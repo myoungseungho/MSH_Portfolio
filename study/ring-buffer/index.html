@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>링버퍼 (Ring Buffer) 학습 - MSH Portfolio</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+
+        .nav {
+            margin-bottom: 40px;
+        }
+
+        .nav a {
+            color: #666;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .nav a:hover {
+            color: #333;
+        }
+
+        .header {
+            margin-bottom: 50px;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #111;
+        }
+
+        .header-meta {
+            display: flex;
+            gap: 20px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #111;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .section h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 30px 0 15px 0;
+            color: #333;
+        }
+
+        .section p {
+            margin-bottom: 16px;
+            color: #444;
+        }
+
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .comment { color: #6a9955; }
+        .keyword { color: #569cd6; }
+        .type { color: #4ec9b0; }
+        .string { color: #ce9178; }
+        .number { color: #b5cea8; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        th, td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f8f8f8;
+            font-weight: 600;
+            color: #333;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .diagram {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 20px 0;
+            font-family: 'Consolas', monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 20px 0;
+        }
+
+        .tag {
+            background: #e8f4fd;
+            color: #1976d2;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .insight-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+
+        .insight-box h4 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .insight-box.blue {
+            background: #e3f2fd;
+            border-left-color: #2196f3;
+        }
+
+        .insight-box.blue h4 {
+            color: #1565c0;
+        }
+
+        .insight-box.red {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+
+        .insight-box.red h4 {
+            color: #c62828;
+        }
+
+        .insight-box.green {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+
+        .insight-box.green h4 {
+            color: #2e7d32;
+        }
+
+        ul, ol {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 40px 0;
+            color: #999;
+            font-size: 0.9rem;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 60px;
+        }
+
+        /* 토글 섹션 스타일 */
+        .toggle-section {
+            margin: 16px 0;
+        }
+
+        .toggle-section summary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            cursor: pointer;
+            font-weight: 500;
+            color: #1e40af;
+            background: #dbeafe;
+            border-radius: 25px;
+            list-style: none;
+            transition: all 0.2s;
+        }
+
+        .toggle-section summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .toggle-section summary::before {
+            content: '💡';
+        }
+
+        .toggle-section summary:hover {
+            background: #bfdbfe;
+            transform: translateY(-2px);
+        }
+
+        .toggle-content {
+            margin-top: 12px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e5e7eb;
+            position: relative;
+        }
+
+        .toggle-content::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 30px;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-left: 1px solid #e5e7eb;
+            border-top: 1px solid #e5e7eb;
+            transform: rotate(45deg);
+        }
+
+        .toggle-content h4 {
+            color: #333;
+            margin: 20px 0 12px 0;
+            font-size: 1.05rem;
+        }
+
+        .toggle-content h4:first-child {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav">
+            <a href="../../">&larr; 돌아가기</a>
+        </nav>
+
+        <header class="header">
+            <h1>링버퍼 (Ring Buffer) 학습</h1>
+            <div class="header-meta">
+                <span>C++ / 네트워크</span>
+                <span>TCP 송수신 버퍼</span>
+            </div>
+            <div class="tags">
+                <span class="tag">Ring Buffer</span>
+                <span class="tag">Circular Buffer</span>
+                <span class="tag">TCP</span>
+                <span class="tag">네트워크</span>
+                <span class="tag">게임 서버</span>
+            </div>
+        </header>
+
+        <!-- 1. 문제 제기 -->
+        <section class="section">
+            <h2>1. 왜 링버퍼가 필요한가?</h2>
+
+            <h3>문제 1: TCP는 패킷 경계를 보장 안 함</h3>
+            <p>
+                TCP는 <strong>바이트 스트림</strong>입니다.
+                택배처럼 박스 단위로 오는 게 아니라, 수도꼭지에서 물 나오듯 그냥 쭉 흘러옵니다.
+            </p>
+
+            <div class="diagram">보낸 것:  [이동 20바이트] [공격 15바이트] [채팅 100바이트]
+받은 것:  [이동 20 + 공격 10]  [공격 5 + 채팅 50]  [채팅 50]
+
+→ 패킷이 쪼개지거나 합쳐져서 옴!</div>
+
+            <h3>문제 2: 데이터를 어디에 저장할 건가?</h3>
+            <p>
+                패킷이 반만 왔으면, 나머지 반이 올 때까지 어디에 보관해야 할까요?
+            </p>
+
+<pre><code><span class="keyword">char</span> buffer[<span class="number">1024</span>];
+<span class="keyword">int</span> received = recv(socket, buffer, <span class="number">1024</span>, <span class="number">0</span>);
+
+<span class="comment">// 패킷이 반만 왔으면?</span>
+<span class="comment">// 나머지 반 올 때까지 어디 보관해?</span></code></pre>
+        </section>
+
+        <!-- 2. 일반 배열의 한계 -->
+        <section class="section">
+            <h2>2. 일반 배열의 한계</h2>
+
+            <h3>단순한 해결책</h3>
+            <div class="diagram">[데이터][데이터][데이터][    비어있음    ]
+ ↑ 여기서부터              ↑ 여기까지 사용 중
+
+새 데이터 오면 뒤에 추가, 처리 끝나면 앞에서 제거</div>
+
+            <h3>문제 발생</h3>
+            <div class="diagram">처리 완료     아직 처리 안 함      새 데이터 공간
+[  빈 공간  ][데이터][데이터][데이터][  부족!  ]
+
+앞은 비었는데 뒤가 꽉 참!</div>
+
+            <h3>해결책: 앞으로 밀기 (memmove)</h3>
+<pre><code><span class="comment">// 앞의 빈 공간 제거하려고 데이터를 앞으로 밀기</span>
+memmove(buffer, buffer + processedBytes, remainingBytes);</code></pre>
+
+            <div class="diagram">Before: [빈][빈][빈][A][B][C][빈]
+After:  [A][B][C][빈][빈][빈][빈]</div>
+
+            <div class="insight-box red">
+                <h4>성능 문제</h4>
+                <p>
+                    초당 수천 개 패킷이 오는데, 매번 memcpy/memmove?<br>
+                    <strong>복사 없이 앞 공간을 재활용할 방법이 필요합니다.</strong>
+                </p>
+            </div>
+        </section>
+
+        <!-- 3. 링버퍼 아이디어 -->
+        <section class="section">
+            <h2>3. 링버퍼의 핵심 아이디어</h2>
+
+            <p><strong>배열의 끝과 시작을 연결해버리자!</strong></p>
+
+            <h3>일반 배열</h3>
+            <div class="diagram">[0][1][2][3][4][5][6][7]
+ ↑                    ↑
+시작                  끝 (여기서 막힘)</div>
+
+            <h3>링버퍼</h3>
+            <div class="diagram">    ┌──────────────────┐
+    ↓                  │
+[0][1][2][3][4][5][6][7]
+                       │
+    다시 0번으로 ←──────┘</div>
+
+            <p>원형으로 그려보면:</p>
+            <div class="diagram">        [0]
+     [7]   [1]
+    [6]     [2]
+     [5]   [3]
+        [4]</div>
+
+            <div class="insight-box green">
+                <h4>핵심</h4>
+                <p>
+                    물리적으론 일반 배열인데, <strong>% 연산으로 원형처럼 동작</strong>시키는 겁니다.
+                </p>
+            </div>
+        </section>
+
+        <!-- 4. Head와 Tail -->
+        <section class="section">
+            <h2>4. 두 개의 포인터: Head와 Tail</h2>
+
+<pre><code>Head (Write) - 새 데이터 쓰는 위치
+Tail (Read)  - 데이터 읽는 위치</code></pre>
+
+            <h3>초기 상태 (비어있음)</h3>
+            <div class="diagram">[  ][  ][  ][  ][  ][  ][  ][  ]
+ ↑
+Head, Tail (같은 위치 = 비어있음)</div>
+
+            <h3>데이터 3개 들어옴</h3>
+            <div class="diagram">[A][B][C][  ][  ][  ][  ][  ]
+ ↑        ↑
+Tail     Head</div>
+
+            <h3>2개 처리 완료 (읽음)</h3>
+            <div class="diagram">[  ][  ][C][  ][  ][  ][  ][  ]
+       ↑  ↑
+     Tail Head</div>
+
+            <h3>5개 더 들어옴 (끝을 넘어서 앞으로!)</h3>
+            <div class="diagram">[H][  ][C][D][E][F][G][H]
+    ↑   ↑
+  Head Tail</div>
+
+            <div class="insight-box blue">
+                <h4>memcpy 없이 앞 공간 재활용!</h4>
+                <p>
+                    끝에 도달하면 다시 0번으로 돌아가서 빈 공간을 사용합니다.<br>
+                    데이터 복사 없이 인덱스만 움직이면 됩니다.
+                </p>
+            </div>
+        </section>
+
+        <!-- 5. 핵심 연산 -->
+        <section class="section">
+            <h2>5. 핵심 연산: 나머지 연산 (%)</h2>
+
+<pre><code><span class="comment">// 8칸짜리 버퍼에서</span>
+<span class="keyword">int</span> next = (head + <span class="number">1</span>) % <span class="number">8</span>;
+
+<span class="comment">// head가 7이면?</span>
+<span class="comment">// (7 + 1) % 8 = 0  ← 다시 처음으로!</span></code></pre>
+
+            <p>이게 "Ring"의 정체입니다. % 연산 하나로 원형 동작을 구현합니다.</p>
+
+            <h3>기본 구조</h3>
+<pre><code><span class="keyword">class</span> <span class="type">RingBuffer</span> {
+    <span class="keyword">char</span>* buffer;
+    <span class="keyword">int</span> capacity;   <span class="comment">// 버퍼 크기</span>
+    <span class="keyword">int</span> head;       <span class="comment">// 쓰기 위치</span>
+    <span class="keyword">int</span> tail;       <span class="comment">// 읽기 위치</span>
+
+<span class="keyword">public</span>:
+    <span class="type">RingBuffer</span>(<span class="keyword">int</span> size) {
+        buffer = <span class="keyword">new</span> <span class="keyword">char</span>[size];
+        capacity = size;
+        head = <span class="number">0</span>;
+        tail = <span class="number">0</span>;
+    }
+
+    <span class="comment">// 사용 중인 크기</span>
+    <span class="keyword">int</span> GetUsedSize() {
+        <span class="keyword">return</span> (head - tail + capacity) % capacity;
+    }
+
+    <span class="comment">// 빈 공간 크기</span>
+    <span class="keyword">int</span> GetFreeSize() {
+        <span class="keyword">return</span> capacity - GetUsedSize() - <span class="number">1</span>;  <span class="comment">// 1칸은 구분용</span>
+    }
+};</code></pre>
+        </section>
+
+        <!-- 6. 실제 시나리오 -->
+        <section class="section">
+            <h2>6. 실제 시나리오: 이동 패킷 수신</h2>
+
+            <h3>패킷 구조</h3>
+<pre><code><span class="keyword">struct</span> <span class="type">PacketHeader</span> {
+    <span class="type">uint16_t</span> size;    <span class="comment">// 패킷 전체 크기</span>
+    <span class="type">uint16_t</span> type;    <span class="comment">// 패킷 종류</span>
+};
+
+<span class="keyword">struct</span> <span class="type">MovePacket</span> {
+    <span class="type">PacketHeader</span> header;  <span class="comment">// 4바이트</span>
+    <span class="keyword">float</span> x;              <span class="comment">// 4바이트</span>
+    <span class="keyword">float</span> y;              <span class="comment">// 4바이트</span>
+    <span class="keyword">float</span> z;              <span class="comment">// 4바이트</span>
+};  <span class="comment">// 총 16바이트</span></code></pre>
+
+            <h3>1단계: 데이터 수신</h3>
+            <div class="diagram">recv()로 16바이트 수신
+
+[size][type][ x  ][ y  ][ z  ][  ][  ]...
+ ↑                              ↑
+Tail                           Head</div>
+
+            <h3>2단계: 패킷 파싱</h3>
+<pre><code><span class="comment">// 헤더 읽어서 크기 확인</span>
+<span class="type">PacketHeader</span>* header = (<span class="type">PacketHeader</span>*)(buffer + tail);
+
+<span class="comment">// 완전한 패킷이 도착했나?</span>
+<span class="keyword">int</span> dataInBuffer = head - tail;
+<span class="keyword">if</span> (dataInBuffer >= header->size) {
+    <span class="comment">// 완전한 패킷 있음, 처리 가능!</span>
+}</code></pre>
+
+            <h3>3단계: 처리 후 Tail 이동</h3>
+<pre><code><span class="type">MovePacket</span>* movePacket = (<span class="type">MovePacket</span>*)(buffer + tail);
+player->SetPosition(movePacket->x, movePacket->y, movePacket->z);
+
+<span class="comment">// 처리 완료, Tail 이동</span>
+tail = (tail + header->size) % capacity;</code></pre>
+
+            <div class="diagram">처리 완료 후
+
+[    처리됨    ][  ][  ][  ][  ][  ]...
+                ↑
+            Head, Tail (다시 비어있음)</div>
+        </section>
+
+        <!-- 7. 버퍼 크기 설정 -->
+        <section class="section">
+            <h2>7. 버퍼 크기는 어떻게 정하나?</h2>
+
+            <div class="insight-box red">
+                <h4>절대 조건</h4>
+                <p>
+                    <strong>링버퍼 크기 >= 최대 패킷 크기</strong><br>
+                    이것보다 작으면 완전한 패킷 1개도 담을 수 없습니다.
+                </p>
+            </div>
+
+<pre><code><span class="comment">// 최대 패킷이 4KB라면</span>
+<span class="keyword">const int</span> MAX_PACKET_SIZE = <span class="number">4096</span>;
+
+<span class="comment">// 링버퍼는 훨씬 크게</span>
+<span class="keyword">const int</span> RING_BUFFER_SIZE = <span class="number">65536</span>;  <span class="comment">// 64KB</span></code></pre>
+
+            <h3>왜 크게 잡나?</h3>
+            <p>
+                네트워크는 <strong>들어오는 속도</strong>와 <strong>처리하는 속도</strong>가 다릅니다.
+            </p>
+            <ul>
+                <li>recv()는 계속 데이터를 받아옴</li>
+                <li>처리는 게임 로직 돌면서 천천히</li>
+                <li>버퍼가 작으면 처리하기도 전에 꽉 참</li>
+            </ul>
+
+            <table>
+                <tr>
+                    <th>조건</th>
+                    <th>설명</th>
+                </tr>
+                <tr>
+                    <td>링버퍼 >= 최대 패킷</td>
+                    <td><strong>필수</strong> (이것보다 작으면 동작 자체가 안 됨)</td>
+                </tr>
+                <tr>
+                    <td>링버퍼 >> 최대 패킷</td>
+                    <td><strong>권장</strong> (여유 공간 있어야 밀리지 않음)</td>
+                </tr>
+            </table>
+
+        </section>
+
+        <!-- 8. 링버퍼 vs 다른 버퍼 -->
+        <section class="section">
+            <h2>8. 언제 링버퍼를 쓰고, 언제 안 쓰나?</h2>
+
+            <h3>링버퍼가 적합한 경우</h3>
+            <div class="diagram">들어옴 → [A][B][C][D] → 나감
+         FIFO (선입선출)
+
+"물 흐르듯 들어오고, 들어온 순서대로 나가는" 데이터</div>
+
+            <ul>
+                <li><strong>네트워크 송수신 버퍼</strong> (TCP 스트림)</li>
+                <li>오디오/비디오 스트리밍</li>
+                <li>로그 버퍼 (최근 N개만 유지)</li>
+                <li>키보드 입력 버퍼</li>
+            </ul>
+
+            <h3>링버퍼가 부적합한 경우</h3>
+
+            <table>
+                <tr>
+                    <th>상황</th>
+                    <th>적합한 버퍼</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>파일 한 번 읽기</td>
+                    <td>일반 배열</td>
+                    <td>한 번 쓰고 끝, 순환 필요 없음</td>
+                </tr>
+                <tr>
+                    <td>게임 화면 렌더링</td>
+                    <td>더블 버퍼</td>
+                    <td>생산자/소비자 동시 작업</td>
+                </tr>
+                <tr>
+                    <td>중간 데이터 자주 접근</td>
+                    <td>일반 배열</td>
+                    <td>랜덤 접근이 링버퍼에선 복잡</td>
+                </tr>
+                <tr>
+                    <td>전체 데이터 한 번에 처리</td>
+                    <td>일반 배열</td>
+                    <td>링버퍼는 끝/앞 나뉠 수 있음</td>
+                </tr>
+            </table>
+
+            <details class="toggle-section">
+                <summary>더블 버퍼란?</summary>
+                <div class="toggle-content">
+                    <h4>버퍼 2개를 번갈아 사용</h4>
+                    <div class="diagram">[버퍼 A] ← 화면에 표시 중
+[버퍼 B] ← 다음 프레임 그리는 중
+
+완료되면 swap!
+
+[버퍼 A] ← 다음 프레임 그리는 중
+[버퍼 B] ← 화면에 표시 중</div>
+                    <p>게임 렌더링에서 화면 깜빡임 방지용으로 사용합니다.</p>
+                </div>
+            </details>
+        </section>
+
+        <!-- 9. 정리 -->
+        <section class="section">
+            <h2>9. 정리</h2>
+
+            <div class="insight-box green">
+                <h4>링버퍼 핵심 정리</h4>
+                <ul>
+                    <li><strong>구조:</strong> 배열 + Head/Tail 인덱스 + % 연산</li>
+                    <li><strong>장점:</strong> memcpy 없이 빈 공간 재활용</li>
+                    <li><strong>용도:</strong> 연속적으로 흘러오는 FIFO 데이터</li>
+                    <li><strong>크기:</strong> 최대 패킷보다 크게, 실무에선 10~20배</li>
+                </ul>
+            </div>
+
+            <div class="diagram">소켓 → recv() → [링버퍼] → 패킷 파싱 → 게임 로직
+                          ↑        ↓
+                        Head     Tail
+                       (쓰기)   (읽기)</div>
+
+            <h3>한 줄 요약</h3>
+            <p>
+                <strong>링버퍼 = "물 흐르듯 들어오고, 순서대로 나가는" 데이터를 복사 없이 처리하는 기법</strong>
+            </p>
+        </section>
+
+        <footer class="footer">
+            <p>MSH Portfolio - Game Server Developer</p>
+        </footer>
+    </div>
+</body>
+</html>
