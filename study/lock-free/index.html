@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lock-Free 자료구조 학습 - MSH Portfolio</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+
+        .nav {
+            margin-bottom: 40px;
+        }
+
+        .nav a {
+            color: #666;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .nav a:hover {
+            color: #333;
+        }
+
+        .header {
+            margin-bottom: 50px;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #111;
+        }
+
+        .header-meta {
+            display: flex;
+            gap: 20px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #111;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .section h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 30px 0 15px 0;
+            color: #333;
+        }
+
+        .section p {
+            margin-bottom: 16px;
+            color: #444;
+        }
+
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .comment { color: #6a9955; }
+        .keyword { color: #569cd6; }
+        .type { color: #4ec9b0; }
+        .string { color: #ce9178; }
+        .number { color: #b5cea8; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        th, td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f8f8f8;
+            font-weight: 600;
+            color: #333;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .diagram {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 20px 0;
+            font-family: 'Consolas', monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 20px 0;
+        }
+
+        .tag {
+            background: #e8f4fd;
+            color: #1976d2;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .insight-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+
+        .insight-box h4 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .insight-box.blue {
+            background: #e3f2fd;
+            border-left-color: #2196f3;
+        }
+
+        .insight-box.blue h4 {
+            color: #1565c0;
+        }
+
+        .insight-box.red {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+
+        .insight-box.red h4 {
+            color: #c62828;
+        }
+
+        .insight-box.green {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+
+        .insight-box.green h4 {
+            color: #2e7d32;
+        }
+
+        ul, ol {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 40px 0;
+            color: #999;
+            font-size: 0.9rem;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 60px;
+        }
+
+        .compare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        @media (max-width: 600px) {
+            .compare-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .compare-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            border: 1px solid #eee;
+        }
+
+        .compare-card h4 {
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .compare-card.slow h4 {
+            color: #d32f2f;
+        }
+
+        .compare-card.fast h4 {
+            color: #388e3c;
+        }
+
+        /* 토글 섹션 스타일 */
+        .toggle-section {
+            margin: 16px 0;
+        }
+
+        .toggle-section summary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            cursor: pointer;
+            font-weight: 500;
+            color: #1e40af;
+            background: #dbeafe;
+            border-radius: 25px;
+            list-style: none;
+            transition: all 0.2s;
+        }
+
+        .toggle-section summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .toggle-section summary::before {
+            content: '💡';
+        }
+
+        .toggle-section summary:hover {
+            background: #bfdbfe;
+            transform: translateY(-2px);
+        }
+
+        .toggle-content {
+            margin-top: 12px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #e5e7eb;
+            position: relative;
+        }
+
+        .toggle-content::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 30px;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-left: 1px solid #e5e7eb;
+            border-top: 1px solid #e5e7eb;
+            transform: rotate(45deg);
+        }
+
+        .toggle-content h4 {
+            color: #333;
+            margin: 20px 0 12px 0;
+            font-size: 1.05rem;
+        }
+
+        .toggle-content h4:first-child {
+            margin-top: 0;
+        }
+
+        .step-box {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+        }
+
+        .step-box h4 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav">
+            <a href="../../">&larr; 돌아가기</a>
+        </nav>
+
+        <header class="header">
+            <h1>Lock-Free 자료구조 학습</h1>
+            <div class="header-meta">
+                <span>C++ / Windows</span>
+                <span>멀티스레드 동기화</span>
+            </div>
+            <div class="tags">
+                <span class="tag">Lock-Free</span>
+                <span class="tag">CAS</span>
+                <span class="tag">Atomic</span>
+                <span class="tag">Race Condition</span>
+                <span class="tag">게임 서버</span>
+            </div>
+        </header>
+
+        <!-- 1. Race Condition -->
+        <section class="section">
+            <h2>1. 시작점: Race Condition 문제</h2>
+
+            <h3>counter++ 는 왜 위험한가?</h3>
+            <p>
+                간단해 보이는 <code>counter++</code> 한 줄이 사실은 CPU 내부에서 3단계로 실행됩니다.
+            </p>
+
+            <div class="diagram">counter++;  // 이거 한 줄이 사실은 3단계
+
+CPU 내부 동작:
+1. LOAD:  메모리에서 counter 값을 레지스터로 읽기
+2. ADD:   레지스터에서 +1
+3. STORE: 레지스터 값을 메모리에 쓰기</div>
+
+            <h3>문제 상황</h3>
+            <p>두 스레드가 동시에 <code>counter++</code>를 실행하면:</p>
+
+            <div class="diagram">counter = 0 상태에서 시작
+
+스레드A: LOAD (0 읽음)
+스레드B: LOAD (0 읽음)  ← A가 쓰기 전에 읽어버림!
+스레드A: ADD (0+1=1)
+스레드A: STORE (1 저장)
+스레드B: ADD (0+1=1)
+스레드B: STORE (1 저장)  ← 1을 덮어씀!
+
+결과: counter = 1 (2가 되어야 하는데!)</div>
+
+            <div class="insight-box red">
+                <h4>Race Condition</h4>
+                <p>
+                    여러 스레드가 <strong>동시에 같은 데이터에 접근</strong>할 때,
+                    실행 순서에 따라 결과가 달라지는 문제입니다.
+                    데이터 손실이 발생하지만, 크래시가 나지 않아서 발견하기 어렵습니다.
+                </p>
+            </div>
+        </section>
+
+        <!-- 2. Mutex -->
+        <section class="section">
+            <h2>2. 해결책 1: 뮤텍스 (Mutex)</h2>
+
+<pre><code><span class="keyword">mutex</span>.lock();
+counter++;
+<span class="keyword">mutex</span>.unlock();</code></pre>
+
+            <p>
+                <code>lock()</code> 하면 다른 스레드는 그 구역에 못 들어오고,
+                <code>unlock()</code> 하면 다음 스레드가 들어갈 수 있습니다.
+            </p>
+
+            <h3>문제점 1: 데드락 (Deadlock)</h3>
+            <div class="diagram">스레드1: 뮤텍스A 잠금 → 뮤텍스B 잠그려 함 (B는 스레드2가 잡고 있음) → 대기
+스레드2: 뮤텍스B 잠금 → 뮤텍스A 잠그려 함 (A는 스레드1이 잡고 있음) → 대기
+
+→ 둘 다 영원히 대기 = 데드락!</div>
+
+            <div class="insight-box red">
+                <h4>데드락의 무서운 점</h4>
+                <ul>
+                    <li><strong>크래시:</strong> 덤프 + PDB로 원인 추적 가능</li>
+                    <li><strong>데드락:</strong> 프로세스가 "살아있는데 멈춤" → 덤프도 없고, 어디서 꼬였는지 모름</li>
+                </ul>
+            </div>
+
+            <h3>문제점 2: 성능</h3>
+            <p>
+                스레드가 <code>lock()</code>에서 막히면 OS가 스레드를 "재웁니다".
+                깨어날 때 컨텍스트 스위칭이 발생하고, 이는 수천~수만 CPU 사이클을 소모합니다.
+            </p>
+        </section>
+
+        <!-- 3. Atomic -->
+        <section class="section">
+            <h2>3. 해결책 2: Atomic 연산</h2>
+
+<pre><code><span class="comment">// Windows API</span>
+InterlockedIncrement(&counter);
+
+<span class="comment">// C++11 표준</span>
+std::<span class="type">atomic</span>&lt;<span class="keyword">int</span>&gt; counter;
+counter++;</code></pre>
+
+            <h3>뮤텍스 vs Atomic 차이</h3>
+            <table>
+                <tr>
+                    <th></th>
+                    <th>뮤텍스</th>
+                    <th>Atomic</th>
+                </tr>
+                <tr>
+                    <td>대기 방식</td>
+                    <td>OS가 스레드를 재움 (sleep)</td>
+                    <td>CPU가 즉시 재시도 (spin)</td>
+                </tr>
+                <tr>
+                    <td>컨텍스트 스위칭</td>
+                    <td>발생</td>
+                    <td>없음</td>
+                </tr>
+                <tr>
+                    <td>비용</td>
+                    <td>수천~수만 사이클</td>
+                    <td>수십 사이클</td>
+                </tr>
+                <tr>
+                    <td>데드락</td>
+                    <td>가능</td>
+                    <td>불가능</td>
+                </tr>
+                <tr>
+                    <td>범위</td>
+                    <td>여러 줄 보호 가능</td>
+                    <td>변수 1개만</td>
+                </tr>
+            </table>
+
+            <details class="toggle-section">
+                <summary>비유로 이해하기</summary>
+                <div class="toggle-content">
+                    <div class="diagram">뮤텍스 = 은행 번호표 뽑고 의자에 앉아서 10분 기다림
+         (스레드가 잠들고, 깨어나는 데 비용 발생)
+
+Atomic = 편의점 계산대에서 앞사람이 카드 찍는 0.5초 기다림
+         (자리에서 서서 기다림, 바로 내 차례)</div>
+                </div>
+            </details>
+
+            <div class="insight-box">
+                <h4>Atomic이 항상 좋은 건 아님</h4>
+                <p>
+                    Atomic은 "깨어서 대기" = CPU를 계속 사용합니다.
+                    대기 시간이 길면 CPU 낭비가 됩니다.
+                </p>
+                <ul>
+                    <li><strong>짧은 작업:</strong> Atomic이 유리</li>
+                    <li><strong>긴 작업 (I/O 포함):</strong> 뮤텍스가 유리</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 4. Atomic의 한계 -->
+        <section class="section">
+            <h2>4. Atomic의 한계</h2>
+
+            <p>Atomic은 <strong>변수 1개</strong>만 처리할 수 있습니다.</p>
+
+<pre><code><span class="comment">// Atomic: 변수 1개만 안전</span>
+InterlockedIncrement(&a);  <span class="comment">// a만 안전</span>
+InterlockedIncrement(&b);  <span class="comment">// b만 안전</span>
+<span class="comment">// a와 b를 "함께" 안전하게? 못함</span>
+
+<span class="comment">// 뮤텍스: 여러 변수 가능</span>
+<span class="keyword">mutex</span>.lock();
+a = <span class="number">1</span>;
+b = <span class="number">2</span>;
+c = a + b;
+<span class="keyword">mutex</span>.unlock();</code></pre>
+
+            <div class="insight-box blue">
+                <h4>Lock-Free가 해결하려는 문제</h4>
+                <p>
+                    Atomic처럼 빠르고 데드락 없으면서,<br>
+                    여러 변수도 안전하게 처리하고 싶다!
+                </p>
+            </div>
+        </section>
+
+        <!-- 5. CAS -->
+        <section class="section">
+            <h2>5. CAS (Compare-And-Swap)</h2>
+
+            <p>Lock-Free의 <strong>핵심 연산</strong>입니다.</p>
+
+<pre><code>CAS(변수, 예상값, 새값)
+
+<span class="comment">// 풀어쓰면:</span>
+<span class="keyword">if</span> (변수 == 예상값) {
+    변수 = 새값;
+    <span class="keyword">return</span> <span class="keyword">true</span>;   <span class="comment">// 성공!</span>
+} <span class="keyword">else</span> {
+    <span class="keyword">return</span> <span class="keyword">false</span>;  <span class="comment">// 실패 (누가 먼저 바꿨네)</span>
+}</code></pre>
+
+            <p>
+                중요한 점: 이 전체가 <strong>CPU 명령어 1개</strong>로 실행됩니다. 중간에 끊기지 않습니다.
+            </p>
+
+            <h3>CAS 동작 예시</h3>
+            <div class="diagram">counter = 10 상태
+
+스레드A: CAS(&counter, 10, 11)
+         "counter가 10이면 11로 바꿔줘"
+         → counter가 10이네? → 11로 바꿈 → 성공!
+
+스레드B: CAS(&counter, 10, 11)  (거의 동시에)
+         "counter가 10이면 11로 바꿔줘"
+         → counter가 11이네? (A가 바꿔버림) → 실패!
+         → 다시 시도...</div>
+
+            <div class="insight-box green">
+                <h4>CAS의 핵심 아이디어</h4>
+                <p>
+                    "내가 읽은 값이 아직 그대로야?" 확인하고 바꿈.<br>
+                    다른 스레드가 먼저 바꿨으면 실패 → 처음부터 다시 시도.
+                </p>
+            </div>
+        </section>
+
+        <!-- 6. Lock-Free 예시 -->
+        <section class="section">
+            <h2>6. Lock-Free 링크드 리스트 예시</h2>
+
+            <h3>상황 설정</h3>
+            <p>게임 서버에서 "접속한 유저 목록"을 링크드 리스트로 관리한다고 가정합니다.</p>
+
+            <div class="diagram">현재 접속 유저: 철수 → 영희 (2명)
+
+HEAD → [철수] → [영희] → NULL</div>
+
+            <h3>문제: 동시에 2명이 접속</h3>
+            <div class="diagram">스레드1: "민수" 접속 처리
+스레드2: "지수" 접속 처리
+둘 다 맨 앞에 추가하려고 함</div>
+
+            <h3>위험한 상황 (락 없이 그냥 하면)</h3>
+            <div class="diagram">스레드1: "민수 다음은 철수야" (민수→철수 연결)
+스레드2: "지수 다음은 철수야" (지수→철수 연결)  ← 동시에!
+
+스레드1: "HEAD는 이제 민수야"
+스레드2: "HEAD는 이제 지수야"  ← 민수 덮어씀!
+
+결과: HEAD → [지수] → [철수] → [영희]
+      [민수] → [철수] → ...  ← 민수가 리스트에서 사라짐!</div>
+
+            <h3>CAS로 해결</h3>
+            <div class="diagram">스레드1: "HEAD가 아직 철수 맞아?" → 맞네 → "민수로 바꿀게" → 성공!
+스레드2: "HEAD가 아직 철수 맞아?" → 아니네 민수잖아 → 실패!
+         → 다시: "민수 맞아?" → 맞네 → "지수로 바꿀게" → 성공!
+
+결과: HEAD → [지수] → [민수] → [철수] → [영희]
+      4명 다 있음!</div>
+
+            <h3>코드로 보면</h3>
+<pre><code><span class="keyword">void</span> Push(Node* newNode) {
+    <span class="keyword">do</span> {
+        Node* oldHead = HEAD;        <span class="comment">// 1. 현재 HEAD 기억</span>
+        newNode->next = oldHead;     <span class="comment">// 2. 새 노드가 oldHead를 가리킴</span>
+    } <span class="keyword">while</span> (!CAS(&HEAD, oldHead, newNode));  <span class="comment">// 3. 확인 후 바꾸기</span>
+}</code></pre>
+
+            <div class="insight-box blue">
+                <h4>핵심 아이디어</h4>
+                <p>
+                    2개 변수를 동시에 못 바꾸면, <strong>마지막 1개(HEAD)만 CAS로 확인</strong>.<br>
+                    성공하면 연결 완료, 실패하면 누가 건드렸으니 처음부터 다시.
+                </p>
+            </div>
+        </section>
+
+        <!-- 7. 정리 -->
+        <section class="section">
+            <h2>7. 정리: 언제 뭘 쓸까?</h2>
+
+            <table>
+                <tr>
+                    <th>상황</th>
+                    <th>추천</th>
+                </tr>
+                <tr>
+                    <td>단순 카운터 증가</td>
+                    <td>Atomic (InterlockedIncrement)</td>
+                </tr>
+                <tr>
+                    <td>짧은 작업, 변수 여러 개</td>
+                    <td>Lock-Free (CAS 기반)</td>
+                </tr>
+                <tr>
+                    <td>긴 작업, I/O 포함</td>
+                    <td>뮤텍스</td>
+                </tr>
+                <tr>
+                    <td>복잡한 로직, 여러 자원</td>
+                    <td>뮤텍스 (데드락 주의)</td>
+                </tr>
+                <tr>
+                    <td>경쟁이 심한 상황</td>
+                    <td>뮤텍스 (Lock-Free는 CPU 낭비)</td>
+                </tr>
+            </table>
+
+            <div class="insight-box">
+                <h4>경쟁이 심하면?</h4>
+                <p>
+                    100개 스레드가 동시에 CAS를 시도하면, 1개만 성공하고 99개는 실패 → 재시도.
+                    이러면 CPU만 낭비됩니다. 이런 경우엔 뮤텍스가 더 효율적입니다.
+                </p>
+            </div>
+        </section>
+
+        <!-- 8. 추가 학습 -->
+        <section class="section">
+            <h2>8. 추가 학습 키워드</h2>
+            <ul>
+                <li><strong>ABA 문제:</strong> CAS의 함정 (값이 A→B→A로 바뀌면 변화를 감지 못함)</li>
+                <li><strong>Lock-Free Queue, Stack:</strong> 실제 자료구조 구현</li>
+                <li><strong>Memory Ordering:</strong> CPU가 명령어 순서를 바꾸는 문제</li>
+                <li><strong>std::atomic의 memory_order:</strong> C++ 표준 메모리 순서 옵션</li>
+            </ul>
+        </section>
+
+        <footer class="footer">
+            <p>MSH Portfolio - Game Server Developer</p>
+        </footer>
+    </div>
+</body>
+</html>
