@@ -278,6 +278,68 @@
             margin-bottom: 15px;
             font-size: 1.1rem;
         }
+
+        /* 토글 섹션 스타일 */
+        .toggle-section {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin: 16px 0;
+            overflow: hidden;
+        }
+
+        .toggle-section summary {
+            padding: 16px 20px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #1976d2;
+            background: #f8f9fa;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toggle-section summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .toggle-section summary::before {
+            content: '+';
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            background: #1976d2;
+            color: white;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .toggle-section[open] summary::before {
+            content: '-';
+        }
+
+        .toggle-section summary:hover {
+            background: #e3f2fd;
+        }
+
+        .toggle-content {
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .toggle-content h4 {
+            color: #333;
+            margin: 20px 0 12px 0;
+            font-size: 1.05rem;
+        }
+
+        .toggle-content h4:first-child {
+            margin-top: 0;
+        }
     </style>
 </head>
 <body>
@@ -548,10 +610,74 @@ Close();            // 한 번만 종료</code></pre>
             <div class="diagram">권장 Pool Size = (CPU 코어 수 x 2) + 디스크 수
 
 예: 4코어 DB 서버, SSD 1개
-→ (4 x 2) + 1 = 9~10개
+→ (4 x 2) + 1 = 9~10개</div>
 
-이유: I/O 대기 중 CPU가 놀지 않도록
-     다른 연결이 CPU를 사용할 수 있게 함</div>
+            <details class="toggle-section">
+                <summary>왜 코어 x 2인가? (클릭해서 자세히 보기)</summary>
+                <div class="toggle-content">
+                    <h4>식당 비유로 이해하기</h4>
+                    <div class="diagram">주방장 4명 (= CPU 코어 4개)
+손님 주문 = DB 쿼리
+
+주문 처리 과정:
+1. 요리 준비 (CPU 작업) = 1분
+2. 오븐에서 굽기 (I/O 대기) = 9분  ← 주방장이 기다리기만 함</div>
+
+                    <h4>시나리오 1: 테이블 4개 (연결 4개)</h4>
+                    <div class="diagram">주방장A → 테이블1 주문받음 → 1분 요리 → 오븐에 넣음 → 9분 대기...
+주방장B → 테이블2 주문받음 → 1분 요리 → 오븐에 넣음 → 9분 대기...
+주방장C → 테이블3 주문받음 → 1분 요리 → 오븐에 넣음 → 9분 대기...
+주방장D → 테이블4 주문받음 → 1분 요리 → 오븐에 넣음 → 9분 대기...
+
+문제: 4명의 주방장이 9분 동안 손 놓고 오븐만 쳐다봄!
+결과: 10분에 4개 주문 처리</div>
+
+                    <h4>시나리오 2: 테이블 8개 (연결 8개 = 코어 x 2)</h4>
+                    <div class="diagram">주방장A → 테이블1 요리(1분) → 오븐에 넣음 → 바로 테이블5 요리 시작!
+주방장B → 테이블2 요리(1분) → 오븐에 넣음 → 바로 테이블6 요리 시작!
+주방장C → 테이블3 요리(1분) → 오븐에 넣음 → 바로 테이블7 요리 시작!
+주방장D → 테이블4 요리(1분) → 오븐에 넣음 → 바로 테이블8 요리 시작!
+
+핵심: 오븐이 굽는 동안 주방장은 다른 테이블 요리함!
+결과: 10분에 8개 주문 처리 (2배!)</div>
+
+                    <div class="insight-box blue">
+                        <h4>왜 x2가 적당한가?</h4>
+                        <p>
+                            CPU 작업 : I/O 대기 = 약 1 : 9 비율 (DB 쿼리 특성)
+                        </p>
+                        <p>
+                            → 주방장 1명이 오븐 기다리는 동안 다른 주문 1개 더 처리 가능<br>
+                            → 그래서 테이블(연결)이 2배 필요<br>
+                            → <strong>코어 4개 x 2 = 연결 8개</strong>
+                        </p>
+                    </div>
+                </div>
+            </details>
+
+            <details class="toggle-section">
+                <summary>디스크 수는 왜 더하나? (클릭해서 자세히 보기)</summary>
+                <div class="toggle-content">
+                    <h4>오븐 개수 = 디스크 개수</h4>
+                    <div class="diagram">오븐 1개 → 동시에 1개만 구워짐
+오븐 2개 → 동시에 2개 구워짐 → 테이블 2개 더 받아도 됨!
+
+(코어 x 2) + 오븐 수 = Pool Size
+(4 x 2) + 2 = 10개</div>
+
+                    <div class="insight-box">
+                        <h4>실제 상황</h4>
+                        <ul>
+                            <li><strong>디스크 1개:</strong> 동시에 1개 I/O만 처리</li>
+                            <li><strong>디스크 2개:</strong> 동시에 2개 I/O 처리 가능</li>
+                            <li><strong>RAID/SSD 여러개:</strong> 병렬 I/O로 처리량 증가</li>
+                        </ul>
+                        <p style="margin-top: 12px;">
+                            디스크가 많으면 병렬 I/O가 가능하므로, 그만큼 연결을 더 늘려도 병목이 안 생깁니다.
+                        </p>
+                    </div>
+                </div>
+            </details>
 
             <h3>Pool이 가득 찼을 때 전략</h3>
             <table>
