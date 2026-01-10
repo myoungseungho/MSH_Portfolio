@@ -484,6 +484,58 @@ Atomic = 편의점 계산대에서 앞사람이 카드 찍는 0.5초 기다림
                 </div>
             </details>
 
+            <details class="toggle-section">
+                <summary>Atomic과 CAS는 다르다! (중요)</summary>
+                <div class="toggle-content">
+                    <h4>일반 int vs Atomic vs CAS</h4>
+                    <table>
+                        <tr>
+                            <th>종류</th>
+                            <th>counter++ 동작</th>
+                            <th>CPU 명령어</th>
+                        </tr>
+                        <tr>
+                            <td>일반 int</td>
+                            <td>LOAD → ADD → STORE (3단계)</td>
+                            <td>mov, add, mov</td>
+                        </tr>
+                        <tr>
+                            <td>std::atomic</td>
+                            <td>원자적 증가 (1단계)</td>
+                            <td>lock xadd</td>
+                        </tr>
+                        <tr>
+                            <td>CAS</td>
+                            <td>비교 후 조건부 교체</td>
+                            <td>lock cmpxchg</td>
+                        </tr>
+                    </table>
+
+                    <h4>코드로 보면</h4>
+<pre><code>std::<span class="type">atomic</span>&lt;<span class="keyword">int</span>&gt; counter;
+
+counter++;              <span class="comment">// lock xadd → 그냥 원자적 증가 (CAS 아님!)</span>
+counter.store(<span class="number">5</span>);       <span class="comment">// mov → 단순 저장</span>
+counter.load();         <span class="comment">// mov → 단순 읽기</span>
+
+<span class="comment">// 이게 CAS!</span>
+counter.compare_exchange_strong(expected, desired);
+<span class="comment">// "expected면 desired로 바꿔줘"</span></code></pre>
+
+                    <div class="insight-box blue">
+                        <h4>핵심 구분</h4>
+                        <ul>
+                            <li><code>atomic++</code> = "무조건 1 더해" → <strong>확인 없이 바로 실행</strong></li>
+                            <li><code>CAS</code> = "이 값이면 바꿔줘" → <strong>조건 확인 후 실행</strong></li>
+                        </ul>
+                        <p style="margin-top: 12px;">
+                            둘 다 Lock-Free지만, CAS는 "읽은 값이 아직 그대로인지 확인"이 필요할 때만 씁니다.<br>
+                            단순 증가는 확인 없이 바로 더하면 되니까 <code>lock xadd</code>로 충분합니다.
+                        </p>
+                    </div>
+                </div>
+            </details>
+
             <div class="insight-box">
                 <h4>Atomic이 항상 좋은 건 아님</h4>
                 <p>
