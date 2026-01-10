@@ -419,13 +419,7 @@ counter++;
 
 → 둘 다 영원히 대기 = 데드락!</div>
 
-            <div class="insight-box red">
-                <h4>데드락의 무서운 점</h4>
-                <ul>
-                    <li><strong>크래시:</strong> 덤프 + PDB로 원인 추적 가능</li>
-                    <li><strong>데드락:</strong> 프로세스가 "살아있는데 멈춤" → 덤프도 없고, 어디서 꼬였는지 모름</li>
-                </ul>
-            </div>
+            
 
             <h3>문제점 2: 성능</h3>
             <p>
@@ -665,8 +659,52 @@ HEAD → [철수] → [영희] → NULL</div>
         <!-- 8. 추가 학습 -->
         <section class="section">
             <h2>8. 추가 학습 키워드</h2>
+
+            <h3>ABA 문제</h3>
+            <p>CAS의 함정: 값이 A→B→A로 바뀌면 변화를 감지 못함</p>
+
+            <details class="toggle-section">
+                <summary>ABA 문제와 해결 방법 (클릭)</summary>
+                <div class="toggle-content">
+                    <h4>문제 상황</h4>
+                    <div class="diagram">스레드1: old = A 읽음 → (잠시 멈춤)
+스레드2: A → B로 변경
+스레드3: B → A로 변경 (다시 A가 됨!)
+스레드1: CAS(&변수, new, A) → "A 맞네!" → 성공!
+         → 근데 사실 중간에 바뀌었던 거임!</div>
+
+                    <h4>해결: 값 + 버전 번호</h4>
+                    <p>값만 비교하지 말고, <strong>버전 번호</strong>를 함께 붙여서 비교합니다.</p>
+<pre><code><span class="comment">// 값만 저장하지 말고</span>
+<span class="keyword">int</span> value;
+
+<span class="comment">// 값 + 버전을 함께 저장</span>
+<span class="keyword">struct</span> Tagged {
+    <span class="keyword">int</span> value;
+    <span class="keyword">int</span> version;  <span class="comment">// 바꿀 때마다 +1</span>
+};</code></pre>
+
+                    <h4>동작 예시</h4>
+                    <div class="diagram">초기: {value=A, version=0}
+
+스레드1: old = {A, 0} 읽음 → (잠시 멈춤)
+스레드2: {A, 0} → {B, 1}
+스레드3: {B, 1} → {A, 2}  ← 값은 A지만 버전이 다름!
+스레드1: CAS로 {A, 0} 확인 → 현재는 {A, 2} → 버전 다름 → 실패!
+         → 재시도</div>
+
+                    <div class="insight-box green">
+                        <h4>핵심</h4>
+                        <p>
+                            값이 같아도 버전이 다르면 "누가 건드렸다"는 걸 알 수 있음.<br>
+                            Windows에서는 <code>InterlockedCompareExchange64</code>로 값(32bit) + 버전(32bit)을 동시에 비교합니다.
+                        </p>
+                    </div>
+                </div>
+            </details>
+
+            <h3>기타 키워드</h3>
             <ul>
-                <li><strong>ABA 문제:</strong> CAS의 함정 (값이 A→B→A로 바뀌면 변화를 감지 못함)</li>
                 <li><strong>Lock-Free Queue, Stack:</strong> 실제 자료구조 구현</li>
                 <li><strong>Memory Ordering:</strong> CPU가 명령어 순서를 바꾸는 문제</li>
                 <li><strong>std::atomic의 memory_order:</strong> C++ 표준 메모리 순서 옵션</li>
