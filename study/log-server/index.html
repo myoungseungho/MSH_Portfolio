@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로그 서버 시스템 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 40px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 8px; }
+        .header p { color: #666; }
+        .section {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            border: 1px solid #eee;
+        }
+        .section h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: #111;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #4CAF50;
+        }
+        .section h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 24px 0 12px 0;
+            color: #333;
+        }
+        p {
+            margin-bottom: 16px;
+            color: #444;
+        }
+        .question {
+            background: #e8f5e9;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin: 16px 0;
+            border-left: 4px solid #4CAF50;
+        }
+        .answer {
+            background: #f5f5f5;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin: 16px 0;
+            border-left: 4px solid #2196F3;
+        }
+        .flow-diagram {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .highlight {
+            background: #e8f5e9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .warning {
+            background: #fff3e0;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin: 16px 0;
+            border-left: 4px solid #FF9800;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        ul, ol {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .comparison-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 20px 0;
+        }
+        .comparison-item {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        .comparison-item h4 {
+            font-size: 1rem;
+            margin-bottom: 12px;
+            color: #111;
+        }
+        .comparison-item.good {
+            border-left: 4px solid #4CAF50;
+        }
+        .comparison-item.bad {
+            border-left: 4px solid #f44336;
+        }
+        .feature-list {
+            background: #fafafa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .feature-list h4 {
+            color: #4CAF50;
+            margin-bottom: 12px;
+        }
+        @media (max-width: 600px) {
+            .comparison-box {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-web/" class="back-link">← 웹서버 (Node.js)</a>
+
+        <header class="header">
+            <h1>로그 서버 시스템</h1>
+            <p>게임 로그 수집 및 실시간 지표 집계 시스템</p>
+        </header>
+
+        <!-- 1. 로그 서버란? -->
+        <section class="section">
+            <h2>1. 로그 서버란?</h2>
+
+            <div class="question">
+                <strong>Q:</strong> 게임 로그를 왜 별도 서버에서 처리할까?
+            </div>
+
+            <div class="answer">
+                <strong>A:</strong> 로그는 엄청 자주 쌓이고(쓰기 위주), 게임 DB에 부담을 주면 안 되니까 분리한다.
+            </div>
+
+            <div class="flow-diagram">
+[게임서버 11] ──┐
+[게임서버 12] ──┼──TCP 소켓──→ [Node.js 로그서버] ──→ [MongoDB]
+[게임서버 13] ──┘                    │
+                                    ├── chosun_log1 (서버 10~19)
+                                    ├── chosun_log2 (서버 20~29)
+                                    └── chosun_logUV (순방문자)
+            </div>
+        </section>
+
+        <!-- 2. 왜 MongoDB인가? -->
+        <section class="section">
+            <h2>2. 왜 MSSQL 대신 MongoDB를 쓸까?</h2>
+
+            <div class="comparison-box">
+                <div class="comparison-item bad">
+                    <h4>MSSQL (관계형 DB)</h4>
+                    <p>테이블 구조 고정</p>
+                    <p>트랜잭션 등 무거운 기능</p>
+                    <p>정확성이 중요할 때 적합</p>
+                </div>
+                <div class="comparison-item good">
+                    <h4>MongoDB (NoSQL)</h4>
+                    <p>구조 자유로움 (필드 막 추가 가능)</p>
+                    <p>단순 INSERT 엄청 빠름</p>
+                    <p>대량 쓰기가 중요할 때 적합</p>
+                </div>
+            </div>
+
+            <div class="answer">
+                <strong>로그의 특성:</strong> 자주 쌓임 + 나중에 조회 + 수정/삭제 거의 없음 → MongoDB가 적합
+            </div>
+        </section>
+
+        <!-- 3. DB 분리 전략 -->
+        <section class="section">
+            <h2>3. 서버 그룹별 DB 분리</h2>
+
+            <div class="question">
+                <strong>Q:</strong> 왜 로그 DB를 여러 개로 나눌까?
+            </div>
+
+            <div class="flow-diagram">
+Math.floor(groupnum / 10)
+
+서버 11번 → 11/10 = 1 → chosun_log1
+서버 19번 → 19/10 = 1 → chosun_log1
+서버 21번 → 21/10 = 2 → chosun_log2
+서버 25번 → 25/10 = 2 → chosun_log2
+
+→ 10개 서버 로그를 하나의 DB에 묶음
+            </div>
+
+            <div class="answer">
+                <strong>장점:</strong>
+                <ul>
+                    <li>특정 서버 로그만 조회할 때 빠름</li>
+                    <li>오래된 로그 정리할 때 DB 단위로 가능</li>
+                    <li>한 DB가 너무 커지는 것 방지</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 4. C++ 게임서버 → Node.js 통신 -->
+        <section class="section">
+            <h2>4. C++ 게임서버 → Node.js 통신</h2>
+
+            <div class="question">
+                <strong>Q:</strong> 게임서버는 어떤 형식으로 로그를 보낼까?
+            </div>
+
+            <h3>C++ 전송 코드 (LogManager.cpp)</h3>
+            <div class="flow-diagram">
+BOOL CLogManager::SendLogServer(char* szColName, map&lt;wstring, wstring&gt;* pLog)
+{
+    // 1. 타임스탬프 자동 추가
+    pLog->insert(pair&lt;wstring, wstring&gt;(L"timestamp",
+        to_wstring(g_Server.GetTimeStamp())));
+
+    // 2. map을 "key:value,key:value,..." 형식으로 변환
+    wstring sum;
+    for (auto iter = pLog->begin(); iter != pLog->end(); iter++)
+    {
+        sum += iter->first + L":" + iter->second + L",";
+    }
+
+    // 3. TCP로 전송
+    g_Server.SendLogServer((BYTE*)&sendmsg, packetSize);
+}
+            </div>
+
+            <div class="warning">
+                <strong>주의:</strong> JSON이 아니야! 단순 "key:value,key:value,..." 문자열이야.
+            </div>
+
+            <h3>자료형 변환 과정</h3>
+            <div class="flow-diagram">
+map&lt;wstring, wstring&gt;    // C++ STL 맵
+        ↓
+    wstring               // 하나의 긴 문자열로 조합
+        ↓                   "ccu:150,groupnum:11,timestamp:..."
+    BYTE*                 // 바이트 배열로 캐스팅
+        ↓
+    TCP 전송              // 바이트 스트림으로 전송
+        ↓
+    Buffer (Node.js)      // 바이트 버퍼로 수신
+        ↓
+    string                // .toString()으로 문자열 변환
+        ↓
+    split(',')            // 쉼표로 나눠서 배열로 만듦
+        ↓
+    Object {}             // key:value 파싱해서 JS 객체로
+            </div>
+
+            <div class="answer">
+                <strong>핵심:</strong> C++에서 배열을 보내는 게 아니라, <span class="highlight">쉼표로 구분된 긴 문자열 하나</span>를 보내고, Node.js에서 split(',')으로 배열로 만드는 것!
+            </div>
+
+            <h3>실제 전송 예시</h3>
+            <div class="flow-diagram">
+// CCU 로그
+map&lt;wstring, wstring&gt; log;
+log[L"ccu"] = L"150";
+log[L"groupnum"] = L"11";
+SendLogServer("ccu_logs", &log);
+
+→ 전송: "ccu:150,groupnum:11,timestamp:1704969600"
+
+// 로그인 로그
+map&lt;wstring, wstring&gt; log;
+log[L"accunique"] = L"12345";
+log[L"charunique"] = L"67890";
+log[L"charname"] = L"김전사";
+log[L"logtype"] = L"0";
+SendLogServer("char_logs", &log);
+
+→ 전송: "accunique:12345,charunique:67890,charname:김전사,logtype:0,timestamp:..."
+            </div>
+        </section>
+
+        <!-- 5. Node.js 수신 및 파싱 -->
+        <section class="section">
+            <h2>5. Node.js 수신 및 파싱</h2>
+
+            <div class="flow-diagram">
+// Node.js에서 수신 후 처리
+handleLog(dataBuffer) {
+    // 1. "ccu:150,groupnum:11,timestamp:1704969600" 파싱
+    const parts = dataString.split(',');
+    const logData = {};
+
+    for (const part of parts) {
+        const [key, value] = part.split(':');
+        logData[key] = value;
+    }
+
+    // 2. 결과: { ccu: 150, groupnum: 11, timestamp: 1704969600 }
+
+    // 3. MongoDB에 저장
+    db.collection('ccu_logs').insertOne(logData);
+}
+            </div>
+
+            <div class="answer">
+                <strong>흐름:</strong> C++ map → 문자열 → TCP → Node.js → 파싱 → MongoDB
+            </div>
+        </section>
+
+        <!-- 6. Queue + 배치 처리 -->
+        <section class="section">
+            <h2>6. Queue + 배치 처리</h2>
+
+            <div class="question">
+                <strong>Q:</strong> 왜 로그를 바로 INSERT하지 않고 Queue에 넣을까?
+            </div>
+
+            <div class="flow-diagram">
+let mPurchaseQueue = new Queue();
+
+setInterval(processItem, 10);  // 10ms마다 실행
+
+function processItem() {
+    const MAX_DB_REQUEST_COUNT = 100;  // 최대 100개씩만
+
+    while (!mPurchaseQueue.empty() && count < MAX_DB_REQUEST_COUNT) {
+        let param = mPurchaseQueue.dequeue();
+        mongo.collection(param.colname).insert(param.newObj);
+    }
+}
+            </div>
+
+            <div class="answer">
+                <strong>이유:</strong> Node.js는 싱글스레드. 1000개 로그가 한꺼번에 오면 다 처리하는 동안 다른 작업(연결 체크, 새 로그 수신) 못함. 10ms마다 100개씩 처리하면 다른 작업할 시간이 생김.
+            </div>
+
+            <p>이걸 <span class="highlight">배치 처리(Batch Processing)</span> + <span class="highlight">양보(Yielding)</span> 라고 해.</p>
+        </section>
+
+        <!-- 7. 전체 흐름 -->
+        <section class="section">
+            <h2>7. 전체 흐름 정리</h2>
+
+            <div class="flow-diagram">
+[C++ 게임서버]
+    │
+    │ map&lt;wstring, wstring&gt; log;
+    │ log["ccu"] = "150";
+    │ log["groupnum"] = "11";
+    │
+    ↓ "ccu:150,groupnum:11,timestamp:..."
+    │
+    │ TCP 포트 65000
+    ↓
+[Node.js 로그서버]
+    │
+    │ 문자열 파싱 → { ccu: 150, groupnum: 11, ... }
+    │
+    ↓ Queue에 저장
+    │
+    │ 10ms마다 100개씩 처리
+    ↓
+[MongoDB]
+    │
+    ├── chosun_log1.ccu_logs
+    ├── chosun_log1.char_logs
+    ├── chosun_log1.item_logs
+    └── ...
+            </div>
+        </section>
+
+        <!-- 8. 핵심 정리 -->
+        <section class="section">
+            <h2>8. 핵심 정리</h2>
+
+            <table>
+                <tr>
+                    <th>개념</th>
+                    <th>설명</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>MongoDB 사용</td>
+                    <td>MSSQL 대신 NoSQL</td>
+                    <td>로그는 대량 쓰기, 구조 유연</td>
+                </tr>
+                <tr>
+                    <td>DB 분리</td>
+                    <td>chosun_log1, log2...</td>
+                    <td>서버 그룹별 관리 용이</td>
+                </tr>
+                <tr>
+                    <td>key:value 포맷</td>
+                    <td>JSON 아닌 단순 문자열</td>
+                    <td>C++에서 빠르게 생성 가능</td>
+                </tr>
+                <tr>
+                    <td>Queue + 배치</td>
+                    <td>10ms마다 100개씩</td>
+                    <td>싱글스레드에서 다른 작업 양보</td>
+                </tr>
+                <tr>
+                    <td>CCU/UV 집계</td>
+                    <td>실시간 지표 계산</td>
+                    <td>서버 모니터링, DAU 분석</td>
+                </tr>
+                <tr>
+                    <td>TCP 소켓</td>
+                    <td>HTTP 아닌 직접 연결</td>
+                    <td>게임서버와 익숙한 방식</td>
+                </tr>
+            </table>
+        </section>
+    </div>
+</body>
+</html>
