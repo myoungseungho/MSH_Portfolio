@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU 기본 동작 원리 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        section { margin-bottom: 48px; }
+        section h2 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #111;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        section h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            margin: 24px 0 12px 0;
+        }
+        p { margin-bottom: 16px; color: #444; }
+
+        .concept-box {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border-left: 4px solid #2196F3;
+        }
+        .concept-box.key {
+            border-left-color: #4CAF50;
+            background: #f1f8e9;
+        }
+        .concept-box.warning {
+            border-left-color: #FF9800;
+            background: #fff8e1;
+        }
+        .concept-box h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #111;
+        }
+
+        .diagram {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #d4d4d4;
+            overflow-x: auto;
+            white-space: pre;
+        }
+
+        .code-block {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 16px 0;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #d4d4d4;
+            white-space: pre;
+        }
+        .code-block .comment { color: #6A9955; }
+        .code-block .keyword { color: #569CD6; }
+        .code-block .type { color: #4EC9B0; }
+        .code-block .number { color: #B5CEA8; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+        }
+        tr:hover { background: #fafafa; }
+
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #2196F3;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+
+        .summary-table {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .summary-table th {
+            background: #2196F3;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초 목록</a>
+
+        <header class="header">
+            <h1>CPU 기본 동작 원리</h1>
+            <p>"CPU는 어떻게 동작하나요?"에 대한 표면적 이해</p>
+        </header>
+
+        <!-- 1. CPU 구조 -->
+        <section>
+            <h2>1. CPU의 기본 구조</h2>
+            <p>CPU는 크게 세 가지 핵심 요소로 구성됩니다.</p>
+
+            <div class="diagram">┌─────────────────────────────────────────┐
+│                  CPU                     │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
+│  │   CU    │  │   ALU   │  │Register │  │
+│  │ (제어)  │  │ (연산)  │  │ (저장)  │  │
+│  └─────────┘  └─────────┘  └─────────┘  │
+└─────────────────────────────────────────┘</div>
+
+            <div class="concept-box">
+                <h4>각 구성 요소의 역할</h4>
+                <ul style="margin-left: 20px;">
+                    <li><strong>CU (Control Unit)</strong>: 명령어를 해석하고 제어 신호 생성</li>
+                    <li><strong>ALU (Arithmetic Logic Unit)</strong>: 실제 연산 수행 (덧셈, 비교 등)</li>
+                    <li><strong>Register</strong>: CPU 내부의 초고속 임시 저장소</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 2. 버스 시스템 -->
+        <section>
+            <h2>2. 버스 (Bus) 시스템</h2>
+            <p>CPU와 메모리 사이의 데이터 통로입니다.</p>
+
+            <div class="diagram">        CPU                          메모리
+         │                              │
+         ├──── 주소 버스 (Address) ────→│  "어디서 읽을까?"
+         │                              │
+         ├──── 데이터 버스 (Data) ←────→│  "무슨 데이터?"
+         │                              │
+         └──── 제어 버스 (Control) ────→│  "읽기? 쓰기?"</div>
+
+            <table>
+                <tr>
+                    <th>버스 종류</th>
+                    <th>역할</th>
+                    <th>방향</th>
+                </tr>
+                <tr>
+                    <td>주소 버스</td>
+                    <td>메모리 위치 지정</td>
+                    <td>CPU → 메모리</td>
+                </tr>
+                <tr>
+                    <td>데이터 버스</td>
+                    <td>실제 데이터 전송</td>
+                    <td>양방향</td>
+                </tr>
+                <tr>
+                    <td>제어 버스</td>
+                    <td>읽기/쓰기 신호</td>
+                    <td>CPU → 메모리</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- 3. PC (Program Counter) -->
+        <section>
+            <h2>3. PC (Program Counter)</h2>
+            <p>다음에 실행할 명령어의 주소를 가리키는 레지스터입니다.</p>
+
+            <div class="diagram">메모리 (코드 영역)
+┌────────────────────────┐
+│ 0x100: MOV A, 1        │ ← PC가 여기를 가리킴
+│ 0x104: MOV B, 2        │
+│ 0x108: ADD A, B        │
+│ 0x10C: ...             │
+└────────────────────────┘
+
+실행 후 PC는 자동으로 0x104로 증가</div>
+
+            <div class="concept-box key">
+                <h4>PC의 동작</h4>
+                <p>PC는 명령어 실행 후 <span class="highlight">자동으로 증가</span>합니다. 단, 점프(JMP) 명령을 만나면 PC 값이 점프 대상 주소로 변경됩니다.</p>
+            </div>
+        </section>
+
+        <!-- 4. FLAGS 레지스터 -->
+        <section>
+            <h2>4. FLAGS 레지스터와 조건 점프</h2>
+            <p>비교 연산의 결과를 저장하고, 조건 점프에 사용됩니다.</p>
+
+            <h3>예시: if (x > 10) 실행 과정</h3>
+
+            <div class="code-block"><span class="comment">// C++ 코드</span>
+<span class="keyword">if</span> (x > <span class="number">10</span>) {
+    doSomething();
+}</div>
+
+            <div class="diagram">어셈블리로 변환:
+─────────────────────────
+CMP x, 10      ; x와 10을 비교 → FLAGS에 결과 저장
+JG  label      ; FLAGS 보고 x > 10이면 점프
+...            ; 아니면 여기 실행
+label:
+    doSomething()</div>
+
+            <div class="concept-box">
+                <h4>FLAGS의 주요 플래그</h4>
+                <ul style="margin-left: 20px;">
+                    <li><strong>ZF (Zero Flag)</strong>: 결과가 0이면 1</li>
+                    <li><strong>SF (Sign Flag)</strong>: 결과가 음수면 1</li>
+                    <li><strong>CF (Carry Flag)</strong>: 올림/빌림 발생시 1</li>
+                    <li><strong>OF (Overflow Flag)</strong>: 오버플로우 발생시 1</li>
+                </ul>
+            </div>
+
+            <h3>조건 점프 명령어</h3>
+            <table>
+                <tr>
+                    <th>명령어</th>
+                    <th>의미</th>
+                    <th>조건</th>
+                </tr>
+                <tr>
+                    <td>JE / JZ</td>
+                    <td>같으면 점프</td>
+                    <td>ZF = 1</td>
+                </tr>
+                <tr>
+                    <td>JNE / JNZ</td>
+                    <td>다르면 점프</td>
+                    <td>ZF = 0</td>
+                </tr>
+                <tr>
+                    <td>JG</td>
+                    <td>크면 점프 (signed)</td>
+                    <td>ZF=0 && SF=OF</td>
+                </tr>
+                <tr>
+                    <td>JL</td>
+                    <td>작으면 점프 (signed)</td>
+                    <td>SF != OF</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- 5. 캐시 -->
+        <section>
+            <h2>5. 캐시 메모리</h2>
+            <p>CPU와 메모리 속도 차이를 줄이기 위한 중간 저장소입니다.</p>
+
+            <div class="diagram">속도 (빠름 → 느림)
+────────────────────────────────────────────
+레지스터 → L1 캐시 → L2 캐시 → L3 캐시 → RAM
+────────────────────────────────────────────
+용량 (작음 → 큼)</div>
+
+            <div class="concept-box">
+                <h4>캐시 계층 구조</h4>
+                <ul style="margin-left: 20px;">
+                    <li><strong>L1 캐시</strong>: 각 코어 전용, 가장 빠름 (~32KB)</li>
+                    <li><strong>L2 캐시</strong>: 각 코어 전용 (~256KB)</li>
+                    <li><strong>L3 캐시</strong>: 전체 코어 공유 (~수 MB)</li>
+                </ul>
+            </div>
+
+            <h3>캐시 지역성 (Cache Locality)</h3>
+            <p>캐시는 데이터를 <span class="highlight">캐시 라인(64바이트)</span> 단위로 가져옵니다.</p>
+
+            <div class="code-block"><span class="comment">// 방법 A - 순차 접근 (빠름)</span>
+<span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i < <span class="number">1000000</span>; i++) {
+    arr[i] = arr[i] * <span class="number">2</span>;  <span class="comment">// Cache Hit!</span>
+}
+
+<span class="comment">// 방법 B - 랜덤 접근 (느림)</span>
+<span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i < <span class="number">1000000</span>; i++) {
+    arr[random[i]] = arr[random[i]] * <span class="number">2</span>;  <span class="comment">// Cache Miss!</span>
+}</div>
+
+            <div class="concept-box key">
+                <h4>순차 접근이 빠른 이유</h4>
+                <p>arr[0] 접근 시 arr[0]~arr[15] (64바이트)가 한 번에 캐시로 올라옵니다. 이후 arr[1]~arr[15] 접근은 캐시에서 바로 읽어옵니다 (Cache Hit). 랜덤 접근은 매번 새로운 캐시 라인을 로드해야 합니다 (Cache Miss).</p>
+            </div>
+        </section>
+
+        <!-- 6. 파이프라인 -->
+        <section>
+            <h2>6. 파이프라인 (Pipeline)</h2>
+            <p>명령어를 겹쳐서 실행하여 처리량을 높이는 기법입니다.</p>
+
+            <h3>명령어 처리 단계</h3>
+            <div class="diagram">1. Fetch    - 명령어 가져오기 (메모리에서)
+2. Decode   - 명령어 해석 (이게 뭔 명령이지?)
+3. Execute  - 실행 (ALU에서 연산)
+4. Write    - 결과 저장 (레지스터에)</div>
+
+            <h3>파이프라인 없음 vs 있음</h3>
+            <div class="diagram">파이프라인 없음 (순차 실행):
+시간 →  1  2  3  4  5  6  7  8  9  10 11 12
+명령A: [F][D][E][W]
+명령B:             [F][D][E][W]
+명령C:                         [F][D][E][W]
+총 12사이클
+
+─────────────────────────────────────────────
+
+파이프라인 있음 (겹쳐서 실행):
+시간 →  1  2  3  4  5  6
+명령A: [F][D][E][W]
+명령B:    [F][D][E][W]
+명령C:       [F][D][E][W]
+총 6사이클</div>
+
+            <div class="concept-box warning">
+                <h4>파이프라인 해저드 (Hazard)</h4>
+                <p>항상 깔끔하게 겹쳐 실행할 수 있는 건 아닙니다.</p>
+                <div class="code-block" style="margin: 12px 0;"><span class="type">int</span> a = <span class="number">1</span> + <span class="number">2</span>;    <span class="comment">// 명령어 A</span>
+<span class="type">int</span> b = a + <span class="number">3</span>;    <span class="comment">// 명령어 B ← A의 결과가 필요!</span></div>
+                <p>B는 A의 결과를 기다려야 합니다. 이런 대기 시간을 <strong>Stall(버블)</strong>이라고 합니다.</p>
+            </div>
+
+            <h3>해저드 해결 방법</h3>
+            <table>
+                <tr>
+                    <th>기법</th>
+                    <th>설명</th>
+                </tr>
+                <tr>
+                    <td>Forwarding</td>
+                    <td>결과를 Write 전에 미리 다음 명령에 전달</td>
+                </tr>
+                <tr>
+                    <td>Out-of-Order</td>
+                    <td>의존성 없는 다른 명령 먼저 실행</td>
+                </tr>
+                <tr>
+                    <td>Branch Prediction</td>
+                    <td>조건 점프 결과를 예측하여 미리 실행</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- 7. 최종 정리 -->
+        <section>
+            <h2>7. 핵심 요약</h2>
+
+            <div class="summary-table">
+                <table>
+                    <tr>
+                        <th>개념</th>
+                        <th>핵심 내용</th>
+                    </tr>
+                    <tr>
+                        <td>CPU 구조</td>
+                        <td>CU(제어), ALU(연산), 레지스터(저장)</td>
+                    </tr>
+                    <tr>
+                        <td>버스</td>
+                        <td>주소/데이터/제어 버스로 CPU-메모리 통신</td>
+                    </tr>
+                    <tr>
+                        <td>PC</td>
+                        <td>다음 명령어 주소, 점프로 변경 가능</td>
+                    </tr>
+                    <tr>
+                        <td>FLAGS</td>
+                        <td>비교 결과 저장 → 조건 점프에 활용</td>
+                    </tr>
+                    <tr>
+                        <td>캐시</td>
+                        <td>L1/L2(코어별), L3(공유), 순차 접근이 유리</td>
+                    </tr>
+                    <tr>
+                        <td>파이프라인</td>
+                        <td>명령어 겹쳐 실행, Hazard로 지연 발생 가능</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="concept-box key" style="margin-top: 24px;">
+                <h4>게임 서버 개발자 관점</h4>
+                <ul style="margin-left: 20px;">
+                    <li><strong>캐시 친화적 코드</strong>: 데이터를 연속 메모리에 배치하면 성능 향상</li>
+                    <li><strong>분기 예측</strong>: if문이 많으면 파이프라인 효율 저하 가능</li>
+                    <li><strong>메모리 접근 패턴</strong>: 랜덤 접근보다 순차 접근이 훨씬 빠름</li>
+                </ul>
+            </div>
+        </section>
+
+        <div class="nav-links">
+            <a href="../category-cs/">← CS 기초 목록</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
