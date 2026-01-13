@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lag Compensation Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #00d4ff;
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: #1a1a2e;
+            border: 2px solid #333;
+            color: #888;
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .tab-btn:hover {
+            border-color: #00d4ff;
+            color: #fff;
+        }
+
+        .tab-btn.active {
+            background: #00d4ff;
+            color: #000;
+            border-color: #00d4ff;
+        }
+
+        .demo-container {
+            display: none;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .demo-container.active {
+            display: block;
+        }
+
+        .demo-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .demo-header h2 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+
+        .demo-header p {
+            color: #888;
+        }
+
+        .canvas-wrapper {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .canvas-box {
+            background: #111;
+            border-radius: 12px;
+            padding: 15px;
+            border: 2px solid #222;
+        }
+
+        .canvas-box h3 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .canvas-box.off h3 { color: #ff6b6b; }
+        .canvas-box.on h3 { color: #51cf66; }
+        .canvas-box.attacker h3 { color: #ff6b6b; }
+        .canvas-box.server h3 { color: #ffd43b; }
+        .canvas-box.victim h3 { color: #51cf66; }
+
+        canvas {
+            display: block;
+            border-radius: 8px;
+            background: #1a1a2e;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #1a1a2e;
+            padding: 10px 15px;
+            border-radius: 8px;
+        }
+
+        .control-group label {
+            color: #888;
+            font-size: 13px;
+        }
+
+        input[type="range"] {
+            width: 120px;
+            cursor: pointer;
+        }
+
+        .value-display {
+            color: #00d4ff;
+            font-weight: bold;
+            min-width: 50px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #00d4ff;
+            border: none;
+            color: #000;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #00a8cc;
+            transform: scale(1.05);
+        }
+
+        .instructions {
+            text-align: center;
+            padding: 15px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .instructions code {
+            background: #333;
+            padding: 3px 8px;
+            border-radius: 4px;
+            color: #ffd43b;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            padding: 10px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .status-item {
+            text-align: center;
+        }
+
+        .status-item .label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .status-item .value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+
+        .hit-effect {
+            position: absolute;
+            font-size: 24px;
+            font-weight: bold;
+            animation: hitPop 0.5s ease-out forwards;
+            pointer-events: none;
+        }
+
+        @keyframes hitPop {
+            0% { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(1.5) translateY(-20px); opacity: 0; }
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Network Lag Compensation Demo</h1>
+
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="prediction">1. Client Prediction</button>
+        <button class="tab-btn" data-tab="rubberbanding">2. Rubberbanding</button>
+        <button class="tab-btn" data-tab="interpolation">3. Interpolation</button>
+        <button class="tab-btn" data-tab="lagcomp">4. Lag Compensation</button>
+    </div>
+
+    <!-- Demo 1: Client Prediction -->
+    <div id="prediction" class="demo-container active">
+        <div class="demo-header">
+            <h2>Client-side Prediction</h2>
+            <p>Compare character response with prediction ON vs OFF</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Network Delay:</label>
+                <input type="range" id="pred-delay" min="50" max="500" value="200">
+                <span class="value-display" id="pred-delay-val">200ms</span>
+            </div>
+            <button id="pred-reset">Reset Position</button>
+        </div>
+
+        <div class="instructions">
+            Use <code>WASD</code> or <code>Arrow Keys</code> to move
+        </div>
+
+        <div class="canvas-wrapper">
+            <div class="canvas-box off">
+                <h3>Prediction OFF (Wait for Server)</h3>
+                <canvas id="pred-canvas-off" width="400" height="300"></canvas>
+            </div>
+            <div class="canvas-box on">
+                <h3>Prediction ON (Immediate Response)</h3>
+                <canvas id="pred-canvas-on" width="400" height="300"></canvas>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #00d4ff;"></div>
+                <span>Player</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: rgba(0,212,255,0.3);"></div>
+                <span>Input Sent (waiting...)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Demo 2: Rubberbanding -->
+    <div id="rubberbanding" class="demo-container">
+        <div class="demo-header">
+            <h2>Server Reconciliation (Rubberbanding)</h2>
+            <p>When client prediction is wrong, server corrects it</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Network Delay:</label>
+                <input type="range" id="rubber-delay" min="100" max="500" value="250">
+                <span class="value-display" id="rubber-delay-val">250ms</span>
+            </div>
+            <button id="rubber-reset">Reset</button>
+        </div>
+
+        <div class="instructions">
+            Move with <code>WASD</code> - Try to pass through the <span style="color:#ff6b6b;">RED WALL</span> (Server will reject!)
+        </div>
+
+        <div class="canvas-wrapper">
+            <div class="canvas-box">
+                <h3 style="color:#00d4ff;">Client View (with Prediction)</h3>
+                <canvas id="rubber-canvas-client" width="500" height="300"></canvas>
+            </div>
+            <div class="canvas-box">
+                <h3 style="color:#ffd43b;">Server View (Authority)</h3>
+                <canvas id="rubber-canvas-server" width="500" height="300"></canvas>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="label">Rollbacks</div>
+                <div class="value" id="rollback-count">0</div>
+            </div>
+            <div class="status-item">
+                <div class="label">Status</div>
+                <div class="value" id="rubber-status" style="color:#51cf66;">Synced</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Demo 3: Interpolation -->
+    <div id="interpolation" class="demo-container">
+        <div class="demo-header">
+            <h2>Entity Interpolation</h2>
+            <p>Smoothing other players' movement between server updates</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Server Tickrate:</label>
+                <input type="range" id="interp-tickrate" min="5" max="60" value="15">
+                <span class="value-display" id="interp-tickrate-val">15 tick</span>
+            </div>
+            <button id="interp-reset">Restart</button>
+        </div>
+
+        <div class="canvas-wrapper">
+            <div class="canvas-box off">
+                <h3>Interpolation OFF (Raw Updates)</h3>
+                <canvas id="interp-canvas-off" width="400" height="300"></canvas>
+            </div>
+            <div class="canvas-box on">
+                <h3>Interpolation ON (Smooth)</h3>
+                <canvas id="interp-canvas-on" width="400" height="300"></canvas>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ff6b6b;"></div>
+                <span>Other Player (from server)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: rgba(255,107,107,0.3);"></div>
+                <span>Position History</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Demo 4: Lag Compensation -->
+    <div id="lagcomp" class="demo-container">
+        <div class="demo-header">
+            <h2>Lag Compensation (Hit Detection)</h2>
+            <p>Server rewinds time to validate hits from attacker's perspective</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Attacker Ping:</label>
+                <input type="range" id="lag-attacker-ping" min="50" max="300" value="150">
+                <span class="value-display" id="lag-attacker-ping-val">150ms</span>
+            </div>
+            <div class="control-group">
+                <label>Victim Ping:</label>
+                <input type="range" id="lag-victim-ping" min="20" max="200" value="50">
+                <span class="value-display" id="lag-victim-ping-val">50ms</span>
+            </div>
+            <button id="lag-reset">Reset</button>
+        </div>
+
+        <div class="instructions">
+            <code>Click</code> on attacker's screen to shoot! Watch how server rewinds time.
+        </div>
+
+        <div class="canvas-wrapper">
+            <div class="canvas-box attacker">
+                <h3>Attacker's Screen (150ms behind)</h3>
+                <canvas id="lag-canvas-attacker" width="350" height="250"></canvas>
+            </div>
+            <div class="canvas-box server">
+                <h3>Server (Real-time)</h3>
+                <canvas id="lag-canvas-server" width="350" height="250"></canvas>
+            </div>
+            <div class="canvas-box victim">
+                <h3>Victim's Screen (50ms behind)</h3>
+                <canvas id="lag-canvas-victim" width="350" height="250"></canvas>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="label">Hits</div>
+                <div class="value" id="hit-count">0</div>
+            </div>
+            <div class="status-item">
+                <div class="label">Misses</div>
+                <div class="value" id="miss-count">0</div>
+            </div>
+            <div class="status-item">
+                <div class="label">Last Result</div>
+                <div class="value" id="last-result">-</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // Tab Navigation
+        // ============================================
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.demo-container').forEach(d => d.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab).classList.add('active');
+            });
+        });
+
+        // ============================================
+        // Demo 1: Client Prediction
+        // ============================================
+        const predCanvasOff = document.getElementById('pred-canvas-off');
+        const predCanvasOn = document.getElementById('pred-canvas-on');
+        const predCtxOff = predCanvasOff.getContext('2d');
+        const predCtxOn = predCanvasOn.getContext('2d');
+
+        const predState = {
+            offPlayer: { x: 200, y: 150 },
+            onPlayer: { x: 200, y: 150 },
+            onPlayerGhost: null,
+            pendingInputs: [],
+            delay: 200
+        };
+
+        document.getElementById('pred-delay').addEventListener('input', (e) => {
+            predState.delay = parseInt(e.target.value);
+            document.getElementById('pred-delay-val').textContent = predState.delay + 'ms';
+        });
+
+        document.getElementById('pred-reset').addEventListener('click', () => {
+            predState.offPlayer = { x: 200, y: 150 };
+            predState.onPlayer = { x: 200, y: 150 };
+            predState.onPlayerGhost = null;
+            predState.pendingInputs = [];
+        });
+
+        const keys = {};
+        document.addEventListener('keydown', (e) => {
+            if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+                keys[e.key] = true;
+                e.preventDefault();
+            }
+        });
+        document.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        function predUpdate() {
+            const speed = 4;
+            let dx = 0, dy = 0;
+
+            if (keys['w'] || keys['ArrowUp']) dy = -speed;
+            if (keys['s'] || keys['ArrowDown']) dy = speed;
+            if (keys['a'] || keys['ArrowLeft']) dx = -speed;
+            if (keys['d'] || keys['ArrowRight']) dx = speed;
+
+            if (dx !== 0 || dy !== 0) {
+                // Prediction ON: Move immediately
+                predState.onPlayer.x = Math.max(20, Math.min(380, predState.onPlayer.x + dx));
+                predState.onPlayer.y = Math.max(20, Math.min(280, predState.onPlayer.y + dy));
+
+                // Queue input for OFF canvas (delayed)
+                predState.pendingInputs.push({
+                    dx, dy,
+                    time: Date.now(),
+                    processed: false
+                });
+            }
+
+            // Process delayed inputs for OFF canvas
+            const now = Date.now();
+            predState.pendingInputs.forEach(input => {
+                if (!input.processed && now - input.time >= predState.delay) {
+                    predState.offPlayer.x = Math.max(20, Math.min(380, predState.offPlayer.x + input.dx));
+                    predState.offPlayer.y = Math.max(20, Math.min(280, predState.offPlayer.y + input.dy));
+                    input.processed = true;
+                }
+            });
+
+            // Clean old inputs
+            predState.pendingInputs = predState.pendingInputs.filter(i => !i.processed || Date.now() - i.time < 1000);
+        }
+
+        function predDraw() {
+            // Draw OFF canvas
+            predCtxOff.fillStyle = '#1a1a2e';
+            predCtxOff.fillRect(0, 0, 400, 300);
+
+            // Show pending indicator
+            const hasPending = predState.pendingInputs.some(i => !i.processed);
+            if (hasPending) {
+                predCtxOff.fillStyle = 'rgba(0,212,255,0.2)';
+                predCtxOff.beginPath();
+                predCtxOff.arc(predState.offPlayer.x, predState.offPlayer.y, 30, 0, Math.PI * 2);
+                predCtxOff.fill();
+
+                predCtxOff.fillStyle = '#666';
+                predCtxOff.font = '12px monospace';
+                predCtxOff.textAlign = 'center';
+                predCtxOff.fillText('waiting...', predState.offPlayer.x, predState.offPlayer.y + 45);
+            }
+
+            predCtxOff.fillStyle = '#00d4ff';
+            predCtxOff.beginPath();
+            predCtxOff.arc(predState.offPlayer.x, predState.offPlayer.y, 20, 0, Math.PI * 2);
+            predCtxOff.fill();
+
+            // Draw ON canvas
+            predCtxOn.fillStyle = '#1a1a2e';
+            predCtxOn.fillRect(0, 0, 400, 300);
+
+            predCtxOn.fillStyle = '#00d4ff';
+            predCtxOn.beginPath();
+            predCtxOn.arc(predState.onPlayer.x, predState.onPlayer.y, 20, 0, Math.PI * 2);
+            predCtxOn.fill();
+
+            // Draw player labels
+            predCtxOff.fillStyle = '#fff';
+            predCtxOff.font = 'bold 12px sans-serif';
+            predCtxOff.textAlign = 'center';
+            predCtxOff.fillText('P', predState.offPlayer.x, predState.offPlayer.y + 5);
+
+            predCtxOn.fillStyle = '#fff';
+            predCtxOn.font = 'bold 12px sans-serif';
+            predCtxOn.textAlign = 'center';
+            predCtxOn.fillText('P', predState.onPlayer.x, predState.onPlayer.y + 5);
+        }
+
+        // ============================================
+        // Demo 2: Rubberbanding
+        // ============================================
+        const rubberCanvasClient = document.getElementById('rubber-canvas-client');
+        const rubberCanvasServer = document.getElementById('rubber-canvas-server');
+        const rubberCtxClient = rubberCanvasClient.getContext('2d');
+        const rubberCtxServer = rubberCanvasServer.getContext('2d');
+
+        const rubberState = {
+            clientPos: { x: 100, y: 150 },
+            serverPos: { x: 100, y: 150 },
+            wall: { x: 250, y: 50, w: 20, h: 200 },
+            delay: 250,
+            pendingMoves: [],
+            rollbackCount: 0,
+            isRubberbanding: false
+        };
+
+        document.getElementById('rubber-delay').addEventListener('input', (e) => {
+            rubberState.delay = parseInt(e.target.value);
+            document.getElementById('rubber-delay-val').textContent = rubberState.delay + 'ms';
+        });
+
+        document.getElementById('rubber-reset').addEventListener('click', () => {
+            rubberState.clientPos = { x: 100, y: 150 };
+            rubberState.serverPos = { x: 100, y: 150 };
+            rubberState.pendingMoves = [];
+            rubberState.rollbackCount = 0;
+            rubberState.isRubberbanding = false;
+            document.getElementById('rollback-count').textContent = '0';
+            document.getElementById('rubber-status').textContent = 'Synced';
+            document.getElementById('rubber-status').style.color = '#51cf66';
+        });
+
+        function rubberUpdate() {
+            const speed = 4;
+            let dx = 0, dy = 0;
+
+            if (keys['w'] || keys['ArrowUp']) dy = -speed;
+            if (keys['s'] || keys['ArrowDown']) dy = speed;
+            if (keys['a'] || keys['ArrowLeft']) dx = -speed;
+            if (keys['d'] || keys['ArrowRight']) dx = speed;
+
+            if (dx !== 0 || dy !== 0) {
+                // Client prediction: move immediately
+                rubberState.clientPos.x += dx;
+                rubberState.clientPos.y += dy;
+
+                // Clamp to bounds
+                rubberState.clientPos.x = Math.max(20, Math.min(480, rubberState.clientPos.x));
+                rubberState.clientPos.y = Math.max(20, Math.min(280, rubberState.clientPos.y));
+
+                // Queue for server
+                rubberState.pendingMoves.push({
+                    dx, dy,
+                    time: Date.now(),
+                    clientPosAfter: { ...rubberState.clientPos }
+                });
+            }
+
+            // Process server moves
+            const now = Date.now();
+            rubberState.pendingMoves = rubberState.pendingMoves.filter(move => {
+                if (now - move.time >= rubberState.delay) {
+                    // Server processes the move
+                    let newX = rubberState.serverPos.x + move.dx;
+                    let newY = rubberState.serverPos.y + move.dy;
+
+                    // Check wall collision on server
+                    const wall = rubberState.wall;
+                    const wouldCollide = newX + 20 > wall.x && newX - 20 < wall.x + wall.w &&
+                                        newY + 20 > wall.y && newY - 20 < wall.y + wall.h;
+
+                    if (!wouldCollide) {
+                        rubberState.serverPos.x = Math.max(20, Math.min(480, newX));
+                        rubberState.serverPos.y = Math.max(20, Math.min(280, newY));
+                    } else {
+                        // Server rejects! Rubberband the client
+                        rubberState.isRubberbanding = true;
+                        rubberState.rollbackCount++;
+                        document.getElementById('rollback-count').textContent = rubberState.rollbackCount;
+                        document.getElementById('rubber-status').textContent = 'ROLLBACK!';
+                        document.getElementById('rubber-status').style.color = '#ff6b6b';
+
+                        setTimeout(() => {
+                            rubberState.clientPos = { ...rubberState.serverPos };
+                            rubberState.isRubberbanding = false;
+                            document.getElementById('rubber-status').textContent = 'Synced';
+                            document.getElementById('rubber-status').style.color = '#51cf66';
+                        }, 100);
+                    }
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        function rubberDraw() {
+            const wall = rubberState.wall;
+
+            // Draw client view
+            rubberCtxClient.fillStyle = '#1a1a2e';
+            rubberCtxClient.fillRect(0, 0, 500, 300);
+
+            // Wall
+            rubberCtxClient.fillStyle = '#ff6b6b';
+            rubberCtxClient.fillRect(wall.x, wall.y, wall.w, wall.h);
+            rubberCtxClient.fillStyle = '#fff';
+            rubberCtxClient.font = '10px sans-serif';
+            rubberCtxClient.save();
+            rubberCtxClient.translate(wall.x + wall.w/2, wall.y + wall.h/2);
+            rubberCtxClient.rotate(-Math.PI/2);
+            rubberCtxClient.textAlign = 'center';
+            rubberCtxClient.fillText('SERVER WALL', 0, 4);
+            rubberCtxClient.restore();
+
+            // Player
+            rubberCtxClient.fillStyle = rubberState.isRubberbanding ? '#ff6b6b' : '#00d4ff';
+            rubberCtxClient.beginPath();
+            rubberCtxClient.arc(rubberState.clientPos.x, rubberState.clientPos.y, 20, 0, Math.PI * 2);
+            rubberCtxClient.fill();
+
+            rubberCtxClient.fillStyle = '#fff';
+            rubberCtxClient.font = 'bold 12px sans-serif';
+            rubberCtxClient.textAlign = 'center';
+            rubberCtxClient.fillText('P', rubberState.clientPos.x, rubberState.clientPos.y + 5);
+
+            // Draw server view
+            rubberCtxServer.fillStyle = '#1a1a2e';
+            rubberCtxServer.fillRect(0, 0, 500, 300);
+
+            // Wall
+            rubberCtxServer.fillStyle = '#ff6b6b';
+            rubberCtxServer.fillRect(wall.x, wall.y, wall.w, wall.h);
+            rubberCtxServer.fillStyle = '#fff';
+            rubberCtxServer.font = '10px sans-serif';
+            rubberCtxServer.save();
+            rubberCtxServer.translate(wall.x + wall.w/2, wall.y + wall.h/2);
+            rubberCtxServer.rotate(-Math.PI/2);
+            rubberCtxServer.textAlign = 'center';
+            rubberCtxServer.fillText('SERVER WALL', 0, 4);
+            rubberCtxServer.restore();
+
+            // Player
+            rubberCtxServer.fillStyle = '#ffd43b';
+            rubberCtxServer.beginPath();
+            rubberCtxServer.arc(rubberState.serverPos.x, rubberState.serverPos.y, 20, 0, Math.PI * 2);
+            rubberCtxServer.fill();
+
+            rubberCtxServer.fillStyle = '#000';
+            rubberCtxServer.font = 'bold 12px sans-serif';
+            rubberCtxServer.textAlign = 'center';
+            rubberCtxServer.fillText('P', rubberState.serverPos.x, rubberState.serverPos.y + 5);
+        }
+
+        // ============================================
+        // Demo 3: Interpolation
+        // ============================================
+        const interpCanvasOff = document.getElementById('interp-canvas-off');
+        const interpCanvasOn = document.getElementById('interp-canvas-on');
+        const interpCtxOff = interpCanvasOff.getContext('2d');
+        const interpCtxOn = interpCanvasOn.getContext('2d');
+
+        const interpState = {
+            tickrate: 15,
+            serverPos: { x: 50, y: 150 },
+            serverVel: { x: 2, y: 0 },
+            lastTickTime: 0,
+            offPos: { x: 50, y: 150 },
+            onPos: { x: 50, y: 150 },
+            targetPos: { x: 50, y: 150 },
+            prevPos: { x: 50, y: 150 },
+            interpProgress: 0,
+            posHistory: []
+        };
+
+        document.getElementById('interp-tickrate').addEventListener('input', (e) => {
+            interpState.tickrate = parseInt(e.target.value);
+            document.getElementById('interp-tickrate-val').textContent = interpState.tickrate + ' tick';
+        });
+
+        document.getElementById('interp-reset').addEventListener('click', () => {
+            interpState.serverPos = { x: 50, y: 150 };
+            interpState.offPos = { x: 50, y: 150 };
+            interpState.onPos = { x: 50, y: 150 };
+            interpState.targetPos = { x: 50, y: 150 };
+            interpState.prevPos = { x: 50, y: 150 };
+            interpState.posHistory = [];
+        });
+
+        function interpUpdate() {
+            // Server moves in a pattern
+            interpState.serverPos.x += interpState.serverVel.x;
+            interpState.serverPos.y += Math.sin(Date.now() / 500) * 2;
+
+            if (interpState.serverPos.x > 350) {
+                interpState.serverPos.x = 350;
+                interpState.serverVel.x = -2;
+            }
+            if (interpState.serverPos.x < 50) {
+                interpState.serverPos.x = 50;
+                interpState.serverVel.x = 2;
+            }
+            interpState.serverPos.y = Math.max(50, Math.min(250, interpState.serverPos.y));
+
+            // Tick update
+            const tickInterval = 1000 / interpState.tickrate;
+            const now = Date.now();
+
+            if (now - interpState.lastTickTime >= tickInterval) {
+                interpState.lastTickTime = now;
+
+                // OFF: Jump directly to new position
+                interpState.offPos = { ...interpState.serverPos };
+
+                // ON: Set up interpolation
+                interpState.prevPos = { ...interpState.targetPos };
+                interpState.targetPos = { ...interpState.serverPos };
+                interpState.interpProgress = 0;
+
+                // Store history
+                interpState.posHistory.push({ ...interpState.serverPos });
+                if (interpState.posHistory.length > 10) interpState.posHistory.shift();
+            }
+
+            // Interpolate for ON
+            interpState.interpProgress += (1000 / 60) / tickInterval;
+            if (interpState.interpProgress > 1) interpState.interpProgress = 1;
+
+            interpState.onPos.x = interpState.prevPos.x + (interpState.targetPos.x - interpState.prevPos.x) * interpState.interpProgress;
+            interpState.onPos.y = interpState.prevPos.y + (interpState.targetPos.y - interpState.prevPos.y) * interpState.interpProgress;
+        }
+
+        function interpDraw() {
+            // OFF canvas
+            interpCtxOff.fillStyle = '#1a1a2e';
+            interpCtxOff.fillRect(0, 0, 400, 300);
+
+            // History trail
+            interpState.posHistory.forEach((pos, i) => {
+                const alpha = (i + 1) / interpState.posHistory.length * 0.3;
+                interpCtxOff.fillStyle = `rgba(255,107,107,${alpha})`;
+                interpCtxOff.beginPath();
+                interpCtxOff.arc(pos.x, pos.y, 15, 0, Math.PI * 2);
+                interpCtxOff.fill();
+            });
+
+            interpCtxOff.fillStyle = '#ff6b6b';
+            interpCtxOff.beginPath();
+            interpCtxOff.arc(interpState.offPos.x, interpState.offPos.y, 20, 0, Math.PI * 2);
+            interpCtxOff.fill();
+
+            interpCtxOff.fillStyle = '#fff';
+            interpCtxOff.font = 'bold 12px sans-serif';
+            interpCtxOff.textAlign = 'center';
+            interpCtxOff.fillText('E', interpState.offPos.x, interpState.offPos.y + 5);
+
+            // ON canvas
+            interpCtxOn.fillStyle = '#1a1a2e';
+            interpCtxOn.fillRect(0, 0, 400, 300);
+
+            // History trail
+            interpState.posHistory.forEach((pos, i) => {
+                const alpha = (i + 1) / interpState.posHistory.length * 0.3;
+                interpCtxOn.fillStyle = `rgba(255,107,107,${alpha})`;
+                interpCtxOn.beginPath();
+                interpCtxOn.arc(pos.x, pos.y, 15, 0, Math.PI * 2);
+                interpCtxOn.fill();
+            });
+
+            interpCtxOn.fillStyle = '#ff6b6b';
+            interpCtxOn.beginPath();
+            interpCtxOn.arc(interpState.onPos.x, interpState.onPos.y, 20, 0, Math.PI * 2);
+            interpCtxOn.fill();
+
+            interpCtxOn.fillStyle = '#fff';
+            interpCtxOn.font = 'bold 12px sans-serif';
+            interpCtxOn.textAlign = 'center';
+            interpCtxOn.fillText('E', interpState.onPos.x, interpState.onPos.y + 5);
+        }
+
+        // ============================================
+        // Demo 4: Lag Compensation
+        // ============================================
+        const lagCanvasAttacker = document.getElementById('lag-canvas-attacker');
+        const lagCanvasServer = document.getElementById('lag-canvas-server');
+        const lagCanvasVictim = document.getElementById('lag-canvas-victim');
+        const lagCtxAttacker = lagCanvasAttacker.getContext('2d');
+        const lagCtxServer = lagCanvasServer.getContext('2d');
+        const lagCtxVictim = lagCanvasVictim.getContext('2d');
+
+        const lagState = {
+            attackerPing: 150,
+            victimPing: 50,
+            serverTarget: { x: 280, y: 125 },
+            serverVel: { x: 0, y: 2 },
+            attackerTarget: { x: 280, y: 125 },
+            victimTarget: { x: 280, y: 125 },
+            positionHistory: [],
+            hitCount: 0,
+            missCount: 0,
+            lastShot: null,
+            rewindIndicator: null
+        };
+
+        document.getElementById('lag-attacker-ping').addEventListener('input', (e) => {
+            lagState.attackerPing = parseInt(e.target.value);
+            document.getElementById('lag-attacker-ping-val').textContent = lagState.attackerPing + 'ms';
+            lagCanvasAttacker.parentElement.querySelector('h3').textContent =
+                `Attacker's Screen (${lagState.attackerPing}ms behind)`;
+        });
+
+        document.getElementById('lag-victim-ping').addEventListener('input', (e) => {
+            lagState.victimPing = parseInt(e.target.value);
+            document.getElementById('lag-victim-ping-val').textContent = lagState.victimPing + 'ms';
+            lagCanvasVictim.parentElement.querySelector('h3').textContent =
+                `Victim's Screen (${lagState.victimPing}ms behind)`;
+        });
+
+        document.getElementById('lag-reset').addEventListener('click', () => {
+            lagState.hitCount = 0;
+            lagState.missCount = 0;
+            lagState.lastShot = null;
+            document.getElementById('hit-count').textContent = '0';
+            document.getElementById('miss-count').textContent = '0';
+            document.getElementById('last-result').textContent = '-';
+        });
+
+        // Click to shoot
+        lagCanvasAttacker.addEventListener('click', (e) => {
+            const rect = lagCanvasAttacker.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            // Check if hit on attacker's screen
+            const dist = Math.hypot(clickX - lagState.attackerTarget.x, clickY - lagState.attackerTarget.y);
+            const hitOnAttacker = dist < 25;
+
+            if (hitOnAttacker) {
+                // Find where target was at attacker's view time
+                const rewindTime = lagState.attackerPing;
+                const historyIndex = Math.max(0, lagState.positionHistory.length - Math.floor(rewindTime / 16) - 1);
+                const rewindPos = lagState.positionHistory[historyIndex] || lagState.serverTarget;
+
+                // Server validates by rewinding
+                lagState.rewindIndicator = {
+                    pos: { ...rewindPos },
+                    time: Date.now()
+                };
+
+                lagState.hitCount++;
+                document.getElementById('hit-count').textContent = lagState.hitCount;
+                document.getElementById('last-result').textContent = 'HIT!';
+                document.getElementById('last-result').style.color = '#51cf66';
+
+                lagState.lastShot = { x: clickX, y: clickY, hit: true, time: Date.now() };
+            } else {
+                lagState.missCount++;
+                document.getElementById('miss-count').textContent = lagState.missCount;
+                document.getElementById('last-result').textContent = 'MISS';
+                document.getElementById('last-result').style.color = '#ff6b6b';
+
+                lagState.lastShot = { x: clickX, y: clickY, hit: false, time: Date.now() };
+            }
+        });
+
+        function lagUpdate() {
+            // Move target on server
+            lagState.serverTarget.y += lagState.serverVel.y;
+            if (lagState.serverTarget.y > 200 || lagState.serverTarget.y < 50) {
+                lagState.serverVel.y *= -1;
+            }
+
+            // Store position history
+            lagState.positionHistory.push({ ...lagState.serverTarget, time: Date.now() });
+            if (lagState.positionHistory.length > 100) lagState.positionHistory.shift();
+
+            // Delayed positions for clients
+            const attackerDelay = Math.floor(lagState.attackerPing / 16);
+            const victimDelay = Math.floor(lagState.victimPing / 16);
+
+            const attackerIdx = Math.max(0, lagState.positionHistory.length - attackerDelay - 1);
+            const victimIdx = Math.max(0, lagState.positionHistory.length - victimDelay - 1);
+
+            lagState.attackerTarget = lagState.positionHistory[attackerIdx] || lagState.serverTarget;
+            lagState.victimTarget = lagState.positionHistory[victimIdx] || lagState.serverTarget;
+        }
+
+        function lagDraw() {
+            const targetSize = 25;
+
+            // Draw attacker view
+            lagCtxAttacker.fillStyle = '#1a1a2e';
+            lagCtxAttacker.fillRect(0, 0, 350, 250);
+
+            // Crosshair
+            lagCtxAttacker.strokeStyle = '#ff6b6b44';
+            lagCtxAttacker.lineWidth = 1;
+            lagCtxAttacker.beginPath();
+            lagCtxAttacker.moveTo(175, 0); lagCtxAttacker.lineTo(175, 250);
+            lagCtxAttacker.moveTo(0, 125); lagCtxAttacker.lineTo(350, 125);
+            lagCtxAttacker.stroke();
+
+            // Target
+            lagCtxAttacker.fillStyle = '#51cf66';
+            lagCtxAttacker.beginPath();
+            lagCtxAttacker.arc(lagState.attackerTarget.x, lagState.attackerTarget.y, targetSize, 0, Math.PI * 2);
+            lagCtxAttacker.fill();
+            lagCtxAttacker.fillStyle = '#fff';
+            lagCtxAttacker.font = 'bold 14px sans-serif';
+            lagCtxAttacker.textAlign = 'center';
+            lagCtxAttacker.fillText('V', lagState.attackerTarget.x, lagState.attackerTarget.y + 5);
+
+            // Shot indicator
+            if (lagState.lastShot && Date.now() - lagState.lastShot.time < 500) {
+                lagCtxAttacker.strokeStyle = lagState.lastShot.hit ? '#51cf66' : '#ff6b6b';
+                lagCtxAttacker.lineWidth = 3;
+                lagCtxAttacker.beginPath();
+                lagCtxAttacker.arc(lagState.lastShot.x, lagState.lastShot.y, 10, 0, Math.PI * 2);
+                lagCtxAttacker.stroke();
+            }
+
+            // Draw server view
+            lagCtxServer.fillStyle = '#1a1a2e';
+            lagCtxServer.fillRect(0, 0, 350, 250);
+
+            // Rewind indicator
+            if (lagState.rewindIndicator && Date.now() - lagState.rewindIndicator.time < 800) {
+                const alpha = 1 - (Date.now() - lagState.rewindIndicator.time) / 800;
+                lagCtxServer.strokeStyle = `rgba(255,212,59,${alpha})`;
+                lagCtxServer.lineWidth = 3;
+                lagCtxServer.setLineDash([5, 5]);
+                lagCtxServer.beginPath();
+                lagCtxServer.arc(lagState.rewindIndicator.pos.x, lagState.rewindIndicator.pos.y, targetSize + 10, 0, Math.PI * 2);
+                lagCtxServer.stroke();
+                lagCtxServer.setLineDash([]);
+
+                lagCtxServer.fillStyle = `rgba(255,212,59,${alpha})`;
+                lagCtxServer.font = '11px sans-serif';
+                lagCtxServer.fillText('REWIND', lagState.rewindIndicator.pos.x, lagState.rewindIndicator.pos.y - 40);
+            }
+
+            // Target (current position)
+            lagCtxServer.fillStyle = '#ffd43b';
+            lagCtxServer.beginPath();
+            lagCtxServer.arc(lagState.serverTarget.x, lagState.serverTarget.y, targetSize, 0, Math.PI * 2);
+            lagCtxServer.fill();
+            lagCtxServer.fillStyle = '#000';
+            lagCtxServer.font = 'bold 14px sans-serif';
+            lagCtxServer.textAlign = 'center';
+            lagCtxServer.fillText('V', lagState.serverTarget.x, lagState.serverTarget.y + 5);
+
+            // Draw victim view
+            lagCtxVictim.fillStyle = '#1a1a2e';
+            lagCtxVictim.fillRect(0, 0, 350, 250);
+
+            // Safe zone indicator
+            lagCtxVictim.strokeStyle = '#51cf6644';
+            lagCtxVictim.lineWidth = 2;
+            lagCtxVictim.strokeRect(30, 30, 80, 190);
+            lagCtxVictim.fillStyle = '#51cf6644';
+            lagCtxVictim.font = '10px sans-serif';
+            lagCtxVictim.fillText('COVER', 70, 25);
+
+            // Target
+            lagCtxVictim.fillStyle = '#51cf66';
+            lagCtxVictim.beginPath();
+            lagCtxVictim.arc(lagState.victimTarget.x, lagState.victimTarget.y, targetSize, 0, Math.PI * 2);
+            lagCtxVictim.fill();
+            lagCtxVictim.fillStyle = '#fff';
+            lagCtxVictim.font = 'bold 14px sans-serif';
+            lagCtxVictim.textAlign = 'center';
+            lagCtxVictim.fillText('ME', lagState.victimTarget.x, lagState.victimTarget.y + 5);
+        }
+
+        // ============================================
+        // Main Loop
+        // ============================================
+        function gameLoop() {
+            // Update active demo
+            const activeTab = document.querySelector('.tab-btn.active').dataset.tab;
+
+            if (activeTab === 'prediction') {
+                predUpdate();
+                predDraw();
+            } else if (activeTab === 'rubberbanding') {
+                rubberUpdate();
+                rubberDraw();
+            } else if (activeTab === 'interpolation') {
+                interpUpdate();
+                interpDraw();
+            } else if (activeTab === 'lagcomp') {
+                lagUpdate();
+                lagDraw();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
