@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>소켓 I/O 모델 비교 - MSH Portfolio</title>
+    <title>소켓 I/O 모델: 동기부터 IOCP까지 - MSH Portfolio</title>
     <style>
         * {
             margin: 0;
@@ -13,14 +13,13 @@
 
         body {
             font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #0f0f0f;
-            color: #e0e0e0;
+            background: #fafafa;
+            color: #333;
             line-height: 1.8;
-            min-height: 100vh;
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 60px 20px;
         }
@@ -30,557 +29,291 @@
         }
 
         .nav a {
-            color: #888;
+            color: #666;
             text-decoration: none;
             font-size: 0.9rem;
         }
 
         .nav a:hover {
-            color: #fff;
+            color: #333;
         }
 
         .header {
-            text-align: center;
             margin-bottom: 50px;
         }
 
         .header h1 {
-            font-size: 2.5rem;
+            font-size: 2.2rem;
             font-weight: 700;
             margin-bottom: 16px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: #111;
         }
 
-        .header p {
-            color: #888;
-            font-size: 1.1rem;
-        }
-
-        /* 탭 네비게이션 */
-        .tabs {
+        .header-meta {
             display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 40px;
-            flex-wrap: wrap;
-        }
-
-        .tab-btn {
-            padding: 12px 24px;
-            border: 2px solid #333;
-            background: transparent;
-            color: #888;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.95rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-
-        .tab-btn:hover {
-            border-color: #555;
-            color: #fff;
-        }
-
-        .tab-btn.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-color: transparent;
-            color: #fff;
-        }
-
-        /* 시각화 영역 */
-        .visualization {
-            background: #1a1a1a;
-            border-radius: 16px;
-            padding: 40px;
-            margin-bottom: 30px;
-            min-height: 400px;
-            position: relative;
-        }
-
-        .vis-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }
-
-        .vis-title {
-            font-size: 1.3rem;
-            font-weight: 600;
-        }
-
-        .vis-controls {
-            display: flex;
-            gap: 10px;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
+            gap: 20px;
+            color: #666;
             font-size: 0.9rem;
-            font-weight: 500;
-            transition: all 0.2s ease;
         }
 
-        .btn-primary {
-            background: #4CAF50;
-            color: white;
+        .section {
+            margin-bottom: 50px;
         }
 
-        .btn-primary:hover {
-            background: #45a049;
-        }
-
-        .btn-secondary {
-            background: #333;
-            color: #fff;
-        }
-
-        .btn-secondary:hover {
-            background: #444;
-        }
-
-        /* 서버/클라이언트 시각화 */
-        .vis-area {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 0;
-        }
-
-        .server-box {
-            width: 120px;
-            height: 120px;
-            background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
-            border-radius: 16px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 8px 32px rgba(33, 150, 243, 0.3);
-        }
-
-        .server-box .icon {
-            font-size: 2.5rem;
-            margin-bottom: 8px;
-        }
-
-        .server-box .label {
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-
-        .connection-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 0 40px;
-            position: relative;
-        }
-
-        .connection-line {
-            width: 100%;
-            height: 4px;
-            background: #333;
-            border-radius: 2px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .connection-line::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 50%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, #667eea, transparent);
-            animation: none;
-        }
-
-        .connection-line.active::after {
-            animation: dataFlow 1s linear infinite;
-        }
-
-        @keyframes dataFlow {
-            0% { left: -50%; }
-            100% { left: 100%; }
-        }
-
-        .clients-box {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .client {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px 16px;
-            background: #252525;
-            border-radius: 8px;
-            border: 2px solid #333;
-            transition: all 0.3s ease;
-            min-width: 200px;
-        }
-
-        .client.waiting {
-            border-color: #555;
-        }
-
-        .client.processing {
-            border-color: #FFC107;
-            background: rgba(255, 193, 7, 0.1);
-        }
-
-        .client.completed {
-            border-color: #4CAF50;
-            background: rgba(76, 175, 80, 0.1);
-        }
-
-        .client-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
-
-        .client.waiting .client-icon {
-            background: #555;
-            color: #888;
-        }
-
-        .client.processing .client-icon {
-            background: #FFC107;
-            color: #000;
-        }
-
-        .client.completed .client-icon {
-            background: #4CAF50;
-            color: #fff;
-        }
-
-        .client-info {
-            flex: 1;
-        }
-
-        .client-name {
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        .client-status {
-            font-size: 0.75rem;
-            color: #888;
-        }
-
-        .client.processing .client-status {
-            color: #FFC107;
-        }
-
-        .client.completed .client-status {
-            color: #4CAF50;
-        }
-
-        .progress-bar {
-            width: 60px;
-            height: 6px;
-            background: #333;
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        .progress-bar-fill {
-            height: 100%;
-            background: #4CAF50;
-            border-radius: 3px;
-            transition: width 0.1s linear;
-            width: 0%;
-        }
-
-        .client.processing .progress-bar-fill {
-            background: #FFC107;
-        }
-
-        /* 통계 영역 */
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 1px solid #333;
-        }
-
-        .stat-item {
-            text-align: center;
-        }
-
-        .stat-value {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: #667eea;
-        }
-
-        .stat-label {
-            font-size: 0.8rem;
-            color: #888;
-            margin-top: 4px;
-        }
-
-        /* 설명 영역 */
-        .description {
-            background: #1a1a1a;
-            border-radius: 16px;
-            padding: 30px;
-            margin-bottom: 30px;
-        }
-
-        .description h3 {
-            font-size: 1.2rem;
-            margin-bottom: 16px;
-            color: #fff;
-        }
-
-        .description p {
-            color: #aaa;
-            margin-bottom: 12px;
-        }
-
-        .description code {
-            background: #2a2a2a;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-family: 'Consolas', monospace;
-            color: #e0e0e0;
-        }
-
-        .feature-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 16px;
-        }
-
-        .feature-tag {
-            padding: 6px 12px;
-            background: #252525;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            color: #aaa;
-        }
-
-        .feature-tag.pro {
-            background: rgba(76, 175, 80, 0.2);
-            color: #4CAF50;
-        }
-
-        .feature-tag.con {
-            background: rgba(244, 67, 54, 0.2);
-            color: #f44336;
-        }
-
-        /* 비교 테이블 */
-        .comparison-section {
-            background: #1a1a1a;
-            border-radius: 16px;
-            padding: 30px;
-            margin-top: 40px;
-        }
-
-        .comparison-section h2 {
+        .section h2 {
             font-size: 1.5rem;
-            margin-bottom: 24px;
-            text-align: center;
-        }
-
-        .comparison-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .comparison-table th,
-        .comparison-table td {
-            padding: 16px;
-            text-align: center;
-            border-bottom: 1px solid #333;
-        }
-
-        .comparison-table th {
-            background: #252525;
             font-weight: 600;
-            color: #fff;
+            margin-bottom: 20px;
+            color: #111;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
         }
 
-        .comparison-table th:first-child,
-        .comparison-table td:first-child {
-            text-align: left;
-        }
-
-        .comparison-table tr:last-child td {
-            border-bottom: none;
-        }
-
-        .comparison-table td {
-            color: #aaa;
-        }
-
-        .rating {
-            display: flex;
-            justify-content: center;
-            gap: 2px;
-        }
-
-        .rating-star {
-            color: #FFC107;
-        }
-
-        .rating-star.empty {
+        .section h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 30px 0 15px 0;
             color: #333;
         }
 
-        /* 워커 스레드 시각화 (IOCP용) */
-        .workers-area {
-            display: flex;
-            gap: 8px;
-            margin-top: 20px;
-            justify-content: center;
+        .section p {
+            margin-bottom: 16px;
+            color: #444;
         }
 
-        .worker {
-            width: 50px;
-            height: 50px;
-            background: #252525;
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
             border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8rem;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        th, td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f8f8f8;
             font-weight: 600;
-            border: 2px solid #333;
-            transition: all 0.3s ease;
+            color: #333;
         }
 
-        .worker.busy {
-            border-color: #FFC107;
-            background: rgba(255, 193, 7, 0.1);
-            color: #FFC107;
+        tr:last-child td {
+            border-bottom: none;
         }
 
-        .queue-area {
-            margin-top: 20px;
-            padding: 16px;
-            background: #252525;
-            border-radius: 8px;
+        .question-box {
+            background: #fff8e1;
+            border-left: 4px solid #ff9800;
+            padding: 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
         }
 
-        .queue-label {
-            font-size: 0.8rem;
-            color: #888;
+        .question-box h4 {
+            color: #e65100;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+
+        .question-box p {
+            margin-bottom: 0;
+            color: #5d4037;
+        }
+
+        .answer-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+
+        .answer-box h4 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+
+        .answer-box p {
+            margin-bottom: 0;
+            color: #1b5e20;
+        }
+
+        .insight-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+
+        .insight-box h4 {
+            color: #1565c0;
+            margin-bottom: 10px;
+        }
+
+        .insight-box p {
+            color: #0d47a1;
             margin-bottom: 8px;
         }
 
-        .queue-items {
-            display: flex;
-            gap: 6px;
-            min-height: 30px;
-            flex-wrap: wrap;
+        .insight-box p:last-child {
+            margin-bottom: 0;
         }
 
-        .queue-item {
+        .problem-box {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+
+        .problem-box h4 {
+            color: #c62828;
+            margin-bottom: 10px;
+        }
+
+        .problem-box p {
+            color: #b71c1c;
+            margin-bottom: 0;
+        }
+
+        ul, ol {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .diagram {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 20px 0;
+            font-family: 'Consolas', monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 20px 0;
+        }
+
+        .tag {
+            background: #e8f4fd;
+            color: #1976d2;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 40px 0;
+            color: #999;
+            font-size: 0.9rem;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 60px;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin: 30px 0;
+        }
+
+        .summary-box h3 {
+            color: white;
+            margin-top: 0;
+            font-size: 1.3rem;
+        }
+
+        .summary-box p {
+            color: rgba(255,255,255,0.9);
+            margin-bottom: 12px;
+        }
+
+        .summary-box code {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        .demo-gif {
+            width: 100%;
+            border-radius: 12px;
+            margin: 20px 0;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .step-number {
+            display: inline-block;
             width: 28px;
             height: 28px;
-            background: #667eea;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
+            background: #2196f3;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 28px;
             font-weight: 600;
-            animation: queuePulse 0.5s ease;
+            margin-right: 10px;
         }
 
-        @keyframes queuePulse {
-            0% { transform: scale(0); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
+        .comparison-table {
+            margin: 30px 0;
         }
 
-        /* 로그 영역 */
-        .log-area {
-            margin-top: 20px;
-            padding: 16px;
-            background: #0a0a0a;
-            border-radius: 8px;
-            font-family: 'Consolas', monospace;
-            font-size: 0.8rem;
-            max-height: 150px;
-            overflow-y: auto;
+        .comparison-table th {
+            text-align: center;
         }
 
-        .log-entry {
-            padding: 4px 0;
-            color: #888;
-            animation: fadeIn 0.3s ease;
+        .comparison-table td {
+            text-align: center;
         }
 
-        .log-entry .time {
-            color: #555;
-        }
-
-        .log-entry.connect {
-            color: #2196F3;
-        }
-
-        .log-entry.process {
-            color: #FFC107;
-        }
-
-        .log-entry.complete {
-            color: #4CAF50;
-        }
-
-        @keyframes fadeIn {
-            0% { opacity: 0; transform: translateY(-5px); }
-            100% { opacity: 1; transform: translateY(0); }
-        }
-
-        /* 반응형 */
-        @media (max-width: 768px) {
-            .stats {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            .vis-area {
-                flex-direction: column;
-                gap: 30px;
-            }
-
-            .connection-area {
-                transform: rotate(90deg);
-                width: 100px;
-                padding: 20px 0;
-            }
-
-            .tabs {
-                gap: 6px;
-            }
-
-            .tab-btn {
-                padding: 10px 16px;
-                font-size: 0.85rem;
-            }
+        .comparison-table td:first-child {
+            text-align: left;
+            font-weight: 500;
         }
     </style>
 </head>
@@ -591,101 +324,449 @@
         </nav>
 
         <header class="header">
-            <h1>Socket I/O 모델 비교</h1>
-            <p>동기부터 IOCP까지, 각 방식의 차이를 시각적으로 이해하기</p>
+            <h1>소켓 I/O 모델: 동기부터 IOCP까지</h1>
+            <div class="header-meta">
+                <span>네트워크 프로그래밍 기초</span>
+                <span>2025.01</span>
+            </div>
+            <div class="tags">
+                <span class="tag">Socket</span>
+                <span class="tag">동기/비동기</span>
+                <span class="tag">Overlapped I/O</span>
+                <span class="tag">IOCP</span>
+                <span class="tag">Windows</span>
+            </div>
         </header>
 
-        <!-- 탭 -->
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="sync">동기 (Sync)</button>
-            <button class="tab-btn" data-tab="async">비동기 (Select)</button>
-            <button class="tab-btn" data-tab="overlapped">Overlapped I/O</button>
-            <button class="tab-btn" data-tab="iocp">IOCP</button>
-        </div>
-
-        <!-- 시각화 -->
-        <div class="visualization">
-            <div class="vis-header">
-                <div class="vis-title" id="vis-title">동기 (Synchronous) 서버</div>
-                <div class="vis-controls">
-                    <button class="btn btn-secondary" id="btn-reset">리셋</button>
-                    <button class="btn btn-primary" id="btn-start">시작</button>
-                </div>
-            </div>
-
-            <div class="vis-area">
-                <div class="server-box">
-                    <div class="icon">🖥️</div>
-                    <div class="label">Server</div>
-                </div>
-
-                <div class="connection-area">
-                    <div class="connection-line" id="connection-line"></div>
-                    <div class="workers-area" id="workers-area" style="display: none;">
-                        <!-- IOCP 워커 스레드 -->
-                    </div>
-                    <div class="queue-area" id="queue-area" style="display: none;">
-                        <div class="queue-label">Completion Queue</div>
-                        <div class="queue-items" id="queue-items"></div>
-                    </div>
-                </div>
-
-                <div class="clients-box" id="clients-box">
-                    <!-- 클라이언트들 -->
-                </div>
-            </div>
-
-            <div class="log-area" id="log-area">
-                <div class="log-entry"><span class="time">[00:00.000]</span> 시뮬레이션 준비 완료. 시작 버튼을 눌러주세요.</div>
-            </div>
-
-            <div class="stats">
-                <div class="stat-item">
-                    <div class="stat-value" id="stat-total">0</div>
-                    <div class="stat-label">총 처리</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="stat-time">0.0s</div>
-                    <div class="stat-label">소요 시간</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="stat-throughput">0.0</div>
-                    <div class="stat-label">처리량/초</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="stat-avg-wait">0.0s</div>
-                    <div class="stat-label">평균 대기</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 설명 -->
-        <div class="description" id="description">
-            <h3>동기 (Synchronous) 방식</h3>
+        <!-- 개요 -->
+        <section class="section">
+            <h2>개요</h2>
             <p>
-                가장 기본적인 방식입니다. 서버가 한 클라이언트의 요청을 <strong>완전히 처리할 때까지</strong>
-                다른 클라이언트는 대기해야 합니다.
+                게임 서버를 만들다 보면 "IOCP를 써야 한다"는 말을 듣게 됩니다.
+                IOCP가 뭔지, 왜 필요한지, 어떻게 동작하는지를 <strong>질문과 답변 형식</strong>으로
+                차근차근 이해해봅시다.
             </p>
             <p>
-                <code>recv()</code>, <code>send()</code> 호출 시 데이터가 올 때까지 <strong>블로킹(blocking)</strong>됩니다.
+                이 문서는 "프로그램끼리 어떻게 대화할까?"라는 아주 기초적인 질문에서 시작해서,
+                고성능 서버의 핵심인 IOCP까지 단계별로 쌓아갑니다.
             </p>
-            <div class="feature-list">
-                <span class="feature-tag pro">구현 간단</span>
-                <span class="feature-tag pro">디버깅 쉬움</span>
-                <span class="feature-tag con">확장성 없음</span>
-                <span class="feature-tag con">동시 처리 불가</span>
-            </div>
-        </div>
+        </section>
 
-        <!-- 비교 테이블 -->
-        <div class="comparison-section">
-            <h2>4가지 모델 비교</h2>
+        <!-- 1. 소켓의 시작 -->
+        <section class="section">
+            <h2>1. 프로그램끼리의 대화 - 소켓</h2>
+
+            <div class="question-box">
+                <h4>질문</h4>
+                <p>컴퓨터 A에서 게임 클라이언트가 실행 중이고, 컴퓨터 B에서 게임 서버가 실행 중입니다. 두 프로그램이 서로 다른 컴퓨터에 있는데, 어떻게 "대화"를 할 수 있을까요?</p>
+            </div>
+
+            <div class="answer-box">
+                <h4>답</h4>
+                <p>전화처럼 연결해서 대화한다!</p>
+            </div>
+
+            <p>정확합니다! 전화 통화의 특징을 생각해보면:</p>
+            <ul>
+                <li>서로 <strong>연결</strong>이 되어야 대화 가능</li>
+                <li>한쪽이 말하면 다른 쪽이 듣고, 반대도 가능 (양방향)</li>
+                <li>연결이 끊어지면 대화 끝</li>
+            </ul>
+
+            <p>네트워크 프로그래밍도 정확히 이렇게 동작합니다!</p>
+
+            <div class="question-box">
+                <h4>질문</h4>
+                <p>현실에서 전화를 걸려면 "전화기"와 "전화번호"가 필요합니다. 프로그램 세계에서는 뭐가 필요할까요?</p>
+            </div>
+
+            <div class="answer-box">
+                <h4>답</h4>
+                <p>소켓(Socket)이랑 IP 주소 + 포트!</p>
+            </div>
+
+            <table>
+                <tr>
+                    <th>현실 (전화)</th>
+                    <th>프로그램 세계</th>
+                </tr>
+                <tr>
+                    <td>전화기</td>
+                    <td><strong>소켓 (Socket)</strong></td>
+                </tr>
+                <tr>
+                    <td>전화번호</td>
+                    <td><strong>IP 주소 + 포트</strong></td>
+                </tr>
+            </table>
+
+            <div class="insight-box">
+                <h4>왜 IP 주소만으로는 부족할까?</h4>
+                <p>한 컴퓨터에서 카카오톡, 크롬, 게임이 동시에 실행 중일 때, IP 주소만으로는 <strong>어느 프로그램</strong>한테 데이터를 전달할지 알 수 없습니다.</p>
+                <p><code>IP 주소</code> = 건물 주소 (어느 컴퓨터인지)</p>
+                <p><code>포트</code> = 호수 (그 컴퓨터의 어느 프로그램인지)</p>
+            </div>
+        </section>
+
+        <!-- 2. 동기의 개념 -->
+        <section class="section">
+            <h2>2. 동기(Synchronous)란?</h2>
+
+            <p>현실에서 전화 통화를 하려면 이런 순서로 진행되죠:</p>
+
+            <div class="diagram">1. 전화기를 든다
+2. 번호를 누른다
+3. 상대가 받을 때까지 기다린다... (뚜르르... 뚜르르...)
+4. 상대가 받으면 → 대화 시작!</div>
+
+            <div class="question-box">
+                <h4>질문</h4>
+                <p>3번 단계에서 "상대가 받을 때까지 기다린다"고 했습니다. 이때 나는 다른 일을 할 수 있나요? 아니면 전화기 붙들고 가만히 기다려야 하나요?</p>
+            </div>
+
+            <div class="answer-box">
+                <h4>답</h4>
+                <p>기다리는 동안은 아무것도 못하지 않나?</p>
+            </div>
+
+            <p>맞습니다! 바로 이게 <strong>"동기(Synchronous)"</strong>입니다.</p>
+
+            <div class="insight-box">
+                <h4>동기 = 기다린다</h4>
+                <p>전화 거는 동안 → 가만히 기다림 (다른 일 못 함)</p>
+                <p>상대가 받으면 → 그제야 다음 단계로 진행</p>
+            </div>
+
+            <pre><code>// 동기 소켓 코드
+connect(socket, serverAddr, ...);  // 서버에 연결 요청
+// ↑ 여기서 멈춤! 연결될 때까지 다음 줄로 안 넘어감
+
+send(socket, data, ...);           // 연결되면 그제야 실행됨</code></pre>
+
+            <p><code>connect()</code> 함수가 <strong>완료될 때까지</strong> 프로그램이 그 자리에서 <strong>멈춰있는 것</strong> = <strong>동기 방식</strong></p>
+        </section>
+
+        <!-- 3. 동기의 문제점 -->
+        <section class="section">
+            <h2>3. 동기 방식의 문제점</h2>
+
+            <p>자, 이제 <strong>서버</strong> 입장에서 생각해봅시다.</p>
+
+            <div class="question-box">
+                <h4>상황</h4>
+                <p>게임 서버가 실행 중입니다. 플레이어 A가 접속했고, 서버가 A의 요청을 처리하는 중입니다... (동기 방식이라 기다리는 중)</p>
+                <p><strong>이때 플레이어 B가 접속을 시도합니다. B는 어떻게 될까요?</strong></p>
+            </div>
+
+            <div class="answer-box">
+                <h4>답</h4>
+                <p>B도 계속 기다려야 하지 않나?</p>
+            </div>
+
+            <div class="problem-box">
+                <h4>동기 방식의 치명적인 문제</h4>
+                <p><strong>동기 서버 = 한 번에 한 명만 상대 가능</strong></p>
+                <p>게임 서버에 1000명이 접속하면? → 999명이 줄 서서 기다림 → 서비스 불가능!</p>
+            </div>
+
+            <img src="sync.gif" alt="동기 방식 데모" class="demo-gif">
+
+            <p>위 GIF를 보면, 클라이언트가 <strong>하나씩 순차적으로</strong> 처리되는 것이 보입니다. Client 1이 끝나야 Client 2가 시작됩니다.</p>
+        </section>
+
+        <!-- 4. 해결책 - 비동기 -->
+        <section class="section">
+            <h2>4. 해결책 - 비동기(Asynchronous)</h2>
+
+            <div class="question-box">
+                <h4>질문</h4>
+                <p>식당에 손님이 100명 왔는데 직원이 1명입니다. 한 손님 주문받고, 요리하고, 서빙하고... 그동안 99명은 대기... 이 식당이 손님을 빠르게 처리하려면 어떻게 해야 할까요?</p>
+            </div>
+
+            <div class="answer-box">
+                <h4>답</h4>
+                <p>일단 A 주문만 받고 요리하다가, 주문 오자마자 B 주문받아야지!</p>
+            </div>
+
+            <p>이게 바로 <strong>비동기(Asynchronous)</strong>의 핵심입니다!</p>
+
+            <h3>해결책 1: 직원을 늘린다 (멀티스레드)</h3>
+
+            <div class="diagram">손님 A → 직원 1이 전담
+손님 B → 직원 2가 전담
+손님 C → 직원 3이 전담</div>
+
+            <div class="problem-box">
+                <h4>멀티스레드의 문제</h4>
+                <p>손님이 10,000명이면 직원도 10,000명 고용해야 할까요?</p>
+                <p>스레드 1개 = 메모리 1MB 이상 소모 → 10,000개 = 10GB... 💀</p>
+            </div>
+
+            <h3>해결책 2: 한 명이 효율적으로 (비동기)</h3>
+
+            <div class="diagram">직원 1명이:
+  → A 주문 받음 (잠깐)
+  → A 요리 시작해둠 (오븐에 넣어두고)
+  → B 주문 받음 (잠깐)
+  → B 요리 시작해둠
+  → A 요리 완료! 서빙
+  → C 주문 받음...</div>
+
+            <p><strong>"기다리지 않고" 다른 일을 먼저 처리</strong>하는 방식!</p>
+
+            <div class="question-box">
+                <h4>질문</h4>
+                <p>비동기 방식에서 <code>recv()</code>가 "바로 리턴"한다면... 데이터가 아직 안 왔는데 어떻게 알죠? 오븐에 요리 넣어뒀는데, 다 됐는지 안 됐는지 어떻게 확인하나요?</p>
+            </div>
+
+            <div class="answer-box">
+                <h4>답</h4>
+                <p>주기적으로 확인하거나 알림 받아야 하지 않나?</p>
+            </div>
+
+            <table>
+                <tr>
+                    <th>방식</th>
+                    <th>설명</th>
+                    <th>비유</th>
+                </tr>
+                <tr>
+                    <td><strong>폴링 (Polling)</strong></td>
+                    <td>계속 물어봄: "다 됐어?"</td>
+                    <td>오븐 앞에서 계속 들여다보기</td>
+                </tr>
+                <tr>
+                    <td><strong>이벤트 (Event)</strong></td>
+                    <td>완료되면 알려줌</td>
+                    <td>오븐 타이머가 "띵!" 울림</td>
+                </tr>
+            </table>
+
+            <h3>Select 모델 (폴링 방식)</h3>
+
+            <pre><code>while(1) {
+    // 모든 소켓을 검사: "누구 데이터 왔어?"
+    select(sockets, ...);
+
+    for(각 소켓) {
+        if(데이터 왔으면) {
+            recv(socket, ...);  // 처리
+        }
+    }
+}</code></pre>
+
+            <div class="question-box">
+                <h4>질문</h4>
+                <p>손님 1,000명이 앉아있는데, 실제로 주문할 사람은 3명뿐입니다. 직원이 1,000개 테이블을 매번 다 돌아보는 게 효율적일까요?</p>
+            </div>
+
+            <div class="answer-box">
+                <h4>답</h4>
+                <p>비효율적이지, 쓸데없이 확인하느라 시간 낭비!</p>
+            </div>
+
+            <img src="select.gif" alt="Select 방식 데모" class="demo-gif">
+
+            <p>Select 방식은 <strong>동시에 여러 클라이언트를 처리</strong>할 수 있지만, 소켓이 많아질수록 폴링 오버헤드가 증가합니다.</p>
+        </section>
+
+        <!-- 5. Overlapped I/O -->
+        <section class="section">
+            <h2>5. 한 단계 더 - Overlapped I/O</h2>
+
+            <p>이벤트 방식이 폴링보다 낫긴 한데... 문제가 있습니다.</p>
+
+            <div class="diagram">1. 소켓에서 "데이터 왔다!" 알림 받음
+2. recv() 호출해서 데이터 읽음 ← 이때 잠깐 멈춤(블로킹)
+3. 처리 완료</div>
+
+            <p>알림을 받고 나서 <strong>실제로 데이터를 읽는 동안</strong>은 여전히 기다려야 해요.</p>
+
+            <div class="question-box">
+                <h4>질문</h4>
+                <p>"알림 받는 것"뿐만 아니라, "데이터 읽는 작업 자체"도 기다리지 않게 할 수는 없을까요?</p>
+                <p>힌트: 누군가한테 "이거 읽어서 여기 갖다 놔"라고 시켜놓고 나는 다른 일 하면?</p>
+            </div>
+
+            <div class="answer-box">
+                <h4>답</h4>
+                <p>오, 좋은데?</p>
+            </div>
+
+            <p>이게 바로 <strong>Overlapped I/O</strong>입니다!</p>
+
+            <div class="insight-box">
+                <h4>Overlapped I/O 핵심</h4>
+                <p>"OS야, 이 소켓에서 데이터 읽어서 이 버퍼에 넣어놔. 다 되면 알려줘."</p>
+                <p>→ 나는 바로 다른 일 하러 감!</p>
+            </div>
+
+            <pre><code>// Overlapped I/O 방식
+OVERLAPPED overlapped = {0};
+
+WSARecv(socket, buffer, ..., &overlapped);  // 작업 요청만 하고
+// ↓ 바로 다음 줄 실행됨! (기다리지 않음)
+
+// 나는 다른 일 하는 중...
+// ...
+
+// 나중에 완료 확인
+GetOverlappedResult(...);  // "아까 그거 다 됐어?"</code></pre>
+
+            <img src="overlapped.gif" alt="Overlapped I/O 방식 데모" class="demo-gif">
+
+            <p>Overlapped I/O는 <strong>I/O 작업 자체를 OS에게 맡기고</strong> 바로 다른 일을 할 수 있습니다.</p>
+
+            <table>
+                <tr>
+                    <th>단계</th>
+                    <th>동기</th>
+                    <th>Select</th>
+                    <th>Overlapped</th>
+                </tr>
+                <tr>
+                    <td>요청</td>
+                    <td>직접 기다림</td>
+                    <td>알림 받음</td>
+                    <td>알림 받음</td>
+                </tr>
+                <tr>
+                    <td>I/O 처리</td>
+                    <td>직접 (기다림)</td>
+                    <td>직접 (기다림)</td>
+                    <td><strong>OS가 처리</strong></td>
+                </tr>
+                <tr>
+                    <td>나는?</td>
+                    <td>계속 기다림</td>
+                    <td>중간중간 기다림</td>
+                    <td><strong>계속 다른 일 가능</strong></td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- 6. IOCP -->
+        <section class="section">
+            <h2>6. 최종 진화 - IOCP</h2>
+
+            <p>Overlapped I/O 좋습니다. 근데 생각해보세요.</p>
+
+            <div class="question-box">
+                <h4>상황</h4>
+                <p>클라이언트가 1,000명 접속 중입니다. 각각 읽기/쓰기 작업을 OS한테 시켜놨어요. 이제 완료 알림이 동시에 여러 개 옵니다.</p>
+                <p>"A 읽기 완료!" "B 쓰기 완료!" "C 읽기 완료!" ... (수백 개가 동시에)</p>
+                <p><strong>이 수많은 완료 알림들을 효율적으로 관리하려면 어떻게 해야 할까요?</strong></p>
+            </div>
+
+            <div class="answer-box">
+                <h4>답</h4>
+                <p>한 곳에 모아서 순서대로 처리?</p>
+            </div>
+
+            <p>정확합니다! 이게 바로 <strong>IOCP (I/O Completion Port)</strong>입니다!</p>
+
+            <div class="insight-box">
+                <h4>IOCP = 완료된 작업들이 모이는 큐</h4>
+                <p>회사에서 여러 부서의 보고서가 마구 들어올 때, 중앙 수신함에 모아두고 직원들이 하나씩 꺼내서 처리하는 것과 같습니다.</p>
+            </div>
+
+            <div class="diagram">         완료 알림들
+              ↓
+    ┌─────────────────────┐
+    │   Completion Port   │  ← 완료된 작업들이 여기 쌓임
+    │   (대기열/큐)        │
+    └─────────────────────┘
+              ↓
+     Worker Thread들이 꺼내서 처리</div>
+
+            <pre><code>// 1. Completion Port 생성 (중앙 수신함 만들기)
+HANDLE iocp = CreateIoCompletionPort(...);
+
+// 2. 소켓들을 IOCP에 등록
+CreateIoCompletionPort(socket, iocp, ...);
+
+// 3. 작업 요청 (Overlapped I/O)
+WSARecv(socket, buffer, ..., &overlapped);
+
+// 4. Worker Thread에서 완료된 작업 꺼내기
+while(1) {
+    GetQueuedCompletionStatus(iocp, ...);  // 완료된 거 있으면 가져옴
+    처리(overlapped);
+}</code></pre>
+
+            <img src="iocp.gif" alt="IOCP 방식 데모" class="demo-gif">
+
+            <p>IOCP에서는 <strong>Worker Thread들이 Completion Queue에서 작업을 꺼내</strong> 동시에 처리합니다.</p>
+
+            <div class="question-box">
+                <h4>질문</h4>
+                <p>왜 IOCP에서는 스레드를 적게 써도 될까요? 10,000명이 접속해도요?</p>
+            </div>
+
+            <div class="answer-box">
+                <h4>답</h4>
+                <p>실제로 동시에 보내는 건 일부뿐이니까!</p>
+            </div>
+
+            <p>정확합니다! <strong>접속 수 ≠ 동시 작업 수</strong></p>
+
+            <div class="diagram">클라이언트 10,000명 접속
+      ↓
+실제로 동시에 뭔가 하는 사람: 100명 정도
+      ↓
+Worker Thread 8개로도 충분히 처리 가능!</div>
+
+            <h3>Overlapped I/O vs IOCP 차이</h3>
+
+            <div class="question-box">
+                <h4>질문</h4>
+                <p>Overlapped I/O랑 IOCP 차이가 뭔가요? 큐의 유무?</p>
+            </div>
+
+            <table>
+                <tr>
+                    <th></th>
+                    <th>Overlapped I/O</th>
+                    <th>IOCP</th>
+                </tr>
+                <tr>
+                    <td>정체</td>
+                    <td>비동기 작업 <strong>방식</strong></td>
+                    <td>완료 알림 <strong>관리 시스템</strong></td>
+                </tr>
+                <tr>
+                    <td>비유</td>
+                    <td>알바한테 일 시키기</td>
+                    <td>알바들 완료 보고를 <strong>한 곳에서</strong> 관리</td>
+                </tr>
+                <tr>
+                    <td>관계</td>
+                    <td>-</td>
+                    <td>Overlapped I/O를 <strong>사용함</strong></td>
+                </tr>
+            </table>
+
+            <p><code>IOCP = Overlapped I/O + 완료 큐 + 효율적인 스레드 관리</code></p>
+        </section>
+
+        <!-- 최종 요약 -->
+        <section class="section">
+            <h2>최종 정리</h2>
+
+            <div class="summary-box">
+                <h3>Socket I/O 모델 진화 과정</h3>
+                <p><strong>1. 동기 (Sync)</strong> - 한 명씩 처리, 기다림 → 확장 불가</p>
+                <p><strong>2. 비동기 (Select)</strong> - 기다리지 않고 나중에 확인 → 폴링 오버헤드</p>
+                <p><strong>3. Overlapped I/O</strong> - I/O 작업 자체를 OS에게 맡김 → 완료 관리 복잡</p>
+                <p><strong>4. IOCP</strong> - 완료 알림을 큐로 모아서 효율적으로 처리 → Windows 최고 성능!</p>
+            </div>
+
             <table class="comparison-table">
                 <thead>
                     <tr>
                         <th>특성</th>
                         <th>동기</th>
-                        <th>비동기 (Select)</th>
+                        <th>Select</th>
                         <th>Overlapped</th>
                         <th>IOCP</th>
                     </tr>
@@ -693,10 +774,10 @@
                 <tbody>
                     <tr>
                         <td>동시 처리</td>
-                        <td><div class="rating"><span class="rating-star">★</span><span class="rating-star empty">★</span><span class="rating-star empty">★</span><span class="rating-star empty">★</span><span class="rating-star empty">★</span></div></td>
-                        <td><div class="rating"><span class="rating-star">★</span><span class="rating-star">★</span><span class="rating-star">★</span><span class="rating-star empty">★</span><span class="rating-star empty">★</span></div></td>
-                        <td><div class="rating"><span class="rating-star">★</span><span class="rating-star">★</span><span class="rating-star">★</span><span class="rating-star">★</span><span class="rating-star empty">★</span></div></td>
-                        <td><div class="rating"><span class="rating-star">★</span><span class="rating-star">★</span><span class="rating-star">★</span><span class="rating-star">★</span><span class="rating-star">★</span></div></td>
+                        <td>1명</td>
+                        <td>수백 명</td>
+                        <td>수천 명</td>
+                        <td><strong>수만 명+</strong></td>
                     </tr>
                     <tr>
                         <td>구현 난이도</td>
@@ -710,507 +791,22 @@
                         <td>낮음</td>
                         <td>보통</td>
                         <td>높음</td>
-                        <td>최상</td>
-                    </tr>
-                    <tr>
-                        <td>확장성</td>
-                        <td>~10</td>
-                        <td>~1,000</td>
-                        <td>~10,000</td>
-                        <td>~100,000+</td>
+                        <td><strong>최상</strong></td>
                     </tr>
                     <tr>
                         <td>적합한 용도</td>
-                        <td>테스트/학습</td>
-                        <td>소규모 서버</td>
-                        <td>중규모 서버</td>
-                        <td>대규모 게임서버</td>
+                        <td>테스트</td>
+                        <td>소규모</td>
+                        <td>중규모</td>
+                        <td><strong>대규모 게임서버</strong></td>
                     </tr>
                 </tbody>
             </table>
-        </div>
+        </section>
+
+        <footer class="footer">
+            <p>MSH Portfolio - Game Server Developer</p>
+        </footer>
     </div>
-
-    <script>
-        // 설정
-        const CONFIG = {
-            sync: {
-                title: '동기 (Synchronous) 서버',
-                clientCount: 5,
-                processTime: 1000,
-                description: `
-                    <h3>동기 (Synchronous) 방식</h3>
-                    <p>가장 기본적인 방식입니다. 서버가 한 클라이언트의 요청을 <strong>완전히 처리할 때까지</strong> 다른 클라이언트는 대기해야 합니다.</p>
-                    <p><code>recv()</code>, <code>send()</code> 호출 시 데이터가 올 때까지 <strong>블로킹(blocking)</strong>됩니다.</p>
-                    <img src="sync.gif" alt="동기 방식 데모" style="width:100%; border-radius:8px; margin:16px 0;">
-                    <div class="feature-list">
-                        <span class="feature-tag pro">구현 간단</span>
-                        <span class="feature-tag pro">디버깅 쉬움</span>
-                        <span class="feature-tag con">확장성 없음</span>
-                        <span class="feature-tag con">동시 처리 불가</span>
-                    </div>
-                `
-            },
-            async: {
-                title: '비동기 (Select) 서버',
-                clientCount: 5,
-                processTime: 800,
-                description: `
-                    <h3>비동기 (Select) 방식</h3>
-                    <p><code>select()</code> 함수로 여러 소켓을 <strong>동시에 모니터링</strong>합니다. 데이터가 준비된 소켓만 처리합니다.</p>
-                    <p>블로킹되지 않지만, <strong>매번 모든 소켓을 검사</strong>해야 하는 오버헤드가 있습니다.</p>
-                    <img src="select.gif" alt="Select 방식 데모" style="width:100%; border-radius:8px; margin:16px 0;">
-                    <div class="feature-list">
-                        <span class="feature-tag pro">동시 처리 가능</span>
-                        <span class="feature-tag pro">단일 스레드</span>
-                        <span class="feature-tag con">소켓 수 제한</span>
-                        <span class="feature-tag con">폴링 오버헤드</span>
-                    </div>
-                `
-            },
-            overlapped: {
-                title: 'Overlapped I/O 서버',
-                clientCount: 5,
-                processTime: 600,
-                description: `
-                    <h3>Overlapped I/O 방식</h3>
-                    <p>I/O 작업을 <strong>OS에게 맡기고</strong> 바로 리턴합니다. 완료되면 이벤트나 콜백으로 알림받습니다.</p>
-                    <p><code>WSARecv()</code>에 <code>OVERLAPPED</code> 구조체를 전달하면 <strong>비동기로 동작</strong>합니다.</p>
-                    <img src="overlapped.gif" alt="Overlapped I/O 방식 데모" style="width:100%; border-radius:8px; margin:16px 0;">
-                    <div class="feature-list">
-                        <span class="feature-tag pro">진정한 비동기</span>
-                        <span class="feature-tag pro">높은 효율</span>
-                        <span class="feature-tag con">구현 복잡</span>
-                        <span class="feature-tag con">완료 관리 필요</span>
-                    </div>
-                `
-            },
-            iocp: {
-                title: 'IOCP 서버',
-                clientCount: 5,
-                processTime: 400,
-                workerCount: 4,
-                description: `
-                    <h3>IOCP (I/O Completion Port) 방식</h3>
-                    <p>완료된 I/O를 <strong>큐(Queue)에 모아서</strong> Worker Thread들이 효율적으로 처리합니다.</p>
-                    <p>Windows에서 <strong>최고 성능</strong>의 네트워크 모델입니다. 대규모 게임서버의 표준!</p>
-                    <img src="iocp.gif" alt="IOCP 방식 데모" style="width:100%; border-radius:8px; margin:16px 0;">
-                    <div class="feature-list">
-                        <span class="feature-tag pro">최고 성능</span>
-                        <span class="feature-tag pro">확장성 최상</span>
-                        <span class="feature-tag pro">효율적 스레드 관리</span>
-                        <span class="feature-tag con">Windows 전용</span>
-                    </div>
-                `
-            }
-        };
-
-        // 상태
-        let currentTab = 'sync';
-        let isRunning = false;
-        let startTime = 0;
-        let clients = [];
-        let completedCount = 0;
-        let totalWaitTime = 0;
-        let timerInterval = null;
-        let queue = [];
-        let workers = [];
-
-        // DOM 요소
-        const tabBtns = document.querySelectorAll('.tab-btn');
-        const visTitle = document.getElementById('vis-title');
-        const clientsBox = document.getElementById('clients-box');
-        const logArea = document.getElementById('log-area');
-        const btnStart = document.getElementById('btn-start');
-        const btnReset = document.getElementById('btn-reset');
-        const connectionLine = document.getElementById('connection-line');
-        const workersArea = document.getElementById('workers-area');
-        const queueArea = document.getElementById('queue-area');
-        const queueItems = document.getElementById('queue-items');
-        const description = document.getElementById('description');
-
-        // 탭 전환
-        tabBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (isRunning) return;
-
-                tabBtns.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                currentTab = btn.dataset.tab;
-
-                visTitle.textContent = CONFIG[currentTab].title;
-                description.innerHTML = CONFIG[currentTab].description;
-
-                // IOCP일 때만 워커/큐 표시
-                if (currentTab === 'iocp') {
-                    workersArea.style.display = 'flex';
-                    queueArea.style.display = 'block';
-                    initWorkers();
-                } else {
-                    workersArea.style.display = 'none';
-                    queueArea.style.display = 'none';
-                }
-
-                resetSimulation();
-            });
-        });
-
-        // 워커 초기화 (IOCP)
-        function initWorkers() {
-            workersArea.innerHTML = '';
-            workers = [];
-            for (let i = 0; i < CONFIG.iocp.workerCount; i++) {
-                const worker = document.createElement('div');
-                worker.className = 'worker';
-                worker.textContent = `W${i + 1}`;
-                worker.dataset.index = i;
-                workersArea.appendChild(worker);
-                workers.push({ element: worker, busy: false, clientId: null });
-            }
-        }
-
-        // 클라이언트 초기화
-        function initClients() {
-            clientsBox.innerHTML = '';
-            clients = [];
-            const count = CONFIG[currentTab].clientCount;
-
-            for (let i = 0; i < count; i++) {
-                const client = document.createElement('div');
-                client.className = 'client waiting';
-                client.innerHTML = `
-                    <div class="client-icon">${i + 1}</div>
-                    <div class="client-info">
-                        <div class="client-name">Client ${i + 1}</div>
-                        <div class="client-status">대기중</div>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="progress-bar-fill"></div>
-                    </div>
-                `;
-                clientsBox.appendChild(client);
-                clients.push({
-                    element: client,
-                    status: 'waiting',
-                    progress: 0,
-                    connectTime: 0,
-                    startProcessTime: 0
-                });
-            }
-        }
-
-        // 로그 추가
-        function addLog(message, type = '') {
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(3);
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            entry.innerHTML = `<span class="time">[${elapsed.padStart(8, '0')}]</span> ${message}`;
-            logArea.appendChild(entry);
-            logArea.scrollTop = logArea.scrollHeight;
-        }
-
-        // 통계 업데이트
-        function updateStats() {
-            const elapsed = (Date.now() - startTime) / 1000;
-            document.getElementById('stat-total').textContent = completedCount;
-            document.getElementById('stat-time').textContent = elapsed.toFixed(1) + 's';
-            document.getElementById('stat-throughput').textContent =
-                elapsed > 0 ? (completedCount / elapsed).toFixed(2) : '0.0';
-            document.getElementById('stat-avg-wait').textContent =
-                completedCount > 0 ? (totalWaitTime / completedCount / 1000).toFixed(2) + 's' : '0.0s';
-        }
-
-        // 클라이언트 상태 업데이트
-        function updateClientStatus(index, status, statusText) {
-            const client = clients[index];
-            client.element.className = `client ${status}`;
-            client.element.querySelector('.client-status').textContent = statusText;
-            client.status = status;
-        }
-
-        // 프로그레스 업데이트
-        function updateProgress(index, progress) {
-            const client = clients[index];
-            client.progress = progress;
-            client.element.querySelector('.progress-bar-fill').style.width = `${progress}%`;
-        }
-
-        // 동기 방식 시뮬레이션
-        async function runSync() {
-            const processTime = CONFIG.sync.processTime;
-
-            for (let i = 0; i < clients.length; i++) {
-                if (!isRunning) break;
-
-                clients[i].connectTime = Date.now();
-                addLog(`Client ${i + 1} 접속`, 'connect');
-
-                // 이전 클라이언트들이 처리될 때까지 대기
-                clients[i].startProcessTime = Date.now();
-                const waitTime = clients[i].startProcessTime - clients[i].connectTime;
-                totalWaitTime += waitTime;
-
-                updateClientStatus(i, 'processing', '처리중...');
-                addLog(`Client ${i + 1} 처리 시작`, 'process');
-                connectionLine.classList.add('active');
-
-                // 처리 시뮬레이션
-                for (let p = 0; p <= 100; p += 5) {
-                    if (!isRunning) break;
-                    updateProgress(i, p);
-                    await sleep(processTime / 20);
-                }
-
-                if (!isRunning) break;
-
-                updateClientStatus(i, 'completed', '완료');
-                addLog(`Client ${i + 1} 처리 완료`, 'complete');
-                completedCount++;
-                connectionLine.classList.remove('active');
-
-                updateStats();
-            }
-        }
-
-        // 비동기 (Select) 방식 시뮬레이션
-        async function runAsync() {
-            const processTime = CONFIG.async.processTime;
-
-            // 모든 클라이언트 동시 접속
-            for (let i = 0; i < clients.length; i++) {
-                clients[i].connectTime = Date.now();
-                addLog(`Client ${i + 1} 접속`, 'connect');
-            }
-
-            connectionLine.classList.add('active');
-
-            // 라운드 로빈 방식으로 처리 (select 시뮬레이션)
-            let allDone = false;
-            while (!allDone && isRunning) {
-                allDone = true;
-
-                for (let i = 0; i < clients.length; i++) {
-                    if (!isRunning) break;
-                    if (clients[i].status === 'completed') continue;
-
-                    allDone = false;
-
-                    if (clients[i].status === 'waiting') {
-                        clients[i].startProcessTime = Date.now();
-                        totalWaitTime += clients[i].startProcessTime - clients[i].connectTime;
-                        updateClientStatus(i, 'processing', '처리중...');
-                        addLog(`Client ${i + 1} 처리 시작 (select)`, 'process');
-                    }
-
-                    // 조금씩 진행
-                    clients[i].progress += 10;
-                    updateProgress(i, Math.min(clients[i].progress, 100));
-
-                    if (clients[i].progress >= 100) {
-                        updateClientStatus(i, 'completed', '완료');
-                        addLog(`Client ${i + 1} 처리 완료`, 'complete');
-                        completedCount++;
-                        updateStats();
-                    }
-                }
-
-                await sleep(processTime / 10);
-            }
-
-            connectionLine.classList.remove('active');
-        }
-
-        // Overlapped I/O 방식 시뮬레이션
-        async function runOverlapped() {
-            const processTime = CONFIG.overlapped.processTime;
-
-            // 모든 클라이언트 동시 접속 및 I/O 요청
-            for (let i = 0; i < clients.length; i++) {
-                clients[i].connectTime = Date.now();
-                clients[i].startProcessTime = Date.now();
-                addLog(`Client ${i + 1} 접속 + Overlapped 요청`, 'connect');
-                updateClientStatus(i, 'processing', 'I/O 진행중...');
-            }
-
-            connectionLine.classList.add('active');
-
-            // 병렬 처리 시뮬레이션
-            const promises = clients.map(async (client, i) => {
-                for (let p = 0; p <= 100; p += 5) {
-                    if (!isRunning) return;
-                    updateProgress(i, p);
-                    await sleep(processTime / 20 + Math.random() * 50);
-                }
-
-                if (!isRunning) return;
-
-                totalWaitTime += Date.now() - client.startProcessTime;
-                updateClientStatus(i, 'completed', '완료');
-                addLog(`Client ${i + 1} I/O 완료`, 'complete');
-                completedCount++;
-                updateStats();
-            });
-
-            await Promise.all(promises);
-            connectionLine.classList.remove('active');
-        }
-
-        // IOCP 방식 시뮬레이션
-        async function runIOCP() {
-            const processTime = CONFIG.iocp.processTime;
-            queue = [];
-
-            // 모든 클라이언트 접속 및 큐에 추가
-            for (let i = 0; i < clients.length; i++) {
-                clients[i].connectTime = Date.now();
-                addLog(`Client ${i + 1} 접속 → Completion Queue에 등록`, 'connect');
-
-                // 큐에 추가 (시각화)
-                const queueItem = document.createElement('div');
-                queueItem.className = 'queue-item';
-                queueItem.textContent = i + 1;
-                queueItem.dataset.clientId = i;
-                queueItems.appendChild(queueItem);
-                queue.push({ clientId: i, element: queueItem });
-
-                await sleep(50);
-            }
-
-            connectionLine.classList.add('active');
-
-            // Worker 스레드들이 큐에서 작업을 가져가서 처리
-            async function workerProcess(workerIndex) {
-                while (queue.length > 0 && isRunning) {
-                    const task = queue.shift();
-                    if (!task) break;
-
-                    const clientId = task.clientId;
-                    task.element.remove();
-
-                    // 워커 상태 업데이트
-                    workers[workerIndex].busy = true;
-                    workers[workerIndex].clientId = clientId;
-                    workers[workerIndex].element.classList.add('busy');
-                    workers[workerIndex].element.textContent = `C${clientId + 1}`;
-
-                    clients[clientId].startProcessTime = Date.now();
-                    totalWaitTime += clients[clientId].startProcessTime - clients[clientId].connectTime;
-                    updateClientStatus(clientId, 'processing', `Worker ${workerIndex + 1}`);
-                    addLog(`Worker ${workerIndex + 1}: Client ${clientId + 1} 처리 시작`, 'process');
-
-                    // 처리
-                    for (let p = 0; p <= 100; p += 10) {
-                        if (!isRunning) return;
-                        updateProgress(clientId, p);
-                        await sleep(processTime / 10);
-                    }
-
-                    if (!isRunning) return;
-
-                    updateClientStatus(clientId, 'completed', '완료');
-                    addLog(`Worker ${workerIndex + 1}: Client ${clientId + 1} 완료`, 'complete');
-                    completedCount++;
-                    updateStats();
-
-                    // 워커 상태 리셋
-                    workers[workerIndex].busy = false;
-                    workers[workerIndex].clientId = null;
-                    workers[workerIndex].element.classList.remove('busy');
-                    workers[workerIndex].element.textContent = `W${workerIndex + 1}`;
-                }
-            }
-
-            // 모든 워커 동시 실행
-            await Promise.all(workers.map((_, i) => workerProcess(i)));
-            connectionLine.classList.remove('active');
-        }
-
-        // 시뮬레이션 시작
-        async function startSimulation() {
-            if (isRunning) return;
-
-            isRunning = true;
-            btnStart.textContent = '실행중...';
-            btnStart.disabled = true;
-            startTime = Date.now();
-            completedCount = 0;
-            totalWaitTime = 0;
-
-            logArea.innerHTML = '';
-            addLog('시뮬레이션 시작', '');
-
-            initClients();
-            if (currentTab === 'iocp') {
-                initWorkers();
-                queueItems.innerHTML = '';
-            }
-
-            timerInterval = setInterval(updateStats, 100);
-
-            switch (currentTab) {
-                case 'sync':
-                    await runSync();
-                    break;
-                case 'async':
-                    await runAsync();
-                    break;
-                case 'overlapped':
-                    await runOverlapped();
-                    break;
-                case 'iocp':
-                    await runIOCP();
-                    break;
-            }
-
-            clearInterval(timerInterval);
-            isRunning = false;
-            btnStart.textContent = '시작';
-            btnStart.disabled = false;
-
-            if (completedCount === clients.length) {
-                addLog('모든 클라이언트 처리 완료!', 'complete');
-            }
-            updateStats();
-        }
-
-        // 리셋
-        function resetSimulation() {
-            isRunning = false;
-            clearInterval(timerInterval);
-
-            btnStart.textContent = '시작';
-            btnStart.disabled = false;
-            connectionLine.classList.remove('active');
-
-            completedCount = 0;
-            totalWaitTime = 0;
-            queue = [];
-
-            document.getElementById('stat-total').textContent = '0';
-            document.getElementById('stat-time').textContent = '0.0s';
-            document.getElementById('stat-throughput').textContent = '0.0';
-            document.getElementById('stat-avg-wait').textContent = '0.0s';
-
-            logArea.innerHTML = '<div class="log-entry"><span class="time">[00:00.000]</span> 시뮬레이션 준비 완료. 시작 버튼을 눌러주세요.</div>';
-
-            initClients();
-            if (currentTab === 'iocp') {
-                initWorkers();
-                queueItems.innerHTML = '';
-            }
-        }
-
-        // 유틸리티
-        function sleep(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
-
-        // 이벤트 리스너
-        btnStart.addEventListener('click', startSimulation);
-        btnReset.addEventListener('click', resetSimulation);
-
-        // 초기화
-        initClients();
-    </script>
 </body>
 </html>
