@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Step 5: 동적 경계 조절 - 심리스 월드</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 60px 20px; }
+        .nav { margin-bottom: 40px; }
+        .nav a { color: #666; text-decoration: none; font-size: 0.9rem; margin-right: 12px; }
+        .nav a:hover { color: #333; }
+        .header { margin-bottom: 50px; }
+        .header h1 { font-size: 2.2rem; font-weight: 700; margin-bottom: 16px; color: #111; }
+        .header-meta { display: flex; gap: 20px; color: #666; font-size: 0.9rem; margin-bottom: 20px; }
+        .tags { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tag { background: #1a237e; color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.8rem; }
+        .section { margin-bottom: 50px; }
+        .section h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 20px; color: #111; padding-bottom: 10px; border-bottom: 2px solid #e0e0e0; }
+        .section h3 { font-size: 1.2rem; font-weight: 600; margin: 30px 0 15px 0; color: #333; }
+        .section p { margin-bottom: 16px; color: #444; }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 0.9em; color: #1a237e; }
+        pre code { background: none; padding: 0; color: #d4d4d4; }
+        .img-container { margin: 30px 0; text-align: center; }
+        .img-container img { max-width: 100%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .img-caption { margin-top: 12px; font-size: 0.85rem; color: #666; }
+        .highlight-box { background: #e8eaf6; border-left: 4px solid #1a237e; padding: 20px; margin: 20px 0; border-radius: 4px; }
+        .highlight-box h4 { color: #1a237e; margin-bottom: 12px; font-size: 1.1rem; }
+        .diagram-box { background: #fff; border: 2px solid #e0e0e0; padding: 24px; margin: 20px 0; border-radius: 8px; }
+        .diagram-box pre { background: #fafafa; color: #333; border: 1px solid #e0e0e0; }
+        .param-table { width: 100%; border-collapse: collapse; margin: 20px 0; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        .param-table th, .param-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+        .param-table th { background: #1a237e; color: white; font-weight: 600; }
+        .param-table tr:last-child td { border-bottom: none; }
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); color: white; border-radius: 12px; padding: 24px; margin: 32px 0; }
+        .summary-box h3 { margin-bottom: 16px; }
+        .summary-box pre { background: rgba(255,255,255,0.1); color: white; border: none; }
+        .footer-nav { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .footer-nav a { color: #1a237e; text-decoration: none; font-size: 0.9rem; }
+        .footer-nav a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav">
+            <a href="../../../">← 메인</a>
+            <a href="../">← 심리스 월드 목록</a>
+        </nav>
+
+        <header class="header">
+            <h1>Step 5: 동적 경계 조절</h1>
+            <div class="header-meta">
+                <span>단계: 5/5</span>
+                <span>난이도: 고급</span>
+            </div>
+            <div class="tags">
+                <span class="tag">Dynamic Boundary</span>
+                <span class="tag">World Manager</span>
+                <span class="tag">Load Balancing</span>
+            </div>
+        </header>
+
+        <!-- GIF 자리 -->
+        <div class="img-container">
+            <img src="../../../../Screenshots/Seamless/step5.gif" alt="Step 5: 동적 경계 조절" onerror="this.style.display='none'">
+            <p class="img-caption">Step 5: 월드 매니저가 부하에 따라 경계를 동적으로 조절</p>
+        </div>
+
+        <section class="section">
+            <h2>고정 경계의 한계</h2>
+            <p>
+                지금까지 배운 오버랩 존은 경계가 고정되어 있었습니다.
+                그런데 경계 근처에서 보스레이드가 벌어지면?
+            </p>
+
+            <div class="diagram-box">
+                <pre>존 A        |오버랩|        존 B
+            | 100명 |
+            |보스레이드|
+
+오버랩에서 양쪽이 "둘 다 알고 있으면":
+- 존 A: 100명 위치 추적
+- 존 B: 100명 위치 추적
+→ 비효율적!</pre>
+            </div>
+
+            <p>
+                경계가 고정되어 있어서 문제! <strong>경계를 움직이면?</strong>
+            </p>
+        </section>
+
+        <section class="section">
+            <h2>경계를 움직인다</h2>
+
+            <div class="diagram-box">
+                <pre>[Before]
+존 A 담당: X = 0 ~ 1000
+존 B 담당: X = 900 ~ 2000
+오버랩: 900 ~ 1000
+
+
+[After - 경계를 존 B 쪽으로 밀면]
+존 A 담당: X = 0 ~ 1200   ← 늘어남
+존 B 담당: X = 1100 ~ 2000 ← 줄어듦
+오버랩: 1100 ~ 1200       ← 위치가 옮겨짐</pre>
+            </div>
+
+            <p>
+                보스레이드가 있는 곳을 한 서버가 통째로 담당하면 중복 연산이 사라집니다!
+            </p>
+        </section>
+
+        <section class="section">
+            <h2>월드 매니저 (상위 관리자)</h2>
+            <p>
+                경계를 "언제" "어디로" 밀지 누가 결정할까요?
+            </p>
+
+            <div class="diagram-box">
+                <pre>존 A, 존 B가 직접 대화하면?
+
+존 A: "나 지금 부하 80%야, 경계 좀 밀어줘"
+존 B: "나도 70%인데? 너가 더 받아"
+존 A: "아니 너가 받아"
+→ 서로 싸움!</pre>
+            </div>
+
+            <div class="diagram-box">
+                <pre>상위 관리자가 있으면?
+
+        [월드 매니저]  ← 전체 상황 모니터링
+         /          \
+      존 A          존 B
+
+월드 매니저: "존 A 80%, 존 B 40%네"
+월드 매니저: "존 B야, 경계 니 쪽으로 밀어서 좀 더 받아"
+존 B: "넵"</pre>
+            </div>
+
+            <table class="param-table">
+                <thead>
+                    <tr><th>월드 매니저 역할</th><th>설명</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>부하 모니터링</td><td>"존 A 몇 %, 존 B 몇 %"</td></tr>
+                    <tr><td>경계 이동 결정</td><td>"경계를 어디로 밀어라"</td></tr>
+                    <tr><td>유저 배치 조율</td><td>"이 유저는 존 B로 보내"</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="section">
+            <h2>경계 이동 과정</h2>
+
+            <div class="highlight-box">
+                <h4>핵심: 끊기지 않게!</h4>
+                <p>경계를 "확" 밀면 유저가 갑자기 끊길 수 있음. 그래서:</p>
+                <ol style="margin-left: 20px; margin-top: 12px;">
+                    <li><strong>오버랩 먼저 확장</strong> (안전하게 양쪽 연결)</li>
+                    <li><strong>유저 핸드오프</strong> (정보 전달)</li>
+                    <li><strong>Authority 이전</strong></li>
+                    <li><strong>옛 영역 해제</strong></li>
+                </ol>
+            </div>
+
+            <div class="diagram-box">
+                <pre>경계 이동 순서:
+
+Step 1: 오버랩을 먼저 넓힘
+        [존 A    |====오버랩 확장====|    존 B]
+
+Step 2: 새 영역의 유저들 핸드오프
+        존 B → 존 A: "이 유저들 정보야"
+
+Step 3: Authority 이전
+        새 영역 유저들의 Authority가 존 A로
+
+Step 4: 오버랩 축소, 옛 영역 해제
+        [존 A         |오버랩|    존 B]
+
+→ "오버랩 확장 → 이전 → 축소" 순서!</pre>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>존 기반 심리스 최종 정리</h2>
+
+            <div class="summary-box">
+                <h3>전체 구조</h3>
+                <pre>
+        [월드 매니저]
+         ↙    ↓    ↘
+      존 A   존 B   존 C ...
+
+각 존 서버:
+- 담당 영역의 유저 관리
+- 인접 존과 오버랩 영역 공유
+- 핸드오프로 유저 정보 교환
+
+월드 매니저:
+- 전체 부하 모니터링
+- 동적 경계 조절 명령
+- 유저 배치 최적화</pre>
+            </div>
+
+            <div class="highlight-box">
+                <h4>존 기반 심리스 핵심 정리</h4>
+                <pre style="background: #1e1e1e; color: #d4d4d4;">[기초 심리스]
+- 오버랩 존에서 양쪽 서버 동시 연결
+- Authority 기준으로 판정 (가까운 쪽)
+- 핸드오프로 유저 정보 전달
+- 넘어가면 이전 서버 해제
+
+[동적 심리스]
+- 월드 매니저가 전체 상황 모니터링
+- 부하에 따라 경계 동적 조절
+- 오버랩 확장 → 이전 → 축소 순서</pre>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>다음 단계 (예정)</h2>
+            <p>존 기반 심리스는 여기까지! 다음에 배울 내용:</p>
+            <ul style="margin-left: 20px;">
+                <li><strong>AOI (Area of Interest)</strong>: 시야 범위 기반 관리</li>
+                <li><strong>동적 존 분할</strong>: 부하에 따라 존 자체를 쪼개기</li>
+                <li><strong>SpatialOS</strong>: 최신 대규모 심리스 기술</li>
+            </ul>
+        </section>
+
+        <footer class="footer-nav">
+            <a href="../04-handoff/">← 이전: 핸드오프</a>
+            <a href="../">심리스 월드 목록 →</a>
+        </footer>
+    </div>
+</body>
+</html>
