@@ -106,17 +106,47 @@
             text-align: center;
         }
 
-        .code-block {
+        pre.code-block {
             background: #263238;
             border-radius: 8px;
             padding: 16px 20px;
             margin: 16px 0;
-            font-family: 'Consolas', monospace;
-            font-size: 0.9rem;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
             color: #eceff1;
             overflow-x: auto;
-            line-height: 1.6;
+            line-height: 1.7;
             white-space: pre;
+        }
+
+        .info-box {
+            background: #e8f5e9;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #4CAF50;
+        }
+        .info-box h4 {
+            color: #2e7d32;
+            margin-bottom: 12px;
+            font-size: 1rem;
+        }
+        .info-box p {
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .analogy-box {
+            background: #fff8e1;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #FFC107;
+        }
+        .analogy-box h4 {
+            color: #f57c00;
+            margin-bottom: 12px;
+            font-size: 1rem;
         }
 
         .compare-table {
@@ -195,32 +225,70 @@
                 <div class="q">기존 Unity 방식은 어떻게 작동하고, 왜 느려질 수 있어?</div>
                 <div class="a">
                     <p>기존 방식을 따라가 보자:</p>
-                    <p>• 적 1마리 = <span class="highlight">게임오브젝트</span> + <span class="highlight">스크립트</span></p>
-                    <p>• 스크립트 안에는 <span class="highlight">변수</span>랑 <span class="highlight">Update()</span></p>
+                    <p>• 적 1마리 = <span class="highlight">게임오브젝트</span> + <span class="highlight">스크립트(MonoBehaviour)</span></p>
+                    <p>• 스크립트 안에는 <span class="highlight">변수(데이터)</span>랑 <span class="highlight">Update()(로직)</span></p>
                     <p>• 적 1000마리면? → Update() 1000번 호출</p>
                     <p style="margin-top: 12px;">근데 잠깐, 1000마리가 하는 일이 뭐야? <strong>다 똑같은 이동 로직</strong> 아니야?</p>
-                    <p><span class="key-point">공통 로직 + 데이터만 다름</span></p>
+                    <p><span class="key-point">공통 로직 + 데이터만 다름</span> — 이게 핵심이야.</p>
                 </div>
             </div>
 
             <div class="chat">
                 <div class="q">그게 왜 느린 건데? 좀 더 CS적으로 설명해줘.</div>
                 <div class="a">
-                    <p>MonoBehaviour는 <span class="highlight">class</span>야. class는 <span class="warning">힙(Heap) 메모리</span>에 할당돼.</p>
+                    <p>MonoBehaviour는 <span class="highlight">class</span>야. C#에서 class는 <span class="warning">힙(Heap) 메모리</span>에 할당돼.</p>
                     <p style="margin-top: 12px;">적 1000마리를 new로 생성하면, 힙에 1000개 객체가 생기는데...</p>
-                    <p><strong>얘네가 메모리에 다 함께 붙어있을까? 떨어져 있겠지.</strong></p>
-                    <p style="margin-top: 12px;">CPU가 for문 돌면서 적 데이터 읽을 때:</p>
-                    <p>• 적A → 메모리 100번지</p>
-                    <p>• 적B → 메모리 9999번지 (엄청 멀리)</p>
-                    <p>• 적C → 메모리 50번지 (또 다른 곳)</p>
-                    <p style="margin-top: 12px;">→ CPU 캐시에 안 올라와 있음 → <span class="warning">캐시 미스</span> → 메인 메모리까지 가서 가져옴 → <strong>느림</strong></p>
+                    <p><strong>이 객체들이 메모리에 나란히 붙어있을까?</strong></p>
+                    <p><span class="warning">아니, 힙은 동적 할당이라 여기저기 흩어져 있어.</span></p>
                 </div>
             </div>
 
+            <div class="info-box">
+                <h4>CPU 캐시란?</h4>
+                <p>CPU 안에 있는 <strong>초고속 소형 메모리</strong>야. RAM보다 작지만 훨씬 빨라.</p>
+                <p style="margin-top: 8px;"><strong>속도 비교:</strong></p>
+                <p>• <span class="highlight">캐시 접근</span>: ~1ns (빠름!)</p>
+                <p>• <span class="warning">RAM 접근</span>: ~100ns (느림)</p>
+                <p style="margin-top: 8px;"><strong>결론:</strong> 캐시에 있으면 100배 빠름. 연속 배치가 중요한 이유.</p>
+            </div>
+
+<pre class="code-block">
+CPU가 for문으로 적 데이터를 순회할 때:
+
+적A 데이터 → 메모리 100번지
+적B 데이터 → 메모리 9999번지   ← 엄청 멀리!
+적C 데이터 → 메모리 50번지     ← 또 다른 곳!
+
+→ CPU 캐시에 없음 → 캐시 미스(Cache Miss)
+→ 메인 메모리까지 가서 데이터 가져옴 (100ns 대기)
+→ 캐시 히트 대비 100배 느림
+
+
+참고: 캐시 라인 (Cache Line)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CPU는 데이터를 1바이트씩 안 읽고, 64바이트 단위로 읽어와.
+이 64바이트 블록을 "캐시 라인"이라고 해.
+
+연속 배치된 데이터: 캐시 라인 1개에 여러 객체 데이터가 포함됨
+흩어진 데이터: 캐시 라인마다 쓸모없는 데이터가 같이 딸려옴
+</pre>
+
+            <div class="analogy-box">
+                <h4>함수 호출 오버헤드</h4>
+                <p>MonoBehaviour의 Update()는 매번 <span class="warning">"어떤 함수를 호출할지"</span> 찾아야 해.</p>
+                <p>50,000개 오브젝트 = 함수 찾기 50,000번. 이것도 쌓이면 느려지는 원인.</p>
+            </div>
+
+            <div class="analogy-box">
+                <h4>비유: 서류 정리</h4>
+                <p>• <strong>기존 방식:</strong> 1000개 서류가 사무실 여기저기 서랍에 흩어져 있음. 하나씩 찾으러 돌아다녀야 함.</p>
+                <p>• <strong>ECS 방식:</strong> 1000개 서류가 한 파일철에 순서대로 정리됨. 앞에서부터 쭉 넘기면 끝.</p>
+            </div>
+
             <div class="visual-section">
-                <h4>시뮬레이션: 바닐라(MonoBehaviour) 50,000개</h4>
+                <h4>실제 테스트: 바닐라(MonoBehaviour) 50,000개</h4>
                 <img src="../../Screenshots/dots/step1.gif" alt="Step 1: Vanilla" class="step-gif">
-                <p class="gif-caption">50,000개 오브젝트 → <span class="fps-bad">~20 FPS</span> (버벅거림)</p>
+                <p class="gif-caption">50,000개 오브젝트 이동 → <span class="fps-bad">~20 FPS</span> (버벅거림)</p>
             </div>
         </div>
 
@@ -229,242 +297,509 @@
             <h2>Part 2. ECS란? 그리고 왜 빨라지는가</h2>
 
             <div class="chat">
-                <div class="q">어떻게 해야 빨라져? 그리고 기존에도 로직은 클래스 하나였잖아, 왜 ECS가 더 빨라?</div>
+                <div class="q">어떻게 해야 빨라져?</div>
                 <div class="a">
-                    <p><strong>해결책:</strong> 로직 1번만 만들고, 데이터 1000개를 <span class="highlight">한 줄로 쭉 넣어서</span> 한 번에 처리.</p>
-                    <p style="margin-top: 16px;">이게 <span class="key-point">ECS</span>의 핵심이야:</p>
-                    <p>• <strong>E</strong>ntity = 그냥 ID (껍데기)</p>
-                    <p>• <strong>C</strong>omponent = 데이터만 (변수)</p>
-                    <p>• <strong>S</strong>ystem = 로직만 (함수, 1번만 존재)</p>
+                    <p>발상의 전환이 필요해:</p>
+                    <p>• 기존: <span class="warning">오브젝트 중심(OOP)</span> — 각 오브젝트가 자기 데이터 + 로직을 들고 있음</p>
+                    <p>• ECS: <span class="key-point">데이터 중심(DOD)</span> — 같은 종류의 데이터를 한 곳에 모아놓고, 로직이 쭉 순회</p>
                 </div>
             </div>
 
-            <div class="code-block">기존 MonoBehaviour:
-→ 오브젝트 1000개 × Update() 1000번 호출
+            <div class="info-box">
+                <h4>ECS의 세 가지 구성요소</h4>
+                <p><strong>E - Entity:</strong> 그냥 ID야. 껍데기. "나는 123번 엔티티" 이게 끝.</p>
+                <p><strong>C - Component:</strong> 순수한 데이터만. 로직 없음. <span class="highlight">struct</span>로 만듦.</p>
+                <p><strong>S - System:</strong> 순수한 로직만. 데이터 없음. Component들을 쭉 순회하며 처리.</p>
+            </div>
 
-ECS:
-→ System 1개가 데이터 1000개 쭉 순회</div>
+<pre class="code-block">
+기존 MonoBehaviour (객체 지향 - OOP):
+
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│ Enemy A         │  │ Enemy B         │  │ Enemy C         │
+│ ├─ position     │  │ ├─ position     │  │ ├─ position     │
+│ ├─ speed        │  │ ├─ speed        │  │ ├─ speed        │
+│ └─ Update()     │  │ └─ Update()     │  │ └─ Update()     │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+       ↓                    ↓                    ↓
+  Update() 호출        Update() 호출        Update() 호출
+  (함수 호출 3번)
+
+
+ECS (데이터 지향 - DOD):
+
+┌─────────────────────────────────────────────────────────┐
+│ Position Component Array (연속 메모리)                   │
+│ [A의 pos] [B의 pos] [C의 pos] [D의 pos] ...              │
+└─────────────────────────────────────────────────────────┘
+                           ↓
+                  Movement System이
+                  한 번에 쭉 순회하며 처리
+                  (함수 호출 1번)
+</pre>
 
             <div class="chat">
+                <div class="q">구조가 다른 건 알겠는데, 이게 왜 빠른 거야?</div>
                 <div class="a">
-                    <p style="margin-top: 16px;"><strong>근데 진짜 빨라지는 이유는 "메모리 배치"야:</strong></p>
+                    <p><strong>메모리 배치</strong>가 달라지기 때문이야.</p>
+                    <p>ECS에서 같은 타입의 Component는 <span class="key-point">연속된 메모리 블록(Chunk)</span>에 저장돼.</p>
+                    <p>struct는 <span class="highlight">스택</span>이나 <span class="highlight">연속된 배열</span>에 할당되거든.</p>
                 </div>
             </div>
 
-            <div class="code-block">기존 (MonoBehaviour):
-적A 데이터 → 메모리 100번지
-적B 데이터 → 메모리 9999번지
-적C 데이터 → 메모리 50번지
-(힙에 흩어져 있음)
+<pre class="code-block">
+메모리 배치 비교:
 
-ECS:
-적A 데이터 → 메모리 100번지
-적B 데이터 → 메모리 101번지
-적C 데이터 → 메모리 102번지
-(연속으로 붙어 있음)</div>
+[MonoBehaviour - class - 힙에 흩어짐]
+메모리: ...□...■...□...■...□...■...
+            ↑     ↑     ↑
+           적A   적B   적C  (사이사이에 다른 데이터)
+
+[ECS - struct - 연속 배치]
+메모리: ...■■■■■■■■■■■■...
+           ↑↑↑↑↑↑↑↑↑↑
+          적A적B적C적D... (쭉 붙어있음)
+</pre>
+
+            <div class="info-box">
+                <h4>class vs struct</h4>
+                <p><strong>class:</strong> 배열에 담아도 <span class="warning">주소만 연속</span>, 실제 데이터는 힙에 흩어짐</p>
+                <p><strong>struct:</strong> 배열에 담으면 <span class="key-point">데이터 자체가 연속</span> 배치됨</p>
+                <p style="margin-top: 8px;">ECS Component는 struct라서 자동으로 연속 배치!</p>
+            </div>
+
+<pre class="code-block">
+[class 배열] - 포인터만 연속, 데이터는 흩어짐
+배열: [주소1][주소2][주소3][주소4]
+         ↓      ↓      ↓      ↓
+      (힙 어딘가)(다른곳)(또 다른곳)...
+→ 주소 따라가면 캐시 미스!
+
+[struct 배열] - 데이터가 통째로 연속
+배열: [적A 데이터][적B 데이터][적C 데이터][적D 데이터]
+→ 캐시 라인 1개에 여러 적 데이터 포함!
+</pre>
 
             <div class="chat">
                 <div class="a">
-                    <p>CPU는 <span class="key-point">연속된 메모리</span>를 읽을 때 10~100배 빠름. (캐시 히트)</p>
-                    <p>흩어져 있으면 매번 "어디있지?" 찾아다님. (캐시 미스)</p>
-                    <p style="margin-top: 12px;">즉, 힙에 흩뿌려진 데이터 때문에 CPU가 for문 돌릴 때 <span class="warning">캐시 미스</span>가 난 거야.</p>
-                    <p>ECS는 같은 타입 Component를 <span class="key-point">연속 메모리 블록(Chunk)</span>에 몰아넣어서 캐시 히트율 극대화.</p>
+                    <p>CPU가 데이터를 읽을 때는 <span class="highlight">캐시 라인(64바이트)</span> 단위로 가져와.</p>
+                    <p>연속 배치면 한 번 가져올 때 여러 적의 데이터가 같이 딸려옴 → <span class="key-point">캐시 히트</span></p>
+                    <p>흩어져 있으면 매번 새로 가져와야 함 → <span class="warning">캐시 미스</span></p>
+                    <p style="margin-top: 12px;"><strong>캐시 히트 vs 캐시 미스 = 10~100배 속도 차이</strong></p>
                 </div>
+            </div>
+
+            <div class="analogy-box">
+                <h4>프리페칭 (Prefetching)</h4>
+                <p>CPU가 <strong>"다음에 뭘 읽을지"를 예측</strong>해서 미리 캐시로 가져오는 기능.</p>
+                <p style="margin-top: 8px;"><strong>연속 배열:</strong> 패턴이 규칙적 → 예측 가능 → 미리 로드 → 대기 시간 0</p>
+                <p><strong>흩어진 객체:</strong> 패턴 없음 → 예측 불가 → 매번 RAM까지 다녀옴</p>
             </div>
         </div>
 
         <!-- Part 3: DOTS = ECS + Jobs + Burst -->
         <div class="conversation">
-            <h2>Part 3. ECS만으로 끝? DOTS는 뭐야?</h2>
+            <h2>Part 3. DOTS는 ECS만 있는 게 아니야</h2>
 
             <div class="chat">
-                <div class="q">ECS랑 DOTS랑 뭔 차이야?</div>
+                <div class="q">ECS랑 DOTS랑 같은 거 아니야?</div>
                 <div class="a">
-                    <p><span class="highlight">ECS</span> = 패턴 이름 (Entity-Component-System)</p>
-                    <p><span class="highlight">DOTS</span> = Unity가 만든 기술 묶음 (Data-Oriented Technology Stack)</p>
-                    <p style="margin-top: 16px;"><strong>DOTS 안에 3개 들어있어:</strong></p>
-                    <p>1. <span class="highlight">Entities</span> - ECS 구현체</p>
-                    <p>2. <span class="highlight">Jobs</span> - 멀티스레딩 (코어 여러 개 활용)</p>
-                    <p>3. <span class="highlight">Burst</span> - C# → 네이티브 코드로 컴파일 (C++ 급 속도)</p>
+                    <p><span class="highlight">ECS</span>는 아키텍처 패턴 이름이고,</p>
+                    <p><span class="highlight">DOTS</span>는 Unity가 만든 기술 스택 이름이야.</p>
+                    <p style="margin-top: 12px;"><strong>DOTS = Data-Oriented Technology Stack</strong></p>
+                    <p>ECS만 있는 게 아니라 세 가지 기술이 합쳐진 거야:</p>
                 </div>
+            </div>
+
+            <div class="info-box">
+                <h4>DOTS의 세 기둥</h4>
+                <p><strong>1. Entities</strong> — Unity의 ECS 구현체. 데이터 배치 최적화.</p>
+                <p><strong>2. Jobs System</strong> — 멀티스레딩. 여러 CPU 코어 동시 활용.</p>
+                <p><strong>3. Burst Compiler</strong> — C# 코드를 네이티브 기계어로 AOT 컴파일.</p>
             </div>
 
             <table class="compare-table">
                 <tr>
                     <th>조합</th>
                     <th>성능 향상</th>
+                    <th>이유</th>
                 </tr>
                 <tr>
                     <td>ECS만</td>
-                    <td>2~5배 (캐시 히트)</td>
+                    <td>2~5배</td>
+                    <td>캐시 히트율 증가</td>
                 </tr>
                 <tr>
                     <td>ECS + Burst</td>
                     <td>10~50배</td>
+                    <td>+ 네이티브 컴파일 최적화</td>
                 </tr>
                 <tr>
                     <td>ECS + Burst + Jobs</td>
                     <td>100배+</td>
+                    <td>+ 멀티코어 병렬 처리</td>
                 </tr>
             </table>
-        </div>
-
-        <!-- Part 4: Jobs + Burst -->
-        <div class="conversation">
-            <h2>Part 4. Jobs와 Burst는 뭘 해주는 거야?</h2>
 
             <div class="chat">
-                <div class="q">Jobs랑 Burst가 각각 뭔데?</div>
                 <div class="a">
-                    <p><strong>Jobs - 놀고 있는 코어 일 시키기:</strong></p>
-                    <p>• CPU 코어가 보통 8개인데, 기존 Unity Update()는 <span class="warning">1개(메인스레드)</span>만 씀</p>
-                    <p>• 나머지 7개는? <strong>놀아.</strong></p>
-                    <p>• <span class="key-point">Jobs = 그 7개도 일 시키는 거.</span></p>
-                    <p>• 적 50,000마리 → 8코어가 6,250마리씩 나눠서 동시에 처리</p>
-                    <p style="margin-top: 20px;"><strong>Burst - C#을 C++ 급으로:</strong></p>
-                    <p>• C#은 원래: C# → IL(중간코드) → <span class="warning">런타임에 JIT가 기계어로 변환</span></p>
-                    <p>• 그래서 C++보다 느려. 매번 변환 오버헤드 + JIT가 대충 변환함.</p>
-                    <p>• <span class="key-point">Burst = 미리 빡세게 기계어로 컴파일해놓는 거.</span></p>
-                    <p>• JIT 건너뛰고, C++ 급으로 최적화된 네이티브 코드 뽑아냄.</p>
+                    <p>세 기술이 시너지를 내는 거야:</p>
+                    <p>• ECS가 데이터를 <strong>연속 배치</strong>해놓으면</p>
+                    <p>• Jobs가 이걸 <strong>여러 코어로 분할</strong>해서 처리하고</p>
+                    <p>• Burst가 그 코드를 <strong>빡세게 최적화</strong>된 기계어로 컴파일</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Part 4: Jobs + Burst 깊게 -->
+        <div class="conversation">
+            <h2>Part 4. Jobs와 Burst 깊게 파보기</h2>
+
+            <div class="chat">
+                <div class="q">Jobs가 뭔데?</div>
+                <div class="a">
+                    <p>CPU 코어가 요즘 보통 8개야. 근데 기존 Unity는?</p>
+                    <p><span class="warning">메인 스레드 1개</span>에서만 Update() 돌려.</p>
+                    <p>나머지 7개 코어는? <strong>놀고 있어.</strong></p>
+                    <p style="margin-top: 12px;"><span class="key-point">Jobs = 놀고 있는 7개 코어도 일 시키는 거.</span></p>
+                </div>
+            </div>
+
+<pre class="code-block">
+기존 Unity Update() 실행 흐름:
+
+[CPU 코어 8개 중...]
+코어 1: Update() → Update() → Update() → ...  ← 혼자 바쁨
+코어 2: zzz... (놀고 있음)
+코어 3: zzz...
+코어 4: zzz...
+코어 5: zzz...
+코어 6: zzz...
+코어 7: zzz...
+코어 8: zzz...
+
+→ 7개 코어가 놀고 있음 = CPU 사용률 12.5%
+
+
+Jobs System 사용 시:
+
+코어 1: [적 1번 ~ 6,250번 처리]
+코어 2: [적 6,251번 ~ 12,500번 처리]
+코어 3: [적 12,501번 ~ 18,750번 처리]
+코어 4: [적 18,751번 ~ 25,000번 처리]
+코어 5: [적 25,001번 ~ 31,250번 처리]
+코어 6: [적 31,251번 ~ 37,500번 처리]
+코어 7: [적 37,501번 ~ 43,750번 처리]
+코어 8: [적 43,751번 ~ 50,000번 처리]
+
+→ 8코어 풀가동 = 이론상 8배 빠름
+</pre>
+
+            <div class="analogy-box">
+                <h4>멀티스레딩 왜 어려워?</h4>
+                <p>여러 스레드가 같은 데이터를 건드리면 <span class="warning">레이스 컨디션</span> — 데이터 꼬임.</p>
+                <p style="margin-top: 8px;"><strong>Unity Jobs의 해결:</strong> 50,000개를 8등분해서 각 코어에 배분.</p>
+                <p>각 코어는 자기 담당 데이터만 건드림 → 충돌 원천 차단.</p>
+            </div>
+
+            <div class="chat">
+                <div class="q">Burst는 뭔데? C#으로 짜면서 C++ 급 성능이 난다고?</div>
+                <div class="a">
+                    <p>먼저 <strong>왜 C++이 빠르고 C#이 느린지</strong>부터 알아야 해.</p>
+                </div>
+            </div>
+
+<pre class="code-block">
+[ C++ 빌드 과정 ]
+
+소스코드(.cpp)
+     ↓ 컴파일러 (MSVC, GCC, Clang)
+어셈블리 → 기계어(.exe)
+     ↓
+CPU가 바로 실행
+
+→ 빌드할 때 이미 기계어로 변환됨
+→ 실행 시 변환 오버헤드 없음
+→ 컴파일러가 빡세게 최적화 (인라인, SIMD, 루프 언롤링 등)
+
+
+[ C# 실행 과정 ]
+
+소스코드(.cs)
+     ↓ C# 컴파일러
+IL 코드 (Intermediate Language, 중간 언어)
+     ↓ 실행할 때 CLR의 JIT 컴파일러가
+기계어로 변환
+     ↓
+CPU 실행
+
+→ 실행할 때마다 JIT가 기계어로 변환 (오버헤드)
+→ JIT는 빠른 컴파일이 목표라 최적화가 "적당히"만 됨
+→ 결과: C++보다 느림
+</pre>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>Burst가 하는 일:</strong></p>
+                    <p>C# 코드를 <span class="key-point">미리(AOT)</span> 네이티브 기계어로 컴파일해.</p>
+                    <p>JIT처럼 "적당히"가 아니라, <span class="highlight">LLVM 기반</span>으로 C++ 급 빡센 최적화.</p>
+                </div>
+            </div>
+
+<pre class="code-block">
+[ Burst 컴파일 과정 ]
+
+C# 코드 (HPC# - High Performance C#)
+     ↓ Burst 컴파일러 (LLVM 기반)
+고도로 최적화된 네이티브 기계어
+     ↓
+CPU가 바로 실행
+
+→ C# 문법으로 C++ 급 성능 달성!
+</pre>
+
+            <div class="info-box">
+                <h4>Burst가 해주는 최적화</h4>
+                <p>• <strong>SIMD:</strong> 여러 데이터를 동시에 처리 (4~8배 빠름)</p>
+                <p>• <strong>인라인:</strong> 함수 호출 제거 → 오버헤드 0</p>
+                <p>• <strong>루프 최적화:</strong> 반복문을 더 효율적인 형태로 변환</p>
+                <p style="margin-top: 8px;">이걸 <span class="highlight">[BurstCompile]</span> 한 줄로 자동 적용!</p>
+            </div>
+
+<pre class="code-block">
+SIMD 쉽게 이해하기
+
+[일반 연산]
+x 계산 → y 계산 → z 계산 (순차 처리, 3번)
+
+[SIMD 연산]
+(x, y, z, w) 한꺼번에 계산 (병렬 처리, 1번)
+
+→ CPU의 넓은 레지스터(128~256비트)를 활용
+→ 같은 연산을 4~8개 데이터에 동시 적용
+→ 이론상 4~8배 빠름
+
+Burst가 알아서 이 변환을 해줌!
+</pre>
+
+            <div class="chat">
+                <div class="q">그럼 모든 C# 코드에 Burst 쓰면 되는 거 아니야?</div>
+                <div class="a">
+                    <p><span class="warning">아니, Burst는 제약이 있어.</span></p>
+                    <p>Burst는 <span class="highlight">HPC# (High Performance C#)</span>라는 C#의 부분집합만 컴파일 가능해.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>Burst에서 쓸 수 있는 것</th>
+                    <th>Burst에서 못 쓰는 것</th>
+                </tr>
+                <tr>
+                    <td>struct (값 타입)</td>
+                    <td>class (참조 타입)</td>
+                </tr>
+                <tr>
+                    <td>int, float, bool</td>
+                    <td>string, object</td>
+                </tr>
+                <tr>
+                    <td>float3, float4, quaternion (Unity.Mathematics)</td>
+                    <td>Vector3, Quaternion (UnityEngine)</td>
+                </tr>
+                <tr>
+                    <td>NativeArray, NativeList</td>
+                    <td>List&lt;T&gt;, Dictionary&lt;K,V&gt;</td>
+                </tr>
+                <tr>
+                    <td>math.sin(), math.cos()</td>
+                    <td>Mathf.Sin(), Debug.Log()</td>
+                </tr>
+            </table>
+
+            <div class="analogy-box">
+                <h4>왜 MonoBehaviour에서 Burst 못 써?</h4>
+                <p>MonoBehaviour는 <span class="warning">class</span>야. Transform도, GameObject도 전부 class.</p>
+                <p>class는 힙에 할당되고 GC가 관리하는 <span class="warning">참조 타입</span>이라 Burst가 처리 못 해.</p>
+                <p style="margin-top: 8px;"><strong>ECS의 Component는 전부 struct (값 타입)</strong>라서 Burst와 찰떡궁합인 거야.</p>
             </div>
         </div>
 
         <!-- Part 5: 실제 비교 -->
         <div class="conversation">
-            <h2>Part 5. 실제 성능 비교</h2>
+            <h2>Part 5. 실제 성능 비교 (50,000개 오브젝트)</h2>
 
             <div class="chat">
                 <div class="a">
-                    <p>50,000개 오브젝트 이동 기준:</p>
+                    <p>말로만 하면 와닿지 않으니까, 직접 비교해보자.</p>
+                    <p>같은 작업: <strong>50,000개 큐브가 랜덤 방향으로 이동</strong></p>
                 </div>
             </div>
 
             <div class="visual-section">
                 <h4>Step 1: 바닐라 (MonoBehaviour)</h4>
                 <img src="../../Screenshots/dots/step1.gif" alt="Vanilla" class="step-gif">
-                <p class="gif-caption"><span class="fps-bad">~20 FPS</span> - Update() 50,000번 호출</p>
+                <p class="gif-caption"><span class="fps-bad">~20 FPS</span> — 각 오브젝트마다 Update() 호출, 캐시 미스 다수</p>
             </div>
 
             <div class="visual-section">
-                <h4>Step 2: DOTS (ECS + Burst)</h4>
-                <img src="../../Screenshots/dots/step2.gif" alt="DOTS Burst" class="step-gif">
-                <p class="gif-caption"><span class="fps-good">~200+ FPS</span> - 연속 메모리 + 네이티브 컴파일</p>
+                <h4>Step 2: DOTS (ECS만, Burst OFF)</h4>
+                <img src="../../Screenshots/dots/step2.gif" alt="DOTS ECS Only" class="step-gif">
+                <p class="gif-caption">~60~80 FPS — ECS 구조만으로도 3배 향상</p>
             </div>
 
             <div class="visual-section">
-                <h4>Step 3: DOTS (No Burst) - Burst 끈 상태</h4>
-                <img src="../../Screenshots/dots/step3.gif" alt="DOTS No Burst" class="step-gif">
-                <p class="gif-caption">Burst 없으면 성능 하락 → Burst의 기여도 확인</p>
+                <h4>Step 3: DOTS (ECS + Burst)</h4>
+                <img src="../../Screenshots/dots/step3.gif" alt="DOTS Burst" class="step-gif">
+                <p class="gif-caption"><span class="fps-good">~200+ FPS</span> — 연속 메모리 순회 + 네이티브 컴파일</p>
             </div>
 
             <div class="visual-section">
-                <h4>Step 4: DOTS (Jobs Parallel) - 멀티코어 활용</h4>
-                <img src="../../Screenshots/dots/step4.gif" alt="DOTS Jobs" class="step-gif">
-                <p class="gif-caption">8코어 병렬 처리 → 추가 성능 향상</p>
+                <h4>Step 4: DOTS (ECS + Burst + Jobs) — 8코어 병렬 처리</h4>
+                <img src="../../Screenshots/dots/step5.gif" alt="DOTS Jobs" class="step-gif">
+                <p class="gif-caption"><span class="fps-good">~250+ FPS</span> — 멀티코어 활용으로 추가 성능 향상</p>
             </div>
 
             <table class="compare-table">
                 <tr>
                     <th>모드</th>
-                    <th>FPS (50,000개)</th>
+                    <th>FPS</th>
+                    <th>바닐라 대비</th>
                     <th>특징</th>
                 </tr>
                 <tr>
                     <td>바닐라</td>
                     <td class="fps-bad">~20</td>
+                    <td>1x</td>
                     <td>Update() 개별 호출, 캐시 미스</td>
                 </tr>
                 <tr>
-                    <td>DOTS (Burst)</td>
-                    <td class="fps-good">~200+</td>
-                    <td>연속 메모리 + 네이티브 컴파일</td>
-                </tr>
-                <tr>
                     <td>DOTS (No Burst)</td>
-                    <td>~60~80</td>
-                    <td>ECS만, Burst 없음</td>
+                    <td>~70</td>
+                    <td>3.5x</td>
+                    <td>ECS 구조만 (캐시 히트)</td>
                 </tr>
                 <tr>
-                    <td>DOTS (Jobs)</td>
-                    <td class="fps-good">~250+</td>
-                    <td>멀티코어 병렬 처리</td>
+                    <td>DOTS (Burst)</td>
+                    <td class="fps-good">~200</td>
+                    <td>10x</td>
+                    <td>+ 네이티브 컴파일</td>
+                </tr>
+                <tr>
+                    <td>DOTS (Burst + Jobs)</td>
+                    <td class="fps-good">~250</td>
+                    <td>12.5x</td>
+                    <td>+ 멀티코어 병렬</td>
                 </tr>
             </table>
         </div>
 
         <!-- Part 6: 코드 비교 -->
         <div class="conversation">
-            <h2>Part 6. 코드는 어떻게 다를까?</h2>
+            <h2>Part 6. 코드로 보는 차이</h2>
 
             <div class="chat">
                 <div class="a">
                     <p><strong>바닐라 (MonoBehaviour):</strong></p>
+                    <p>데이터와 로직이 한 클래스에 묶여 있어.</p>
                 </div>
             </div>
 
-            <div class="code-block">public class Enemy : MonoBehaviour
+<pre class="code-block">
+public class Enemy : MonoBehaviour
 {
+    // ===== 데이터 =====
     public float speed = 5f;
     public Vector3 direction;
 
-    void Update()  // 오브젝트마다 호출됨
+    // ===== 로직 =====
+    // 오브젝트마다 매 프레임 호출됨
+    void Update()
     {
         transform.position += direction * speed * Time.deltaTime;
     }
-}</div>
+}
+
+// 50,000개 오브젝트 = Update() 50,000번 호출
+</pre>
 
             <div class="chat">
                 <div class="a">
                     <p><strong>DOTS (ECS):</strong></p>
+                    <p>데이터(Component)와 로직(System)이 완전히 분리돼.</p>
                 </div>
             </div>
 
-            <div class="code-block">// Component - 데이터만
+<pre class="code-block">
+// ============================================
+// Component: 순수 데이터 (struct)
+// ============================================
 public struct EnemyData : IComponentData
 {
     public float speed;
     public float3 direction;
+    public float boundarySize;
 }
 
-// System - 로직만, 1번만 존재
-[BurstCompile]
+
+// ============================================
+// System: 순수 로직 (1개만 존재)
+// ============================================
+[BurstCompile]  // ← 이 한 줄로 네이티브 컴파일!
 public partial struct EnemyMovementSystem : ISystem
 {
+    [BurstCompile]
     public void OnUpdate(ref SystemState state)
     {
         float dt = SystemAPI.Time.DeltaTime;
 
-        // 모든 Enemy 데이터를 쭉 순회
+        // 모든 EnemyData를 가진 Entity를 쭉 순회
         foreach (var (transform, enemy) in
-            SystemAPI.Query&lt;RefRW&lt;LocalTransform&gt;, RefRW&lt;EnemyData&gt;&gt;())
+            SystemAPI.Query&lt;RefRW&lt;LocalTransform&gt;,
+                           RefRW&lt;EnemyData&gt;&gt;())
         {
-            transform.ValueRW.Position +=
-                enemy.ValueRO.direction * enemy.ValueRO.speed * dt;
+            float3 pos = transform.ValueRO.Position;
+            pos += enemy.ValueRO.direction *
+                   enemy.ValueRO.speed * dt;
+
+            // 경계 체크
+            if (math.abs(pos.x) > enemy.ValueRO.boundarySize)
+                enemy.ValueRW.direction = -enemy.ValueRO.direction;
+
+            transform.ValueRW.Position = pos;
         }
     }
-}</div>
+}
 
-            <div class="chat">
-                <div class="a">
-                    <p><strong>핵심 차이:</strong></p>
-                    <p>• 바닐라: 데이터 + 로직이 한 클래스에 묶임</p>
-                    <p>• ECS: <span class="key-point">데이터(Component)와 로직(System) 분리</span></p>
-                </div>
+// System 1개가 50,000개 데이터를 연속으로 처리
+</pre>
+
+            <div class="info-box">
+                <h4>핵심 차이점</h4>
+                <p><strong>바닐라:</strong> 50,000개 오브젝트 = Update() 50,000번 호출 (함수 호출 오버헤드)</p>
+                <p><strong>ECS:</strong> System 1개가 50,000개 데이터를 연속으로 쭉 처리 (캐시 친화적)</p>
+                <p style="margin-top: 12px;">함수 호출 오버헤드 없음 + 캐시 히트율 극대화 = <span class="key-point">성능 폭발</span></p>
             </div>
         </div>
 
         <!-- 전체 정리 -->
         <div class="summary-box">
-            <h3>전체 정리</h3>
+            <h3>전체 정리: 왜 DOTS가 빠른가</h3>
             <ul>
-                <li><strong>ECS</strong> = Entity(ID) + Component(데이터) + System(로직) 분리</li>
-                <li><strong>캐시 히트</strong> = 연속 메모리 배치로 CPU가 빠르게 읽음</li>
-                <li><strong>Jobs</strong> = 놀고 있는 코어들도 일 시킴 (병렬 처리)</li>
-                <li><strong>Burst</strong> = C# → 네이티브 코드로 미리 컴파일</li>
-                <li><strong>DOTS</strong> = ECS + Jobs + Burst 합친 Unity 기술 스택</li>
-                <li><strong>결과</strong> = 50,000개 기준 20fps → 200+fps (10배↑)</li>
+                <li><strong>기존 문제:</strong> MonoBehaviour는 class(힙 할당)라 메모리가 흩어짐 → 캐시 미스 (100ns) + vtable 오버헤드</li>
+                <li><strong>ECS:</strong> struct 기반 연속 배치 → 캐시 히트 (1ns) + 프리페칭 가능 + 함수 호출 1번</li>
+                <li><strong>Jobs:</strong> 작업 분할 + Safety System → 레이스 컨디션 없이 8코어 병렬 처리</li>
+                <li><strong>Burst:</strong> LLVM AOT + SIMD 벡터화 → 루프당 8배 처리량</li>
+                <li><strong>시너지:</strong> 연속 데이터(ECS) × 병렬 처리(Jobs) × 네이티브 최적화(Burst)</li>
+                <li><strong>결과:</strong> 50,000개 기준 20fps → 250fps (<span class="fps-good">12배↑</span>)</li>
             </ul>
+        </div>
+
+        <div class="analogy-box">
+            <h4>핵심 인사이트</h4>
+            <p>DOTS는 마법이 아니야. <strong>"CPU가 좋아하는 방식"</strong>으로 데이터를 배치하고 처리한 결과야.</p>
+            <p style="margin-top: 8px;">연속 배치 → 캐시 히트 / 멀티코어 활용 → 병렬 처리 / 네이티브 컴파일 → 최적화</p>
+            <p style="margin-top: 8px;"><strong>결론:</strong> 하드웨어 특성을 이해하면 성능 최적화가 보인다.</p>
         </div>
 
         <div class="nav-links">
