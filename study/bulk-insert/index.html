@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1만 건 INSERT, 1초 안에 끝내는 법 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        /* 코드 블록 */
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* 비교 테이블 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .fast {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .slow {
+            background: #ffcdd2;
+        }
+
+        /* 실측 결과 박스 */
+        .result-box {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            margin: 24px 0;
+        }
+        .result-box h4 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .result-box .result-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        .result-box .result-item {
+            text-align: center;
+        }
+        .result-box .result-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .result-box .result-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .result-box .result-note {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .divider {
+            height: 1px;
+            background: #e0e0e0;
+            margin: 32px 0;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>1만 건 INSERT, 1초 안에 끝내는 법</h1>
+            <p>Bulk Insert vs 개별 Insert - 실측으로 증명하는 7.7배 성능 차이</p>
+        </header>
+
+        <!-- Part 1: 문제 상황 -->
+        <div class="conversation">
+            <h2>Part 1. 문제 상황</h2>
+
+            <div class="chat">
+                <div class="q">게임 종료 시 유저 데이터 1만 개를 저장해야 해. 어떻게 할래?</div>
+                <div class="a">
+                    <p><strong>상황: 레이드 종료</strong></p>
+                    <p>• 참가자 100명</p>
+                    <p>• 각 유저당: 인벤토리 50개 + 퀘스트 30개 + 스킬 20개</p>
+                    <p>• 총 100 × 100 = <span class="highlight">약 1만 건 INSERT</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그냥 for문 돌면서 1건씩 INSERT 하면 되는 거 아니야?</div>
+                <div class="a">
+                    <p>그게 제일 직관적이긴 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">INSERT INTO TInven VALUES (...)  -- 1번
+INSERT INTO TInven VALUES (...)  -- 2번
+...
+INSERT INTO TInven VALUES (...)  -- 10000번</div>
+
+            <div class="chat">
+                <div class="q">시간 복잡도가 O(N)이니까 빠른 거 아니야?</div>
+                <div class="a">
+                    <p>맞아, O(N)이야. 1만 건이면 1만 번 연산.</p>
+                    <p><span class="warning">근데 O(N)인데도 5초 넘게 걸릴 수 있어.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">왜? CPU 연산 1만 번이면 마이크로초 단위 아니야?</div>
+                <div class="a">
+                    <p>CPU 연산만 보면 그래. 근데...</p>
+                    <p><span class="key-point">INSERT 한 번에 CPU 연산만 일어나는 게 아니야.</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 진짜 병목 -->
+        <div class="conversation">
+            <h2>Part 2. INSERT 한 번에 뭐가 일어나?</h2>
+
+            <div class="code-block">[게임 서버]                    [DB 서버]
+     |                              |
+     |--- INSERT 요청 ------------>|  (→ 네트워크)
+     |                              |  (DB 처리)
+     |<-- 완료 응답 ---------------|  (← 네트워크)
+     |                              |
+   다음 INSERT...</div>
+
+            <div class="chat">
+                <div class="q">아, 네트워크 왕복이 있구나?</div>
+                <div class="a">
+                    <p>맞아. <span class="highlight">1번 INSERT = 네트워크 왕복 1번</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>환경</th>
+                    <th>왕복 시간 (RTT)</th>
+                </tr>
+                <tr>
+                    <td>localhost (같은 PC)</td>
+                    <td>0.1~0.5ms</td>
+                </tr>
+                <tr>
+                    <td>같은 데이터센터</td>
+                    <td>0.5~2ms</td>
+                </tr>
+                <tr>
+                    <td>서울 ↔ 도쿄</td>
+                    <td>30~50ms</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">로컬이라도 0.5ms면... 1만 건이면?</div>
+                <div class="a">
+                    <p>1만 × 0.5ms = <span class="warning">5,000ms = 5초</span></p>
+                    <p>서울↔도쿄면? 1만 × 30ms = <span class="warning">300초 = 5분</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>정리:</strong></p>
+                    <p>• CPU 연산 시간: 0.001초 (무시 가능)</p>
+                    <p>• 네트워크 시간: 5초 (99.9% 차지)</p>
+                    <p><span class="key-point">O(N)인데 5초 걸리는 이유 = 네트워크 왕복이 병목</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 해결책 -->
+        <div class="conversation">
+            <h2>Part 3. 해결책 - 묶어서 보내기</h2>
+
+            <div class="chat">
+                <div class="q">왕복 횟수를 줄이면 되겠네?</div>
+                <div class="a">
+                    <p><span class="key-point">정확해.</span> 방법이 크게 두 가지야.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>방법 1: VALUES 묶어서 한 방에</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">-- 개별 (왕복 3번)
+INSERT INTO TItem VALUES (1, 'sword');
+INSERT INTO TItem VALUES (2, 'shield');
+INSERT INTO TItem VALUES (3, 'potion');
+
+-- 한 번에 (왕복 1번)
+INSERT INTO TItem VALUES
+    (1, 'sword'),
+    (2, 'shield'),
+    (3, 'potion');</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>방법 2: 트랜잭션으로 묶기</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">BEGIN TRANSACTION
+    INSERT INTO TItem VALUES (1, 'sword');
+    INSERT INTO TItem VALUES (2, 'shield');
+    INSERT INTO TItem VALUES (3, 'potion');
+COMMIT</div>
+
+            <div class="chat">
+                <div class="q">둘 다 "묶는다"는 건 같은데, 뭐가 달라?</div>
+                <div class="a">
+                    <p>직접 테스트해보자.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 실측 결과 -->
+        <div class="conversation">
+            <h2>Part 4. 실측 결과</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>테스트 환경:</strong> 로컬 MSSQL 2019, 1000건 INSERT</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h4>실측 결과 (로컬 DB, 1000건)</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">개별 INSERT</div>
+                        <div class="result-value">231ms</div>
+                        <div class="result-note">1x (기준)</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">VALUES 묶음</div>
+                        <div class="result-value">82ms</div>
+                        <div class="result-note">2.8배 빠름</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">트랜잭션 묶음</div>
+                        <div class="result-value">30ms</div>
+                        <div class="result-note">7.7배 빠름</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">어? VALUES 묶는 게 제일 빠를 줄 알았는데, 트랜잭션이 더 빠르네?</div>
+                <div class="a">
+                    <p>좋은 관찰이야. 이유가 있어.</p>
+                    <p>힌트: <span class="highlight">로컬 DB라서 네트워크 왕복이 거의 0이야.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 뭐가 병목이었던 거야?</div>
+                <div class="a">
+                    <p><span class="key-point">디스크 flush (커밋)</span>가 병목이었어.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 커밋이 뭔데? -->
+        <div class="conversation">
+            <h2>Part 5. 잠깐, 커밋이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">INSERT 하면 바로 디스크에 저장되는 거 아니야?</div>
+                <div class="a">
+                    <p>아니. 생각해봐.</p>
+                    <p>만약 INSERT 하자마자 디스크에 쓰는데, 그 직후 정전이 되면?</p>
+                </div>
+            </div>
+
+            <div class="code-block">INSERT INTO TItem VALUES (1, 'sword');  -- 디스크에 씀
+INSERT INTO TItem VALUES (2, 'shield'); -- 디스크에 씀
+INSERT INTO TItem VALUES (3, 'potion'); -- 쓰다가 정전! 💥</div>
+
+            <div class="chat">
+                <div class="q">데이터가 반만 저장되잖아?</div>
+                <div class="a">
+                    <p>맞아. 더 심각한 예시를 보자.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>상황: 아이템 거래</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">-- 유저 A가 유저 B에게 검 판매 (1000골드)
+UPDATE TInven SET owner = 'B' WHERE item = 'sword';   -- 1. 검을 B에게
+UPDATE TGold SET gold = gold - 1000 WHERE user = 'B'; -- 2. B 돈 차감
+UPDATE TGold SET gold = gold + 1000 WHERE user = 'A'; -- 3. A 돈 지급 💥 정전!</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>결과:</strong></p>
+                    <p>• 검: B한테 갔음 ✅</p>
+                    <p>• B 돈: 1000골드 빠짐 ✅</p>
+                    <p>• A 돈: 안 들어옴 ❌</p>
+                    <p><span class="warning">B는 돈 냈는데 A는 돈 못 받음 = 데이터 불일치</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 어떻게 해야 해?</div>
+                <div class="a">
+                    <p>3개 다 성공하거나, 3개 다 실패하거나. <span class="key-point">중간이 없어야 해.</span></p>
+                    <p>이게 <span class="highlight">트랜잭션</span>이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">BEGIN TRANSACTION  -- 시작
+    UPDATE TInven SET owner = 'B' WHERE item = 'sword';
+    UPDATE TGold SET gold = gold - 1000 WHERE user = 'B';
+    UPDATE TGold SET gold = gold + 1000 WHERE user = 'A';
+COMMIT             -- 확정!</div>
+
+            <div class="chat">
+                <div class="q">COMMIT이 "확정"이구나. 그 전까지는?</div>
+                <div class="a">
+                    <p><span class="highlight">메모리에만 임시 저장.</span> 디스크엔 안 씀.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>단계</th>
+                    <th>저장 위치</th>
+                    <th>속도</th>
+                    <th>정전 시</th>
+                </tr>
+                <tr>
+                    <td>COMMIT 전</td>
+                    <td>메모리</td>
+                    <td>빠름</td>
+                    <td>날아감 (롤백)</td>
+                </tr>
+                <tr>
+                    <td>COMMIT 후</td>
+                    <td>디스크</td>
+                    <td>느림</td>
+                    <td>복구됨</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>COMMIT = "이제 진짜야. 디스크에 영구 저장해."</strong></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 왜 트랜잭션이 빠른가 -->
+        <div class="conversation">
+            <h2>Part 6. 그래서 왜 트랜잭션이 빨라?</h2>
+
+            <div class="chat">
+                <div class="q">아까 개별 INSERT는 트랜잭션 안 썼잖아. 그럼 COMMIT 안 한 거야?</div>
+                <div class="a">
+                    <p>아니, 했어. <span class="highlight">Auto-Commit 모드</span>라서.</p>
+                </div>
+            </div>
+
+            <div class="code-block">-- 이렇게 쓰면
+INSERT INTO T VALUES (1, 'a');
+
+-- 실제로는 이렇게 동작
+BEGIN TRANSACTION
+    INSERT INTO T VALUES (1, 'a');
+COMMIT  -- 자동으로 붙음!</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="warning">매 문장마다 자동 COMMIT = 매번 디스크 flush</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[A] 개별 INSERT (auto-commit 모드)
+INSERT → 자동 COMMIT → 디스크 flush
+INSERT → 자동 COMMIT → 디스크 flush
+INSERT → 자동 COMMIT → 디스크 flush
+... (1000번 디스크 쓰기)
+
+[C] 트랜잭션 묶음
+BEGIN TRAN
+INSERT → 메모리에만
+INSERT → 메모리에만
+INSERT → 메모리에만
+... (1000번 메모리 쓰기)
+COMMIT → 디스크 flush 1번!</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>방식</th>
+                    <th>디스크 flush 횟수</th>
+                </tr>
+                <tr class="slow">
+                    <td>A. 개별 INSERT</td>
+                    <td>1000번</td>
+                </tr>
+                <tr class="fast">
+                    <td>C. 트랜잭션 묶음</td>
+                    <td>1번</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">이게 7.7배 차이의 원인이야.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 B(VALUES 묶음)는? 그것도 INSERT 1번이니까 flush 1번 아니야?</div>
+                <div class="a">
+                    <p>맞아. flush는 1번인데, 다른 문제가 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block">-- B의 SQL 문장 (실제로 이렇게 생김)
+INSERT INTO T VALUES (1,'item_1',10),(2,'item_2',20),(3,'item_3',30)...
+
+-- 길이: 1000개 × 30자 = 약 3만 자짜리 SQL 문장</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>SQL Server가 이 3만 자를 <span class="highlight">파싱(문법 분석)</span>해야 해.</p>
+                    <p>• 괄호 1000개 체크</p>
+                    <p>• 쉼표 3000개 체크</p>
+                    <p>• 문법 맞는지 검증</p>
+                    <p>이게 오버헤드야.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>방식</th>
+                    <th>디스크 flush</th>
+                    <th>SQL 파싱</th>
+                    <th>결과</th>
+                </tr>
+                <tr class="slow">
+                    <td>A. 개별</td>
+                    <td>1000번</td>
+                    <td>짧은 거 1000개</td>
+                    <td>231ms</td>
+                </tr>
+                <tr>
+                    <td>B. VALUES 묶음</td>
+                    <td>1번</td>
+                    <td>3만 자 1개</td>
+                    <td>82ms</td>
+                </tr>
+                <tr class="fast">
+                    <td>C. 트랜잭션</td>
+                    <td>1번</td>
+                    <td>짧은 거 1000개</td>
+                    <td>30ms</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 7: 원격이라면 -->
+        <div class="conversation">
+            <h2>Part 7. 원격 DB라면?</h2>
+
+            <div class="chat">
+                <div class="q">로컬 테스트 결과인데, 원격이면 어떻게 달라져?</div>
+                <div class="a">
+                    <p>네트워크 왕복이 추가되면 <span class="warning">격차가 폭발해.</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>방식</th>
+                    <th>로컬 (0ms)</th>
+                    <th>데이터센터 (1ms)</th>
+                    <th>서울↔도쿄 (30ms)</th>
+                </tr>
+                <tr class="slow">
+                    <td>개별 INSERT</td>
+                    <td>231ms</td>
+                    <td>1,231ms</td>
+                    <td>30,000ms (30초)</td>
+                </tr>
+                <tr class="fast">
+                    <td>트랜잭션</td>
+                    <td>30ms</td>
+                    <td>31ms</td>
+                    <td>60ms</td>
+                </tr>
+                <tr>
+                    <td><strong>차이</strong></td>
+                    <td>7배</td>
+                    <td>40배</td>
+                    <td><strong>500배</strong></td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">네트워크가 멀수록 배치/트랜잭션의 효과가 극대화</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">"1만 건 INSERT하는데 왜 5분이나 걸려요?"</div>
+                <div class="a">
+                    <p>→ <span class="warning">개별 INSERT + 원격 DB = 죽음</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>COMMIT</strong> = "이제 진짜야" - 메모리 → 디스크 영구 저장</li>
+                <li><strong>Auto-Commit</strong> = 매 문장마다 자동 COMMIT → 매번 디스크 flush</li>
+                <li><strong>트랜잭션 묶음</strong> = COMMIT 1번 = flush 1번 (7.7배 빠름)</li>
+                <li><strong>VALUES 묶음</strong> = flush 1번이지만 긴 SQL 파싱 오버헤드</li>
+                <li><strong>원격 DB</strong> = 네트워크 왕복까지 더해져 500배 차이 가능</li>
+                <li><strong>실무 원칙</strong> = 대량 INSERT는 반드시 트랜잭션으로!</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">← DB / 캐시</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
