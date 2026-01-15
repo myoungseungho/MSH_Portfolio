@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프로세스 vs 스레드 - 생성 비용, 컨텍스트 스위칭, 메모리 비교 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; color: #111; }
+        .subtitle { color: #666; margin-bottom: 40px; }
+        h2 { font-size: 1.4rem; font-weight: 600; margin: 48px 0 16px; color: #111; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+        h3 { font-size: 1.1rem; font-weight: 600; margin: 32px 0 12px; color: #333; }
+        p { margin-bottom: 16px; }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .inline-code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th { background: #f5f5f5; font-weight: 600; }
+        .highlight { color: #e74c3c; font-weight: 600; }
+        .result-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #FF9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .diagram {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            margin: 16px 0;
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 32px;
+            border-radius: 12px;
+            margin: 40px 0;
+        }
+        .summary h3 { color: white; margin-top: 0; }
+        .summary ul { margin-left: 20px; }
+        .summary li { margin: 8px 0; }
+        .test-result {
+            background: #1e1e1e;
+            color: #4EC9B0;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+        }
+        .test-result .label { color: #9CDCFE; }
+        .test-result .value { color: #CE9178; }
+        .test-result .highlight { color: #DCDCAA; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <h1>프로세스 vs 스레드</h1>
+        <p class="subtitle">생성 비용 481배, 컨텍스트 스위칭 5,615배 차이 실측</p>
+
+        <h2>개념: 집 vs 방</h2>
+
+        <div class="diagram">
+[프로세스 = 집 한 채]
+┌─────────┐  ┌─────────┐  ┌─────────┐
+│ 집1     │  │ 집2     │  │ 집3     │
+│ 유저1   │  │ 유저2   │  │ 유저3   │
+│ 메모리A │  │ 메모리B │  │ 메모리C │
+└─────────┘  └─────────┘  └─────────┘
+→ 완전히 독립된 공간, 집 3채 필요
+
+[스레드 = 집 안의 방]
+┌─────────────────────────┐
+│ 집1 (하나의 프로세스)    │
+│ ┌─────┬─────┬─────┐    │
+│ │유저1│유저2│유저3│    │
+│ └─────┴─────┴─────┘    │
+│ 메모리 공유              │
+└─────────────────────────┘
+→ 같은 집, 방 3개</div>
+
+        <table>
+            <tr>
+                <th>구분</th>
+                <th>프로세스</th>
+                <th>스레드</th>
+            </tr>
+            <tr>
+                <td>비유</td>
+                <td>집 한 채</td>
+                <td>집 안의 방</td>
+            </tr>
+            <tr>
+                <td>메모리</td>
+                <td>독립 (수 MB)</td>
+                <td>공유 (스택만 별도, 수 KB)</td>
+            </tr>
+            <tr>
+                <td>자원</td>
+                <td>독립</td>
+                <td>공유</td>
+            </tr>
+            <tr>
+                <td>통신</td>
+                <td>IPC 필요</td>
+                <td>메모리 직접 접근</td>
+            </tr>
+        </table>
+
+        <h2>테스트 1: 생성 비용</h2>
+
+        <p>스레드 1000개 vs 프로세스 100개 생성 시간 측정:</p>
+
+        <pre><code>// 스레드 생성
+for (int i = 0; i < 1000; i++) {
+    threads[i] = CreateThread(NULL, 0, DummyFunc, NULL, 0, NULL);
+}
+
+// 프로세스 생성
+for (int i = 0; i < 100; i++) {
+    CreateProcessA(NULL, "cmd /c exit", ...);
+    WaitForSingleObject(pi.hProcess, INFINITE);
+}</code></pre>
+
+        <div class="test-result">
+<span class="label">[Thread]</span> 1000개 생성+종료: <span class="value">26,814 us</span> (26.8ms)
+         → 1개당 <span class="highlight">27 us</span>
+
+<span class="label">[Process]</span> 100개 생성+종료: <span class="value">1,289,527 us</span> (1289ms)
+         → 1개당 <span class="highlight">12,895 us</span>
+
+<span class="label">[결과]</span> 프로세스가 스레드보다 <span class="highlight">481배 느림</span>
+        </div>
+
+        <div class="info-box">
+            <strong>왜 이렇게 차이나?</strong><br>
+            • 스레드: 스택만 할당, 부모 자원 공유<br>
+            • 프로세스: 전체 메모리 공간 할당, 페이지 테이블 생성, 핸들 테이블 복사
+        </div>
+
+        <h2>테스트 2: 컨텍스트 스위칭 비용</h2>
+
+        <p>두 스레드가 이벤트로 ping-pong하며 전환 횟수 측정:</p>
+
+        <pre><code>// Ping 스레드
+for (int i = 0; i < 10000; i++) {
+    WaitForSingleObject(event1, INFINITE);  // 대기
+    SetEvent(event2);                        // 신호
+}
+
+// Pong 스레드
+for (int i = 0; i < 10000; i++) {
+    SetEvent(event1);                        // 신호
+    WaitForSingleObject(event2, INFINITE);  // 대기
+}</code></pre>
+
+        <div class="test-result">
+<span class="label">[Thread]</span> 컨텍스트 스위칭 20,000회: <span class="value">47,925 us</span>
+         → 1회당 <span class="highlight">2.4 us</span>
+
+<span class="label">[Process]</span> IPC 통신 100회: <span class="value">1,345,552 us</span>
+         → 1회당 <span class="highlight">13,456 us</span>
+
+<span class="label">[결과]</span> 프로세스 IPC가 스레드 스위칭보다 <span class="highlight">5,615배 느림</span>
+        </div>
+
+        <div class="info-box">
+            <strong>컨텍스트 스위칭이란?</strong><br>
+            CPU가 현재 작업을 멈추고 다른 작업으로 전환하는 것.<br>
+            • 스레드: 같은 메모리 공간 → 빠름<br>
+            • 프로세스: 다른 메모리 공간 → 페이지 테이블 교체 필요 → 느림
+        </div>
+
+        <h2>테스트 3: 메모리 사용량</h2>
+
+        <p>스레드 100개 생성 전후 메모리 사용량 비교:</p>
+
+        <div class="test-result">
+<span class="label">[Before]</span> 현재 메모리: <span class="value">4.49 MB</span>
+
+<span class="label">[Thread 100개 생성 후]</span>
+         → 추가 메모리: <span class="value">2.16 MB</span>
+         → 스레드 1개당: <span class="highlight">22 KB</span>
+
+<span class="label">[Process]</span> 일반적으로 1개당 <span class="highlight">수 MB ~ 수십 MB</span>
+         (독립된 메모리 공간, 페이지 테이블, 핸들 테이블 등)
+        </div>
+
+        <h2>최종 비교표</h2>
+
+        <table>
+            <tr>
+                <th>항목</th>
+                <th>스레드</th>
+                <th>프로세스</th>
+                <th>배율</th>
+            </tr>
+            <tr>
+                <td><strong>생성 비용</strong></td>
+                <td>27 us</td>
+                <td>12,895 us</td>
+                <td class="highlight">481배</td>
+            </tr>
+            <tr>
+                <td><strong>컨텍스트 스위칭</strong></td>
+                <td>2.4 us</td>
+                <td>13,456 us</td>
+                <td class="highlight">5,615배</td>
+            </tr>
+            <tr>
+                <td><strong>메모리 사용</strong></td>
+                <td>22 KB</td>
+                <td>수 MB</td>
+                <td class="highlight">~100배</td>
+            </tr>
+            <tr>
+                <td><strong>안정성</strong></td>
+                <td>위험 (공유)</td>
+                <td>안전 (격리)</td>
+                <td>-</td>
+            </tr>
+        </table>
+
+        <h2>그럼 항상 스레드가 정답?</h2>
+
+        <div class="warning-box">
+            <strong>스레드의 단점:</strong><br>
+            • 메모리 공유 → Race Condition 발생 가능<br>
+            • 하나가 죽으면 전체 프로세스 죽음<br>
+            • 락(Lock) 관리 필요 → 복잡도 증가
+        </div>
+
+        <h3>실제 사용 예시</h3>
+
+        <table>
+            <tr>
+                <th>상황</th>
+                <th>선택</th>
+                <th>이유</th>
+            </tr>
+            <tr>
+                <td>게임 서버 (유저 처리)</td>
+                <td>스레드 풀</td>
+                <td>빠른 응답, 메모리 효율</td>
+            </tr>
+            <tr>
+                <td>웹 브라우저 (탭)</td>
+                <td>프로세스</td>
+                <td>탭 하나 죽어도 다른 탭 안전</td>
+            </tr>
+            <tr>
+                <td>DB 서버</td>
+                <td>프로세스</td>
+                <td>안정성, 격리</td>
+            </tr>
+            <tr>
+                <td>채팅 서버</td>
+                <td>스레드</td>
+                <td>가벼운 I/O, 빠른 전환</td>
+            </tr>
+        </table>
+
+        <div class="summary">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>스레드</strong> = 가볍고 빠름, but 공유 메모리로 인한 위험</li>
+                <li><strong>프로세스</strong> = 무겁고 느림, but 격리되어 안전</li>
+                <li><strong>생성 비용</strong>: 프로세스가 481배 느림</li>
+                <li><strong>컨텍스트 스위칭</strong>: 프로세스가 5,615배 느림</li>
+                <li><strong>메모리</strong>: 스레드 22KB vs 프로세스 수 MB</li>
+                <li><strong>게임 서버</strong>: 대부분 스레드 풀 + IOCP 조합</li>
+            </ul>
+        </div>
+
+    </div>
+</body>
+</html>
