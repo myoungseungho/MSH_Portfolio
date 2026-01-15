@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>임시 테이블 vs 테이블 변수, 뭐가 다를까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .fast {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .slow {
+            background: #ffcdd2;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            margin: 24px 0;
+        }
+        .result-box h4 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .result-box .result-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .result-box .result-item {
+            text-align: center;
+        }
+        .result-box .result-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .result-box .result-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .result-box .result-note {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>임시 테이블 vs 테이블 변수, 뭐가 다를까?</h1>
+            <p># vs @ - 메모리라고 다 빠른 게 아니다</p>
+        </header>
+
+        <!-- Part 1: 문제 상황 -->
+        <div class="conversation">
+            <h2>Part 1. 쿼리 중간에 임시 저장하고 싶을 때</h2>
+
+            <div class="chat">
+                <div class="q">복잡한 계산 결과를 잠깐 저장해두고 나중에 쓰고 싶어</div>
+                <div class="a">
+                    <p>두 가지 방법이 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block">-- 방법 1: 임시 테이블 (#)
+SELECT user_id, SUM(damage) AS total_damage
+INTO #TempDamage
+FROM TBattleLog
+GROUP BY user_id;
+
+SELECT * FROM #TempDamage WHERE total_damage > 10000;
+DROP TABLE #TempDamage;</div>
+
+            <div class="code-block">-- 방법 2: 테이블 변수 (@)
+DECLARE @TempDamage TABLE (
+    user_id INT,
+    total_damage INT
+);
+
+INSERT INTO @TempDamage
+SELECT user_id, SUM(damage)
+FROM TBattleLog
+GROUP BY user_id;
+
+SELECT * FROM @TempDamage WHERE total_damage > 10000;</div>
+
+            <div class="chat">
+                <div class="q"># 붙은 거랑 @ 붙은 거, 뭐가 달라?</div>
+            </div>
+        </div>
+
+        <!-- Part 2: 기본 차이 -->
+        <div class="conversation">
+            <h2>Part 2. 기본적인 차이</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>임시 테이블 (#)</th>
+                    <th>테이블 변수 (@)</th>
+                </tr>
+                <tr>
+                    <td>생성 방식</td>
+                    <td>SELECT INTO 가능</td>
+                    <td>DECLARE로 미리 선언</td>
+                </tr>
+                <tr>
+                    <td>저장 위치</td>
+                    <td>tempdb (디스크)</td>
+                    <td>메모리 (작으면) / tempdb (크면)</td>
+                </tr>
+                <tr>
+                    <td>삭제</td>
+                    <td>DROP 또는 세션 종료</td>
+                    <td>자동 (범위 벗어나면)</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">테이블 변수가 메모리면 더 빠른 거 아니야?</div>
+                <div class="a">
+                    <p><span class="warning">그렇게 생각하기 쉬운데, 함정이 있어.</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 통계 개념 -->
+        <div class="conversation">
+            <h2>Part 3. "통계"가 뭔데?</h2>
+
+            <div class="chat">
+                <div class="q">임시 테이블과 테이블 변수의 진짜 차이가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">통계(Statistics)</span>가 있냐 없냐야.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">통계가 뭔데?</div>
+                <div class="a">
+                    <p>DB가 테이블에 대해 <span class="key-point">미리 조사해둔 정보</span>야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">TUser 테이블 통계:
+- 총 행 수: 50,000개
+- user_id: 1 ~ 50,000 범위
+- level: 대부분 1~30 사이에 몰려있음</div>
+
+            <div class="chat">
+                <div class="q">왜 필요해?</div>
+                <div class="a">
+                    <p>DB가 쿼리 실행 전에 <strong>작전을 짜야 하니까.</strong></p>
+                    <p>"인덱스 타고 갈까? 전체 스캔할까?"</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>비유: 전쟁 전 정찰</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">[정찰 정보 있으면]
+"적군 100명, 동쪽에 몰려있음"
+→ 동쪽으로 집중 공격 ✅
+
+[정찰 정보 없으면]
+"적군 몇 명인지 모름... 한 1명이겠지?"
+→ 혼자 들어갔다가 100명한테 박살 ❌</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">통계 = 정찰 정보</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 왜 차이가 나는가 -->
+        <div class="conversation">
+            <h2>Part 4. 왜 임시 테이블엔 있고, 테이블 변수엔 없어?</h2>
+
+            <div class="chat">
+                <div class="q">이름을 다시 봐</div>
+            </div>
+
+            <div class="code-block">임시 "테이블" → 테이블이야. 진짜 테이블처럼 취급.
+"테이블" 변수 → 변수야. 걍 변수 취급.</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>임시 테이블 (#)</th>
+                    <th>테이블 변수 (@)</th>
+                </tr>
+                <tr>
+                    <td>정체</td>
+                    <td>진짜 테이블</td>
+                    <td>변수 (테이블 흉내)</td>
+                </tr>
+                <tr>
+                    <td>통계</td>
+                    <td class="fast">자동 생성 ✅</td>
+                    <td class="slow">안 만듦 ❌</td>
+                </tr>
+                <tr>
+                    <td>DB 추정</td>
+                    <td>실제 데이터 수 기반</td>
+                    <td>항상 1행으로 추정</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">왜 테이블 변수는 통계를 안 만들어?</div>
+                <div class="a">
+                    <p><strong>설계 의도:</strong></p>
+                    <p>• "작은 데이터 잠깐 담아두는 용도"</p>
+                    <p>• "10~100건 정도 담고 빨리 쓰고 버려"</p>
+                    <p>• "통계 만드는 시간도 아깝다"</p>
+                    <p>→ 그래서 통계 생략함</p>
+                    <p>→ <span class="warning">근데 사람들이 10만 건 넣어버림</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 실측 테스트 -->
+        <div class="conversation">
+            <h2>Part 5. 실측 테스트</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>테스트 환경:</strong> 10만 건 데이터, score=50 조회</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h4>실측 결과 (10만 건)</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">임시 테이블 (#)</div>
+                        <div class="result-value">226 ms</div>
+                        <div class="result-note">논리적 읽기: 438</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">테이블 변수 (@)</div>
+                        <div class="result-value">260 ms</div>
+                        <div class="result-note">논리적 읽기: 102,392</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">테이블 변수가 더 느려? 메모리인데?</div>
+                <div class="a">
+                    <p><span class="warning">논리적 읽기 횟수를 봐.</span></p>
+                    <p>• 임시 테이블: 438번</p>
+                    <p>• 테이블 변수: 102,392번</p>
+                    <p><strong>234배 더 많이 읽음!</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">임시 테이블:
+"통계 보니까 score=50이 약 1000건. 인덱스 타자."
+→ 논리적 읽기 6번 ✅
+
+테이블 변수:
+"통계 없으니까... 1건이겠지? 걍 전체 스캔하자."
+→ 논리적 읽기 102,392번 ❌</div>
+        </div>
+
+        <!-- Part 6: 핵심 -->
+        <div class="conversation">
+            <h2>Part 6. 핵심 깨달음</h2>
+
+            <div class="chat">
+                <div class="q">디스크인 임시 테이블이 메모리인 테이블 변수보다 빠르다고?</div>
+                <div class="a">
+                    <p><span class="key-point">느린 이유가 "디스크"가 아니야.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">느린 이유 ≠ 디스크에서 읽어서
+느린 이유 = 102,392번 읽어서</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>비유:</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">[임시 테이블]
+"지도 보고 정확한 위치로 6번만 가서 가져옴"
+→ 디스크여도 6번이면 빠름
+
+[테이블 변수]
+"지도 없어서 10만 번 헤맴"
+→ 메모리여도 10만 번이면 느림</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>저장 위치</th>
+                    <th>읽기 횟수</th>
+                    <th>결과</th>
+                </tr>
+                <tr>
+                    <td>임시 테이블</td>
+                    <td>디스크</td>
+                    <td class="fast">438번</td>
+                    <td class="fast">빠름</td>
+                </tr>
+                <tr>
+                    <td>테이블 변수</td>
+                    <td>메모리</td>
+                    <td class="slow">102,392번</td>
+                    <td class="slow">느림</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">"어디에 저장되냐"보다 "몇 번 읽냐"가 더 중요</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>임시 테이블 (#)</strong> = 진짜 테이블, 통계 있음, tempdb 저장</li>
+                <li><strong>테이블 변수 (@)</strong> = 변수, 통계 없음, 메모리/tempdb</li>
+                <li><strong>통계</strong> = DB가 실행 계획 세울 때 참고하는 정보</li>
+                <li><strong>테이블 변수 문제</strong> = 통계 없어서 DB가 항상 1행으로 추정</li>
+                <li><strong>데이터 100건 이하</strong> = 테이블 변수 @ 써도 됨</li>
+                <li><strong>데이터 1000건 이상</strong> = 임시 테이블 # 써라</li>
+                <li><strong>모르겠으면</strong> = 그냥 임시 테이블 # 써라</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">← DB / 캐시</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
