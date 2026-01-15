@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>서브쿼리 vs JOIN, 뭐가 더 빠를까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good { background: #e8f5e9; color: #2e7d32; }
+        .compare-table .bad { background: #ffebee; color: #c62828; }
+        .compare-table .same { background: #fff3e0; color: #e65100; }
+
+        .analogy-box {
+            background: #f3e5f5;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #9c27b0;
+        }
+        .analogy-box strong {
+            color: #7b1fa2;
+        }
+
+        .result-box {
+            background: #e8f5e9;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #4caf50;
+        }
+        .result-box strong {
+            color: #2e7d32;
+        }
+
+        .warning-box {
+            background: #fff3e0;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #ff9800;
+        }
+        .warning-box strong {
+            color: #e65100;
+        }
+
+        .conclusion-box {
+            background: #e3f2fd;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #2196f3;
+        }
+        .conclusion-box strong {
+            color: #1565c0;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">< DB / 캐시</a>
+
+        <header class="header">
+            <h1>서브쿼리 vs JOIN, 뭐가 더 빠를까?</h1>
+            <p>이론과 현실의 차이 - 옵티마이저의 힘</p>
+        </header>
+
+        <!-- Part 1: 두 테이블 연결하기 -->
+        <div class="conversation">
+            <h2>Part 1. 두 테이블을 연결하려면?</h2>
+
+            <div class="chat">
+                <div class="q">Players 테이블에 GuildID만 있고, GuildName은 Guilds 테이블에 있어. 철수의 길드 이름을 알려면?</div>
+                <div class="a">
+                    <p>두 테이블을 <span class="highlight">연결</span>해야 해. 방법은 2가지:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 방법 1: 서브쿼리
+SELECT PlayerName,
+       (SELECT GuildName FROM Guilds WHERE GuildID = Players.GuildID)
+FROM Players
+WHERE PlayerName = '철수';
+
+-- 방법 2: JOIN
+SELECT PlayerName, GuildName
+FROM Players
+JOIN Guilds ON Players.GuildID = Guilds.GuildID
+WHERE PlayerName = '철수';
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>방식</th>
+                    <th>설명</th>
+                </tr>
+                <tr>
+                    <td>서브쿼리</td>
+                    <td>쿼리 안에 쿼리를 넣음</td>
+                </tr>
+                <tr>
+                    <td>JOIN</td>
+                    <td>두 테이블을 합쳐서 조회</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 2: 서브쿼리 종류 -->
+        <div class="conversation">
+            <h2>Part 2. 서브쿼리는 2종류가 있다</h2>
+
+            <div class="chat">
+                <div class="q">서브쿼리가 느리다고 들었는데?</div>
+                <div class="a">
+                    <p><span class="warning">항상 느린 건 아니야.</span> 서브쿼리도 종류가 있어:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 1. 상관 서브쿼리 (바깥 테이블 참조)
+SELECT PlayerName,
+       (SELECT GuildName FROM Guilds WHERE GuildID = Players.GuildID)
+FROM Players;
+
+-- Players.GuildID를 참조 → 매 행마다 실행될 수 있음
+            </div>
+
+            <div class="analogy-box">
+                <strong>상관 서브쿼리 = 매번 물어보기</strong><br><br>
+                "철수야 너 길드 뭐야?" → Guilds 가서 찾기<br>
+                "영희야 너 길드 뭐야?" → Guilds 가서 찾기<br>
+                "민수야 너 길드 뭐야?" → Guilds 가서 찾기<br>
+                ...<br>
+                100만 번 왔다갔다!
+            </div>
+
+            <div class="code-block">
+-- 2. 비상관 서브쿼리 (독립적으로 실행)
+SELECT * FROM Players
+WHERE GuildID IN (SELECT GuildID FROM Guilds);
+
+-- 서브쿼리가 독립적 → 한 번만 실행
+            </div>
+
+            <div class="analogy-box">
+                <strong>비상관 서브쿼리 = 한 번만 물어보기</strong><br><br>
+                먼저: "길드 ID 목록 줘" → (1, 2, 3, 4, 5) 받아옴<br>
+                그 다음: Players에서 이 목록에 있는 애들만 조회<br><br>
+                Guilds는 딱 1번만 감!
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>종류</th>
+                    <th>특징</th>
+                    <th>이론상 속도</th>
+                </tr>
+                <tr>
+                    <td>상관 서브쿼리</td>
+                    <td>바깥 테이블 값 참조</td>
+                    <td class="bad">느림 (매번 실행)</td>
+                </tr>
+                <tr>
+                    <td>비상관 서브쿼리</td>
+                    <td>독립적으로 실행</td>
+                    <td class="good">빠름 (한 번만)</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3: JOIN 방식 -->
+        <div class="conversation">
+            <h2>Part 3. JOIN은 어떻게 동작해?</h2>
+
+            <div class="chat">
+                <div class="q">JOIN이 빠르다고 하는데, 어떻게 동작해?</div>
+                <div class="a">
+                    <p>DB가 두 테이블을 합치는 방법이 <span class="highlight">3가지</span>야:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+1. Nested Loops (중첩 루프)
+   Player 1번 → Guilds에서 찾기
+   Player 2번 → Guilds에서 찾기
+   ...
+   for문 안에 for문!
+
+2. Hash Match (해시)
+   1단계: Guilds를 해시 테이블로 만듦
+          {1: "용사길드", 2: "마법사길드"}
+   2단계: Players 보면서 해시에서 바로 찾기
+          GuildID=2 → 해시[2] → "마법사길드"
+
+3. Merge (병합)
+   둘 다 정렬해놓고 양쪽에서 동시에 훑으면서 합침
+            </div>
+
+            <div class="chat">
+                <div class="q">Nested Loops는 상관 서브쿼리랑 비슷해 보이는데?</div>
+                <div class="a">
+                    <p><span class="key-point">맞아! 거의 같은 동작이야.</span></p>
+                    <p>근데 JOIN은 DB가 상황에 따라 <span class="highlight">최적의 방식을 선택</span>해줘.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>상관 서브쿼리</th>
+                    <th>JOIN</th>
+                </tr>
+                <tr>
+                    <td>방식 선택</td>
+                    <td>고정</td>
+                    <td>옵티마이저가 선택</td>
+                </tr>
+                <tr>
+                    <td>가능한 방식</td>
+                    <td>1가지</td>
+                    <td>Nested/Hash/Merge 중 선택</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 4: 실측 테스트 -->
+        <div class="conversation">
+            <h2>Part 4. 실제로 테스트해보자</h2>
+
+            <div class="chat">
+                <div class="q">이론은 알겠어. 실제로 차이가 얼마나 나?</div>
+                <div class="a">
+                    <p>100만 플레이어 + 1만 길드로 테스트:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 테스트 환경
+-- TPlayer: 100만 건, TGuild: 1만 건
+
+-- 테스트 1: 상관 서브쿼리
+SELECT PlayerID, PlayerName,
+       (SELECT GuildName FROM TGuild WHERE GuildID = p.GuildID)
+FROM TPlayer p WHERE Level = 50;
+
+-- 테스트 2: JOIN
+SELECT p.PlayerID, p.PlayerName, g.GuildName
+FROM TPlayer p
+JOIN TGuild g ON p.GuildID = g.GuildID
+WHERE p.Level = 50;
+
+-- 테스트 3: IN 서브쿼리
+SELECT * FROM TPlayer
+WHERE GuildID IN (SELECT GuildID FROM TGuild WHERE GuildID <= 100);
+
+-- 테스트 4: EXISTS
+SELECT * FROM TPlayer p
+WHERE EXISTS (SELECT 1 FROM TGuild g WHERE g.GuildID = p.GuildID AND g.GuildID <= 100);
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>테스트</th>
+                    <th>TGuild 읽기</th>
+                    <th>시간</th>
+                </tr>
+                <tr>
+                    <td>1. 상관 서브쿼리</td>
+                    <td class="same">133</td>
+                    <td>75ms</td>
+                </tr>
+                <tr>
+                    <td>2. JOIN</td>
+                    <td class="same">133</td>
+                    <td>95ms</td>
+                </tr>
+                <tr>
+                    <td>3. IN 서브쿼리</td>
+                    <td class="good">2</td>
+                    <td>87ms</td>
+                </tr>
+                <tr>
+                    <td>4. EXISTS</td>
+                    <td class="good">2</td>
+                    <td>75ms</td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <strong>예상과 다른 결과!</strong><br><br>
+                상관 서브쿼리(133)와 JOIN(133)의 읽기 횟수가 <strong>똑같다!</strong><br>
+                "서브쿼리가 느리다"는 이론과 다르게, 실제로는 차이가 없었다.
+            </div>
+        </div>
+
+        <!-- Part 5: 옵티마이저의 힘 -->
+        <div class="conversation">
+            <h2>Part 5. 왜 차이가 없을까? - 옵티마이저의 힘</h2>
+
+            <div class="chat">
+                <div class="q">이론대로면 상관 서브쿼리가 느려야 하는데?</div>
+                <div class="a">
+                    <p><span class="key-point">현대 MSSQL 옵티마이저가 똑똑해졌기 때문이야.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+옛날:
+- 서브쿼리 → 무조건 매번 실행
+- JOIN → 최적화된 방식 선택
+→ "서브쿼리 느리니까 JOIN 써라!"
+
+지금:
+- 서브쿼리 → 옵티마이저가 내부적으로 JOIN처럼 변환
+- JOIN → 최적화된 방식 선택
+→ "뭘 써도 옵티마이저가 알아서 최적화"
+            </div>
+
+            <div class="conclusion-box">
+                <strong>결론: 옵티마이저를 믿어라</strong><br><br>
+                현대 DB는 쿼리를 실행하기 전에 <strong>내부적으로 최적화</strong>한다.<br>
+                상관 서브쿼리도 JOIN처럼 변환해서 실행할 수 있다.<br><br>
+                → <strong>"서브쿼리가 무조건 느리다"는 옛날 얘기!</strong>
+            </div>
+        </div>
+
+        <!-- Part 6: 그래서 뭘 써야 해? -->
+        <div class="conversation">
+            <h2>Part 6. 그래서 뭘 써야 해?</h2>
+
+            <div class="chat">
+                <div class="q">성능 차이 없으면 뭘 써도 되는 거야?</div>
+                <div class="a">
+                    <p><span class="key-point">가독성 좋은 걸 써!</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>추천</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>두 테이블 데이터 같이 보기</td>
+                    <td class="good">JOIN</td>
+                    <td>의도가 명확함</td>
+                </tr>
+                <tr>
+                    <td>있냐 없냐 확인</td>
+                    <td class="good">EXISTS</td>
+                    <td>찾는 순간 멈춤</td>
+                </tr>
+                <tr>
+                    <td>집계 결과로 필터링</td>
+                    <td class="good">서브쿼리</td>
+                    <td>JOIN으로 표현 어려움</td>
+                </tr>
+            </table>
+
+            <div class="code-block">
+-- 집계 결과로 필터링 (서브쿼리가 자연스러움)
+SELECT * FROM Players
+WHERE Level > (SELECT AVG(Level) FROM Players);
+
+-- "평균 레벨보다 높은 플레이어" → 읽기 쉬움!
+            </div>
+        </div>
+
+        <!-- Part 7: 교훈 -->
+        <div class="conversation">
+            <h2>Part 7. 오늘의 교훈</h2>
+
+            <div class="result-box">
+                <strong>"인터넷에서 본 최적화 팁, 직접 테스트 안 하면 믿지 마라"</strong><br><br>
+                - "서브쿼리가 느리다" → 옛날 얘기<br>
+                - "OR 대신 UNION 써라" → 오히려 느릴 수 있음<br>
+                - 현대 옵티마이저는 생각보다 똑똑하다<br><br>
+                <strong>→ 최적화는 항상 실측으로 검증해야 한다!</strong>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리: 서브쿼리 vs JOIN</h3>
+            <ul>
+                <li><strong>서브쿼리</strong> - 쿼리 안에 쿼리, 상관/비상관 2종류</li>
+                <li><strong>JOIN</strong> - 두 테이블 합치기, Nested/Hash/Merge 방식</li>
+                <li><strong>이론</strong> - 상관 서브쿼리는 매번 실행되어 느림</li>
+                <li><strong>현실</strong> - 옵티마이저가 알아서 최적화, 차이 없음</li>
+                <li><strong>결론</strong> - 가독성 좋은 걸 선택, 실측으로 검증</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">< DB / 캐시</a>
+            <a href="../../">홈으로 ></a>
+        </div>
+    </div>
+</body>
+</html>
