@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clustered Deferred Rendering - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            margin: 24px 0;
+        }
+        .result-box h4 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .result-box .result-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+        .result-box .result-item {
+            text-align: center;
+        }
+        .result-box .result-label {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .result-box .result-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+        .result-box .result-note {
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+        .result-box .result-highlight {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .gif-container {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .gif-container img {
+            max-width: 100%;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        .gif-container .caption {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-gpu/" class="back-link">← GPU / 그래픽스</a>
+
+        <header class="header">
+            <h1>Clustered Deferred Rendering</h1>
+            <p>Forward → Deferred → Tiled → Clustered, 그런데 왜 Clustered가 더 느려?</p>
+        </header>
+
+        <!-- Part 1: 렌더링 기법의 발전 -->
+        <div class="conversation">
+            <h2>Part 1. 광원이 많아지면 왜 느려져?</h2>
+
+            <div class="chat">
+                <div class="q">광원 1000개면 왜 렉 걸려?</div>
+                <div class="a">
+                    <p>Forward 렌더링은 <span class="highlight">모든 오브젝트 × 모든 광원</span>을 계산함.</p>
+                    <p>오브젝트 100개 × 광원 1000개 = <span class="warning">10만 번 계산</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">// Forward: 모든 광원 순회 (병목!)
+for (int i = 0; i < 1000; i++) {
+    // 광원마다 조명 계산...
+}</div>
+
+            <div class="gif-container">
+                <img src="../../Screenshots/클러스터 디퍼드/step1.gif" alt="Forward Rendering">
+                <div class="caption">Forward Rendering - 광원 수에 비례해서 느려짐</div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그래서 어떻게 해결해?</div>
+                <div class="a">
+                    <p><strong>아이디어:</strong> 필요한 광원만 계산하자!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: Deferred -->
+        <div class="conversation">
+            <h2>Part 2. Deferred - 지오메트리랑 라이팅 분리</h2>
+
+            <div class="code-block">[Forward 문제점]
+같은 픽셀이 여러 번 덮어씌워져도 조명 계산함 (Overdraw 낭비)
+
+[Deferred 해결]
+1. G-Buffer Pass: 화면에 보이는 것만 먼저 저장
+   → Albedo, Normal, Depth 텍스처에 저장
+2. Lighting Pass: 최종 픽셀에 대해서만 조명 계산
+   → Overdraw 낭비 없음!</div>
+
+            <div class="gif-container">
+                <img src="../../Screenshots/클러스터 디퍼드/step2.gif" alt="Deferred Rendering">
+                <div class="caption">Deferred Rendering - Overdraw 문제 해결</div>
+            </div>
+
+            <div class="chat">
+                <div class="q">근데 여전히 모든 광원 체크하잖아?</div>
+                <div class="a">
+                    <p>맞음. 각 픽셀이 <span class="warning">1000개 광원 전부 체크</span>함.</p>
+                    <p>→ 다음 단계 필요!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: Tiled -->
+        <div class="conversation">
+            <h2>Part 3. Tiled - 화면을 타일로 분할</h2>
+
+            <div class="chat">
+                <div class="q">어떻게 필요한 광원만 골라?</div>
+            </div>
+
+            <div class="code-block">[Tiled Deferred]
+화면을 16×16 픽셀 타일로 분할
+
+┌─────┬─────┬─────┐
+│타일0│타일1│타일2│
+├─────┼─────┼─────┤
+│타일3│타일4│타일5│  ← 각 타일별로 영향 주는 광원 목록 생성
+└─────┴─────┴─────┘
+
+타일4에 영향 주는 광원: [3, 17, 42] ← 3개만 계산!</div>
+
+            <div class="gif-container">
+                <img src="../../Screenshots/클러스터 디퍼드/step3.gif" alt="Tiled Deferred">
+                <div class="caption">Tiled Deferred - 타일별 광원 컬링으로 대폭 향상</div>
+            </div>
+
+            <div class="code-block">// Tiled: 이 타일의 광원만!
+uint tileLightCount = TileLightList[tileId];  // 예: 3개
+for (uint i = 0; i < tileLightCount; i++) {
+    uint lightIndex = TileLightList[tileId + 1 + i];
+    // 3개만 계산!
+}</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>1000개 중 <span class="key-point">10~50개만 계산</span></p>
+                    <p>→ 불필요한 계산 90% 이상 제거!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: Clustered -->
+        <div class="conversation">
+            <h2>Part 4. Clustered - 깊이 방향으로도 분할</h2>
+
+            <div class="chat">
+                <div class="q">그럼 Clustered는 뭐가 달라?</div>
+                <div class="a">
+                    <p>Tiled는 <span class="highlight">2D 분할</span> (X, Y)</p>
+                    <p>Clustered는 <span class="highlight">3D 분할</span> (X, Y, <strong>Z</strong>)</p>
+                </div>
+            </div>
+
+            <div class="code-block">    타일 (2D)              클러스터 (3D)
+  ┌─────────┐            ┌─────────┐ Slice 0 (가까움)
+  │ ● A     │            │ ● A     │
+  │ ● B     │    →       ├─────────┤ Slice 1
+  │ ● C     │            │ ● B     │
+  └─────────┘            ├─────────┤ Slice 2 (멀음)
+                         │ ● C     │
+  Tiled: A,B,C 모두 체크  └─────────┘
+                         Clustered: 깊이별로 분리</div>
+
+            <div class="gif-container">
+                <img src="../../Screenshots/클러스터 디퍼드/step4.gif" alt="Clustered Deferred">
+                <div class="caption">Clustered Deferred - 깊이 방향 분할 추가</div>
+            </div>
+        </div>
+
+        <!-- Part 5: 왜 느려? -->
+        <div class="conversation">
+            <h2>Part 5. 근데 왜 Clustered가 더 느려?</h2>
+
+            <div class="chat">
+                <div class="q">난 Tiled 다음 버전이 Clustered라고 생각했는데 왜 더 느려?</div>
+                <div class="a">
+                    <p><span class="warning">이론적 발전 ≠ 항상 더 빠름</span></p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h4>광원 1800개 성능 비교 (실측)</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">Forward</div>
+                        <div class="result-value">~80</div>
+                        <div class="result-note">FPS</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">Deferred</div>
+                        <div class="result-value">~128</div>
+                        <div class="result-note">FPS</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">Tiled</div>
+                        <div class="result-value">~300</div>
+                        <div class="result-note">FPS</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">Clustered</div>
+                        <div class="result-value">~200</div>
+                        <div class="result-note">FPS</div>
+                    </div>
+                </div>
+                <div class="result-highlight">
+                    Clustered가 Tiled보다 느림!
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">왜 그런 거야?</div>
+            </div>
+
+            <div class="code-block">[원인 1] 컴퓨트 셰이더 오버헤드
+Tiled:     5,700 타일 × N 광원
+Clustered: 5,700 타일 × N 광원 × 8 깊이슬라이스 분배
+→ 깊이 슬라이스 분배하는 추가 작업 필요
+
+[원인 2] 픽셀 셰이더 추가 연산
+float linearDepth = GetLinearDepth(depth);
+int depthSlice = GetDepthSlice(linearDepth);  // log 연산!
+uint clusterIndex = ...;  // 3D 인덱스 계산
+→ 매 픽셀마다 깊이 슬라이스 계산 비용
+
+[원인 3] 메모리 접근
+Clustered 라이트 리스트 = 타일 × 깊이슬라이스 = 8배 큰 버퍼
+→ 캐시 효율성 저하</div>
+
+            <div class="chat">
+                <div class="q">그럼 Clustered는 언제 좋아?</div>
+                <div class="a">
+                    <p><strong>깊이 복잡도가 높은 씬:</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">[Clustered가 유리한 상황]
+- 도시 씬: 건물들이 깊이 방향으로 많이 겹침
+- 실내/복도: 여러 층, 깊은 복도 구조
+- 같은 화면 위치에 다양한 깊이의 오브젝트
+
+[이 데모의 씬]
+- 주로 평면 구조 (바닥 + 기둥)
+- 깊이 방향 복잡도가 낮음
+- 깊이 슬라이싱 이점 < 오버헤드</div>
+        </div>
+
+        <!-- Part 6: 결론 -->
+        <div class="conversation">
+            <h2>Part 6. 그래서 뭘 써야 해?</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>씬 특성</th>
+                    <th>추천</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>평면 구조, 오픈 월드</td>
+                    <td class="good">Tiled</td>
+                    <td>2D 컬링으로 충분</td>
+                </tr>
+                <tr>
+                    <td>깊이 복잡, 실내/도시</td>
+                    <td class="good">Clustered</td>
+                    <td>3D 컬링 이점 있음</td>
+                </tr>
+                <tr>
+                    <td>광원 적음 (< 100)</td>
+                    <td>Deferred</td>
+                    <td>컬링 오버헤드 불필요</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>실제 게임 엔진 (UE5, Unity)도 상황에 따라 다른 기법 선택</strong></p>
+                    <p>→ <span class="key-point">"더 발전된 기법이 항상 더 좋은 것은 아니다"</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Forward</strong> = O(오브젝트 × 광원), 광원 많으면 느림</li>
+                <li><strong>Deferred</strong> = G-Buffer 분리로 Overdraw 해결</li>
+                <li><strong>Tiled</strong> = 2D 타일 분할, 필요한 광원만 계산 (90% 절약)</li>
+                <li><strong>Clustered</strong> = 3D 클러스터 분할, 깊이 복잡한 씬에서 유리</li>
+                <li><strong>실측 결과</strong> = 평면 씬에서 Tiled > Clustered (오버헤드 때문)</li>
+                <li><strong>교훈</strong> = 씬 특성에 맞는 기법 선택이 중요</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-gpu/">← GPU / 그래픽스</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
