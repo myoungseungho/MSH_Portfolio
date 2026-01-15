@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1억 건 테이블, 어떻게 관리할까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .fast {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .slow {
+            background: #ffcdd2;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            margin: 24px 0;
+        }
+        .result-box h4 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .result-box .result-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .result-box .result-item {
+            text-align: center;
+        }
+        .result-box .result-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .result-box .result-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .result-box .result-note {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>1억 건 테이블, 어떻게 관리할까?</h1>
+            <p>파티셔닝으로 조회 5배, 삭제 240배 빠르게</p>
+        </header>
+
+        <!-- Part 1: 문제 상황 -->
+        <div class="conversation">
+            <h2>Part 1. 테이블이 1억 건이 넘어가면?</h2>
+
+            <div class="chat">
+                <div class="q">테이블이 1억 건이 넘어가면 어떤 문제가 생길까?</div>
+                <div class="a">
+                    <p><span class="warning">느려진다.</span> 인덱스가 있어도.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">인덱스가 있으면 빠르다며?</div>
+                <div class="a">
+                    <p>1억 건짜리 인덱스는:</p>
+                    <p>• 인덱스 트리 자체가 깊어짐</p>
+                    <p>• 메모리에 다 안 올라감</p>
+                    <p>• 디스크 I/O 증가</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">어떻게 해결해?</div>
+                <div class="a">
+                    <p><span class="key-point">나눠서 저장한다.</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 파티셔닝 개념 -->
+        <div class="conversation">
+            <h2>Part 2. 파티셔닝이란?</h2>
+
+            <div class="code-block">[1억 건 테이블 하나]     →     [2024년 데이터] 2500만 건
+                              [2023년 데이터] 2500만 건
+                              [2022년 데이터] 2500만 건
+                              [2021년 데이터] 2500만 건</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="highlight">하나의 테이블처럼 보이지만, 내부적으로는 여러 덩어리로 나눠져 있음</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">WHERE date = '2024-01-15' 조회하면?</div>
+                <div class="a">
+                    <p>2024년 파티션만 본다. 나머지 3개는 <span class="key-point">아예 안 봄.</span></p>
+                    <p>이걸 <strong>파티션 프루닝(Partition Pruning)</strong>이라고 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">파티션 프루닝:
+• 1억 건 전체 스캔 ❌
+• 2500만 건만 스캔 ✅ (나머지 3개 파티션은 스킵)</div>
+        </div>
+
+        <!-- Part 3: MSSQL 파티션 생성 -->
+        <div class="conversation">
+            <h2>Part 3. MSSQL에서 파티션 만들기</h2>
+
+            <div class="code-block">-- 1) 파티션 함수: 어떻게 나눌지
+CREATE PARTITION FUNCTION pf_OrderYear (DATE)
+AS RANGE RIGHT FOR VALUES
+('2021-01-01', '2022-01-01', '2023-01-01', '2024-01-01');
+
+-- 2) 파티션 스키마: 어디에 저장할지
+CREATE PARTITION SCHEME ps_OrderYear
+AS PARTITION pf_OrderYear ALL TO ([PRIMARY]);
+
+-- 3) 파티션 테이블 생성
+CREATE TABLE OrdersPartitioned (
+    OrderID INT,
+    OrderDate DATE NOT NULL,
+    CustomerID INT,
+    PRIMARY KEY (OrderID, OrderDate)  -- 파티션 키 포함 필수!
+) ON ps_OrderYear(OrderDate);</div>
+
+            <div class="chat">
+                <div class="q">PRIMARY KEY에 OrderDate가 왜 들어가?</div>
+                <div class="a">
+                    <p><span class="warning">파티션 테이블의 제약:</span> PK에 파티션 키가 포함되어야 함.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 실측 테스트 1 - 조회 -->
+        <div class="conversation">
+            <h2>Part 4. 실측 테스트: 조회 성능</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>테스트 환경:</strong> 100만 건, 5개 파티션 (연도별 약 20만 건씩)</p>
+                    <p><strong>쿼리:</strong> 2023년 데이터 조회</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h4>파티션 키(날짜)로 조회</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">일반 테이블</div>
+                        <div class="result-value">46 ms</div>
+                        <div class="result-note">논리적 읽기: 3,600</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">파티션 테이블</div>
+                        <div class="result-value">10 ms</div>
+                        <div class="result-note">논리적 읽기: 721</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">논리적 읽기 5배 차이, 시간 4.6배 차이</span></p>
+                    <p>5개 파티션 중 1개만 봤으니까 읽기가 1/5로 줄어든 것.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 실측 테스트 2 - 파티션 키 아닌 조회 -->
+        <div class="conversation">
+            <h2>Part 5. 함정: 파티션 키가 아닌 컬럼으로 조회하면?</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>쿼리:</strong> CustomerID = 5000 조회 (파티션 키 아님)</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>일반 테이블</th>
+                    <th>파티션 테이블</th>
+                </tr>
+                <tr>
+                    <td>스캔 수</td>
+                    <td>1</td>
+                    <td class="slow">5 (전체 파티션)</td>
+                </tr>
+                <tr>
+                    <td>논리적 읽기</td>
+                    <td>3,600</td>
+                    <td class="slow">3,606</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="warning">파티션 효과 없음!</span> 오히려 살짝 느림.</p>
+                    <p>CustomerID가 어느 파티션에 있는지 모르니까 5개 다 뒤져야 함.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[핵심]
+파티션 키로 조회 → ✅ 5배 빠름
+파티션 키 아닌 컬럼 → ❌ 효과 없음
+
+그래서 중요한 질문:
+"이 테이블, 주로 어떤 조건으로 조회해?"
+→ 자주 쓰는 조회 조건 = 파티션 키로 잡아야 의미 있음</div>
+        </div>
+
+        <!-- Part 6: 실측 테스트 3 - 삭제 -->
+        <div class="conversation">
+            <h2>Part 6. 진짜 빛나는 순간: 대량 삭제</h2>
+
+            <div class="chat">
+                <div class="q">게임 로그 테이블, 90일 지난 데이터 삭제해야 해</div>
+                <div class="a">
+                    <p>이게 파티셔닝의 <span class="key-point">킬러 기능</span>이야.</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h4>20만 건 삭제 성능</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">DELETE WHERE</div>
+                        <div class="result-value">963 ms</div>
+                        <div class="result-note">한 줄씩 삭제, 로그 기록</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">TRUNCATE PARTITION</div>
+                        <div class="result-value">4 ms</div>
+                        <div class="result-note">파티션 통째로 해제</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">240배 차이!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">-- 일반 테이블: DELETE
+DELETE FROM Orders WHERE OrderDate < '2021-01-01';
+→ 한 줄 삭제, 로그 기록, 한 줄 삭제, 로그 기록... (20만 번 반복)
+→ 몇 분 ~ 몇 시간
+
+-- 파티션 테이블: TRUNCATE PARTITION
+TRUNCATE TABLE Orders WITH (PARTITIONS (1));
+→ "이 파티션 페이지들 해제" (한 번에 끝)
+→ 몇 초</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>실무에서:</strong></p>
+                    <p>• 매일 100만 건씩 쌓이는 로그 테이블</p>
+                    <p>• DELETE로 90일 전 데이터 삭제 → 서비스 느려짐</p>
+                    <p>• TRUNCATE PARTITION → 서비스 영향 없음</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 7: 언제 쓸까 -->
+        <div class="conversation">
+            <h2>Part 7. 언제 파티셔닝을 써야 할까?</h2>
+
+            <div class="chat">
+                <div class="q">그냥 나눠두면 좋은 거 아니야?</div>
+                <div class="a">
+                    <p><span class="warning">단점도 있어:</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>고려 사항</th>
+                    <th>설명</th>
+                </tr>
+                <tr>
+                    <td>관리 복잡도</td>
+                    <td>매년 새 파티션 추가해야 함. 안 하면 마지막 파티션 비대해짐</td>
+                </tr>
+                <tr>
+                    <td>PK 제약</td>
+                    <td>파티션 키가 PK에 포함되어야 함</td>
+                </tr>
+                <tr>
+                    <td>유니크 제약</td>
+                    <td>테이블 전체에서 유니크하게 만들기 어려움</td>
+                </tr>
+                <tr>
+                    <td>백업/복구</td>
+                    <td>파티션 단위로 해야 해서 더 복잡</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>현실적인 기준:</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">100만 건 이하  →  굳이 파티션 안 해도 됨
+1000만 건 ~    →  고려 시작
+1억 건 이상    →  거의 필수
+
++ "오래된 데이터 삭제"가 자주 필요하면 → 파티셔닝 강력 추천</div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>파티셔닝</strong> = 하나의 테이블을 내부적으로 여러 덩어리로 나눔</li>
+                <li><strong>파티션 프루닝</strong> = 필요한 파티션만 조회, 나머지 스킵</li>
+                <li><strong>파티션 키로 조회</strong> → 5배 빠름 (논리적 읽기 1/5)</li>
+                <li><strong>파티션 키 아닌 컬럼</strong> → 효과 없음 (전체 파티션 스캔)</li>
+                <li><strong>대량 삭제</strong> → DELETE 대신 TRUNCATE PARTITION으로 240배 빠름</li>
+                <li><strong>파티션 키 선택</strong> = "자주 쓰는 조회 조건"으로 잡아야 의미 있음</li>
+                <li><strong>1억 건 이상</strong>이거나 <strong>주기적 삭제</strong>가 필요하면 파티셔닝 고려</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">← DB / 캐시</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
