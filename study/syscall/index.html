@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>시스템 콜 오버헤드 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            margin: 24px 0;
+        }
+        .result-box h4 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .result-box .result-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .result-box .result-item {
+            text-align: center;
+        }
+        .result-box .result-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .result-box .result-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+        .result-box .result-note {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <header class="header">
+            <h1>시스템 콜, 왜 느릴까?</h1>
+            <p>일반 함수 vs 시스템 콜, 75배 성능 차이의 원리</p>
+        </header>
+
+        <!-- Part 1: 커널이 뭐야 -->
+        <div class="conversation">
+            <h2>Part 1. 커널이 뭐야?</h2>
+
+            <div class="code-block">[컴퓨터 구조]
+
+┌─────────────────────────────────┐
+│     너의 프로그램 (게임 서버)       │  ← 유저 영역
+├─────────────────────────────────┤
+│          커널 (OS 핵심)            │  ← 커널 영역
+├─────────────────────────────────┤
+│    하드웨어 (CPU, 메모리, 디스크)    │
+└─────────────────────────────────┘</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="highlight">커널 = 하드웨어를 직접 다루는 OS의 핵심 부분</span></p>
+                    <p>• 메모리 관리</p>
+                    <p>• 프로세스/스레드 관리</p>
+                    <p>• 파일 시스템</p>
+                    <p>• 네트워크</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">왜 일반 프로그램이 직접 하드웨어 못 건드려?</div>
+                <div class="a">
+                    <p><span class="warning">위험해서!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[만약 아무 프로그램이나 하드웨어 건드리면?]
+
+게임.exe: "디스크야, 다른 프로그램 파일 지워"
+악성코드.exe: "메모리야, 은행 앱 데이터 줘"
+버그앱.exe: "CPU야, 무한루프" → 컴퓨터 멈춤</div>
+        </div>
+
+        <!-- Part 2: CPU 권한 레벨 -->
+        <div class="conversation">
+            <h2>Part 2. CPU의 권한 레벨 (Ring)</h2>
+
+            <div class="code-block">[CPU의 보호 기능]
+
+Ring 0: 커널 모드 - 뭐든 할 수 있음 (OS만)
+Ring 3: 유저 모드 - 제한됨 (일반 프로그램)
+
+너의 게임 서버 → Ring 3에서 실행
+하드웨어 접근?  → Ring 0 (커널)한테 부탁해야 함</div>
+
+            <div class="chat">
+                <div class="q">메모리에서 커널이랑 유저 영역이 어떻게 나뉘어?</div>
+            </div>
+
+            <div class="code-block">[가상 메모리 - 프로세스 기준]
+
+주소 0xFFFFFFFF ┌─────────────────┐
+               │   커널 영역       │ ← Ring 0에서만 접근 가능
+               │   (상위 절반)     │   모든 프로세스가 공유
+주소 0x80000000 ├─────────────────┤
+               │   유저 영역       │ ← Ring 3에서 접근 가능
+               │   (하위 절반)     │   내 코드, 데이터
+주소 0x00000000 └─────────────────┘</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>메모리 주소 공간에 <strong>둘 다 있어</strong>.</p>
+                    <p>근데 <span class="warning">CPU가 하드웨어적으로 막음!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[Ring 3 (유저 모드)에서]
+유저 영역 접근 → ✅ OK
+커널 영역 접근 → ❌ CPU가 막음 (예외 발생)
+
+[Ring 0 (커널 모드)에서]
+유저 영역 접근 → ✅ OK
+커널 영역 접근 → ✅ OK</div>
+        </div>
+
+        <!-- Part 3: 시스템 콜이란 -->
+        <div class="conversation">
+            <h2>Part 3. 시스템 콜이란?</h2>
+
+            <div class="code-block">[일반 함수 호출]
+내 코드 → 다른 함수 → 돌아옴
+→ 유저모드에서 끝
+
+[시스템 콜]
+내 코드 → OS한테 부탁 → OS가 처리 → 돌아옴
+→ 유저모드 → 커널모드 → 유저모드</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>시스템 콜 예시:</strong></p>
+                    <p>• 파일 열기/읽기/쓰기</p>
+                    <p>• 메모리 할당 (VirtualAlloc)</p>
+                    <p>• 프로세스 생성</p>
+                    <p>• 네트워크 (send, recv)</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">printf나 malloc도 시스템 콜이야?</div>
+                <div class="a">
+                    <p><span class="highlight">직접 시스템 콜은 아니야!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[printf]
+printf("hello")
+→ C 라이브러리 함수 (유저모드)
+→ 내부적으로 버퍼에 쌓음
+→ 버퍼 차면 그때 write() 시스템 콜
+
+[malloc]
+malloc(100)
+→ C 라이브러리 함수 (유저모드)
+→ 이미 받아둔 메모리에서 줌
+→ 부족하면 그때 VirtualAlloc() 시스템 콜
+
+→ 라이브러리가 시스템 콜을 최소화해줌!</div>
+        </div>
+
+        <!-- Part 4: 왜 느린가 -->
+        <div class="conversation">
+            <h2>Part 4. 시스템 콜이 왜 느린가?</h2>
+
+            <div class="code-block">[시스템 콜 실제 과정 - ReadFile 예시]
+
+1. 네 코드
+   ReadFile(handle, buffer, size);
+
+2. 라이브러리 (ntdll.dll)
+   → syscall 명령어 실행
+
+3. CPU가 syscall 명령어 만나면:
+   ┌──────────────────────────────────────┐
+   │ a) 현재 레지스터 전부 저장             │
+   │    (RAX, RBX, RCX... 수십 개)         │
+   │                                      │
+   │ b) 현재 스택 포인터 저장               │
+   │    (돌아올 위치 기억)                  │
+   │                                      │
+   │ c) Ring 3 → Ring 0 전환              │
+   │    (CPU 권한 레벨 변경)               │
+   │                                      │
+   │ d) 커널 코드 주소로 점프               │
+   └──────────────────────────────────────┘
+
+4. 커널 코드 실행
+   - 요청한 작업 수행
+
+5. 커널 작업 끝나면:
+   ┌──────────────────────────────────────┐
+   │ a) Ring 0 → Ring 3 전환              │
+   │ b) 저장했던 레지스터 복원              │
+   │ c) 원래 코드 위치로 복귀               │
+   └──────────────────────────────────────┘
+
+6. 네 코드 계속 실행</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>단계</th>
+                    <th>비용</th>
+                </tr>
+                <tr>
+                    <td>레지스터 저장 (수십 개)</td>
+                    <td>수십 사이클</td>
+                </tr>
+                <tr>
+                    <td>Ring 전환</td>
+                    <td class="bad">수백 사이클</td>
+                </tr>
+                <tr>
+                    <td>커널 코드로 점프</td>
+                    <td>캐시 미스 가능</td>
+                </tr>
+                <tr>
+                    <td>레지스터 복원</td>
+                    <td>수십 사이클</td>
+                </tr>
+                <tr>
+                    <td>Ring 전환 (복귀)</td>
+                    <td class="bad">수백 사이클</td>
+                </tr>
+                <tr>
+                    <td><strong>총합</strong></td>
+                    <td class="bad"><strong>1000~5000 사이클 = 1~5 μs</strong></td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p>일반 함수 호출은? <span class="key-point">수 사이클</span></p>
+                    <p>→ <strong>100배 이상 차이!</strong></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 실측 테스트 -->
+        <div class="conversation">
+            <h2>Part 5. 실측 테스트</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>테스트:</strong> 100만 번 호출, 호출당 시간 측정</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h4>호출당 시간 (나노초)</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">memcpy (유저모드)</div>
+                        <div class="result-value">~0 ns</div>
+                        <div class="result-note">CPU 혼자 처리</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">GetCurrentThreadId</div>
+                        <div class="result-value">1 ns</div>
+                        <div class="result-note">캐시됨, 커널 안 감</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">GetSystemTimePrecise</div>
+                        <div class="result-value">18 ns</div>
+                        <div class="result-note">진짜 시스템 콜</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">ReadFile (캐시됨)</div>
+                        <div class="result-value">1383 ns</div>
+                        <div class="result-note">시스템 콜 + I/O</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">GetCurrentThreadId는 왜 빨라?</div>
+                <div class="a">
+                    <p>Windows가 자주 쓰는 값은 <span class="key-point">유저모드에 캐싱</span>해둠.</p>
+                    <p>TEB (Thread Environment Block)에 저장 → 커널 안 감!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[순수 시스템 콜 오버헤드]
+GetSystemTimePrecise: 18 ns
+
+[memcpy 대비]
+약 75배 느림!
+
+[추가 작업 포함]
+ReadFile: 1383 ns (시스템 콜 + 파일 시스템 처리)</div>
+        </div>
+
+        <!-- Part 6: 실무 의미 -->
+        <div class="conversation">
+            <h2>Part 6. 실무에서의 의미</h2>
+
+            <div class="code-block">[게임 서버에서]
+
+나쁜 예: 매 프레임 시스템 콜 100번
+→ 100 × 18ns = 1.8μs (시스템 콜만)
+→ 실제 작업 포함하면 훨씬 더
+
+좋은 예: 버퍼링해서 시스템 콜 1번
+→ 18ns</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>패턴</th>
+                    <th>설명</th>
+                </tr>
+                <tr>
+                    <td class="good">버퍼링</td>
+                    <td>데이터 모아서 한 번에 write</td>
+                </tr>
+                <tr>
+                    <td class="good">메모리 풀</td>
+                    <td>미리 할당해두고 재사용 (VirtualAlloc 최소화)</td>
+                </tr>
+                <tr>
+                    <td class="good">비동기 I/O</td>
+                    <td>IOCP로 시스템 콜 효율화</td>
+                </tr>
+                <tr>
+                    <td class="bad">매번 할당</td>
+                    <td>new/delete 반복 → 시스템 콜 폭발</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>커널</strong> = OS 핵심, 하드웨어 직접 제어</li>
+                <li><strong>Ring 0/3</strong> = CPU 권한 레벨 (커널/유저)</li>
+                <li><strong>시스템 콜</strong> = 커널 기능 호출, Ring 전환 필요</li>
+                <li><strong>느린 이유</strong> = 레지스터 저장/복원, Ring 전환 (1000+ 사이클)</li>
+                <li><strong>실측</strong> = 순수 시스템 콜 18ns, memcpy 대비 75배</li>
+                <li><strong>최적화</strong> = 버퍼링, 메모리 풀, 비동기 I/O로 시스템 콜 최소화</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-cs/">← CS 기초</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
