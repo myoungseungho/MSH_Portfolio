@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>왜 100만 건 테이블 조회가 0.001초 안에 끝날까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        /* 코드 블록 */
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* 비교 테이블 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good { background: #e8f5e9; color: #2e7d32; }
+        .compare-table .bad { background: #ffebee; color: #c62828; }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: #f3e5f5;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #9c27b0;
+        }
+        .analogy-box strong {
+            color: #7b1fa2;
+        }
+
+        /* 결과 박스 */
+        .result-box {
+            background: #e8f5e9;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #4caf50;
+        }
+        .result-box strong {
+            color: #2e7d32;
+        }
+
+        /* 경고 박스 */
+        .warning-box {
+            background: #fff3e0;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #ff9800;
+        }
+        .warning-box strong {
+            color: #e65100;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">< DB / 캐시</a>
+
+        <header class="header">
+            <h1>왜 100만 건 테이블 조회가 0.001초 안에 끝날까?</h1>
+            <p>DB 인덱스의 원리와 트레이드오프 - 실측 데이터로 배우기</p>
+        </header>
+
+        <!-- Part 1: 문제 인식 -->
+        <div class="conversation">
+            <h2>Part 1. 100만 건 테이블에서 검색하면?</h2>
+
+            <div class="chat">
+                <div class="q">테이블에 데이터가 100만 건 있어. 여기서 Level이 50인 유저를 찾으려면 어떻게 해야 해?</div>
+                <div class="a">
+                    <p>기본적으로 DB는 <span class="warning">처음부터 끝까지 다 본다.</span></p>
+                    <p>1번 행부터 100만 번 행까지 하나씩 확인해. 이걸 <span class="highlight">Full Table Scan</span>이라고 해.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>책 비유</strong><br><br>
+                1000페이지짜리 책에서 "인덱스"라는 단어를 찾으려면?<br>
+                1페이지부터 1000페이지까지 한 장씩 넘기면서 찾아야 해.<br><br>
+                <strong>이게 Full Table Scan이야.</strong>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 100만 건이면 100만 번 확인하는 거야? 엄청 느리겠네?</div>
+                <div class="a">
+                    <p><span class="key-point">맞아!</span> 실제로 테스트해보면:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 테스트 환경: TPlayer 테이블 (100만 건)
+-- 컬럼: PlayerID, ServerID, PlayerName, Level, Gold, LastLogin
+
+SELECT * FROM TPlayer WHERE Level = 50 AND ServerID = 1;
+
+-- 결과: 논리적 읽기 9,487회
+-- DB가 9,487개의 페이지를 읽어야 했음
+            </div>
+        </div>
+
+        <!-- Part 2: 인덱스 개념 -->
+        <div class="conversation">
+            <h2>Part 2. 책 뒤에 있는 "찾아보기" = 인덱스</h2>
+
+            <div class="chat">
+                <div class="q">책에서 단어 찾을 때 1페이지부터 안 봐도 되는 방법이 있잖아?</div>
+                <div class="a">
+                    <p><span class="key-point">책 맨 뒤에 있는 "찾아보기"!</span></p>
+                    <p>"인덱스... 523페이지" 이렇게 적혀있으면 바로 523페이지로 가면 돼.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>DB 인덱스도 똑같아</strong><br><br>
+                "Level 50인 사람은 이 위치에 있어요" 라고 미리 정리해둔 목록이야.<br>
+                검색할 때 전체를 안 보고, 목록에서 바로 찾아가면 돼.
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 인덱스를 만들면 어떻게 돼?</div>
+                <div class="a">
+                    <p><span class="highlight">Index Seek</span>로 바뀌어. 필요한 데이터만 정확히 찾아감.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 인덱스 생성
+CREATE INDEX IX_Level_ServerID ON TPlayer(Level, ServerID);
+
+-- 같은 쿼리 다시 실행
+SELECT * FROM TPlayer WHERE Level = 50 AND ServerID = 1;
+
+-- 결과: 논리적 읽기 1,654회
+-- 9,487 -> 1,654 (약 5.7배 감소!)
+            </div>
+
+            <div class="result-box">
+                <strong>실측 결과</strong><br><br>
+                인덱스 없음: 9,487회 읽기<br>
+                인덱스 있음: 1,654회 읽기<br><br>
+                <strong>5.7배 개선!</strong>
+            </div>
+        </div>
+
+        <!-- Part 3: 복합 인덱스 순서 -->
+        <div class="conversation">
+            <h2>Part 3. 인덱스 컬럼 순서가 중요해?</h2>
+
+            <div class="chat">
+                <div class="q">인덱스를 (Level, ServerID) 순서로 만들었는데, (ServerID, Level)로 만들면 다를까?</div>
+                <div class="a">
+                    <p><span class="warning">완전히 달라!</span> 순서가 성능을 결정해.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>전화번호부 비유</strong><br><br>
+                전화번호부가 "성 > 이름" 순으로 정렬되어 있어.<br>
+                "김씨 중에 철수" 찾기 -> 쉬움 (김씨 찾고 -> 철수 찾기)<br>
+                "철수 중에 김씨" 찾기 -> 어려움 (철수가 어디있는지 모름)<br><br>
+                <strong>첫 번째 컬럼으로 먼저 범위를 좁혀야 해!</strong>
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 WHERE Level = 50 AND ServerID = 1 쿼리에서 어떤 순서가 좋아?</div>
+                <div class="a">
+                    <p>두 조건 다 = (등호)니까 어떤 게 먼저 와도 비슷할 것 같지만...</p>
+                    <p><span class="highlight">선택도(Selectivity)</span>가 높은 컬럼이 앞에 오는 게 좋아.</p>
+                    <p>Level은 1~100 (100가지), ServerID는 1~10 (10가지)</p>
+                    <p>Level이 더 다양하니까 Level이 앞에!</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>인덱스 순서</th>
+                    <th>논리적 읽기</th>
+                    <th>결과</th>
+                </tr>
+                <tr>
+                    <td>(Level, ServerID)</td>
+                    <td class="good">1,654회</td>
+                    <td class="good">최적</td>
+                </tr>
+                <tr>
+                    <td>(ServerID, Level)</td>
+                    <td class="bad">9,487회</td>
+                    <td class="bad">비효율</td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <strong>주의!</strong><br><br>
+                순서가 틀린 인덱스 = 인덱스가 없는 것과 비슷한 성능!<br>
+                5.7배 차이가 날 수 있어.
+            </div>
+        </div>
+
+        <!-- Part 4: Covering Index -->
+        <div class="conversation">
+            <h2>Part 4. Key Lookup이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">인덱스 써서 1,654회로 줄었는데, 더 줄일 수 있어?</div>
+                <div class="a">
+                    <p>현재 상황을 분석해보자.</p>
+                    <p>인덱스에는 (Level, ServerID)만 있어. 그런데 SELECT *은 모든 컬럼을 원해.</p>
+                    <p>그래서 인덱스에서 위치 찾고 -> 원본 테이블에서 나머지 컬럼 가져와야 해.</p>
+                    <p>이 "다시 가져오기"를 <span class="highlight">Key Lookup</span>이라고 해.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>책 비유 (계속)</strong><br><br>
+                찾아보기에서 "인덱스... 523페이지" 확인 (인덱스 검색)<br>
+                -> 523페이지로 이동해서 내용 읽기 (Key Lookup)<br><br>
+                <strong>2번 왔다갔다 해야 해!</strong>
+            </div>
+
+            <div class="chat">
+                <div class="q">이걸 없앨 수 있어?</div>
+                <div class="a">
+                    <p><span class="key-point">Covering Index!</span></p>
+                    <p>인덱스에 필요한 컬럼을 다 포함시키면, 원본 테이블에 안 가도 돼.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- Covering Index 생성 (INCLUDE로 추가 컬럼 포함)
+CREATE INDEX IX_Level_ServerID_Cover ON TPlayer(Level, ServerID)
+INCLUDE (PlayerName, Gold, LastLogin);
+
+-- 결과: 논리적 읽기 11회!
+-- 1,654 -> 11 (약 150배 감소!)
+            </div>
+
+            <div class="result-box">
+                <strong>실측 결과</strong><br><br>
+                일반 인덱스: 1,654회 읽기<br>
+                Covering Index: 11회 읽기<br><br>
+                <strong>150배 개선! (Full Scan 대비 538배)</strong>
+            </div>
+        </div>
+
+        <!-- Part 5: 트레이드오프 -->
+        <div class="conversation">
+            <h2>Part 5. 인덱스의 트레이드오프</h2>
+
+            <div class="chat">
+                <div class="q">인덱스가 이렇게 좋으면 다 만들면 되는 거 아냐?</div>
+                <div class="a">
+                    <p><span class="warning">공짜 점심은 없어!</span> 트레이드오프가 있어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">어떤 단점이 있는데?</div>
+                <div class="a">
+                    <p>1. <span class="highlight">INSERT/UPDATE가 느려져</span></p>
+                    <p>데이터 추가할 때마다 인덱스도 업데이트해야 하거든.</p>
+                    <p>2. <span class="highlight">저장 공간을 더 차지해</span></p>
+                    <p>인덱스도 데이터니까 디스크 공간이 필요해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- INSERT 성능 테스트 (1만 건 삽입)
+
+인덱스 0개: 38ms
+인덱스 7개: 123ms
+
+-> 인덱스 많을수록 INSERT가 3.2배 느려짐!
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>인덱스 개수</th>
+                    <th>INSERT 시간</th>
+                    <th>변화</th>
+                </tr>
+                <tr>
+                    <td>0개</td>
+                    <td>38ms</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>7개</td>
+                    <td>123ms</td>
+                    <td class="bad">3.2배 느림</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">Covering Index는 저장 공간이 더 많이 필요하다고?</div>
+                <div class="a">
+                    <p><span class="key-point">맞아.</span> INCLUDE로 컬럼을 추가하면 인덱스 크기가 커져.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 인덱스 크기 비교
+
+일반 인덱스 (Level, ServerID): 17.62 MB
+Covering Index (+PlayerName, Gold, LastLogin): 54.33 MB
+
+-> Covering Index가 3배 더 큼!
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>인덱스 타입</th>
+                    <th>크기</th>
+                    <th>SELECT</th>
+                    <th>용도</th>
+                </tr>
+                <tr>
+                    <td>일반 인덱스</td>
+                    <td>17.62 MB</td>
+                    <td>1,654회</td>
+                    <td>범용</td>
+                </tr>
+                <tr>
+                    <td>Covering Index</td>
+                    <td>54.33 MB</td>
+                    <td class="good">11회</td>
+                    <td>자주 쓰는 쿼리 최적화</td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <strong>인덱스 설계 원칙</strong><br><br>
+                1. 자주 검색하는 컬럼에만 인덱스 생성<br>
+                2. INSERT가 많은 테이블은 인덱스 최소화<br>
+                3. Covering Index는 핵심 쿼리에만 적용<br>
+                4. 순서를 고려해서 복합 인덱스 설계
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리: DB 인덱스</h3>
+            <ul>
+                <li><strong>Full Table Scan</strong> - 처음부터 끝까지 다 읽음 (느림)</li>
+                <li><strong>Index Seek</strong> - 인덱스로 바로 찾아감 (빠름)</li>
+                <li><strong>복합 인덱스 순서</strong> - 선택도 높은 컬럼이 앞에 (5.7배 차이)</li>
+                <li><strong>Key Lookup</strong> - 인덱스 찾고 원본 테이블 다시 방문</li>
+                <li><strong>Covering Index</strong> - INCLUDE로 Key Lookup 제거 (538배 개선)</li>
+                <li><strong>트레이드오프</strong> - INSERT 3.2배 느림, 저장공간 3배 증가</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">< DB / 캐시</a>
+            <a href="../../">홈으로 ></a>
+        </div>
+    </div>
+</body>
+</html>
