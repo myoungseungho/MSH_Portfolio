@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Actor 모델 - 락 없이 동시성 처리하기 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .etymology-box {
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .etymology-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .etymology-box p {
+            margin-bottom: 12px;
+            opacity: 0.95;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-thread/" class="back-link">← 멀티스레드</a>
+
+        <header class="header">
+            <h1>Actor 모델 - 락 없이 동시성 처리하기</h1>
+            <p>공유 데이터 대신 메시지 패싱으로 동시성 문제 해결</p>
+        </header>
+
+        <!-- Part 1: 어원 -->
+        <div class="etymology-box">
+            <h3>Actor는 무슨 뜻일까?</h3>
+            <p><strong>Actor = 배우(演員)</strong></p>
+            <p>연극 무대의 배우처럼:</p>
+            <p>• 각자 맡은 역할(상태)이 있고</p>
+            <p>• 다른 배우를 직접 조종하지 않고</p>
+            <p>• 대사(메시지)로만 소통하고</p>
+            <p>• 큐(cue)를 받으면 연기를 시작한다</p>
+            <p style="margin-top: 16px; opacity: 0.8;">1973년 칼 휴잇(Carl Hewitt)이 "독립적으로 행동하는 개체"라는 비유로 명명</p>
+        </div>
+
+        <!-- Part 2: 문제 상황 -->
+        <div class="conversation">
+            <h2>Part 1. 멀티스레드의 골칫거리</h2>
+
+            <div class="chat">
+                <div class="q">멀티스레드에서 제일 힘든 게 뭐야?</div>
+                <div class="a">
+                    <p><span class="warning">락, 데드락, 경쟁 조건</span></p>
+                    <p>공유 데이터를 여러 스레드가 건드리니까 생기는 문제들.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[기존 멀티스레드]
+스레드 A ──┐
+           ├── 공유 데이터 ── 락 필요!
+스레드 B ──┘
+
+player.gold -= 100;  // 스레드 A
+player.gold += 50;   // 스레드 B
+→ 동시에 건드리면 데이터 꼬임</div>
+
+            <div class="chat">
+                <div class="q">어떻게 해결해?</div>
+                <div class="a">
+                    <p>락 걸어서 한 번에 하나만 접근하게...</p>
+                    <p>근데 락 쓰면 데드락 위험, 성능 저하...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: Actor 모델 아이디어 -->
+        <div class="conversation">
+            <h2>Part 2. Actor 모델의 발상</h2>
+
+            <div class="chat">
+                <div class="q">락을 안 쓸 순 없을까?</div>
+                <div class="a">
+                    <p><span class="key-point">"공유를 안 하면 되는 거 아니야?"</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[Actor 모델]
+Actor A ── 자기 데이터 (독점)
+Actor B ── 자기 데이터 (독점)
+    ↓
+   메시지로만 통신</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>Actor = 자기만의 데이터 + 메시지 큐를 가진 독립된 단위</strong></p>
+                    <p>Actor끼리 직접 데이터 안 건드리고, 메시지만 주고받음.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 게임 서버 예시 -->
+        <div class="conversation">
+            <h2>Part 3. 이미 쓰고 있다?</h2>
+
+            <div class="chat">
+                <div class="q">게임 서버 11이 서버 12의 데이터 필요하면?</div>
+                <div class="a">
+                    <p><span class="highlight">패킷 보내지!</span> 직접 DB 안 건드려.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[게임 서버 구조]
+서버 11 ── 자기 데이터 (DB_11)
+서버 12 ── 자기 데이터 (DB_12)
+     ↓
+   패킷으로만 통신
+
+[Actor 모델]
+Actor A ── 자기 데이터
+Actor B ── 자기 데이터
+     ↓
+   메시지로만 통신
+
+→ 똑같은 구조!</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>서버 간 통신 구조가 이미 <span class="key-point">Actor 모델</span>과 같은 패턴.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 비교 -->
+        <div class="conversation">
+            <h2>Part 4. 기존 방식 vs Actor 모델</h2>
+
+            <div class="code-block">[기존 멀티스레드 - 락 필요]
+스레드 A: player.gold -= 100;  // 락 걸어야 함
+스레드 B: player.gold += 50;   // 동시에 건드리면 터짐
+
+[Actor 모델 - 락 불필요]
+ActorA → PlayerActor: "골드 100 빼줘"
+ActorB → PlayerActor: "골드 50 더해줘"
+PlayerActor: 메시지 큐에서 하나씩 꺼내서 처리</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>기존 멀티스레드</th>
+                    <th>Actor 모델</th>
+                </tr>
+                <tr>
+                    <td>데이터 접근</td>
+                    <td class="bad">공유 (락 필요)</td>
+                    <td class="good">독점 (락 불필요)</td>
+                </tr>
+                <tr>
+                    <td>통신 방식</td>
+                    <td>직접 메모리 접근</td>
+                    <td>메시지 패싱</td>
+                </tr>
+                <tr>
+                    <td>데드락</td>
+                    <td class="bad">발생 가능</td>
+                    <td class="good">구조적으로 회피</td>
+                </tr>
+                <tr>
+                    <td>디버깅</td>
+                    <td class="bad">어려움</td>
+                    <td class="good">메시지 추적 가능</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">왜 락이 필요 없어?</div>
+                <div class="a">
+                    <p><span class="key-point">데이터 주인이 혼자만 건드리니까!</span></p>
+                    <p>메시지는 큐에 쌓이고, Actor가 하나씩 처리.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 컴퓨터공학에서의 Actor -->
+        <div class="conversation">
+            <h2>Part 5. 컴퓨터공학에서 "Actor"의 공통 개념</h2>
+
+            <div class="chat">
+                <div class="q">언리얼의 Actor도 이거랑 관련 있어?</div>
+                <div class="a">
+                    <p>이름이 같은 건 우연이 아니야. <span class="highlight">공통된 개념</span>을 공유해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Actor의 공통 개념]
+"독립적으로 행동하는 개체"
+
+- 자기 상태를 가짐
+- 스스로 행동함
+- 외부에서 직접 조종당하지 않음</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>분야</th>
+                    <th>Actor</th>
+                    <th>공통점</th>
+                </tr>
+                <tr>
+                    <td>멀티스레드</td>
+                    <td>Actor Model</td>
+                    <td>자기 데이터, 메시지 통신</td>
+                </tr>
+                <tr>
+                    <td>언리얼 엔진</td>
+                    <td>AActor</td>
+                    <td>자기 상태, 독립적 Tick, 월드에서 독립 존재</td>
+                </tr>
+                <tr>
+                    <td>AI</td>
+                    <td>Agent (유사 개념)</td>
+                    <td>자율적 판단, 독립적 행동</td>
+                </tr>
+                <tr>
+                    <td>연극</td>
+                    <td>배우</td>
+                    <td>자기 역할, 대사로 소통, 큐 받으면 연기</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 7: 언제 좋고 언제 별로인가 -->
+        <div class="conversation">
+            <h2>Part 6. Actor 모델이 만능일까?</h2>
+
+            <div class="chat">
+                <div class="q">Actor 모델 좋아 보이는데, 항상 쓰면 되는 거 아니야?</div>
+                <div class="a">
+                    <p><span class="warning">아니, 상황에 따라 다르다.</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>추천</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>독립 개체 (유저, 방, NPC)</td>
+                    <td class="good">✅ Actor</td>
+                    <td>각자 상태 독립적</td>
+                </tr>
+                <tr>
+                    <td>서버 간 통신</td>
+                    <td class="good">✅ Actor</td>
+                    <td>어차피 패킷으로 통신</td>
+                </tr>
+                <tr>
+                    <td>여러 데이터 동시 수정</td>
+                    <td class="bad">❌ 락</td>
+                    <td>트랜잭션이 복잡해짐</td>
+                </tr>
+                <tr>
+                    <td>초저지연 (0.1ms)</td>
+                    <td class="bad">❌ 락</td>
+                    <td>메시지 오버헤드</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">왜 동시 수정은 Actor가 별로야?</div>
+            </div>
+
+            <div class="code-block">[1:1 거래 - Actor 모델]
+TradeActor → Player1Actor: "골드 100 빼줘"
+TradeActor → Player2Actor: "골드 100 더해줘"
+
+근데 Player1이 "골드 부족"이면?
+→ 이미 Player2한테 메시지 보냄
+→ 롤백 메시지 또 보내야 함
+→ 복잡해짐!
+
+[1:1 거래 - 락]
+lock(player1, player2) {
+    if (player1.gold >= 100) {
+        player1.gold -= 100;
+        player2.gold += 100;
+    }
+}
+→ 한 번에 원자적 처리, 간단!</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>실무에서는 섞어 씀:</strong></p>
+                    <p>• 서버 간 = Actor 모델 (패킷 통신)</p>
+                    <p>• 서버 내부 = 필요한 곳만 락</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 8: 실제 사용 -->
+        <div class="conversation">
+            <h2>Part 7. Actor 모델을 쓰는 기술들</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>Erlang/Elixir</strong> - 언어 자체가 Actor 모델 기반</p>
+                    <p><strong>Akka</strong> (Java/Scala) - 게임 서버에서 많이 사용</p>
+                    <p><strong>Orleans</strong> (C#) - MS에서 만든 Actor 프레임워크, Halo에서 사용</p>
+                    <p><strong>게임 서버 아키텍처</strong> - 서버 간 통신이 이미 Actor 패턴</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Actor</strong> = 배우(演員), 독립적으로 행동하는 개체</li>
+                <li><strong>핵심 규칙</strong> = 자기 데이터만 건드림 + 메시지로만 통신</li>
+                <li><strong>장점</strong> = 락 불필요, 데드락 회피, 디버깅 쉬움</li>
+                <li><strong>게임 서버</strong> = 서버 간 통신 구조가 이미 Actor 모델과 유사</li>
+                <li><strong>언리얼 Actor</strong> = 같은 어원, "독립적 개체"라는 개념 공유</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-thread/">← 멀티스레드</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
