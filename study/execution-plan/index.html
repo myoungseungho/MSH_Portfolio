@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DB는 내 쿼리를 어떻게 처리할까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        /* 코드 블록 */
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* 비교 테이블 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good { background: #e8f5e9; color: #2e7d32; }
+        .compare-table .bad { background: #ffebee; color: #c62828; }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: #f3e5f5;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #9c27b0;
+        }
+        .analogy-box strong {
+            color: #7b1fa2;
+        }
+
+        /* 결과 박스 */
+        .result-box {
+            background: #e8f5e9;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #4caf50;
+        }
+        .result-box strong {
+            color: #2e7d32;
+        }
+
+        /* 이미지 박스 */
+        .image-box {
+            background: #f5f5f5;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 16px 0;
+            text-align: center;
+        }
+        .image-box img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .image-box p {
+            margin-top: 12px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">< DB / 캐시</a>
+
+        <header class="header">
+            <h1>DB는 내 쿼리를 어떻게 처리할까?</h1>
+            <p>실행 계획 (Execution Plan) - 쿼리 최적화의 눈</p>
+        </header>
+
+        <!-- Part 1: 실행 계획이란 -->
+        <div class="conversation">
+            <h2>Part 1. 실행 계획이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">쿼리를 실행하면 DB가 알아서 처리하잖아. 근데 어떻게 처리하는지 볼 수 있어?</div>
+                <div class="a">
+                    <p><span class="key-point">볼 수 있어!</span> 그게 바로 <span class="highlight">실행 계획</span>이야.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>네비게이션 비유</strong><br><br>
+                너: "서울에서 부산 가줘"<br>
+                네비게이션:<br>
+                - 경로1: 경부고속도로 → 4시간<br>
+                - 경로2: 국도 → 7시간<br>
+                - 경로3: KTX → 2시간<br>
+                → "경로3 선택!"<br><br>
+                <strong>DB도 똑같아. 여러 방법 중 최적의 경로를 선택해.</strong>
+            </div>
+
+            <div class="code-block">
+SELECT * FROM TPlayer WHERE PlayerName = 'Player500000';
+
+DB 옵티마이저:
+- 방법1: Full Table Scan → 9,487 읽기
+- 방법2: Index Seek → 100 읽기
+- 방법3: Index Seek + Key Lookup → 200 읽기
+→ "방법2 선택!"
+
+이 "어떤 방법으로 할지 결정한 계획" = 실행 계획
+            </div>
+        </div>
+
+        <!-- Part 2: 실행 계획 보는 법 -->
+        <div class="conversation">
+            <h2>Part 2. 실행 계획 보는 법</h2>
+
+            <div class="chat">
+                <div class="q">SSMS에서 어떻게 봐?</div>
+                <div class="a">
+                    <p><span class="highlight">Ctrl + M</span> 누르고 쿼리 실행!</p>
+                    <p>결과 탭 옆에 "실행 계획" 탭이 생겨.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 1. Ctrl + M 누르기 (실제 실행 계획 포함)
+-- 2. 쿼리 실행
+SELECT * FROM TPlayer WHERE PlayerName = 'Player500000';
+-- 3. "실행 계획" 탭 클릭
+            </div>
+
+            <div class="image-box">
+                <img src="./images/1.png" alt="실행 계획 - Key Lookup 있음">
+                <p>Key Lookup이 50%나 차지하는 실행 계획</p>
+            </div>
+
+            <div class="chat">
+                <div class="q">이 그림 어떻게 읽어?</div>
+                <div class="a">
+                    <p><span class="key-point">오른쪽에서 왼쪽으로!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+읽는 순서:
+Index Seek (50%) → Key Lookup (50%) → Nested Loops → SELECT
+
+해석:
+1. Index Seek: 인덱스에서 PlayerName 찾음
+2. Key Lookup: 인덱스에 없는 나머지 컬럼 가져오러 원본 테이블 감
+3. Nested Loops: 두 결과 합침
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>단계</th>
+                    <th>의미</th>
+                    <th>비용</th>
+                </tr>
+                <tr>
+                    <td>Index Seek</td>
+                    <td>인덱스에서 조건에 맞는 데이터 찾음</td>
+                    <td>50%</td>
+                </tr>
+                <tr>
+                    <td class="bad">Key Lookup</td>
+                    <td>인덱스에 없는 컬럼 가져오러 원본 테이블 방문</td>
+                    <td class="bad">50%</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3: Key Lookup 제거 -->
+        <div class="conversation">
+            <h2>Part 3. Key Lookup 없애기</h2>
+
+            <div class="chat">
+                <div class="q">Key Lookup이 50%나 차지해. 없앨 수 있어?</div>
+                <div class="a">
+                    <p><span class="key-point">Covering Index!</span></p>
+                    <p>인덱스에 필요한 컬럼을 다 포함시키면 원본 테이블에 안 가도 돼.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 기존 인덱스: PlayerName만 포함
+CREATE INDEX IX_PlayerName ON TPlayer(PlayerName);
+-- → SELECT * 하면 나머지 컬럼 가져오러 Key Lookup 발생
+
+-- Covering Index: 모든 컬럼 포함
+CREATE INDEX IX_PlayerName_Cover ON TPlayer(PlayerName)
+INCLUDE (PlayerID, ServerID, Level, Gold, CreateDate, LastLoginDate);
+-- → 인덱스만으로 모든 컬럼 제공 가능!
+            </div>
+
+            <div class="image-box">
+                <img src="./images/2.png" alt="실행 계획 - Key Lookup 없음">
+                <p>Covering Index 적용 후 - Key Lookup 사라짐!</p>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상태</th>
+                    <th>실행 계획</th>
+                    <th>비용 분포</th>
+                </tr>
+                <tr>
+                    <td class="bad">Before</td>
+                    <td>Index Seek → Key Lookup → Nested Loops</td>
+                    <td>50% + 50%</td>
+                </tr>
+                <tr>
+                    <td class="good">After</td>
+                    <td>Index Seek만!</td>
+                    <td>100% (인덱스만)</td>
+                </tr>
+            </table>
+
+            <div class="result-box">
+                <strong>결과</strong><br><br>
+                Key Lookup 제거 → 원본 테이블 방문 없음 → 성능 향상!
+            </div>
+        </div>
+
+        <!-- Part 4: 주요 연산자 -->
+        <div class="conversation">
+            <h2>Part 4. 실행 계획에서 자주 보는 것들</h2>
+
+            <div class="chat">
+                <div class="q">실행 계획에서 어떤 걸 주의해서 봐야 해?</div>
+                <div class="a">
+                    <p>이런 것들이 보이면 <span class="warning">주의!</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>연산자</th>
+                    <th>의미</th>
+                    <th>상태</th>
+                </tr>
+                <tr>
+                    <td class="good">Index Seek</td>
+                    <td>인덱스에서 필요한 데이터만 정확히 찾음</td>
+                    <td class="good">좋음</td>
+                </tr>
+                <tr>
+                    <td class="bad">Table Scan</td>
+                    <td>테이블 전체를 처음부터 끝까지 읽음</td>
+                    <td class="bad">나쁨</td>
+                </tr>
+                <tr>
+                    <td class="bad">Index Scan</td>
+                    <td>인덱스 전체를 읽음 (Seek보다 비효율)</td>
+                    <td class="bad">주의</td>
+                </tr>
+                <tr>
+                    <td class="bad">Key Lookup</td>
+                    <td>인덱스 찾고 원본 테이블 다시 방문</td>
+                    <td class="bad">주의</td>
+                </tr>
+                <tr>
+                    <td>Nested Loops</td>
+                    <td>두 결과를 루프로 조인</td>
+                    <td>상황에 따라</td>
+                </tr>
+                <tr>
+                    <td>Hash Match</td>
+                    <td>해시 테이블로 조인 (대용량)</td>
+                    <td>상황에 따라</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">Table Scan이 보이면 무조건 나쁜 거야?</div>
+                <div class="a">
+                    <p>작은 테이블이면 괜찮아. 어차피 전체 읽어도 빠르니까.</p>
+                    <p>근데 <span class="warning">100만 건 테이블에서 Table Scan</span>이면 문제!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 실무 활용 -->
+        <div class="conversation">
+            <h2>Part 5. 실행 계획 활용법</h2>
+
+            <div class="chat">
+                <div class="q">언제 실행 계획을 봐야 해?</div>
+                <div class="a">
+                    <p>이럴 때:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>확인할 것</th>
+                </tr>
+                <tr>
+                    <td>쿼리가 느릴 때</td>
+                    <td>Table Scan, Index Scan 있는지</td>
+                </tr>
+                <tr>
+                    <td>인덱스 추가 후</td>
+                    <td>실제로 Index Seek 쓰는지</td>
+                </tr>
+                <tr>
+                    <td>쿼리 튜닝 후</td>
+                    <td>비용이 줄었는지 비교</td>
+                </tr>
+            </table>
+
+            <div class="code-block">
+실행 계획 활용 순서:
+
+1. 느린 쿼리 발견
+2. Ctrl+M으로 실행 계획 확인
+3. Table Scan, Key Lookup 등 비효율 찾기
+4. 인덱스 추가 또는 쿼리 수정
+5. 다시 실행 계획 확인 → 개선됐는지 비교
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리: 실행 계획</h3>
+            <ul>
+                <li><strong>실행 계획</strong> - DB가 쿼리를 처리하는 "방법"을 보여주는 계획서</li>
+                <li><strong>보는 법</strong> - SSMS에서 Ctrl+M 누르고 실행</li>
+                <li><strong>읽는 법</strong> - 오른쪽에서 왼쪽으로</li>
+                <li><strong>좋은 것</strong> - Index Seek (필요한 것만 정확히 찾음)</li>
+                <li><strong>나쁜 것</strong> - Table Scan, Key Lookup (비효율적 접근)</li>
+                <li><strong>해결책</strong> - 인덱스 추가, Covering Index로 Key Lookup 제거</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">< DB / 캐시</a>
+            <a href="../../">홈으로 ></a>
+        </div>
+    </div>
+</body>
+</html>
