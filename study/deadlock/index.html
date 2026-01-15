@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>왜 DB가 멈췄을까? Lock과 Deadlock - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        /* 코드 블록 */
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* 비교 테이블 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good { background: #e8f5e9; color: #2e7d32; }
+        .compare-table .bad { background: #ffebee; color: #c62828; }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: #f3e5f5;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #9c27b0;
+        }
+        .analogy-box strong {
+            color: #7b1fa2;
+        }
+
+        /* 결과 박스 */
+        .result-box {
+            background: #e8f5e9;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #4caf50;
+        }
+        .result-box strong {
+            color: #2e7d32;
+        }
+
+        /* 경고 박스 */
+        .warning-box {
+            background: #fff3e0;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #ff9800;
+        }
+        .warning-box strong {
+            color: #e65100;
+        }
+
+        /* 가이드라인 박스 */
+        .guide-box {
+            background: #e3f2fd;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #2196f3;
+        }
+        .guide-box strong {
+            color: #1565c0;
+        }
+        .guide-box ul {
+            margin-top: 12px;
+            margin-left: 20px;
+        }
+        .guide-box li {
+            margin: 8px 0;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">< DB / 캐시</a>
+
+        <header class="header">
+            <h1>왜 DB가 멈췄을까? Lock과 Deadlock</h1>
+            <p>동시성 문제의 원인과 해결 - 실측 테스트로 배우기</p>
+        </header>
+
+        <!-- Part 1: Lock 필요성 -->
+        <div class="conversation">
+            <h2>Part 1. 왜 Lock이 필요해?</h2>
+
+            <div class="chat">
+                <div class="q">게임에서 두 명의 유저가 동시에 같은 아이템을 주우려고 해. 아이템은 1개야. 어떻게 될까?</div>
+                <div class="a">
+                    <p>한 명만 주워야 해. 둘 다 먹으면 안 되니까.</p>
+                    <p>근데 DB 입장에서 두 요청이 <span class="warning">"정확히 동시에"</span> 들어왔다면?</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+유저A: UPDATE Item SET Owner = 'A' WHERE ItemID = 1
+유저B: UPDATE Item SET Owner = 'B' WHERE ItemID = 1
+
+→ 둘 다 실행되면? 데이터 꼬임!
+            </div>
+
+            <div class="chat">
+                <div class="q">어떻게 한 명만 처리하게 할 수 있어?</div>
+                <div class="a">
+                    <p><span class="key-point">문 잠그면 돼!</span></p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>화장실 비유</strong><br><br>
+                화장실 칸이 1개야. 두 사람이 동시에 가려고 해.<br>
+                먼저 들어간 사람이 <strong>문 잠금</strong> → 다른 사람은 <strong>대기</strong><br><br>
+                DB에서 이게 바로 <strong>Lock</strong>이야.
+            </div>
+
+            <div class="code-block">
+유저A가 아이템 데이터에 Lock 획득
+→ 유저A 수정 중...
+→ 유저B 접근 시도 → "잠겨있네, 기다려야지"
+→ 유저A 완료, Lock 해제
+→ 유저B 들어감
+            </div>
+        </div>
+
+        <!-- Part 2: Deadlock 개념 -->
+        <div class="conversation">
+            <h2>Part 2. Deadlock이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">Lock이 있으면 문제 해결 아냐?</div>
+                <div class="a">
+                    <p>보통은 그래. 근데 이런 상황은?</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+유저A: 아이템1 Lock 잡음 → 아이템2도 필요해서 기다리는 중
+유저B: 아이템2 Lock 잡음 → 아이템1도 필요해서 기다리는 중
+
+유저A: "B야 아이템2 풀어줘, 그래야 내가 끝내지"
+유저B: "A야 아이템1 풀어줘, 그래야 내가 끝내지"
+
+→ 둘 다 영원히 대기 → 시스템 멈춤!
+            </div>
+
+            <div class="chat">
+                <div class="q">둘 다 영원히 기다리는 거네?</div>
+                <div class="a">
+                    <p><span class="warning">그게 Deadlock (교착 상태)이야.</span></p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>좁은 골목 비유</strong><br><br>
+                차 2대가 좁은 골목에서 마주침.<br>
+                A: "B가 후진해야 내가 지나가지"<br>
+                B: "A가 후진해야 내가 지나가지"<br><br>
+                둘 다 안 물러서면 → <strong>영원히 멈춤!</strong>
+            </div>
+        </div>
+
+        <!-- Part 3: Deadlock 감지와 해결 -->
+        <div class="conversation">
+            <h2>Part 3. DB는 Deadlock을 어떻게 해결해?</h2>
+
+            <div class="chat">
+                <div class="q">영원히 멈춰있으면 안 되잖아. DB가 알아서 해결해?</div>
+                <div class="a">
+                    <p><span class="key-point">DB가 주기적으로 감지해.</span></p>
+                    <p>"누가 누굴 기다리나?" 그래프를 그려서 <span class="highlight">사이클(순환)</span>이 있으면 Deadlock!</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+대기 그래프:
+유저A → (아이템2 기다림) → 유저B
+유저B → (아이템1 기다림) → 유저A
+
+→ 원형으로 돌아옴 = Deadlock 감지!
+            </div>
+
+            <div class="chat">
+                <div class="q">감지하면 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="highlight">희생자(Victim)</span>를 골라서 한 명만 롤백해.</p>
+                    <p>둘 다 롤백하면 비효율적이니까, 한 명만 죽이고 나머지는 진행!</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>희생자 선택 기준</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>작업량 적은 쪽</td>
+                    <td>롤백 비용이 적으니까</td>
+                </tr>
+                <tr>
+                    <td>최근에 시작한 쪽</td>
+                    <td>오래 일한 애 살려주기</td>
+                </tr>
+                <tr>
+                    <td>우선순위 낮은 쪽</td>
+                    <td>중요한 작업 보호</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 4: 실제 테스트 -->
+        <div class="conversation">
+            <h2>Part 4. 실제로 Deadlock 만들어보기</h2>
+
+            <div class="chat">
+                <div class="q">직접 테스트해볼 수 있어?</div>
+                <div class="a">
+                    <p>SSMS에서 <span class="highlight">쿼리 창 2개</span> 열어서 해보자.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 테스트 테이블 생성
+CREATE TABLE TestLock (
+    ID INT PRIMARY KEY,
+    Value NVARCHAR(50)
+);
+INSERT INTO TestLock VALUES (1, 'A'), (2, 'B');
+            </div>
+
+            <div class="code-block">
+-- 창1 (유저A): ID 1 → 2 순서
+BEGIN TRAN
+    UPDATE TestLock SET Value = 'A가 수정' WHERE ID = 1;
+    WAITFOR DELAY '00:00:05';  -- 5초 대기
+    UPDATE TestLock SET Value = 'A가 수정' WHERE ID = 2;
+COMMIT
+
+-- 창2 (유저B): ID 2 → 1 순서 (반대!)
+BEGIN TRAN
+    UPDATE TestLock SET Value = 'B가 수정' WHERE ID = 2;
+    WAITFOR DELAY '00:00:05';
+    UPDATE TestLock SET Value = 'B가 수정' WHERE ID = 1;
+COMMIT
+            </div>
+
+            <div class="result-box">
+                <strong>실행 결과</strong><br><br>
+                창1 먼저 실행 → 바로 창2 실행<br><br>
+                <strong>창1 (유저A):</strong> "트랜잭션이 교착 상태가 발생하여 실행이 중지되었습니다" ❌<br>
+                <strong>창2 (유저B):</strong> 정상 완료 ✅<br><br>
+                → DB가 유저A를 희생자로 선택해서 롤백!
+            </div>
+        </div>
+
+        <!-- Part 5: Deadlock 예방 -->
+        <div class="conversation">
+            <h2>Part 5. Deadlock 예방하는 법</h2>
+
+            <div class="chat">
+                <div class="q">아까 뭐가 문제였어?</div>
+                <div class="a">
+                    <p><span class="warning">순서가 달랐어!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+유저A: 1번 → 2번 순서
+유저B: 2번 → 1번 순서 (반대!)
+
+→ Deadlock 발생!
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 같은 순서로 하면?</div>
+                <div class="a">
+                    <p><span class="key-point">Deadlock이 안 생겨!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 둘 다 같은 순서로 변경
+유저A: 1번 → 2번
+유저B: 1번 → 2번 (똑같이!)
+
+유저A: 1번 Lock → 2번 Lock → 완료 → 해제
+유저B: 1번 대기... → A 끝나면 → 1번 Lock → 2번 Lock → 완료
+
+→ 서로 기다리는 "사이클"이 안 생김!
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>테스트</th>
+                    <th>Lock 순서</th>
+                    <th>결과</th>
+                </tr>
+                <tr>
+                    <td>테스트1</td>
+                    <td>A: 1→2, B: 2→1 (다름)</td>
+                    <td class="bad">Deadlock ❌</td>
+                </tr>
+                <tr>
+                    <td>테스트2</td>
+                    <td>A: 1→2, B: 1→2 (같음)</td>
+                    <td class="good">성공 ✅</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">실무에서는 어떻게 순서를 통일해?</div>
+                <div class="a">
+                    <p><span class="highlight">리소스 ID 순서</span>로 정렬!</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 아이템 교환: 항상 작은 ID 먼저!
+CREATE PROCEDURE sp_Trade @UserA INT, @UserB INT
+AS
+BEGIN
+    IF @UserA < @UserB
+    BEGIN
+        UPDATE Users SET ... WHERE ID = @UserA;
+        UPDATE Users SET ... WHERE ID = @UserB;
+    END
+    ELSE
+    BEGIN
+        UPDATE Users SET ... WHERE ID = @UserB;
+        UPDATE Users SET ... WHERE ID = @UserA;
+    END
+END
+            </div>
+        </div>
+
+        <!-- Part 6: 인덱스와 Lock 범위 -->
+        <div class="conversation">
+            <h2>Part 6. 인덱스가 Lock에 영향을 준다?</h2>
+
+            <div class="chat">
+                <div class="q">인덱스가 Lock이랑 무슨 상관이야?</div>
+                <div class="a">
+                    <p>DB가 수정할 행을 <span class="highlight">찾는 방식</span>이 달라져.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+UPDATE TestLock SET Value = 'A' WHERE ID = 1;
+
+인덱스 있으면:
+→ ID=1 위치 바로 앎 → 그 행만 Lock (Row Lock)
+
+인덱스 없으면:
+→ ID=1이 어디있지? → 전체 스캔하면서 찾음
+→ 찾는 동안 테이블 전체 Lock (Table Lock)
+            </div>
+
+            <div class="analogy-box">
+                <strong>도서관 비유</strong><br><br>
+                <strong>인덱스 있음:</strong> "A-123 위치"로 바로 감 → 그 책만 잠금<br>
+                <strong>인덱스 없음:</strong> 책장 전체 뒤지면서 찾음 → 책장 전체 출입 금지
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>Lock 범위</th>
+                    <th>동시성</th>
+                </tr>
+                <tr>
+                    <td>인덱스 있음</td>
+                    <td class="good">Row Lock (해당 행만)</td>
+                    <td class="good">다른 행 접근 가능</td>
+                </tr>
+                <tr>
+                    <td>인덱스 없음</td>
+                    <td class="bad">Table Lock (전체)</td>
+                    <td class="bad">다른 행도 대기</td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <strong>결론</strong><br><br>
+                인덱스 없이 UPDATE/DELETE 하면 → 테이블 전체가 잠길 수 있음<br>
+                → 다른 유저들 전부 대기 → 성능 저하!
+            </div>
+        </div>
+
+        <!-- Part 7: 실무 가이드라인 -->
+        <div class="conversation">
+            <h2>Part 7. 실무 가이드라인</h2>
+
+            <div class="guide-box">
+                <strong>Deadlock 예방 수칙</strong>
+                <ul>
+                    <li><strong>리소스 접근 순서 통일</strong> - 여러 테이블/행 수정 시 항상 같은 순서 (ID 오름차순 등)</li>
+                    <li><strong>트랜잭션은 짧게</strong> - Lock 시간이 길수록 충돌 확률 ↑</li>
+                    <li><strong>한 번에 Lock 최소화</strong> - 건드리는 테이블/행 수 줄이기</li>
+                    <li><strong>적절한 인덱스 사용</strong> - Table Lock 방지, Row Lock으로 유도</li>
+                    <li><strong>동시성 높은 데이터 분리</strong> - 자주 충돌하면 Redis 등으로 분리 검토</li>
+                </ul>
+            </div>
+
+            <div class="result-box">
+                <strong>한 줄 요약</strong><br><br>
+                <span style="font-size: 1.2rem; font-weight: bold;">"같은 순서로, 짧게, 적게 잠가라"</span>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리: Lock과 Deadlock</h3>
+            <ul>
+                <li><strong>Lock</strong> - 동시 접근 막는 "문 잠금", 데이터 정합성 보장</li>
+                <li><strong>Deadlock</strong> - 서로 Lock 잡고 상대방 기다림 → 영원히 멈춤</li>
+                <li><strong>감지</strong> - 대기 그래프에서 사이클 발견</li>
+                <li><strong>해결</strong> - 희생자 선택 → 한 명만 롤백</li>
+                <li><strong>예방</strong> - 모든 트랜잭션이 같은 순서로 리소스 접근</li>
+                <li><strong>인덱스</strong> - Row Lock 유도, Table Lock 방지</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">< DB / 캐시</a>
+            <a href="../../">홈으로 ></a>
+        </div>
+    </div>
+</body>
+</html>
