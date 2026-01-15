@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTE - 재귀 쿼리로 트리 구조 조회 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; color: #111; }
+        .subtitle { color: #666; margin-bottom: 40px; }
+        h2 { font-size: 1.4rem; font-weight: 600; margin: 48px 0 16px; color: #111; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+        h3 { font-size: 1.1rem; font-weight: 600; margin: 32px 0 12px; color: #333; }
+        p { margin-bottom: 16px; }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .inline-code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .highlight { color: #4CAF50; font-weight: 600; }
+        .result-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #FF9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .tree-visual {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            margin: 16px 0;
+            line-height: 1.8;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th { background: #f5f5f5; font-weight: 600; }
+        .summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 32px;
+            border-radius: 12px;
+            margin: 40px 0;
+        }
+        .summary h3 { color: white; margin-top: 0; }
+        .summary ul { margin-left: 20px; }
+        .summary li { margin: 8px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <h1>CTE - 재귀 쿼리로 트리 구조 조회</h1>
+        <p class="subtitle">스킬 트리, 조직도, 카테고리... SQL로 반복 없이 한 번에 조회하기</p>
+
+        <h2>문제 상황</h2>
+
+        <p>게임에 <strong>스킬 트리</strong>가 있다고 하자.</p>
+
+        <div class="tree-visual">
+검술 (Lv1)
+  ├─ 강타 (Lv2)
+  │    ├─ 회전베기 (Lv3)
+  │    └─ 돌진 (Lv3)
+  └─ 방어 (Lv2)
+       └─ 반격 (Lv3)
+        </div>
+
+        <p>"검술"을 배워야 "강타"를 배울 수 있고, "강타"를 배워야 "회전베기"를 배울 수 있다.</p>
+
+        <h3>테이블 설계</h3>
+
+        <pre><code>CREATE TABLE TSkill (
+    SkillID INT PRIMARY KEY,
+    SkillName NVARCHAR(50),
+    ParentSkillID INT NULL  -- NULL이면 최상위 스킬
+);
+
+INSERT INTO TSkill VALUES
+(1, N'검술', NULL),
+(2, N'강타', 1),
+(3, N'회전베기', 2),
+(4, N'돌진', 2),
+(5, N'방어', 1),
+(6, N'반격', 5);</code></pre>
+
+        <h3>문제: "회전베기"의 모든 선행 스킬은?</h3>
+
+        <p>일반 쿼리로 하면:</p>
+
+        <pre><code>-- 1단계: 회전베기(3)의 부모 찾기
+SELECT * FROM TSkill WHERE SkillID = (
+    SELECT ParentSkillID FROM TSkill WHERE SkillID = 3
+);
+-- 결과: 강타(2)
+
+-- 2단계: 강타(2)의 부모 찾기
+SELECT * FROM TSkill WHERE SkillID = (
+    SELECT ParentSkillID FROM TSkill WHERE SkillID = 2
+);
+-- 결과: 검술(1)</code></pre>
+
+        <div class="warning-box">
+            <strong>문제:</strong> 트리 깊이만큼 쿼리를 반복해야 한다. 10단계면 쿼리 10번!
+        </div>
+
+        <h2>해결: 재귀 CTE</h2>
+
+        <p><strong>CTE (Common Table Expression)</strong>의 재귀 기능을 쓰면 쿼리 1번으로 해결된다.</p>
+
+        <pre><code>WITH SkillTree AS (
+    -- 1) 시작점: 회전베기(3)
+    SELECT SkillID, SkillName, ParentSkillID
+    FROM TSkill
+    WHERE SkillID = 3
+
+    UNION ALL
+
+    -- 2) 반복: 부모를 계속 찾아 올라감
+    SELECT parent.SkillID, parent.SkillName, parent.ParentSkillID
+    FROM TSkill parent
+    JOIN SkillTree child ON parent.SkillID = child.ParentSkillID
+)
+SELECT * FROM SkillTree;</code></pre>
+
+        <div class="result-box">
+            <strong>결과:</strong><br>
+            1. 회전베기 (시작점)<br>
+            2. 강타 (부모)<br>
+            3. 검술 (최상위)
+        </div>
+
+        <h3>동작 원리</h3>
+
+        <table>
+            <tr>
+                <th>회차</th>
+                <th>찾은 스킬</th>
+                <th>부모 있음?</th>
+                <th>다음</th>
+            </tr>
+            <tr>
+                <td>1회차</td>
+                <td>회전베기(3)</td>
+                <td>ParentID=2 있음</td>
+                <td>계속</td>
+            </tr>
+            <tr>
+                <td>2회차</td>
+                <td>강타(2)</td>
+                <td>ParentID=1 있음</td>
+                <td>계속</td>
+            </tr>
+            <tr>
+                <td>3회차</td>
+                <td>검술(1)</td>
+                <td>ParentID=NULL</td>
+                <td>종료</td>
+            </tr>
+        </table>
+
+        <div class="info-box">
+            <strong>UNION ALL을 쓰는 이유:</strong><br>
+            1. 결과를 누적해야 해서 (회차마다 쌓아감)<br>
+            2. 트리 구조라 중복이 없으므로 체크 불필요 (더 빠름)
+        </div>
+
+        <h2>반대 방향: 하위 스킬 전체 조회</h2>
+
+        <p>"검술"을 배우면 이후에 뭘 배울 수 있어?</p>
+
+        <pre><code>WITH SkillTree AS (
+    -- 시작점: 검술(1)
+    SELECT SkillID, SkillName, ParentSkillID
+    FROM TSkill
+    WHERE SkillID = 1
+
+    UNION ALL
+
+    -- 반복: 자식 찾아 내려가기
+    SELECT child.SkillID, child.SkillName, child.ParentSkillID
+    FROM TSkill child
+    JOIN SkillTree parent ON child.ParentSkillID = parent.SkillID
+)
+SELECT * FROM SkillTree;</code></pre>
+
+        <div class="result-box">
+            <strong>결과:</strong> 검술, 강타, 방어, 반격, 회전베기, 돌진 (6개 전체)
+        </div>
+
+        <h3>방향에 따른 JOIN 조건</h3>
+
+        <table>
+            <tr>
+                <th>방향</th>
+                <th>JOIN 조건</th>
+                <th>용도</th>
+            </tr>
+            <tr>
+                <td>위로 ↑</td>
+                <td><code>parent.SkillID = child.ParentSkillID</code></td>
+                <td>선행 스킬 조회</td>
+            </tr>
+            <tr>
+                <td>아래로 ↓</td>
+                <td><code>child.ParentSkillID = parent.SkillID</code></td>
+                <td>하위 스킬 조회</td>
+            </tr>
+        </table>
+
+        <h2>실제 활용 예시</h2>
+
+        <table>
+            <tr>
+                <th>시스템</th>
+                <th>위로 조회</th>
+                <th>아래로 조회</th>
+            </tr>
+            <tr>
+                <td>스킬 트리</td>
+                <td>선행 조건 체크</td>
+                <td>해금 가능 스킬 표시</td>
+            </tr>
+            <tr>
+                <td>조직도</td>
+                <td>보고 라인 (상사들)</td>
+                <td>부하 직원 목록</td>
+            </tr>
+            <tr>
+                <td>카테고리</td>
+                <td>상위 분류 (빵가루)</td>
+                <td>하위 상품 전체</td>
+            </tr>
+            <tr>
+                <td>퀘스트 체인</td>
+                <td>선행 퀘스트</td>
+                <td>후속 퀘스트</td>
+            </tr>
+            <tr>
+                <td>아이템 조합</td>
+                <td>재료 역추적</td>
+                <td>조합 가능 아이템</td>
+            </tr>
+        </table>
+
+        <div class="summary">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>CTE</strong> = 임시 결과 집합에 이름 붙이기</li>
+                <li><strong>재귀 CTE</strong> = SQL에서 반복(루프)이 필요할 때</li>
+                <li><strong>구조:</strong> 시작점 + UNION ALL + 반복부</li>
+                <li><strong>종료 조건:</strong> JOIN 결과가 0건일 때 자동 종료</li>
+                <li><strong>트리 구조 데이터</strong>는 ParentID 컬럼 + 재귀 CTE로 해결</li>
+            </ul>
+        </div>
+
+    </div>
+</body>
+</html>
