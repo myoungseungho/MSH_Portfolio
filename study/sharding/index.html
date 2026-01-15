@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파티셔닝 vs 샤딩, 뭐가 다를까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>파티셔닝 vs 샤딩, 뭐가 다를까?</h1>
+            <p>테이블을 나누는 것과 DB 서버를 나누는 것</p>
+        </header>
+
+        <!-- Part 1: 파티셔닝 복습 -->
+        <div class="conversation">
+            <h2>Part 1. 파티셔닝은 뭐였지?</h2>
+
+            <div class="chat">
+                <div class="q">파티셔닝이 뭐야?</div>
+                <div class="a">
+                    <p>테이블 하나를 <span class="highlight">내부적으로 나눠서 저장</span>하는 것.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[파티셔닝]
+DB 서버 1대
+├── 파티션 1 (2021년)
+├── 파티션 2 (2022년)
+├── 파티션 3 (2023년)
+└── 파티션 4 (2024년)
+
+→ 한 서버 안에서 테이블만 쪼갬</div>
+
+            <div class="chat">
+                <div class="q">그럼 샤딩은?</div>
+                <div class="a">
+                    <p><span class="key-point">DB 서버 자체를 여러 대로 분산</span>하는 것.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[샤딩]
+DB 서버 A ── 유저 1~100만
+DB 서버 B ── 유저 100만~200만
+DB 서버 C ── 유저 200만~300만
+
+→ 서버 자체를 여러 대로 나눔</div>
+        </div>
+
+        <!-- Part 2: 핵심 차이 -->
+        <div class="conversation">
+            <h2>Part 2. 핵심 차이</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>파티셔닝</th>
+                    <th>샤딩</th>
+                </tr>
+                <tr>
+                    <td>나누는 대상</td>
+                    <td>테이블</td>
+                    <td>DB 서버</td>
+                </tr>
+                <tr>
+                    <td>서버 수</td>
+                    <td>1대</td>
+                    <td>여러 대</td>
+                </tr>
+                <tr>
+                    <td>구현 난이도</td>
+                    <td class="good">쉬움</td>
+                    <td class="bad">어려움</td>
+                </tr>
+                <tr>
+                    <td>확장성</td>
+                    <td>서버 1대 한계</td>
+                    <td class="good">무한 확장 가능</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3: MMORPG 구조 비교 -->
+        <div class="conversation">
+            <h2>Part 3. MMORPG에서의 구조</h2>
+
+            <div class="chat">
+                <div class="q">우리 게임은 서버 11, 12, 13... 각각 DB 따로 있는데, 이것도 샤딩이야?</div>
+                <div class="a">
+                    <p><span class="warning">아니, 그건 "완전 격리" 구조야.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[완전 격리 - 대부분의 한국 MMORPG]
+서버 11 ─ DB_11 ─ 유저들
+서버 12 ─ DB_12 ─ 유저들
+서버 13 ─ DB_13 ─ 유저들
+
+→ 서로 절대 안 만남. 완전히 다른 세계.
+→ 구현 쉬움, 문제 격리됨</div>
+
+            <div class="code-block">[샤딩]
+게임 서버 ─┬─ DB 샤드 1 (유저 1~100만)
+          ├─ DB 샤드 2 (유저 100만~200만)
+          └─ DB 샤드 3 (유저 200만~300만)
+
+→ 나눠 저장하지만, 서로 만날 수 있음 (거래, 파티 등)
+→ "하나의 세계"인데 DB만 분산</div>
+
+            <div class="chat">
+                <div class="q">11서버 유저랑 12서버 유저가 거래하려면?</div>
+                <div class="a">
+                    <p>"월드 트레이드 서버" 같은 <span class="highlight">공용 공간</span>으로 이동해서 거래.</p>
+                    <p>이건 <strong>"공유 존(Shared Zone)"</strong> 패턴이야. 샤딩이랑은 다른 접근.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 샤딩이 필요한 상황 -->
+        <div class="conversation">
+            <h2>Part 4. 샤딩이 진짜 필요한 상황</h2>
+
+            <div class="code-block">[이런 상황]
+- 유저 500만 명이 "하나의 월드"에서 플레이
+- 한 DB로 감당 안 됨
+- 근데 모든 유저가 서로 만날 수 있어야 함
+
+→ 샤딩 필요!</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>실제 사례:</strong></p>
+                    <p>• <strong>EVE Online</strong> - 전 세계 유저가 하나의 우주</p>
+                    <p>• <strong>알비온 온라인</strong> - 싱글 샤드, 모든 유저 같은 세계</p>
+                    <p>• <strong>모바일 게임</strong> - 유저 수천만 명, 샤딩 거의 필수</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 해시 샤딩 -->
+        <div class="conversation">
+            <h2>Part 5. 해시 샤딩 (ID % N)</h2>
+
+            <div class="chat">
+                <div class="q">유저 300만 명을 DB 3대에 나눠 저장해. "유저 150만 번"은 어느 DB로 가야 해?</div>
+                <div class="a">
+                    <p><span class="key-point">유저 ID를 3으로 나눈 나머지!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">유저 ID % 3 = 0  → DB 샤드 0
+유저 ID % 3 = 1  → DB 샤드 1
+유저 ID % 3 = 2  → DB 샤드 2
+
+유저 150만 → 1500000 % 3 = 0 → DB 샤드 0으로!</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>이걸 <strong>샤드 키(Shard Key)</strong>라고 해. 유저 ID가 샤드 키인 거지.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">장점은?</div>
+                <div class="a">
+                    <p>✅ 데이터가 <span class="key-point">균등하게 분배</span>됨. 핫스팟 없음.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 리샤딩 문제 -->
+        <div class="conversation">
+            <h2>Part 6. 해시 샤딩의 문제: 리샤딩</h2>
+
+            <div class="chat">
+                <div class="q">유저가 많아져서 DB를 3대 → 4대로 늘리고 싶어</div>
+                <div class="a">
+                    <p><span class="warning">큰 문제 발생!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">유저 150만 3:
+- 기존 (3대): 1500003 % 3 = 0 → DB 샤드 0
+- 변경 (4대): 1500003 % 4 = 3 → DB 샤드 3
+
+→ 위치가 바뀜! 데이터 이동 필요!</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>리샤딩(Resharding) 문제:</strong></p>
+                    <p>• DB 추가/제거할 때마다 <span class="warning">데이터 대이동</span> 발생</p>
+                    <p>• 서비스 중단하거나, 복잡한 마이그레이션 필요</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 7: 범위 샤딩 -->
+        <div class="conversation">
+            <h2>Part 7. 범위 샤딩</h2>
+
+            <div class="chat">
+                <div class="q">리샤딩 문제 해결하려면?</div>
+                <div class="a">
+                    <p>나눗셈 말고 <span class="highlight">범위로 나누자</span>.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[범위 샤딩]
+유저 ID 1 ~ 100만      → DB 1
+유저 ID 100만 ~ 200만  → DB 2
+유저 ID 200만 ~ 300만  → DB 3</div>
+
+            <div class="chat">
+                <div class="q">DB 추가하면?</div>
+            </div>
+
+            <div class="code-block">유저 ID 1 ~ 100만      → DB 1 (그대로)
+유저 ID 100만 ~ 200만  → DB 2 (그대로)
+유저 ID 200만 ~ 300만  → DB 3 (그대로)
+유저 ID 300만 ~ 400만  → DB 4 (새로 추가!)
+
+→ 기존 데이터 안 건드려도 됨!</div>
+
+            <div class="chat">
+                <div class="q">그럼 범위 샤딩이 더 좋네?</div>
+                <div class="a">
+                    <p><span class="warning">새로운 문제가 생겨.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">유저 ID 1~100만 (2020년 가입) → DB 1 → 거의 접속 안 함 💤
+유저 ID 100만~200만 (2022년)  → DB 2 → 보통
+유저 ID 200만~300만 (2024년)  → DB 3 → 폭주 🔥
+
+→ "핫스팟" 문제 발생!</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>비용은 3대 내는데, 실제론 1대가 다 처리하는 꼴.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 8: 비교 정리 -->
+        <div class="conversation">
+            <h2>Part 8. 해시 vs 범위 비교</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>방식</th>
+                    <th>리샤딩</th>
+                    <th>부하 분산</th>
+                </tr>
+                <tr>
+                    <td><strong>해시 샤딩</strong> (ID % N)</td>
+                    <td class="bad">❌ 데이터 대이동</td>
+                    <td class="good">✅ 균등</td>
+                </tr>
+                <tr>
+                    <td><strong>범위 샤딩</strong> (ID 범위)</td>
+                    <td class="good">✅ 쉬움</td>
+                    <td class="bad">❌ 핫스팟</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">둘 다 단점이 있네. 실무에선 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="key-point">처음부터 DB를 넉넉하게 잡는다.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[현실적인 해결책]
+
+해시 샤딩 + 처음부터 넉넉하게
+- DB 3대 필요해도 10대로 시작
+- 나중에 추가 안 해도 되게 설계
+- 리샤딩 자체를 안 하는 게 목표
+
+→ 샤딩은 복잡하니까, 최대한 리샤딩 안 하게!</div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>파티셔닝</strong> = 테이블을 나눔 (서버 1대)</li>
+                <li><strong>샤딩</strong> = DB 서버를 나눔 (서버 여러 대)</li>
+                <li><strong>완전 격리</strong> = 서버별 DB 분리, 유저 간 상호작용 불가 (대부분의 한국 MMORPG)</li>
+                <li><strong>해시 샤딩</strong> = ID % N, 균등 분배 but 리샤딩 어려움</li>
+                <li><strong>범위 샤딩</strong> = ID 범위, 리샤딩 쉬움 but 핫스팟</li>
+                <li><strong>실무 해결책</strong> = 처음부터 DB 넉넉하게 잡아서 리샤딩 피하기</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">← DB / 캐시</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
