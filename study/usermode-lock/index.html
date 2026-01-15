@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유저모드 락 vs 커널모드 락 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            margin: 24px 0;
+        }
+        .result-box h4 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .result-box .result-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .result-box .result-item {
+            text-align: center;
+        }
+        .result-box .result-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .result-box .result-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .result-box .result-note {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+        .result-box .result-highlight {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <header class="header">
+            <h1>유저모드 락 vs 커널모드 락</h1>
+            <p>CriticalSection vs Mutex, 121배 성능 차이의 비밀</p>
+        </header>
+
+        <!-- Part 1: 락의 기본 -->
+        <div class="conversation">
+            <h2>Part 1. 락 못 잡으면 뭘 하고 있을까?</h2>
+
+            <div class="chat">
+                <div class="q">락 걸면 왜 느려져?</div>
+                <div class="a">
+                    <p>하나의 스레드만 들어가니까, 나머지는 <span class="highlight">대기</span>해야 함.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그 "대기"를 어디서 해?</div>
+            </div>
+
+            <div class="code-block">[A] 바쁜 대기 (Spin)
+"락 풀렸나? 락 풀렸나? 락 풀렸나?..."
+- 장점: 락 금방 풀리면 바로 잡음
+- 단점: CPU 계속 씀
+
+[B] 잠들기 (Sleep)
+"OS야 나 재워줘... 락 풀리면 깨워줘"
+- 장점: CPU 안 씀
+- 단점: 깨우는 데 비용 듦 (커널 개입)</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>추천</th>
+                </tr>
+                <tr>
+                    <td>락 금방 풀림 (1μs 이하)</td>
+                    <td class="good">Spin - 기다리는 게 나음</td>
+                </tr>
+                <tr>
+                    <td>락 오래 걸림 (1ms 이상)</td>
+                    <td class="good">Sleep - 자는 게 나음</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 2: 유저모드 vs 커널모드 -->
+        <div class="conversation">
+            <h2>Part 2. 유저모드 vs 커널모드</h2>
+
+            <div class="code-block">[Mutex] - 커널모드 락
+락 못 잡으면 → OS한테 "나 재워줘" (시스템 콜)
+→ 유저모드 → 커널모드 전환 비용 발생!
+
+[CriticalSection] - 유저모드 락
+락 못 잡으면 → 먼저 좀 돌다가 (Spin)
+              → 그래도 안 되면 그때 OS한테 부탁
+→ 웬만하면 커널 안 감!</div>
+
+            <div class="chat">
+                <div class="q">커널 가는 게 왜 느려?</div>
+                <div class="a">
+                    <p><strong>커널 모드 전환 비용:</strong></p>
+                    <p>유저모드 → 커널모드 → 유저모드</p>
+                    <p>이 왕복에 약 <span class="warning">1000~5000 CPU 사이클</span> 소모</p>
+                    <p>= 대략 1~5 μs</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 내부 구조 -->
+        <div class="conversation">
+            <h2>Part 3. 내부 구조의 차이</h2>
+
+            <div class="chat">
+                <div class="q">겉으로 보면 똑같은데?</div>
+            </div>
+
+            <div class="code-block">// 사용법은 비슷
+EnterCriticalSection(&cs);  // 락
+// ... 작업 ...
+LeaveCriticalSection(&cs);  // 해제
+
+WaitForSingleObject(mutex, INFINITE);  // 락
+// ... 작업 ...
+ReleaseMutex(mutex);  // 해제</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">내부 동작이 다르다!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[CriticalSection 내부]
+1. 유저모드에서 Atomic 연산으로 시도
+   → locked가 0이면 1로 바꾸고 끝!
+2. 실패하면 잠깐 Spin (1000번 정도 재시도)
+3. 그래도 안 되면 그때서야 커널 호출
+
+[Mutex 내부]
+1. 무조건 커널 호출 (시스템 콜)
+2. 커널이 락 관리
+3. 해제할 때도 커널 호출</div>
+
+            <div class="chat">
+                <div class="q">Atomic으로 시도한다는 게 뭐야?</div>
+                <div class="a">
+                    <p><strong>락의 본질:</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">"이 변수가 0이면 내가 1로 바꾸고 들어간다"
+
+locked = 0  (아무도 안 씀)
+locked = 1  (누가 쓰는 중)
+
+if (locked == 0) {
+    locked = 1;  // 내꺼!
+}
+
+→ 이거 한 줄이면 됨
+→ CPU 혼자 처리 가능
+→ OS 부를 필요 없음!</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>비유:</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">[CriticalSection] = 문 앞에 "사용중" 팻말
+→ 팻말만 보면 됨
+→ 관리자 안 불러도 됨
+
+[Mutex] = 건물 관리실에서 열쇠 빌리기
+→ 매번 관리실 가야 함
+→ 관리자가 열쇠 줘야 들어감</div>
+        </div>
+
+        <!-- Part 4: 실측 테스트 -->
+        <div class="conversation">
+            <h2>Part 4. 실측 테스트</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>테스트 환경:</strong> 락 100만 번, 단일 스레드</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h4>락 100만 번 성능 비교</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">CriticalSection (유저모드)</div>
+                        <div class="result-value">4 ms</div>
+                        <div class="result-note">커널 안 감</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">Mutex (커널모드)</div>
+                        <div class="result-value">487 ms</div>
+                        <div class="result-note">매번 커널 호출</div>
+                    </div>
+                </div>
+                <div class="result-highlight">
+                    Mutex가 121배 느림!
+                </div>
+            </div>
+
+            <div class="code-block">[CriticalSection] 100만 번
+→ 유저모드에서 Atomic으로 끝
+→ 커널 안 감
+→ 4ms
+
+[Mutex] 100만 번
+→ 매번 커널 호출 (시스템 콜)
+→ 유저→커널→유저 왕복 100만 번
+→ 487ms</div>
+        </div>
+
+        <!-- Part 5: 언제 뭘 써야 하나 -->
+        <div class="conversation">
+            <h2>Part 5. 언제 뭘 써야 할까?</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>추천</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>같은 프로세스 내 스레드 동기화</td>
+                    <td class="good">CriticalSection</td>
+                    <td>121배 빠름</td>
+                </tr>
+                <tr>
+                    <td>프로세스 간 동기화</td>
+                    <td>Mutex</td>
+                    <td>CriticalSection은 프로세스 간 불가</td>
+                </tr>
+                <tr>
+                    <td>이름 있는 락 (Named Lock)</td>
+                    <td>Mutex</td>
+                    <td>CriticalSection은 이름 못 붙임</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>게임 서버에서:</strong></p>
+                    <p>대부분 같은 프로세스 내 스레드 동기화</p>
+                    <p>→ <span class="key-point">CriticalSection 쓰면 121배 이득!</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 추가 개념 -->
+        <div class="conversation">
+            <h2>Part 6. 더 알아두면 좋은 것들</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>락 종류</th>
+                    <th>모드</th>
+                    <th>특징</th>
+                </tr>
+                <tr>
+                    <td>CriticalSection</td>
+                    <td class="good">유저 → 커널</td>
+                    <td>먼저 유저모드 시도, 실패 시 커널</td>
+                </tr>
+                <tr>
+                    <td>SRWLock</td>
+                    <td class="good">유저 → 커널</td>
+                    <td>읽기/쓰기 분리, 더 가벼움</td>
+                </tr>
+                <tr>
+                    <td>Mutex</td>
+                    <td class="bad">커널</td>
+                    <td>프로세스 간 가능, 느림</td>
+                </tr>
+                <tr>
+                    <td>Semaphore</td>
+                    <td class="bad">커널</td>
+                    <td>N개까지 동시 진입 가능</td>
+                </tr>
+                <tr>
+                    <td>SpinLock</td>
+                    <td class="good">유저</td>
+                    <td>무조건 Spin, 커널 절대 안 감</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>유저모드 락</strong> = 커널 안 감, 빠름 (CriticalSection, SRWLock)</li>
+                <li><strong>커널모드 락</strong> = 매번 시스템 콜, 느림 (Mutex, Semaphore)</li>
+                <li><strong>CriticalSection 내부</strong> = Atomic 시도 → Spin → 커널 (최후)</li>
+                <li><strong>Mutex 내부</strong> = 무조건 커널 호출</li>
+                <li><strong>실측 결과</strong> = Mutex가 CriticalSection보다 121배 느림</li>
+                <li><strong>실무</strong> = 같은 프로세스 내면 CriticalSection, 프로세스 간이면 Mutex</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-cs/">← CS 기초</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
