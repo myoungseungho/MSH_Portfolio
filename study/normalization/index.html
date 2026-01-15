@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>정규화 vs 비정규화, 뭐가 빠를까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .fast {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .slow {
+            background: #ffcdd2;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            margin: 24px 0;
+        }
+        .result-box h4 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .result-box .result-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .result-box .result-item {
+            text-align: center;
+        }
+        .result-box .result-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .result-box .result-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .result-box .result-note {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>정규화 vs 비정규화, 뭐가 빠를까?</h1>
+            <p>테이블 설계의 트레이드오프 - 실측으로 증명하는 SELECT vs UPDATE</p>
+        </header>
+
+        <!-- Part 1: 중복 문제 발견 -->
+        <div class="conversation">
+            <h2>Part 1. 이 테이블, 뭔가 이상해</h2>
+
+            <div class="chat">
+                <div class="q">이런 테이블 본 적 있어?</div>
+            </div>
+
+            <div class="code-block">[TInven - 인벤토리 테이블]
+
+user_id | user_name | item_id | item_name | item_grade
+--------|-----------|---------|-----------|----------
+1       | 홍길동    | 101     | 불꽃검    | 전설
+1       | 홍길동    | 102     | 가죽갑옷  | 일반
+1       | 홍길동    | 103     | 체력물약  | 일반
+2       | 김철수    | 101     | 불꽃검    | 전설
+2       | 김철수    | 104     | 얼음검    | 희귀</div>
+
+            <div class="chat">
+                <div class="q">뭔가 이상한 거 보여?</div>
+                <div class="a">
+                    <p><span class="warning">중복이 많아.</span></p>
+                    <p>• "홍길동" 3번 저장</p>
+                    <p>• "불꽃검, 전설" 2번 저장</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 중복의 문제점 -->
+        <div class="conversation">
+            <h2>Part 2. 중복되면 뭐가 문제야?</h2>
+
+            <div class="chat">
+                <div class="q">홍길동이 닉네임을 "홍삼동"으로 변경하면?</div>
+                <div class="a">
+                    <p>3개 행을 다 바꿔야 해.</p>
+                    <p>100개 아이템 있으면? <span class="warning">100개 행 UPDATE.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">"불꽃검"이 "화염검"으로 패치되면?</div>
+                <div class="a">
+                    <p>유저 1만 명이 불꽃검 갖고 있으면?</p>
+                    <p><span class="warning">1만 개 행 UPDATE.</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>문제</th>
+                    <th>설명</th>
+                </tr>
+                <tr>
+                    <td>저장 공간 낭비</td>
+                    <td>같은 데이터 N번 저장</td>
+                </tr>
+                <tr>
+                    <td>수정 비용</td>
+                    <td>1개 바꾸려면 N개 UPDATE</td>
+                </tr>
+                <tr>
+                    <td>불일치 위험</td>
+                    <td>일부만 바꾸면 데이터 꼬임</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3: 정규화 개념 -->
+        <div class="conversation">
+            <h2>Part 3. 테이블을 나눠보자</h2>
+
+            <div class="chat">
+                <div class="q">어떻게 해결해?</div>
+                <div class="a">
+                    <p>"불꽃검" 정보를 <span class="key-point">한 곳에만 저장</span>하고, 나머지는 참조만 하면 돼.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Before: 전부 한 테이블]
+user_id | user_name | item_id | item_name | item_grade
+--------|-----------|---------|-----------|----------
+1       | 홍길동    | 101     | 불꽃검    | 전설
+1       | 홍길동    | 102     | 가죽갑옷  | 일반
+2       | 김철수    | 101     | 불꽃검    | 전설</div>
+
+            <div class="code-block">[After: 3개로 분리]
+
+[TUser]                     [TItemTemplate]
+user_id | user_name         item_id | item_name | item_grade
+--------|----------         --------|-----------|----------
+1       | 홍길동             101     | 불꽃검    | 전설
+2       | 김철수             102     | 가죽갑옷  | 일반
+
+[TInven]
+user_id | item_id    ← 숫자만 저장 (참조)
+--------|--------
+1       | 101
+1       | 102
+2       | 101</div>
+
+            <div class="chat">
+                <div class="q">"불꽃검" → "화염검" 패치하면?</div>
+                <div class="a">
+                    <p><span class="key-point">TItemTemplate 1개 행만 UPDATE. 끝.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">UPDATE TItemTemplate SET item_name = '화염검' WHERE item_id = 101;</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>이렇게 <span class="highlight">중복을 제거하고 테이블을 나누는 것</span> = <span class="highlight">정규화</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: JOIN 필요 -->
+        <div class="conversation">
+            <h2>Part 4. 근데 조회할 때 문제가...</h2>
+
+            <div class="chat">
+                <div class="q">인벤토리 조회할 때, 아이템 이름도 보여줘야 하잖아?</div>
+                <div class="a">
+                    <p>TInven에는 item_id만 있어. 이름이 없어!</p>
+                    <p><span class="highlight">다른 테이블에서 가져와야 해.</span> 이게 JOIN이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">SELECT i.item_id, t.item_name, t.item_grade
+FROM TInven i
+JOIN TItemTemplate t ON i.item_id = t.item_id
+WHERE i.user_id = 1;</div>
+
+            <div class="chat">
+                <div class="q">이거 느리지 않아?</div>
+                <div class="a">
+                    <p>정규화 전: <strong>테이블 1개</strong> 읽으면 끝</p>
+                    <p>정규화 후: <strong>테이블 2개</strong> 읽고 연결해야 함</p>
+                    <p>직접 테스트해보자.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: SELECT 테스트 -->
+        <div class="conversation">
+            <h2>Part 5. SELECT 성능 테스트</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>테스트 환경:</strong></p>
+                    <p>• 유저 1만 명</p>
+                    <p>• 아이템 템플릿 1,000종</p>
+                    <p>• 인벤토리 50만 건</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h4>SELECT 실측 결과</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">정규화 (JOIN 2개)</div>
+                        <div class="result-value">5,792 μs</div>
+                        <div class="result-note">5.8ms</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">비정규화 (단일 테이블)</div>
+                        <div class="result-value">0 μs</div>
+                        <div class="result-note">측정 불가 (너무 빠름)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">비정규화가 압도적으로 빠르다.</span></p>
+                    <p>그럼 비정규화 쓰면 되겠네?</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: UPDATE 테스트 -->
+        <div class="conversation">
+            <h2>Part 6. UPDATE도 테스트해보자</h2>
+
+            <div class="chat">
+                <div class="q">"Item_500" 아이템 이름을 "전설의검"으로 바꾸면?</div>
+                <div class="a">
+                    <p>정규화: TItemTemplate <strong>1행</strong>만 UPDATE</p>
+                    <p>비정규화: 해당 아이템 가진 행 <strong>전부</strong> UPDATE</p>
+                </div>
+            </div>
+
+            <div class="result-box" style="background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);">
+                <h4>UPDATE 실측 결과 (Item_500 보유: 500행)</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">정규화 (1행)</div>
+                        <div class="result-value">0 μs</div>
+                        <div class="result-note">측정 불가 (너무 빠름)</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">비정규화 (500행)</div>
+                        <div class="result-value">18,301 μs</div>
+                        <div class="result-note">18.3ms</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="warning">정반대 결과!</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>테스트</th>
+                    <th>정규화</th>
+                    <th>비정규화</th>
+                    <th>승자</th>
+                </tr>
+                <tr>
+                    <td>SELECT (조회)</td>
+                    <td class="slow">5,792 μs</td>
+                    <td class="fast">0 μs</td>
+                    <td>비정규화</td>
+                </tr>
+                <tr>
+                    <td>UPDATE (수정)</td>
+                    <td class="fast">0 μs</td>
+                    <td class="slow">18,301 μs</td>
+                    <td>정규화</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 7: 트레이드오프 -->
+        <div class="conversation">
+            <h2>Part 7. 그럼 언제 뭘 써?</h2>
+
+            <div class="chat">
+                <div class="q">조회가 많으면 비정규화, 수정이 많으면 정규화?</div>
+                <div class="a">
+                    <p>단순히 그렇게 결정하면 안 돼.</p>
+                    <p><span class="warning">비정규화의 진짜 위험</span>을 봐야 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[상황: 500행 UPDATE 중 300행만 성공하고 서버 죽음]
+
+inven_id | user_id | item_id | item_name
+---------|---------|---------|----------
+1        | 100     | 500     | 전설의검    ← 바뀜
+2        | 100     | 500     | 전설의검    ← 바뀜
+3        | 100     | 500     | Item_500    ← 안 바뀜 (불일치!)</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="warning">데이터 불일치 = 게임 망하는 버그</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>정규화</th>
+                    <th>비정규화</th>
+                </tr>
+                <tr>
+                    <td>조회 속도</td>
+                    <td>느림 (JOIN)</td>
+                    <td class="fast">빠름</td>
+                </tr>
+                <tr>
+                    <td>수정 속도</td>
+                    <td class="fast">빠름 (1행)</td>
+                    <td>느림 (N행)</td>
+                </tr>
+                <tr>
+                    <td>데이터 무결성</td>
+                    <td class="fast">안전</td>
+                    <td class="slow">위험</td>
+                </tr>
+                <tr>
+                    <td>저장 공간</td>
+                    <td>적음</td>
+                    <td>많음 (중복)</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 8: 실무 전략 -->
+        <div class="conversation">
+            <h2>Part 8. 실무에서는 어떻게?</h2>
+
+            <div class="chat">
+                <div class="q">둘 중 하나만 써야 해?</div>
+                <div class="a">
+                    <p><span class="key-point">둘 다 쓴다.</span> 상황에 맞게.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>데이터 특성</th>
+                    <th>전략</th>
+                    <th>예시</th>
+                </tr>
+                <tr>
+                    <td>자주 바뀜</td>
+                    <td>정규화</td>
+                    <td>유저 닉네임, 레벨</td>
+                </tr>
+                <tr>
+                    <td>거의 안 바뀜</td>
+                    <td>비정규화 가능</td>
+                    <td>아이템 스탯, 스킬 정보</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>하이브리드 예시:</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">[TInven] - 반정규화
+inven_id | user_id | item_id | item_name | item_grade
+         ↑         ↑         ↑
+      FK 유지   FK 유지    복사 (캐시용)
+
+• user_id → 유저 테이블 JOIN (닉변 대응)
+• item_name → 복사해둠 (패치 드물어서 괜찮음)</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>용어 치환:</strong></p>
+                    <p>• "정규화했어?" = "테이블 나눠서 JOIN으로 가져와?"</p>
+                    <p>• "비정규화했어?" = "한 테이블에 다 복사해놨어?"</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>정규화</strong> = 중복 제거, 테이블 분리, JOIN 필요</li>
+                <li><strong>비정규화</strong> = 중복 허용, 한 테이블에 복사</li>
+                <li><strong>SELECT</strong> = 비정규화가 빠름 (JOIN 없음)</li>
+                <li><strong>UPDATE</strong> = 정규화가 빠름 (1행만 수정)</li>
+                <li><strong>무결성</strong> = 정규화가 안전 (불일치 위험 없음)</li>
+                <li><strong>실무</strong> = 자주 바뀌는 건 정규화, 안 바뀌는 건 비정규화</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">← DB / 캐시</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
