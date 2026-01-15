@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가상 메모리 & 페이지 폴트 - 쓰래싱 실측 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; color: #111; }
+        .subtitle { color: #666; margin-bottom: 40px; }
+        h2 { font-size: 1.4rem; font-weight: 600; margin: 48px 0 16px; color: #111; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+        h3 { font-size: 1.1rem; font-weight: 600; margin: 32px 0 12px; color: #333; }
+        p { margin-bottom: 16px; }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th { background: #f5f5f5; font-weight: 600; }
+        .highlight { color: #e74c3c; font-weight: 600; }
+        .result-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #FF9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .danger-box {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .diagram {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            margin: 16px 0;
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 32px;
+            border-radius: 12px;
+            margin: 40px 0;
+        }
+        .summary h3 { color: white; margin-top: 0; }
+        .summary ul { margin-left: 20px; }
+        .summary li { margin: 8px 0; }
+        .test-result {
+            background: #1e1e1e;
+            color: #4EC9B0;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+        }
+        .test-result .label { color: #9CDCFE; }
+        .test-result .value { color: #CE9178; }
+        .test-result .highlight { color: #DCDCAA; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <h1>가상 메모리 & 페이지 폴트</h1>
+        <p class="subtitle">RAM보다 큰 메모리 사용, 쓰래싱(Thrashing) 실측 테스트</p>
+
+        <h2>개념: RAM보다 큰 메모리가 필요하면?</h2>
+
+        <p>컴퓨터에 RAM이 16GB인데 20GB가 필요하면?</p>
+
+        <div class="result-box">
+            <strong>답:</strong> 디스크를 RAM처럼 사용한다 → <strong>가상 메모리</strong>
+        </div>
+
+        <div class="diagram">
+[가상 메모리 구조]
+
+RAM (빠름) ─────────────────────┐
+┌─────────────────────────────┐ │
+│ 자주 쓰는 데이터             │ │
+└─────────────────────────────┘ │
+            ↕ 페이지 교환        │
+디스크 - 스왑 파일 (느림) ─────┘
+┌─────────────────────────────┐
+│ 안 쓰는 데이터 임시 보관     │
+└─────────────────────────────┘</div>
+
+        <h3>페이지(Page)란?</h3>
+        <p>메모리는 <strong>4KB 단위(페이지)</strong>로 관리된다.</p>
+        <ul>
+            <li>RAM ↔ 디스크 교환도 페이지 단위</li>
+            <li>안 쓰는 페이지 → 디스크로 내보냄</li>
+            <li>필요한 페이지 → 디스크에서 RAM으로 올림</li>
+        </ul>
+
+        <h2>페이지 폴트 (Page Fault)</h2>
+
+        <p>CPU가 메모리에 접근했는데 <strong>RAM에 없으면?</strong></p>
+
+        <div class="diagram">
+1. CPU: "메모리 주소 0x1234 읽어야지"
+2. OS 확인: "어? 이거 RAM에 없네" → 페이지 폴트!
+3. 디스크에서 해당 페이지 읽어서 RAM에 올림
+4. 다시 실행</div>
+
+        <div class="warning-box">
+            <strong>문제:</strong><br>
+            • RAM 접근: ~100 ns (나노초)<br>
+            • 디스크 접근: ~100,000 ns (SSD 기준)<br>
+            → 페이지 폴트 = <strong>1000배 느림</strong>
+        </div>
+
+        <h2>쓰래싱 (Thrashing)</h2>
+
+        <p>페이지 폴트가 너무 자주 발생하면 시스템이 거의 멈춤.</p>
+
+        <div class="danger-box">
+            <strong>쓰래싱:</strong> 프로그램이 일하는 시간보다 페이지 교환하는 시간이 더 많은 상태
+        </div>
+
+        <h2>테스트 1: 캐시 효과 (64MB)</h2>
+
+        <p>RAM 안에서 순차 vs 랜덤 접근 비교:</p>
+
+        <div class="test-result">
+<span class="label">[순차 접근]</span> 64MB 배열, 10회 반복
+  결과: <span class="value">272 ms</span>
+
+<span class="label">[랜덤 접근]</span> 64MB 배열, 10회 반복
+  결과: <span class="value">3,528 ms</span>
+
+<span class="label">[결과]</span> 랜덤이 순차보다 <span class="highlight">13배 느림</span>
+  → 캐시 미스로 인한 성능 저하</div>
+
+        <h2>테스트 2: TLB 효과 (16MB)</h2>
+
+        <p>같은 페이지 반복 vs 매번 다른 페이지 접근:</p>
+
+        <div class="test-result">
+<span class="label">[같은 페이지 반복]</span>
+  결과: <span class="value">297 us</span>
+
+<span class="label">[매번 다른 페이지]</span> (스트라이드 4KB)
+  결과: <span class="value">4,478 us</span>
+
+<span class="label">[결과]</span> 다른 페이지 접근이 <span class="highlight">15배 느림</span>
+  → TLB 미스 + 캐시 미스</div>
+
+        <div class="info-box">
+            <strong>TLB (Translation Lookaside Buffer):</strong><br>
+            가상 주소 → 물리 주소 변환을 캐싱하는 버퍼.<br>
+            TLB 미스 = 페이지 테이블 조회 필요 = 느림
+        </div>
+
+        <h2>테스트 3: 진짜 쓰래싱 (26GB)</h2>
+
+        <p>31GB RAM 시스템에서 26GB 할당하여 스왑 유발:</p>
+
+        <div class="test-result">
+<span class="label">[시스템 상태]</span>
+  총 RAM: 31.1 GB
+  할당: 26 GB
+
+<span class="label">[초기화 후]</span>
+  사용 가능 RAM: <span class="highlight">0.01 GB</span> ← RAM 바닥!
+  페이지 파일 사용: <span class="highlight">56.4 GB</span> ← 디스크 스왑 발생!
+
+<span class="label">[순차 접근]</span> 10,000회
+  결과: <span class="value">24 ms</span> (1회당 2.4 us)
+
+<span class="label">[랜덤 접근]</span> 10,000회
+  결과: <span class="value">156 ms</span> (1회당 15.6 us)
+
+<span class="label">[결과]</span> 랜덤이 순차보다 <span class="highlight">6.5배 느림</span></div>
+
+        <h3>왜 6.5배밖에 안 느릴까?</h3>
+
+        <table>
+            <tr>
+                <th>요인</th>
+                <th>설명</th>
+            </tr>
+            <tr>
+                <td>SSD가 빠름</td>
+                <td>HDD였으면 100배 이상 차이</td>
+            </tr>
+            <tr>
+                <td>Windows 최적화</td>
+                <td>프리페칭, 캐싱 잘 함</td>
+            </tr>
+            <tr>
+                <td>접근 횟수</td>
+                <td>10,000회는 SSD가 버틸 수 있음</td>
+            </tr>
+        </table>
+
+        <h2>메모리 접근 패턴별 속도</h2>
+
+        <table>
+            <tr>
+                <th>접근 패턴</th>
+                <th>속도</th>
+                <th>이유</th>
+            </tr>
+            <tr>
+                <td>순차 접근 (RAM)</td>
+                <td>매우 빠름</td>
+                <td>캐시 히트, 프리페치</td>
+            </tr>
+            <tr>
+                <td>랜덤 접근 (RAM)</td>
+                <td>느림 (10~15배)</td>
+                <td>캐시 미스, TLB 미스</td>
+            </tr>
+            <tr>
+                <td>순차 접근 (스왑)</td>
+                <td>느림</td>
+                <td>디스크 I/O, but 순차라 나음</td>
+            </tr>
+            <tr>
+                <td>랜덤 접근 (스왑)</td>
+                <td class="highlight">매우 느림</td>
+                <td>디스크 랜덤 I/O = 최악</td>
+            </tr>
+        </table>
+
+        <h2>게임 서버에서의 교훈</h2>
+
+        <div class="warning-box">
+            <strong>주의사항:</strong><br>
+            • 메모리 사용량이 RAM에 근접하면 성능 급락<br>
+            • 랜덤 메모리 접근 패턴 피하기<br>
+            • 데이터 지역성(Locality) 고려한 설계 필요
+        </div>
+
+        <h3>실제 적용 예시</h3>
+
+        <table>
+            <tr>
+                <th>상황</th>
+                <th>나쁜 패턴</th>
+                <th>좋은 패턴</th>
+            </tr>
+            <tr>
+                <td>유저 데이터 순회</td>
+                <td>포인터 따라가며 랜덤 접근</td>
+                <td>배열에 연속 저장, 순차 순회</td>
+            </tr>
+            <tr>
+                <td>몬스터 AI</td>
+                <td>각 몬스터가 흩어진 메모리</td>
+                <td>몬스터 배열 연속 배치</td>
+            </tr>
+            <tr>
+                <td>아이템 검색</td>
+                <td>링크드 리스트 순회</td>
+                <td>해시맵 또는 연속 배열</td>
+            </tr>
+        </table>
+
+        <div class="summary">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>가상 메모리</strong> = RAM + 디스크 스왑으로 더 큰 메모리 사용</li>
+                <li><strong>페이지 폴트</strong> = RAM에 없는 데이터 접근 시 디스크에서 로드</li>
+                <li><strong>쓰래싱</strong> = 페이지 폴트 폭발 → 시스템 먹통</li>
+                <li><strong>순차 접근</strong>이 랜덤 접근보다 10~15배 빠름 (캐시/TLB)</li>
+                <li><strong>SSD</strong>가 스왑 지옥을 완화하지만, RAM이 최고</li>
+                <li><strong>데이터 지역성</strong> = 성능의 핵심</li>
+            </ul>
+        </div>
+
+    </div>
+</body>
+</html>
