@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPC (프로세스 간 통신) - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        h1 { font-size: 2.2rem; font-weight: 700; margin-bottom: 8px; color: #111; }
+        .subtitle { color: #666; margin-bottom: 48px; font-size: 1.1rem; }
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 48px 0 24px 0;
+            color: #111;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #607D8B;
+        }
+        h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 32px 0 16px 0;
+            color: #333;
+        }
+        p { margin-bottom: 16px; }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .inline-code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: #c7254e;
+        }
+        .result-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 32px;
+            border-radius: 12px;
+            margin: 24px 0;
+        }
+        .result-box h3 { color: white; margin-top: 0; }
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .result-item {
+            background: rgba(255,255,255,0.15);
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .result-item .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+        .result-item .label {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+            margin: 16px 0;
+        }
+        .diagram {
+            background: #f8f9fa;
+            padding: 24px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            line-height: 1.8;
+            overflow-x: auto;
+        }
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 24px 0;
+        }
+        .comparison-item {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #ddd;
+        }
+        .comparison-item h4 {
+            margin-bottom: 12px;
+            color: #333;
+        }
+        .comparison-item.good { border-left: 4px solid #4CAF50; }
+        .comparison-item.caution { border-left: 4px solid #FF9800; }
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+        .tag.fast { background: #e8f5e9; color: #2e7d32; }
+        .tag.medium { background: #fff3e0; color: #ef6c00; }
+        .tag.slow { background: #ffebee; color: #c62828; }
+        @media (max-width: 768px) {
+            .comparison { grid-template-columns: 1fr; }
+            .result-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <h1>IPC (프로세스 간 통신)</h1>
+        <p class="subtitle">공유 메모리 vs 파이프 vs 소켓, 2.2배 성능 차이 실측</p>
+
+        <h2>IPC가 필요한 이유</h2>
+
+        <p><strong>IPC = Inter-Process Communication = 프로세스 간 통신</strong></p>
+
+        <p>프로세스끼리 왜 "특별한 방법"이 필요할까?</p>
+
+        <div class="diagram">
+[프로세스 A]              [프로세스 B]
+┌──────────┐             ┌──────────┐
+│ 내 메모리 │      ?      │ 내 메모리 │
+│ (독립적) │             │ (독립적) │
+└──────────┘             └──────────┘
+        </div>
+
+        <p><strong>프로세스는 각자 독립된 가상 메모리 공간</strong>을 가진다.</p>
+        <p>A 프로세스의 <span class="inline-code">0x1000</span> 주소와 B 프로세스의 <span class="inline-code">0x1000</span> 주소는 <strong>완전히 다른 물리 메모리</strong>를 가리킨다.</p>
+
+        <div class="highlight">
+            <strong>그래서 프로세스끼리 데이터를 주고받으려면 "중간 다리"가 필요하다.</strong><br>
+            그 역할을 하는 것이 IPC 방식들이다: 파이프, 공유 메모리, 소켓 등
+        </div>
+
+        <h2>IPC 방식별 동작 원리</h2>
+
+        <h3>1. 파이프 (Pipe)</h3>
+
+        <div class="diagram">
+[프로세스 A]                              [프로세스 B]
+     │                                        │
+     │ write()                        read()  │
+     ▼                                        ▼
+┌──────────────────────────────────────────────────┐
+│               커널 버퍼 (파이프)                   │
+│           [ 데이터 데이터 데이터 ]                 │
+└──────────────────────────────────────────────────┘
+        </div>
+
+        <ul>
+            <li>A가 파이프에 <strong>쓰면</strong> → 커널이 버퍼에 보관</li>
+            <li>B가 파이프에서 <strong>읽으면</strong> → 커널이 전달</li>
+            <li><strong>특징</strong>: 단방향, 커널이 동기화 처리</li>
+        </ul>
+
+        <h3>2. 공유 메모리 (Shared Memory)</h3>
+
+        <div class="diagram">
+[프로세스 A]                        [프로세스 B]
+     │                                  │
+     │ 매핑                        매핑 │
+     ▼                                  ▼
+┌────────────────────────────────────────────┐
+│          물리 메모리 (공유 영역)             │
+│              [ 데이터 ]                     │
+└────────────────────────────────────────────┘
+        </div>
+
+        <ul>
+            <li>A와 B가 <strong>같은 물리 메모리</strong>를 자기 주소 공간에 매핑</li>
+            <li>A가 쓰면 → B도 바로 보임 (같은 메모리니까)</li>
+            <li><strong>특징</strong>: 커널 안 거침, 가장 빠름, 동기화 직접 구현</li>
+        </ul>
+
+        <h3>3. 소켓 (Socket)</h3>
+
+        <div class="diagram">
+[프로세스 A]                              [프로세스 B]
+     │                                        │
+     │ send()                         recv()  │
+     ▼                                        ▼
+┌──────────────────────────────────────────────────┐
+│                TCP/IP 스택 (커널)                 │
+│      패킷화 → 버퍼 → 프로토콜 처리 → 전달         │
+└──────────────────────────────────────────────────┘
+        </div>
+
+        <ul>
+            <li>원래 <strong>네트워크 통신용</strong>인데 localhost로 쓰면 IPC 가능</li>
+            <li>TCP/IP 프로토콜 처리 과정을 거침</li>
+            <li><strong>특징</strong>: 오버헤드 큼, 대신 다른 컴퓨터와도 통신 가능</li>
+        </ul>
+
+        <h2>성능 테스트 결과</h2>
+
+        <p><strong>테스트 환경</strong>: 64KB 데이터를 10,000번 전송 (총 625MB)</p>
+
+        <div class="result-box">
+            <h3>IPC 방식별 처리량</h3>
+            <div class="result-grid">
+                <div class="result-item">
+                    <div class="value">15,252</div>
+                    <div class="label">공유 메모리 (MB/s)</div>
+                </div>
+                <div class="result-item">
+                    <div class="value">8,519</div>
+                    <div class="label">Anonymous Pipe (MB/s)</div>
+                </div>
+                <div class="result-item">
+                    <div class="value">8,379</div>
+                    <div class="label">Named Pipe (MB/s)</div>
+                </div>
+                <div class="result-item">
+                    <div class="value">6,989</div>
+                    <div class="label">Socket localhost (MB/s)</div>
+                </div>
+            </div>
+        </div>
+
+        <table>
+            <tr>
+                <th>방식</th>
+                <th>처리량</th>
+                <th>상대 속도</th>
+                <th>커널 개입</th>
+            </tr>
+            <tr>
+                <td><span class="tag fast">빠름</span>공유 메모리</td>
+                <td>15,252 MB/s</td>
+                <td>1.0x (기준)</td>
+                <td>최초 매핑만</td>
+            </tr>
+            <tr>
+                <td><span class="tag medium">보통</span>Anonymous Pipe</td>
+                <td>8,519 MB/s</td>
+                <td>1.8x 느림</td>
+                <td>매번 시스템 콜</td>
+            </tr>
+            <tr>
+                <td><span class="tag medium">보통</span>Named Pipe</td>
+                <td>8,379 MB/s</td>
+                <td>1.8x 느림</td>
+                <td>매번 + 이름 관리</td>
+            </tr>
+            <tr>
+                <td><span class="tag slow">느림</span>Socket (localhost)</td>
+                <td>6,989 MB/s</td>
+                <td>2.2x 느림</td>
+                <td>TCP/IP 프로토콜 처리</td>
+            </tr>
+        </table>
+
+        <h3>왜 이런 차이가 나는가?</h3>
+
+        <div class="diagram">
+공유 메모리:
+[프로세스 A] ──memcpy──> [공유 영역] ──memcpy──> [프로세스 B]
+            (유저모드)               (유저모드)
+
+파이프/소켓:
+[프로세스 A] ──WriteFile──> [커널 버퍼] ──ReadFile──> [프로세스 B]
+            (시스템 콜)                  (시스템 콜)
+        </div>
+
+        <p><strong>핵심</strong>: 공유 메모리는 커널을 거치지 않고 메모리 복사만 하므로 빠르다.</p>
+
+        <h2>파이프 vs 공유 메모리: 뭘 써야 하나?</h2>
+
+        <h3>공유 메모리의 함정</h3>
+
+        <p>공유 메모리가 빠르긴 하지만, <strong>동기화를 직접 해야 한다</strong>.</p>
+
+        <pre><code>// 공유 메모리 - 동기화 직접 구현 필요
+[A가 쓰는 중...]  [B가 읽는 중...]
+      ↓                ↓
+   같은 메모리 동시 접근 = Race Condition!</code></pre>
+
+        <div class="comparison">
+            <div class="comparison-item caution">
+                <h4>공유 메모리 코드</h4>
+                <pre><code>// A: 쓰기
+Lock();
+memcpy(sharedMem, data, size);
+Unlock();
+Signal();  // "다 썼어!"
+
+// B: 읽기
+Wait();    // "신호 대기"
+Lock();
+memcpy(buffer, sharedMem, size);
+Unlock();</code></pre>
+                <p>락, 시그널, 대기 직접 구현</p>
+            </div>
+            <div class="comparison-item good">
+                <h4>파이프 코드</h4>
+                <pre><code>// A: 쓰기
+WriteFile(pipe, data, size);
+// 끝!
+
+// B: 읽기
+ReadFile(pipe, buffer, size);
+// 끝!</code></pre>
+                <p>커널이 알아서 동기화</p>
+            </div>
+        </div>
+
+        <h3>선택 기준</h3>
+
+        <table>
+            <tr>
+                <th>상황</th>
+                <th>추천</th>
+                <th>이유</th>
+            </tr>
+            <tr>
+                <td>성능 최우선 + 동기화 자신 있음</td>
+                <td>공유 메모리</td>
+                <td>2배 빠름</td>
+            </tr>
+            <tr>
+                <td>빠른 구현 + 안정성 중요</td>
+                <td>파이프</td>
+                <td>커널이 동기화</td>
+            </tr>
+            <tr>
+                <td>다른 PC 간 통신</td>
+                <td>소켓</td>
+                <td>네트워크 필수</td>
+            </tr>
+        </table>
+
+        <h2>실제 사용 예시 코드</h2>
+
+        <h3>예시 1: 파이프 - 부모-자식 프로세스 통신</h3>
+
+        <p>로그 처리기가 메인 프로세스와 분리되어 로그를 수신하는 경우</p>
+
+        <pre><code>// 파이프 생성
+HANDLE hRead, hWrite;
+CreatePipe(&hRead, &hWrite, NULL, 0);
+
+// 부모: 로그 전송
+void SendLog(const char* message) {
+    DWORD written;
+    WriteFile(hWrite, message, strlen(message), &written, NULL);
+    // 커널이 알아서 버퍼링, 동기화 처리
+}
+
+// 자식: 로그 수신 (별도 프로세스)
+void LogReceiver() {
+    char buffer[1024];
+    DWORD bytesRead;
+    while (ReadFile(hRead, buffer, sizeof(buffer), &bytesRead, NULL)) {
+        // 데이터 없으면 자동 대기 (blocking)
+        buffer[bytesRead] = '\0';
+        printf("[LOG] %s\n", buffer);
+    }
+}</code></pre>
+
+        <div class="highlight">
+            <strong>파이프 장점</strong>: ReadFile이 데이터 없으면 자동 대기. 동기화 코드 불필요.
+        </div>
+
+        <h3>예시 2: 공유 메모리 - 고성능 데이터 공유</h3>
+
+        <p>게임에서 물리 엔진과 렌더러가 위치 데이터를 공유하는 경우</p>
+
+        <pre><code>// 공유 메모리 구조체
+struct SharedGameState {
+    LONG lock;                    // 스핀락
+    int entityCount;
+    struct { float x, y, z; } positions[1000];
+};
+
+// 공유 메모리 생성/연결
+HANDLE hMapFile = CreateFileMapping(INVALID_HANDLE_VALUE, NULL,
+                                     PAGE_READWRITE, 0, sizeof(SharedGameState),
+                                     "GameStateShared");
+SharedGameState* state = (SharedGameState*)MapViewOfFile(
+    hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(SharedGameState));
+
+// 물리 엔진: 위치 업데이트 (쓰기)
+void PhysicsUpdate() {
+    // 스핀락 획득
+    while (InterlockedExchange(&state->lock, 1) == 1) { /* spin */ }
+
+    // 위치 데이터 업데이트
+    for (int i = 0; i < state->entityCount; i++) {
+        state->positions[i].y -= 0.1f;  // 중력
+    }
+
+    // 스핀락 해제
+    InterlockedExchange(&state->lock, 0);
+}
+
+// 렌더러: 위치 읽기
+void RenderUpdate() {
+    // 스핀락 획득
+    while (InterlockedExchange(&state->lock, 1) == 1) { /* spin */ }
+
+    // 위치 데이터 복사
+    LocalPositions = state->positions;  // 복사
+
+    // 스핀락 해제
+    InterlockedExchange(&state->lock, 0);
+
+    // 렌더링...
+}</code></pre>
+
+        <div class="highlight">
+            <strong>공유 메모리 주의점</strong>: 락을 직접 구현해야 함. 실수하면 Race Condition 발생.
+        </div>
+
+        <h3>예시 3: 선택 분기 - 상황에 따라 IPC 방식 결정</h3>
+
+        <pre><code>enum class IPCType { SharedMemory, Pipe, Socket };
+
+IPCType ChooseIPCMethod(bool samePC, bool highPerformance, bool simpleData) {
+    if (!samePC) {
+        // 다른 컴퓨터면 소켓 필수
+        return IPCType::Socket;
+    }
+
+    if (highPerformance && !simpleData) {
+        // 같은 PC + 고성능 필요 + 복잡한 데이터
+        // → 공유 메모리 (동기화 직접 구현 각오)
+        return IPCType::SharedMemory;
+    }
+
+    // 기본: 파이프 (안전하고 간단)
+    return IPCType::Pipe;
+}
+
+// 사용 예시
+void SetupIPC() {
+    // 게임 서버 ↔ DB 서버 (다른 PC)
+    auto dbIPC = ChooseIPCMethod(false, true, false);
+    // → Socket
+
+    // 로그 수집기 (같은 PC, 간단한 텍스트)
+    auto logIPC = ChooseIPCMethod(true, false, true);
+    // → Pipe
+
+    // 물리엔진 ↔ 렌더러 (같은 PC, 대용량, 고성능)
+    auto renderIPC = ChooseIPCMethod(true, true, false);
+    // → SharedMemory
+}</code></pre>
+
+        <h2>게임 서버에서의 IPC</h2>
+
+        <div class="diagram">
+서버 간 통신 (다른 PC):
+[Gate 서버] ←──소켓──→ [Game 서버] ←──소켓──→ [DB 서버]
+   (PC 1)                (PC 2)                (PC 3)
+
+프로세스 내부 (같은 PC):
+┌─────────────────────────────────────────────┐
+│ [로직 스레드] ←── 공유 메모리 ──→ [IO 스레드]  │
+│              (이미 같은 프로세스)              │
+└─────────────────────────────────────────────┘
+        </div>
+
+        <table>
+            <tr>
+                <th>상황</th>
+                <th>IPC 방식</th>
+                <th>이유</th>
+            </tr>
+            <tr>
+                <td>Gate ↔ Game 서버</td>
+                <td>소켓</td>
+                <td>서로 다른 PC에 있을 수 있음</td>
+            </tr>
+            <tr>
+                <td>Game ↔ DB 서버</td>
+                <td>소켓</td>
+                <td>DB는 보통 별도 서버</td>
+            </tr>
+            <tr>
+                <td>같은 프로세스 내 스레드</td>
+                <td>공유 메모리 (락)</td>
+                <td>이미 메모리 공유됨, IPC 불필요</td>
+            </tr>
+            <tr>
+                <td>로그 수집 프로세스</td>
+                <td>파이프 or 소켓</td>
+                <td>간단한 단방향 전송</td>
+            </tr>
+        </table>
+
+        <h2>핵심 정리</h2>
+
+        <table>
+            <tr>
+                <th>방식</th>
+                <th>속도</th>
+                <th>구현 난이도</th>
+                <th>사용 시점</th>
+            </tr>
+            <tr>
+                <td>공유 메모리</td>
+                <td>가장 빠름</td>
+                <td>어려움 (동기화 직접)</td>
+                <td>같은 PC, 대용량, 성능 중요</td>
+            </tr>
+            <tr>
+                <td>파이프</td>
+                <td>보통</td>
+                <td>쉬움</td>
+                <td>같은 PC, 간단한 통신</td>
+            </tr>
+            <tr>
+                <td>소켓</td>
+                <td>느림</td>
+                <td>보통</td>
+                <td>다른 PC 간 통신</td>
+            </tr>
+        </table>
+
+        <div class="highlight">
+            <strong>결론</strong>: 성능만 보면 공유 메모리가 2배 빠르지만,
+            실무에서는 "안정성 + 빠른 구현"이 더 중요할 때가 많다.
+            상황에 맞게 선택하자.
+        </div>
+
+    </div>
+</body>
+</html>
