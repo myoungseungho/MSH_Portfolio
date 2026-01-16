@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인터럽트 vs 폴링 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            margin: 24px 0;
+        }
+        .result-box h4 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .result-box .result-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .result-box .result-item {
+            text-align: center;
+        }
+        .result-box .result-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .result-box .result-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .result-box .result-note {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+        .result-box .result-highlight {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <header class="header">
+            <h1>인터럽트 vs 폴링</h1>
+            <p>키보드 입력은 어떻게 감지할까? CPU 사용률 100,000배 차이</p>
+        </header>
+
+        <!-- Part 1: 키보드 입력 과정 -->
+        <div class="conversation">
+            <h2>Part 1. 키보드 누르면 어떻게 돼?</h2>
+
+            <div class="chat">
+                <div class="q">키보드 누르면 컴퓨터가 어떻게 알아?</div>
+                <div class="a">
+                    <p>물리적인 흐름부터 보자.</p>
+                </div>
+            </div>
+
+            <div class="code-block">키 누름
+   ↓
+기계적 압력
+   ↓
+전기 신호로 변환
+   ↓
+USB로 컴퓨터에 전달
+   ↓
+??? (CPU는 어떻게 알지?)</div>
+
+            <div class="chat">
+                <div class="q">전기 신호가 컴퓨터에 도착했어. CPU는 어떻게 알아?</div>
+                <div class="a">
+                    <p><span class="highlight">두 가지 방법</span>이 있어.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 폴링 vs 인터럽트 -->
+        <div class="conversation">
+            <h2>Part 2. 두 가지 방법</h2>
+
+            <div class="code-block">[방법 A: 폴링 (Polling)]
+
+CPU: "키보드 눌렸어?"
+키보드: "아니"
+CPU: "키보드 눌렸어?"
+키보드: "아니"
+CPU: "키보드 눌렸어?"
+키보드: "아니"
+... (수십억 번 반복)
+CPU: "키보드 눌렸어?"
+키보드: "응!"
+CPU: "오 처리하자"</div>
+
+            <div class="code-block">[방법 B: 인터럽트 (Interrupt)]
+
+CPU: (다른 일 하는 중... 또는 쉬는 중)
+
+키보드: "야! 나 눌렸어!" (신호 보냄)
+
+CPU: "오 처리하자"</div>
+
+            <div class="chat">
+                <div class="q">어떤 게 더 효율적이야?</div>
+                <div class="a">
+                    <p><span class="key-point">B가 효율적!</span> CPU가 계속 물어볼 필요가 없으니까.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>폴링</th>
+                    <th>인터럽트</th>
+                </tr>
+                <tr>
+                    <td>CPU 행동</td>
+                    <td class="bad">계속 "있어? 있어?" 물어봄</td>
+                    <td class="good">신호 올 때까지 쉼</td>
+                </tr>
+                <tr>
+                    <td>CPU 사용률</td>
+                    <td class="bad">100% (풀가동)</td>
+                    <td class="good">0% (대기 중)</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3: 폴링이 존재하는 이유 -->
+        <div class="conversation">
+            <h2>Part 3. 근데 폴링은 왜 있어?</h2>
+
+            <div class="chat">
+                <div class="q">인터럽트가 좋으면 폴링은 왜 존재해?</div>
+                <div class="a">
+                    <p>인터럽트도 <span class="warning">공짜가 아니야</span>.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[인터럽트 처리 과정]
+
+CPU: (중요한 계산 하는 중...)
+    result = a * b + c / d...
+
+키보드: "야! 나 눌렸어!" (인터럽트!)
+
+CPU: "어 잠깐, 지금 하던 거 저장하고..."
+    → 레지스터 저장
+    → 인터럽트 핸들러로 점프
+    → 키보드 처리
+    → 다시 원래 작업 복구
+
+이게 바로 "컨텍스트 스위칭"!</div>
+
+            <div class="chat">
+                <div class="q">컨텍스트 스위칭이 얼마나 비싸?</div>
+                <div class="a">
+                    <p>키보드는 괜찮아. 1초에 몇 번이겠어?</p>
+                    <p><strong>근데 이런 상황은?</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">[상황: 초당 100만 개 네트워크 패킷]
+
+인터럽트 방식:
+패킷! → 컨텍스트 스위칭 → 처리
+패킷! → 컨텍스트 스위칭 → 처리
+패킷! → 컨텍스트 스위칭 → 처리
+... (초당 100만 번 컨텍스트 스위칭?!)
+
+폴링 방식:
+while (true) {
+    if (패킷 있어?) {
+        처리();  // 컨텍스트 스위칭 없음!
+    }
+}</div>
+
+            <div class="chat">
+                <div class="q">아! 이벤트가 엄청 자주 오면 폴링이 낫네?</div>
+                <div class="a">
+                    <p><span class="key-point">맞아!</span> 어차피 계속 올 거면, 그냥 계속 확인하는 게 나아.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 선택 기준 -->
+        <div class="conversation">
+            <h2>Part 4. 언제 뭘 써야 해?</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>선택</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>이벤트가 드물게 발생</td>
+                    <td class="good">인터럽트</td>
+                    <td>CPU 아껴야지</td>
+                </tr>
+                <tr>
+                    <td>이벤트가 매우 자주 발생</td>
+                    <td class="good">폴링</td>
+                    <td>컨텍스트 스위칭 비용 > 폴링 비용</td>
+                </tr>
+            </table>
+
+            <div class="code-block">[실제 사례]
+
+키보드/마우스     → 인터럽트 (드물게 발생)
+고성능 NIC(DPDK) → 폴링 (초당 수백만 패킷)
+게임 서버        → 하이브리드 (상황에 따라 전환)</div>
+        </div>
+
+        <!-- Part 5: 실측 테스트 -->
+        <div class="conversation">
+            <h2>Part 5. 실측 테스트</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>테스트:</strong> 1초 동안 이벤트 대기</p>
+                    <p>A) 폴링: while문에서 계속 확인</p>
+                    <p>B) 이벤트 대기: WaitForSingleObject (인터럽트 방식)</p>
+                </div>
+            </div>
+
+            <div class="code-block">[A] 폴링 코드
+while (!eventFlag) {
+    // 계속 확인 (CPU 100%)
+}
+
+[B] 이벤트 대기 코드
+WaitForSingleObject(hEvent, INFINITE);
+// CPU는 잠들어 있음 (0%)</div>
+
+            <div class="result-box">
+                <h4>1초 대기 동안 CPU 사용량</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">폴링</div>
+                        <div class="result-value">99.5%</div>
+                        <div class="result-note">47억 번 확인</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">이벤트 대기</div>
+                        <div class="result-value">0%</div>
+                        <div class="result-note">그냥 잠자기</div>
+                    </div>
+                </div>
+                <div class="result-highlight">
+                    CPU 사용량 100,000배 차이!
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">47억 번?!</div>
+                <div class="a">
+                    <p>1초 동안 "이벤트 있어?" 47억 번 물어본 거야.</p>
+                    <p>이벤트 대기는 0번. 그냥 잠자다가 깨어남.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 코드로 이해하기 -->
+        <div class="conversation">
+            <h2>Part 6. 코드로 이해하기</h2>
+
+            <div class="code-block">[폴링 - 비효율적인 대기]
+
+volatile bool keyPressed = false;
+
+// 키보드 입력 대기
+while (!keyPressed) {
+    // CPU 100% 사용하면서 계속 확인
+    // 전기 요금 폭탄!
+}
+
+processKey();</div>
+
+            <div class="code-block">[이벤트 대기 - 효율적인 대기]
+
+HANDLE hKeyEvent = CreateEvent(...);
+
+// 키보드 입력 대기
+WaitForSingleObject(hKeyEvent, INFINITE);
+// CPU 0% - 완전히 잠들어 있음
+// 키 누르면 OS가 깨워줌
+
+processKey();</div>
+
+            <div class="chat">
+                <div class="q">키보드에 인터럽트 쓰는 이유가 이거구나?</div>
+                <div class="a">
+                    <p><span class="key-point">맞아!</span> 키 안 누르는 동안 CPU가 쉴 수 있거든.</p>
+                    <p>노트북 배터리도 아끼고, 다른 프로그램도 돌릴 수 있고.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 7: 고급 - 하이브리드 -->
+        <div class="conversation">
+            <h2>Part 7. 고급: 하이브리드 방식</h2>
+
+            <div class="chat">
+                <div class="q">폴링이랑 인터럽트 둘 다 쓸 수는 없어?</div>
+                <div class="a">
+                    <p><span class="key-point">있어!</span> 실제로 많이 써.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[하이브리드 전략]
+
+평소: 인터럽트로 대기 (CPU 절약)
+     ↓
+이벤트 폭주 감지!
+     ↓
+잠시 폴링 모드로 전환 (컨텍스트 스위칭 절약)
+     ↓
+이벤트 줄어듦
+     ↓
+다시 인터럽트 모드로</div>
+
+            <div class="code-block">[Linux NAPI (네트워크)]
+
+1. 평소: 인터럽트로 패킷 수신 대기
+2. 패킷 폭주: 인터럽트 끄고 폴링으로 전환
+3. 패킷 감소: 다시 인터럽트 모드로
+
+→ 두 방식의 장점만 취함!</div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>폴링</strong> = CPU가 계속 "있어? 있어?" 물어봄 → CPU 100%</li>
+                <li><strong>인터럽트</strong> = 장치가 "나 왔어!" 신호 보냄 → CPU 0% (대기 중)</li>
+                <li><strong>인터럽트 비용</strong> = 컨텍스트 스위칭 (공짜 아님!)</li>
+                <li><strong>이벤트 드묾</strong> → 인터럽트 (키보드, 마우스)</li>
+                <li><strong>이벤트 폭주</strong> → 폴링 (고성능 네트워크)</li>
+                <li><strong>실측</strong> = 1초 대기 시 CPU 사용량 100,000배 차이</li>
+                <li><strong>실전</strong> = 하이브리드로 상황에 따라 전환</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-cs/">← CS 기초</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
