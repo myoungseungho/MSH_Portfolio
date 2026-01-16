@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>디스크 스케줄링 - HDD 바늘은 어떻게 움직일까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; color: #111; }
+        .subtitle { color: #666; margin-bottom: 40px; }
+        h2 { font-size: 1.4rem; font-weight: 600; margin: 48px 0 16px; color: #111; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+        h3 { font-size: 1.1rem; font-weight: 600; margin: 32px 0 12px; color: #333; }
+        p { margin-bottom: 16px; }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        code { font-family: 'Consolas', 'Monaco', monospace; }
+        table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background: #f5f5f5; font-weight: 600; }
+        .highlight { color: #e74c3c; font-weight: 600; }
+        .question-box {
+            background: #f3e5f5;
+            border-left: 4px solid #9C27B0;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .question-box strong { color: #7B1FA2; }
+        .answer-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #FF9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .danger-box {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .diagram {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            margin: 16px 0;
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 32px;
+            border-radius: 12px;
+            margin: 40px 0;
+        }
+        .summary h3 { color: white; margin-top: 0; }
+        .summary ul { margin-left: 20px; }
+        .summary li { margin: 8px 0; }
+        .test-result {
+            background: #1e1e1e;
+            color: #4EC9B0;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+        }
+        .test-result .label { color: #9CDCFE; }
+        .test-result .value { color: #CE9178; }
+        .test-result .highlight { color: #DCDCAA; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <h1>디스크 스케줄링</h1>
+        <p class="subtitle">HDD 바늘이 왔다갔다 하면 느려! 어떻게 최적화할까?</p>
+
+        <h2>HDD 구조 이해하기</h2>
+
+        <div class="diagram">
+HDD는 CD처럼 생긴 원판이 빙빙 돌아.
+그 위에 바늘(헤드)이 있어서 데이터를 읽어.
+
+      바깥쪽 (트랙 199)
+         ↓
+   ┌───────────────┐
+   │  ┌─────────┐  │
+   │  │  ┌───┐  │  │
+   │  │  │ ◎ │  │  │  ← 중심
+   │  │  └───┘  │  │
+   │  └─────────┘  │
+   └───────────────┘
+         ↑
+      안쪽 (트랙 0)
+
+데이터 읽으려면 → 바늘이 해당 트랙으로 이동
+이 이동 시간 = 탐색 시간 (Seek Time)</div>
+
+        <h2>스캐폴딩으로 디스크 스케줄링 배우기</h2>
+
+        <div class="question-box">
+            <strong>Q1. 바늘이 트랙 50에 있어. 요청이 이렇게 들어왔어:</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+요청 순서: 트랙 180 → 트랙 30 → 트랙 190 → 트랙 20
+
+순서대로 처리하면 바늘이 어떻게 움직여?</pre>
+        </div>
+
+        <div class="answer-box">
+            <strong>A1. 왔다갔다 해야 해!</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+50 → 180  (130칸 이동)
+180 → 30  (150칸 이동)
+30 → 190  (160칸 이동)
+190 → 20  (170칸 이동)
+
+총 이동: 610칸! 엄청 비효율적</pre>
+            이게 <strong>FCFS (First Come First Serve)</strong> - 먼저 온 순서대로.
+        </div>
+
+        <div class="question-box">
+            <strong>Q2. 더 효율적인 방법? 가까운 데부터 처리하면?</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+현재: 50
+요청: 180, 30, 190, 20
+
+가까운 순서: 30 → 20 → 180 → 190</pre>
+        </div>
+
+        <div class="answer-box">
+            <strong>A2. 이동 거리가 확 줄어!</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+50 → 30   (20칸)
+30 → 20   (10칸)
+20 → 180  (160칸)
+180 → 190 (10칸)
+
+총 이동: 200칸!</pre>
+            <strong>FCFS 610칸 vs SSTF 200칸</strong> = 3배 차이!<br>
+            이게 <strong>SSTF (Shortest Seek Time First)</strong> - 가까운 거 먼저.
+        </div>
+
+        <div class="question-box">
+            <strong>Q3. SSTF 완벽해 보이는데... 문제점은?</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+현재: 50
+요청: 40, 60, 45, 55... (50 근처만 계속 옴)
+그리고 트랙 190에서 기다리는 요청...
+
+190은 언제 처리돼?</pre>
+        </div>
+
+        <div class="answer-box">
+            <strong>A3. 영원히 안 됨! 기아 (Starvation)</strong><br>
+            CPU 스케줄링의 SJF랑 똑같은 문제!<br>
+            가까운 요청이 계속 오면 먼 요청은 굶어 죽음.
+        </div>
+
+        <div class="question-box">
+            <strong>Q4. 기아를 막으려면? 엘리베이터를 생각해봐.</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+엘리베이터:
+1층 → 3층 → 7층 → 10층 (꼭대기)
+→ 방향 바꿈
+10층 → 6층 → 2층 → 1층 (바닥)
+
+한쪽으로 쭉 가다가, 끝에서 방향 바꿈!</pre>
+        </div>
+
+        <div class="answer-box">
+            <strong>A4. 이게 SCAN (엘리베이터 알고리즘)!</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+현재: 50, 방향: 위로
+요청: 180, 30, 190, 20
+
+위로 쭉: 50 → 180 → 190 → 199(끝)
+방향 바꿈
+아래로: 199 → 30 → 20
+
+모든 요청이 결국 처리됨 → 기아 없음!</pre>
+        </div>
+
+        <div class="question-box">
+            <strong>Q5. SCAN도 단점이 있어.</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+바늘이 방금 트랙 199 지나서 내려가는 중.
+이때 트랙 198에 새 요청이 들어오면?
+
+198은 언제 처리돼?</pre>
+        </div>
+
+        <div class="answer-box">
+            <strong>A5. 거의 한 바퀴 기다려야 해!</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+바늘: 199 → (내려감) → 0 → (올라감) → 198
+
+방금 지나간 바로 뒤라서 제일 오래 기다림.
+→ 대기 시간이 불균등!</pre>
+        </div>
+
+        <div class="question-box">
+            <strong>Q6. 대기 시간을 균등하게 하려면?</strong>
+        </div>
+
+        <div class="answer-box">
+            <strong>A6. C-SCAN - 한 방향으로만 + 점프!</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+항상 위로만:
+50 → 180 → 190 → 199(끝)
+→ 점프! 0으로 순간이동
+0 → 20 → 30
+
+모두 비슷하게 기다림 = 균등!</pre>
+            단점: 점프하는 동안 헛이동 (요청 처리 안 함)
+        </div>
+
+        <h2>알고리즘 정리</h2>
+
+        <table>
+            <tr>
+                <th>알고리즘</th>
+                <th>동작</th>
+                <th>장점</th>
+                <th>단점</th>
+            </tr>
+            <tr>
+                <td><strong>FCFS</strong></td>
+                <td>먼저 온 순서</td>
+                <td>공평, 단순</td>
+                <td>왔다갔다 비효율</td>
+            </tr>
+            <tr>
+                <td><strong>SSTF</strong></td>
+                <td>가까운 거 먼저</td>
+                <td>이동 최소</td>
+                <td class="highlight">기아!</td>
+            </tr>
+            <tr>
+                <td><strong>SCAN</strong></td>
+                <td>엘리베이터</td>
+                <td>공평, 효율적</td>
+                <td>끝에서 불균등</td>
+            </tr>
+            <tr>
+                <td><strong>C-SCAN</strong></td>
+                <td>한방향 + 점프</td>
+                <td>균등 대기</td>
+                <td>점프 시 헛이동</td>
+            </tr>
+        </table>
+
+        <h2>시뮬레이션 테스트</h2>
+
+        <div class="info-box">
+            <strong>참고:</strong> 실제 HDD 테스트는 위험하고 어려워서 (디스크 손상 가능),
+            알고리즘 원리를 이해하기 위한 <strong>시뮬레이션</strong>으로 진행.
+        </div>
+
+        <h3>테스트 데이터</h3>
+
+        <div class="diagram">
+디스크: 트랙 0 ~ 199
+바늘 시작 위치: 50
+요청 (도착 순서): 82, 170, 43, 140, 24, 16, 190</div>
+
+        <h3>결과</h3>
+
+        <div class="test-result">
+<span class="label">[FCFS]</span>
+  50 → 82 → 170 → 43 → 140 → 24 → 16 → 190
+  총 이동: <span class="value">642 트랙</span>
+
+<span class="label">[SSTF]</span>
+  50 → 43 → 24 → 16 → 82 → 140 → 170 → 190
+  총 이동: <span class="highlight">208 트랙</span> ← 최소!
+
+<span class="label">[SCAN]</span>
+  50 → 82 → 140 → 170 → 190 → (끝) → 43 → 24 → 16
+  총 이동: <span class="value">332 트랙</span>
+
+<span class="label">[C-SCAN]</span>
+  50 → 82 → 140 → 170 → 190 → (점프) → 16 → 24 → 43
+  총 이동: <span class="value">391 트랙</span></div>
+
+        <h3>결과 비교</h3>
+
+        <table>
+            <tr>
+                <th>알고리즘</th>
+                <th>총 이동</th>
+                <th>기아?</th>
+            </tr>
+            <tr>
+                <td>FCFS</td>
+                <td>642 트랙</td>
+                <td>없음</td>
+            </tr>
+            <tr>
+                <td><strong>SSTF</strong></td>
+                <td><strong>208 트랙</strong></td>
+                <td class="highlight">있음!</td>
+            </tr>
+            <tr>
+                <td>SCAN</td>
+                <td>332 트랙</td>
+                <td>없음</td>
+            </tr>
+            <tr>
+                <td>C-SCAN</td>
+                <td>391 트랙</td>
+                <td>없음</td>
+            </tr>
+        </table>
+
+        <div class="warning-box">
+            <strong>SSTF가 제일 효율적이지만 기아 위험!</strong><br>
+            실제 시스템은 <strong>SCAN</strong> 또는 <strong>C-SCAN</strong> 사용.
+        </div>
+
+        <h2>기아 데모</h2>
+
+        <div class="danger-box">
+            <strong>상황:</strong> 트랙 50 근처 요청이 계속 오고, 트랙 190이 기다리는 중
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+요청: 45, 55, 48, 52, 49, 51, 190
+
+SSTF 처리 순서:
+49 → 48 → 45 → 51 → 52 → 55 → 190
+
+190이 맨 마지막!
+50 근처 요청이 계속 오면 190은 영원히 밀림!</pre>
+        </div>
+
+        <h2>SSD는?</h2>
+
+        <div class="question-box">
+            <strong>Q. SSD도 디스크 스케줄링 필요해?</strong>
+        </div>
+
+        <div class="answer-box">
+            <strong>A. 필요 없어!</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+HDD: 바늘이 물리적으로 이동 → 순서 중요!
+SSD: 전자적으로 접근 → 어디든 같은 속도
+
+HDD 탐색: ~10ms
+SSD 탐색: ~0.1ms (100배 빠름)</pre>
+            SSD는 그냥 FCFS 써도 됨.
+        </div>
+
+        <h3>SSD의 다른 고민</h3>
+
+        <table>
+            <tr>
+                <th>문제</th>
+                <th>설명</th>
+            </tr>
+            <tr>
+                <td><strong>Wear Leveling</strong></td>
+                <td>같은 셀만 쓰면 먼저 죽음 → 골고루 써야 함</td>
+            </tr>
+            <tr>
+                <td><strong>Garbage Collection</strong></td>
+                <td>지운 블록 정리하는 작업</td>
+            </tr>
+            <tr>
+                <td><strong>TRIM</strong></td>
+                <td>OS가 "이거 안 쓰는 데이터야" 알려줌</td>
+            </tr>
+        </table>
+
+        <div class="info-box">
+            SSD는 "바늘 이동 최적화"가 아니라 "셀 수명 관리"가 중요!
+        </div>
+
+        <h2>실제 시스템</h2>
+
+        <table>
+            <tr>
+                <th>저장장치</th>
+                <th>스케줄링</th>
+                <th>이유</th>
+            </tr>
+            <tr>
+                <td>HDD</td>
+                <td>SCAN, C-SCAN</td>
+                <td>바늘 이동 최적화</td>
+            </tr>
+            <tr>
+                <td>SSD</td>
+                <td>NOOP (거의 없음)</td>
+                <td>어디든 같은 속도</td>
+            </tr>
+        </table>
+
+        <div class="summary">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>HDD</strong> = 바늘이 물리적 이동 → 순서가 성능에 영향</li>
+                <li><strong>FCFS</strong> = 먼저 온 순서 → 왔다갔다 비효율</li>
+                <li><strong>SSTF</strong> = 가까운 거 먼저 → 효율적, but 기아 위험</li>
+                <li><strong>SCAN</strong> = 엘리베이터 → 공평하고 효율적</li>
+                <li><strong>C-SCAN</strong> = 한방향 + 점프 → 균등 대기</li>
+                <li><strong>SSD</strong> = 스케줄링 불필요 (전자적 접근)</li>
+                <li><strong>실제 시스템</strong> = SCAN 또는 C-SCAN 사용</li>
+            </ul>
+        </div>
+
+    </div>
+</body>
+</html>
