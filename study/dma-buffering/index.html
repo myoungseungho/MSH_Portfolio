@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DMA & 버퍼링 - MSH Portfolio</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+
+        .nav {
+            margin-bottom: 40px;
+        }
+
+        .nav a {
+            color: #666;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .nav a:hover {
+            color: #333;
+        }
+
+        .header {
+            margin-bottom: 50px;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #111;
+        }
+
+        .header-meta {
+            display: flex;
+            gap: 20px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 20px 0;
+        }
+
+        .tag {
+            background: #e8f4fd;
+            color: #1976d2;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #111;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .section h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 30px 0 15px 0;
+            color: #333;
+        }
+
+        .section p {
+            margin-bottom: 16px;
+            color: #444;
+        }
+
+        /* 대화형 질문-답변 스타일 */
+        .question-box {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 0 12px 12px 0;
+            margin: 25px 0;
+        }
+
+        .question-box .q-label {
+            color: #667eea;
+            font-weight: 700;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .question-box .q-label::before {
+            content: "Q";
+            background: #667eea;
+            color: white;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+        }
+
+        .question-box .question {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .answer-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 20px;
+            border-radius: 0 12px 12px 0;
+            margin: 20px 0;
+        }
+
+        .answer-box .a-label {
+            color: #2e7d32;
+            font-weight: 700;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .answer-box .a-label::before {
+            content: "A";
+            background: #4caf50;
+            color: white;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+        }
+
+        .insight-box {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 20px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+        }
+
+        .insight-box h4 {
+            color: #e65100;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+
+        .insight-box.red {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+
+        .insight-box.red h4 {
+            color: #c62828;
+        }
+
+        .insight-box.green {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+
+        .insight-box.green h4 {
+            color: #2e7d32;
+        }
+
+        .insight-box.blue {
+            background: #e3f2fd;
+            border-left-color: #2196f3;
+        }
+
+        .insight-box.blue h4 {
+            color: #1565c0;
+        }
+
+        .diagram {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin: 20px 0;
+            line-height: 1.5;
+            white-space: pre;
+        }
+
+        .diagram-light {
+            background: white;
+            border: 1px solid #e0e0e0;
+            color: #333;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin: 20px 0;
+            line-height: 1.5;
+            white-space: pre;
+        }
+
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        th, td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f8f8f8;
+            font-weight: 600;
+            color: #333;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50%;
+            font-weight: 700;
+            font-size: 0.9rem;
+            margin-right: 10px;
+        }
+
+        .compare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        @media (max-width: 600px) {
+            .compare-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .compare-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            border: 1px solid #eee;
+        }
+
+        .compare-card h4 {
+            font-size: 1rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .compare-card.bad {
+            border-top: 3px solid #f44336;
+        }
+
+        .compare-card.bad h4 {
+            color: #d32f2f;
+        }
+
+        .compare-card.good {
+            border-top: 3px solid #4caf50;
+        }
+
+        .compare-card.good h4 {
+            color: #388e3c;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 40px 0;
+            color: #999;
+            font-size: 0.9rem;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 60px;
+        }
+
+        ul, ol {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="nav">
+            <a href="../../">&larr; 돌아가기</a>
+        </nav>
+
+        <header class="header">
+            <h1>DMA & 버퍼링</h1>
+            <div class="header-meta">
+                <span>Operating System</span>
+                <span>I/O System</span>
+            </div>
+            <div class="tags">
+                <span class="tag">DMA</span>
+                <span class="tag">PIO</span>
+                <span class="tag">Double Buffering</span>
+                <span class="tag">IOCP</span>
+            </div>
+        </header>
+
+        <!-- 개요 -->
+        <section class="section">
+            <h2>개요</h2>
+            <p>
+                네트워크 카드가 1GB 파일을 받을 때, CPU가 매 바이트마다 직접 옮기면 다른 일을 못한다.
+                이 문서는 <strong>질문을 던지고 답을 찾아가는 방식</strong>으로 DMA의 원리와 버퍼링 기법을 탐구한다.
+            </p>
+        </section>
+
+        <!-- 첫 번째 질문 -->
+        <section class="section">
+            <h2><span class="step-number">1</span>PIO 방식의 문제점</h2>
+
+            <div class="question-box">
+                <div class="q-label">첫 번째 질문</div>
+                <div class="question">
+                    네트워크 카드가 1GB 파일을 받아서 메모리에 저장해야 한다. DMA 없이 PIO 방식으로 하면 어떤 문제가 생길까?
+                </div>
+            </div>
+
+            <div class="diagram">[PIO (Programmed I/O) 방식]
+
+1. 네트워크 카드 → CPU에게 "1바이트 왔어요" 알림
+2. CPU가 네트워크 카드에서 1바이트 읽음
+3. CPU가 메모리에 1바이트 씀
+4. 1~3을 10억 번 반복 (1GB = 10억 바이트)</div>
+
+            <div class="answer-box">
+                <div class="a-label">CPU가 본업을 못 함</div>
+                <p>CPU가 데이터 셔틀만 하느라 게임 로직은 멈춤!</p>
+            </div>
+
+            <div class="diagram">[CPU의 하루 - PIO 방식]
+
+[게임 로직 계산 중...]
+  ↓ 인터럽트! "1바이트 왔어요"
+[하던 거 저장] → [네트워크 카드에서 읽기] → [메모리에 쓰기] → [하던 거 복원]
+  ↓ 다시 계산 시작...
+  ↓ 인터럽트! "또 1바이트 왔어요"
+[하던 거 저장] → [읽기] → [쓰기] → [복원]
+  ↓ ...이걸 10억 번</div>
+
+            <div class="insight-box red">
+                <h4>PIO의 비효율</h4>
+                <p>1GB 전송하는 동안 CPU는 <strong>데이터 셔틀 노동</strong>만 함.</p>
+                <p>그동안 게임 로직, 다른 유저 처리는 전부 멈춤!</p>
+            </div>
+        </section>
+
+        <!-- 두 번째 질문 -->
+        <section class="section">
+            <h2><span class="step-number">2</span>전담 하드웨어가 있다면?</h2>
+
+            <div class="question-box">
+                <div class="q-label">두 번째 질문</div>
+                <div class="question">
+                    CPU한테 "야, 네트워크 카드에서 데이터 오면 메모리 이 주소에 알아서 넣어놔. 다 끝나면 그때 한 번만 알려줘"라고 시킬 수 있으면 어떨까?
+                </div>
+            </div>
+
+            <p>여기서 의문: <em>"어떤 데이터가 올 줄 알고 메모리 주소를 미리 지정하지?"</em></p>
+
+            <div class="answer-box">
+                <div class="a-label">미리 "빈 방"을 예약 → 버퍼(Buffer)</div>
+                <p>데이터 <strong>내용</strong>은 몰라도 됨. <strong>어디에 받을지</strong>만 정해두면 됨!</p>
+            </div>
+
+            <div class="diagram">[CPU가 미리 하는 일]
+
+1. 메모리에 빈 공간 확보 (예: 0x1000 ~ 0x2000)
+
+2. DMA 컨트롤러에게 설정:
+   - "소스: 네트워크 카드"
+   - "목적지: 0x1000번지부터"
+   - "크기: 4KB"
+   - "다 차면 나한테 인터럽트 한 번만 줘"
+
+3. CPU는 자기 할 일 하러 감 (게임 로직, 다른 유저 처리)</div>
+
+            <div class="insight-box green">
+                <h4>DMA (Direct Memory Access)</h4>
+                <p>CPU 대신 <strong>전용 컨트롤러</strong>가 I/O 장치 ↔ 메모리 데이터 전송을 담당!</p>
+            </div>
+        </section>
+
+        <!-- 세 번째 질문 -->
+        <section class="section">
+            <h2><span class="step-number">3</span>인터럽트 횟수 비교</h2>
+
+            <div class="question-box">
+                <div class="q-label">세 번째 질문</div>
+                <div class="question">
+                    1GB를 전송할 때 인터럽트가 몇 번 발생할까?
+                </div>
+            </div>
+
+            <table>
+                <tr>
+                    <th>방식</th>
+                    <th>인터럽트 횟수</th>
+                    <th>계산</th>
+                </tr>
+                <tr>
+                    <td>PIO (1바이트마다)</td>
+                    <td><strong>10억 번</strong></td>
+                    <td>1GB = 10억 바이트</td>
+                </tr>
+                <tr>
+                    <td>DMA (4KB 버퍼)</td>
+                    <td><strong>25만 번</strong></td>
+                    <td>1GB ÷ 4KB = 262,144</td>
+                </tr>
+            </table>
+
+            <div class="diagram-light">[인터럽트 횟수 비교]
+
+PIO:  ████████████████████████████ 10억 번
+DMA:  █ 25만 번
+
+→ 약 4,000배 감소!
+→ CPU가 "데이터 셔틀" 하는 시간이 4,000배 줄어듦</div>
+
+            <div class="insight-box">
+                <h4>DMA의 핵심 가치</h4>
+                <p>인터럽트 횟수 감소 = 컨텍스트 스위칭 오버헤드 감소 = CPU 효율 증가</p>
+            </div>
+        </section>
+
+        <!-- 네 번째 질문 -->
+        <section class="section">
+            <h2><span class="step-number">4</span>버퍼 동시 접근 문제</h2>
+
+            <div class="question-box">
+                <div class="q-label">네 번째 질문</div>
+                <div class="question">
+                    DMA가 버퍼에 쓰는 동안 CPU가 같은 버퍼를 읽으면?
+                </div>
+            </div>
+
+            <div class="diagram">[충돌 상황]
+
+DMA: 버퍼(0x1000)에 데이터 쓰는 중...
+CPU: 같은 버퍼(0x1000)를 읽으려고 함
+
+DMA: "야 나 아직 다 안 썼어!"
+CPU: "어? 반만 채워진 데이터네?"
+
+→ 데이터 무결성 깨짐!</div>
+
+            <div class="answer-box">
+                <div class="a-label">더블 버퍼링 (Double Buffering)</div>
+                <p>버퍼를 2개 쓰면 충돌 없음!</p>
+            </div>
+
+            <div class="diagram">[더블 버퍼링]
+
+[버퍼 A]                    [버퍼 B]
+   ↓                           ↓
+DMA가 쓰는 중                CPU가 읽는 중
+(새 데이터 수신)              (이전 데이터 처리)
+
+        ↓ 다 쓰면 역할 교체 ↓
+
+CPU가 읽는 중                DMA가 쓰는 중
+(방금 받은 데이터)            (다음 데이터 수신)
+
+→ 서로 다른 버퍼를 쓰니까 충돌 없음!</div>
+
+            <div class="insight-box blue">
+                <h4>더블 버퍼링 활용 예시</h4>
+                <ul style="margin: 0; padding-left: 20px;">
+                    <li><strong>그래픽:</strong> Front Buffer(화면 표시) / Back Buffer(다음 프레임 렌더링)</li>
+                    <li><strong>네트워크:</strong> 수신 버퍼 / 처리 버퍼</li>
+                    <li><strong>오디오:</strong> 재생 버퍼 / 로딩 버퍼</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 다섯 번째 질문 -->
+        <section class="section">
+            <h2><span class="step-number">5</span>IOCP와 DMA의 관계</h2>
+
+            <div class="question-box">
+                <div class="q-label">다섯 번째 질문</div>
+                <div class="question">
+                    게임 서버에서 IOCP로 네트워크 처리할 때, 내부적으로 어떻게 동작할까?
+                </div>
+            </div>
+
+<pre><code>// Overlapped I/O로 수신 요청
+WSARecv(socket, &wsaBuf, 1, NULL, &flags, &overlapped, NULL);
+
+// CPU는 다른 일 하다가...
+// 완료 통보 받음
+GetQueuedCompletionStatus(hIOCP, &bytesTransferred, ...);</code></pre>
+
+            <h3>택배 수령으로 비유</h3>
+
+            <div class="compare-grid">
+                <div class="compare-card bad">
+                    <h4>PIO = 직접 수령</h4>
+                    <p>현관문 앞에 서서 택배 올 때까지 기다림</p>
+                    <p>택배 오면 → 내가 직접 받아서 → 내가 방에 갖다 놓음</p>
+                    <p style="margin-top: 12px; color: #666; font-size: 0.85rem;">
+                        → 그동안 아무것도 못함
+                    </p>
+                </div>
+                <div class="compare-card good">
+                    <h4>DMA = 경비실 맡김</h4>
+                    <p>"택배 오면 경비실에서 받아서 내 집 앞에 놔주세요. 다 놓으면 문자 주세요."</p>
+                    <p style="margin-top: 12px; color: #666; font-size: 0.85rem;">
+                        → 나는 집에서 게임하고 있음<br>
+                        → 문자 오면 그때 가져다 씀
+                    </p>
+                </div>
+            </div>
+
+            <div class="diagram">[IOCP + DMA 흐름]
+
+1. CPU → DMA: "이 버퍼에 받아놔" (WSARecv)
+
+2. CPU: 자기 할 일 함 (게임 로직, 다른 유저 처리)
+   DMA: 네트워크 카드 → 메모리로 데이터 복사 중...
+
+3. DMA → CPU: "다 됐어!" (인터럽트 1번)
+
+4. CPU: "오케이" → GetQueuedCompletionStatus()로 완료 확인
+   → 버퍼에서 데이터 꺼내서 처리 시작</div>
+        </section>
+
+        <!-- 여섯 번째 질문 -->
+        <section class="section">
+            <h2><span class="step-number">6</span>DMA의 핵심 가치</h2>
+
+            <div class="question-box">
+                <div class="q-label">여섯 번째 질문</div>
+                <div class="question">
+                    전송 중 CPU 상태는?
+                </div>
+            </div>
+
+            <table>
+                <tr>
+                    <th>항목</th>
+                    <th>PIO</th>
+                    <th>DMA</th>
+                </tr>
+                <tr>
+                    <td>데이터 옮기는 주체</td>
+                    <td>CPU</td>
+                    <td>DMA 컨트롤러</td>
+                </tr>
+                <tr>
+                    <td>전송 중 CPU 상태</td>
+                    <td>셔틀 노동</td>
+                    <td><strong>자기 일</strong></td>
+                </tr>
+                <tr>
+                    <td>인터럽트 횟수</td>
+                    <td>매 바이트</td>
+                    <td>버퍼 단위</td>
+                </tr>
+            </table>
+
+            <div class="answer-box">
+                <div class="a-label">CPU와 I/O의 "병렬화"</div>
+            </div>
+
+            <div class="diagram-light">┌─────────────────────────────────────────────┐
+│              DMA의 핵심 가치                 │
+│                                             │
+│   CPU와 I/O 작업의 "병렬화"                  │
+│                                             │
+│   CPU: 게임 로직, 연산                       │
+│   DMA: 데이터 전송 (네트워크, 디스크)         │
+│                                             │
+│   → 서로 동시에 일함 = 처리량 증가           │
+└─────────────────────────────────────────────┘</div>
+        </section>
+
+        <!-- 실전 예시 -->
+        <section class="section">
+            <h2><span class="step-number">7</span>실전: 대용량 파일 전송</h2>
+
+            <div class="compare-grid">
+                <div class="compare-card bad">
+                    <h4>PIO 방식</h4>
+<pre><code>// 1GB 파일 전송
+for (int i = 0; i < 1GB; i++) {
+    // CPU가 직접:
+    byte = ReadFromNIC();
+    WriteToMemory(byte);
+}
+// 10억 번 인터럽트
+// CPU 점유율 100%</code></pre>
+                    <p style="margin-top: 12px; color: #666; font-size: 0.85rem;">
+                        → 다른 작업 불가<br>
+                        → 게임 서버라면 렉 폭탄
+                    </p>
+                </div>
+                <div class="compare-card good">
+                    <h4>DMA 방식</h4>
+<pre><code>// DMA 설정
+SetupDMA(
+    src: NIC,
+    dst: buffer,
+    size: 4KB,
+    callback: OnComplete
+);
+
+// CPU는 다른 일
+ProcessGameLogic();
+HandleOtherUsers();
+
+// 완료 콜백에서 처리
+void OnComplete() {
+    ProcessData(buffer);
+}</code></pre>
+                    <p style="margin-top: 12px; color: #666; font-size: 0.85rem;">
+                        → 25만 번 인터럽트<br>
+                        → CPU는 본업 수행
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 최종 정리 -->
+        <section class="section">
+            <h2>핵심 정리</h2>
+
+            <table>
+                <tr>
+                    <th>질문</th>
+                    <th>답</th>
+                </tr>
+                <tr>
+                    <td>PIO란?</td>
+                    <td>CPU가 직접 I/O 장치에서 데이터 읽고 씀</td>
+                </tr>
+                <tr>
+                    <td>PIO의 문제?</td>
+                    <td>CPU가 셔틀 노동, 다른 일 못함</td>
+                </tr>
+                <tr>
+                    <td>DMA란?</td>
+                    <td>전용 컨트롤러가 CPU 대신 데이터 전송</td>
+                </tr>
+                <tr>
+                    <td>버퍼란?</td>
+                    <td>미리 예약해둔 "빈 방" (받을 주소)</td>
+                </tr>
+                <tr>
+                    <td>더블 버퍼링?</td>
+                    <td>2개 버퍼로 읽기/쓰기 동시에, 충돌 방지</td>
+                </tr>
+                <tr>
+                    <td>IOCP와 DMA?</td>
+                    <td>IOCP 내부에서 DMA 활용, 완료 시 1번 통보</td>
+                </tr>
+            </table>
+
+            <div class="insight-box green">
+                <h4>게임 서버 실전 결론</h4>
+<pre style="background: transparent; padding: 0; margin: 10px 0; color: #2e7d32;"><code>// IOCP = DMA + 완료 통보 시스템
+
+WSARecv()  → "경비실아, 택배 오면 여기 놔줘"
+           → DMA가 네트워크 → 버퍼로 전송
+           → CPU는 게임 로직 처리 중...
+
+GetQueuedCompletionStatus() → "택배 왔어요" 문자 확인
+           → 그때서야 버퍼 처리
+
+→ CPU와 I/O가 병렬로 동작 = 고성능 서버의 핵심!</code></pre>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <p>MSH Portfolio - Server Developer</p>
+        </footer>
+    </div>
+</body>
+</html>
