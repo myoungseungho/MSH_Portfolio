@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU 스케줄링 - 누구를 먼저 실행할까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; color: #111; }
+        .subtitle { color: #666; margin-bottom: 40px; }
+        h2 { font-size: 1.4rem; font-weight: 600; margin: 48px 0 16px; color: #111; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+        h3 { font-size: 1.1rem; font-weight: 600; margin: 32px 0 12px; color: #333; }
+        p { margin-bottom: 16px; }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        code { font-family: 'Consolas', 'Monaco', monospace; }
+        table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background: #f5f5f5; font-weight: 600; }
+        .highlight { color: #e74c3c; font-weight: 600; }
+        .question-box {
+            background: #f3e5f5;
+            border-left: 4px solid #9C27B0;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .question-box strong { color: #7B1FA2; }
+        .answer-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #FF9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .danger-box {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .diagram {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            margin: 16px 0;
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 32px;
+            border-radius: 12px;
+            margin: 40px 0;
+        }
+        .summary h3 { color: white; margin-top: 0; }
+        .summary ul { margin-left: 20px; }
+        .summary li { margin: 8px 0; }
+        .test-result {
+            background: #1e1e1e;
+            color: #4EC9B0;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+        }
+        .test-result .label { color: #9CDCFE; }
+        .test-result .value { color: #CE9178; }
+        .test-result .highlight { color: #DCDCAA; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <h1>CPU 스케줄링</h1>
+        <p class="subtitle">CPU는 1개인데 프로세스가 10개면? 누구를 먼저?</p>
+
+        <h2>식당 비유로 이해하기</h2>
+
+        <div class="diagram">
+식당에 요리사 1명 (= CPU)
+손님 5명이 주문함 (= 프로세스)
+
+손님1: 10분짜리 요리
+손님2: 5분짜리 요리
+손님3: 8분짜리 요리
+손님4: 2분짜리 요리
+손님5: 7분짜리 요리
+
+요리사는 한 번에 하나만 만들 수 있어.
+누구 거 먼저 만들어?</div>
+
+        <h2>스캐폴딩으로 스케줄링 알고리즘 배우기</h2>
+
+        <div class="question-box">
+            <strong>Q1. 가장 단순한 방법: "먼저 온 순서대로" 하면?</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+도착 순서: 손님1 → 손님2 → 손님3 → 손님4 → 손님5
+
+실행 순서: 손님1(10분) → 손님2(5분) → 손님3(8분) → ...</pre>
+            이 방식의 문제점은?
+        </div>
+
+        <div class="answer-box">
+            <strong>A1. Convoy Effect (호위 효과)</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+손님1: 10분짜리 (먼저 옴)
+손님4: 2분짜리 (나중에 옴)
+
+손님4는 2분이면 끝나는데...
+손님1 때문에 10분 기다려야 함!
+
+→ 느린 놈 뒤에서 다 같이 느려짐</pre>
+            이게 <strong>FCFS (First Come First Serve)</strong> 방식.
+        </div>
+
+        <div class="question-box">
+            <strong>Q2. 그럼 "빨리 끝나는 거 먼저" 하면?</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+손님4: 2분 → 먼저!
+손님2: 5분 → 두 번째!
+손님5: 7분 → 세 번째!
+...</pre>
+            이러면 평균 대기 시간 줄어들지 않아?
+        </div>
+
+        <div class="answer-box">
+            <strong>A2. 맞아! 근데 문제가 있어.</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+손님1: 10분짜리 (먼저 왔어)
+손님2: 2분짜리 (새로 옴)
+손님3: 2분짜리 (또 새로 옴)
+손님4: 2분짜리 (또또 새로 옴)
+...
+
+손님1은 언제 먹어?</pre>
+            <span class="highlight">영원히 못 먹음!</span> 이게 <strong>기아 (Starvation)</strong>.
+            <br><br>
+            이 방식이 <strong>SJF (Shortest Job First)</strong>.
+        </div>
+
+        <div class="question-box">
+            <strong>Q3. 기아를 막으려면?</strong>
+        </div>
+
+        <div class="answer-box">
+            <strong>A3. "시간 나눠쓰기" - 라운드 로빈!</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+각자 4분씩만 요리하고 다음 사람!
+
+손님1(4분) → 손님2(4분) → 손님3(4분) → 손님4(2분 끝!)
+→ 손님5(4분) → 손님1(4분) → 손님2(1분 끝!) → ...
+
+모두 조금씩 진행됨 → 아무도 안 굶음!</pre>
+            이게 <strong>Round Robin</strong> 방식.
+        </div>
+
+        <div class="question-box">
+            <strong>Q4. 근데 4분마다 바꾸면 뭐가 문제야?</strong>
+        </div>
+
+        <div class="answer-box">
+            <strong>A4. 컨텍스트 스위칭 오버헤드!</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+요리 바꿀 때마다:
+- 지금 요리 치우고
+- 다음 요리 재료 꺼내고
+- 어디까지 했는지 확인하고...
+
+→ 바꾸는 것 자체가 시간 소모!</pre>
+            <strong>타임 슬라이스가 너무 짧으면</strong> → 바꾸느라 시간 다 씀<br>
+            <strong>타임 슬라이스가 너무 길면</strong> → FCFS랑 똑같아짐
+        </div>
+
+        <h2>알고리즘 정리</h2>
+
+        <table>
+            <tr>
+                <th>알고리즘</th>
+                <th>방식</th>
+                <th>장점</th>
+                <th>단점</th>
+            </tr>
+            <tr>
+                <td><strong>FCFS</strong></td>
+                <td>먼저 온 순서</td>
+                <td>공정함, 단순함</td>
+                <td>Convoy Effect</td>
+            </tr>
+            <tr>
+                <td><strong>SJF</strong></td>
+                <td>짧은 거 먼저</td>
+                <td>평균 대기 최소</td>
+                <td class="highlight">기아 (Starvation)</td>
+            </tr>
+            <tr>
+                <td><strong>Round Robin</strong></td>
+                <td>시간 나눠쓰기</td>
+                <td>공정함, 응답 빠름</td>
+                <td>컨텍스트 스위칭</td>
+            </tr>
+            <tr>
+                <td><strong>Priority</strong></td>
+                <td>중요한 거 먼저</td>
+                <td>중요 작업 우선</td>
+                <td class="highlight">기아 (Starvation)</td>
+            </tr>
+        </table>
+
+        <div class="info-box">
+            <strong>기아 해결책: 에이징 (Aging)</strong><br>
+            오래 기다린 손님 → 우선순위 올려줌 → 결국 실행됨
+        </div>
+
+        <h2>시뮬레이션 테스트</h2>
+
+        <h3>테스트 데이터</h3>
+
+        <div class="diagram">
+같은 손님 5명으로 각 방식 비교:
+
+손님    도착    요리시간    우선순위
+P1      0분     10분        3
+P2      1분      5분        1 (VIP)
+P3      2분      8분        4
+P4      3분      2분        2
+P5      4분      7분        5</div>
+
+        <h3>측정하는 것</h3>
+
+        <table>
+            <tr>
+                <th>측정값</th>
+                <th>의미</th>
+                <th>쉬운 설명</th>
+            </tr>
+            <tr>
+                <td><strong>대기 시간</strong></td>
+                <td>기다린 시간</td>
+                <td>손님이 음식 나올 때까지 기다린 시간</td>
+            </tr>
+            <tr>
+                <td><strong>반환 시간</strong></td>
+                <td>도착 → 완료</td>
+                <td>주문부터 다 먹을 때까지 총 시간</td>
+            </tr>
+            <tr>
+                <td><strong>응답 시간</strong></td>
+                <td>도착 → 첫 실행</td>
+                <td>"네 주문 시작했어요" 까지 걸린 시간</td>
+            </tr>
+        </table>
+
+        <h3>결과</h3>
+
+        <div class="test-result">
+<span class="label">[FCFS - 먼저 온 순서]</span>
+  평균 대기: <span class="value">12.6</span>
+  평균 응답: <span class="value">12.6</span>
+
+<span class="label">[SJF - 짧은 거 먼저]</span>
+  평균 대기: <span class="highlight">10.6</span> ← 최소!
+  평균 응답: <span class="value">10.6</span>
+
+<span class="label">[Round Robin Q=4]</span>
+  평균 대기: <span class="value">16.8</span>
+  평균 응답: <span class="highlight">5.6</span> ← 응답 빠름!
+
+<span class="label">[Round Robin Q=2]</span>
+  평균 대기: <span class="value">16.2</span>
+  평균 응답: <span class="highlight">2.8</span> ← 응답 더 빠름!
+
+<span class="label">[Priority - 중요한 거 먼저]</span>
+  평균 대기: <span class="value">11.4</span>
+  평균 응답: <span class="value">11.4</span></div>
+
+        <h3>결과 해석</h3>
+
+        <div class="answer-box">
+            <strong>SJF</strong>: 평균 대기 <strong>10.6분</strong> (제일 빠름!)<br>
+            → 근데 긴 작업은 영원히 밀릴 수 있음 (기아)
+        </div>
+
+        <div class="answer-box">
+            <strong>Round Robin (Q=2)</strong>: 응답 시간 <strong>2.8분</strong> (제일 빠름!)<br>
+            → "시작했어요"를 빨리 들음<br>
+            → 아무도 안 굶음 (공정함)<br>
+            → 근데 평균 대기는 16분으로 길어짐
+        </div>
+
+        <h2>기아 (Starvation) 데모</h2>
+
+        <div class="danger-box">
+            <strong>상황:</strong> 10분짜리 손님1이 먼저 왔는데, 2분짜리 손님들이 계속 옴
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+SJF로 하면:
+2분짜리 먼저! → 또 2분짜리! → 또또 2분짜리!
+→ 손님1은 언제?
+→ 영원히 안 옴... 굶어 죽음!</pre>
+        </div>
+
+        <h2>현실의 OS는?</h2>
+
+        <div class="info-box">
+            <strong>다단계 피드백 큐 (MLFQ)</strong><br><br>
+            위의 방식들을 <strong>다 섞어서</strong> 사용!
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+[높은 우선순위 큐] ← 새 프로세스, 짧은 작업
+        ↓ 오래 걸리면 강등
+[중간 우선순위 큐]
+        ↓ 더 오래 걸리면 강등
+[낮은 우선순위 큐]
+        ↑ 오래 기다리면 승급 (에이징)</pre>
+            Windows, Linux 모두 이 방식의 변형 사용.
+        </div>
+
+        <h2>트레이드오프 정리</h2>
+
+        <table>
+            <tr>
+                <th>원하는 것</th>
+                <th>선택</th>
+                <th>대가</th>
+            </tr>
+            <tr>
+                <td>평균 대기 최소</td>
+                <td>SJF</td>
+                <td>기아 위험</td>
+            </tr>
+            <tr>
+                <td>응답 빠름</td>
+                <td>RR (작은 퀀텀)</td>
+                <td>컨텍스트 스위칭 오버헤드</td>
+            </tr>
+            <tr>
+                <td>공정함</td>
+                <td>RR</td>
+                <td>평균 대기 높음</td>
+            </tr>
+            <tr>
+                <td>중요한 거 먼저</td>
+                <td>Priority</td>
+                <td>기아 위험</td>
+            </tr>
+            <tr>
+                <td><strong>다 원함</strong></td>
+                <td><strong>MLFQ</strong></td>
+                <td>구현 복잡</td>
+            </tr>
+        </table>
+
+        <div class="summary">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>CPU 스케줄링</strong> = "누구 먼저 실행할까?" 결정하는 것</li>
+                <li><strong>FCFS</strong> = 먼저 온 순서 → 단순하지만 Convoy Effect</li>
+                <li><strong>SJF</strong> = 짧은 거 먼저 → 평균 최소, but 기아 위험</li>
+                <li><strong>Round Robin</strong> = 시간 나눠쓰기 → 공정, but 오버헤드</li>
+                <li><strong>Priority</strong> = 중요한 거 먼저 → but 기아 위험</li>
+                <li><strong>MLFQ</strong> = 다 섞음 → 현실 OS가 쓰는 방식</li>
+                <li><strong>정답은 없다</strong> = 상황에 맞게 선택 (트레이드오프)</li>
+            </ul>
+        </div>
+
+    </div>
+</body>
+</html>
