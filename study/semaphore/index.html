@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세마포어 vs 뮤텍스 - 소유권의 차이 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; color: #111; }
+        .subtitle { color: #666; margin-bottom: 40px; }
+        h2 { font-size: 1.4rem; font-weight: 600; margin: 48px 0 16px; color: #111; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+        h3 { font-size: 1.1rem; font-weight: 600; margin: 32px 0 12px; color: #333; }
+        p { margin-bottom: 16px; }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th { background: #f5f5f5; font-weight: 600; }
+        .highlight { color: #e74c3c; font-weight: 600; }
+        .result-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #FF9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .question-box {
+            background: #f3e5f5;
+            border-left: 4px solid #9C27B0;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .question-box strong { color: #7B1FA2; }
+        .answer-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .diagram {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            margin: 16px 0;
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 32px;
+            border-radius: 12px;
+            margin: 40px 0;
+        }
+        .summary h3 { color: white; margin-top: 0; }
+        .summary ul { margin-left: 20px; }
+        .summary li { margin: 8px 0; }
+        .test-result {
+            background: #1e1e1e;
+            color: #4EC9B0;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+        }
+        .test-result .label { color: #9CDCFE; }
+        .test-result .value { color: #CE9178; }
+        .test-result .highlight { color: #DCDCAA; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <h1>세마포어 vs 뮤텍스</h1>
+        <p class="subtitle">둘 다 락인데 뭐가 다를까? 소유권의 비밀</p>
+
+        <h2>흔한 오해: "세마포어 = 여러 개 들어갈 수 있는 뮤텍스"?</h2>
+
+        <p>많은 사람들이 이렇게 알고 있다:</p>
+        <ul>
+            <li>뮤텍스: 1개 스레드만 진입</li>
+            <li>세마포어: N개 스레드 진입 가능 (count 설정)</li>
+        </ul>
+
+        <div class="warning-box">
+            <strong>그럼 바이너리 세마포어(count=1)는 뮤텍스랑 같은 거 아니야?</strong><br>
+            → 아니다! 핵심적인 차이가 있다.
+        </div>
+
+        <h2>스캐폴딩으로 차이점 발견하기</h2>
+
+        <div class="question-box">
+            <strong>Q1. 뮤텍스를 잠근 스레드 A가 있어. 스레드 B가 그 뮤텍스를 해제할 수 있을까?</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+스레드 A: Lock(mutex)
+스레드 A: // 작업 중...
+스레드 B: Unlock(mutex)  // ← 이거 가능?</pre>
+        </div>
+
+        <div class="answer-box">
+            <strong>A1. 불가능!</strong><br>
+            뮤텍스는 <strong>"누가 잠갔는지"</strong> 기억한다. 본인만 풀 수 있다.
+        </div>
+
+        <div class="question-box">
+            <strong>Q2. 그럼 세마포어(count=1)로 같은 상황. 스레드 A가 Wait 했는데, 스레드 B가 Signal하면?</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+세마포어 count = 1
+
+스레드 A: Wait(sem)   // count: 1 → 0, 진입
+스레드 A: // 작업 중...
+스레드 B: Signal(sem) // ← 이거 가능?</pre>
+        </div>
+
+        <div class="answer-box">
+            <strong>A2. 가능!</strong><br>
+            세마포어는 "누가 Wait했는지" 기억 안 한다. 그냥 숫자만 관리한다.
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+스레드 A: Wait(sem)   // count: 1 → 0
+스레드 A: // 작업 중...
+스레드 B: Signal(sem) // count: 0 → 1 ← 성공!
+스레드 C: Wait(sem)   // count: 1 → 0, 진입 가능!</pre>
+            <span class="highlight">스레드 A가 아직 작업 중인데 C가 들어와버림!</span>
+        </div>
+
+        <h2>핵심 차이: 소유권</h2>
+
+        <table>
+            <tr>
+                <th></th>
+                <th>뮤텍스</th>
+                <th>세마포어</th>
+            </tr>
+            <tr>
+                <td><strong>소유권</strong></td>
+                <td class="highlight">있음</td>
+                <td>없음</td>
+            </tr>
+            <tr>
+                <td>Lock/Wait</td>
+                <td>스레드 A</td>
+                <td>스레드 A</td>
+            </tr>
+            <tr>
+                <td>Unlock/Signal</td>
+                <td><strong>스레드 A만</strong></td>
+                <td><strong>아무나</strong></td>
+            </tr>
+        </table>
+
+        <h2>그럼 세마포어는 언제 쓸까?</h2>
+
+        <div class="question-box">
+            <strong>Q3. "아무나 Signal 가능"한 특성이 유용한 상황은?</strong><br>
+            힌트: 스레드 A가 "준비됐어!"라고 스레드 B에게 알려주고 싶을 때...
+        </div>
+
+        <h3>게임 서버 실제 예시: 패킷 처리</h3>
+
+        <div class="diagram">
+[네트워크 스레드]              [게임 로직 스레드]
+클라에서 패킷 옴               Wait(sem) ← 패킷 올 때까지 잠듦
+큐에 패킷 넣음                    💤 (CPU 안 씀)
+Signal(sem) ─────────────→    깨어남! 큐에서 패킷 꺼내서 처리</div>
+
+        <h3>왜 뮤텍스로는 안 될까?</h3>
+
+        <div class="diagram">
+[뮤텍스로 하면]
+while(true) {
+    Lock(mutex)      // 아무도 안 잡고 있음 → 바로 통과
+    if(큐 비었음)     // 패킷 없네
+    Unlock(mutex)    // 풀고
+    // → 다시 Lock → 통과 → 확인 → 없음 → 풀고...
+    // 무한 반복. CPU 100%.
+}
+
+[세마포어로 하면]
+while(true) {
+    Wait(sem)        // 신호 올 때까지 잠듦. CPU 0%
+    ProcessPacket(); // 신호 왔다 = 패킷 있다
+}</div>
+
+        <div class="info-box">
+            <strong>핵심 차이:</strong><br>
+            • 뮤텍스 Lock: "다른 놈이 잡고 있으면" 대기<br>
+            • 세마포어 Wait: "count=0이면" 대기<br><br>
+            뮤텍스는 아무도 안 잡고 있으면 <strong>바로 통과</strong>해버림!
+        </div>
+
+        <h2>바이너리 세마포어의 진짜 용도</h2>
+
+        <div class="question-box">
+            <strong>Q4. count=0으로 시작하면?</strong>
+<pre style="background: transparent; color: inherit; padding: 10px 0; margin: 10px 0;">
+세마포어 count = 0  ← 처음부터 0!
+
+[게임 로직 스레드]
+Wait(sem)  → count가 0이네? → ???</pre>
+        </div>
+
+        <div class="answer-box">
+            <strong>A4. 바로 잠든다!</strong><br>
+            첫 번째 스레드도 들어가지 못하고 <strong>신호가 올 때까지 대기</strong>한다.
+        </div>
+
+        <h3>게임 로딩 예시</h3>
+
+        <div class="diagram">
+바이너리 세마포어 count = 0 (신호 없음)
+
+[메인 스레드]                [로딩 스레드]
+"로딩 화면 띄움"
+Wait(sem) ← 대기             리소스 로딩 중...
+   ...                       로딩 완료!
+   ...                       Signal(sem) ──→ 신호 보냄!
+깨어남! 게임 시작</div>
+
+        <p><strong>핵심:</strong> 로딩 스레드가 Wait 안 했는데 Signal 함.<br>
+        → 뮤텍스론 불가능 (본인이 Lock 안 했으면 Unlock 못함)</p>
+
+        <h2>비유로 정리</h2>
+
+        <h3>뮤텍스 = 화장실 열쇠</h3>
+        <div class="diagram">
+너가 열쇠로 문 잠금 → 너만 열 수 있음
+친구가 "나 대신 열어줄게" → 안 됨, 열쇠 없음</div>
+
+        <h3>세마포어 = 초인종</h3>
+        <div class="diagram">
+너: 집에서 초인종 기다림 (Wait)
+배달원: 초인종 누름 (Signal)
+너: 딩동! 문 열고 받음
+
+배달원은 너 집에 들어간 적 없어.
+그냥 "왔어!" 알려준 것뿐.</div>
+
+        <h2>실측 테스트 결과</h2>
+
+        <h3>테스트 1: 소유권 차이</h3>
+
+        <div class="test-result">
+<span class="label">[Mutex]</span>
+  Thread A: Lock → 획득
+  Thread B: Unlock 시도 → <span class="highlight">FAILED! error=288 (ERROR_NOT_OWNER)</span>
+  Thread A: Unlock → Success!
+
+<span class="label">[Semaphore]</span>
+  Thread A: Wait → 획득 (count: 1→0)
+  Thread C: Signal 시도 → <span class="highlight">Success! (count: 0→1)</span>
+  → 아무나 Signal 가능!</div>
+
+        <h3>테스트 2: 신호 대기 패턴</h3>
+
+        <div class="test-result">
+<span class="label">[Semaphore - count=0으로 시작]</span>
+  Waiter: Wait()... → <span class="highlight">바로 잠듦</span>
+  Signaler: 1초 후 Signal!
+  Waiter: 깨어남! (대기 시간: <span class="value">1004 ms</span>)
+
+<span class="label">[Mutex로는?]</span>
+  → count=0 개념 없음
+  → 아무도 안 잡고 있으면 바로 통과
+  → <span class="highlight">'신호 올 때까지 대기' 불가능!</span></div>
+
+        <h3>테스트 3: CPU 사용량</h3>
+
+        <div class="test-result">
+<span class="label">[Mutex 폴링]</span>
+  2초 동안 루프 횟수: <span class="highlight">4,029,467회</span>
+  → CPU 풀가동!
+
+<span class="label">[Semaphore 대기]</span>
+  Wait 횟수: <span class="value">1회</span>
+  → CPU 0%!
+
+<span class="label">[비교]</span>
+  <span class="highlight">400만 번 vs 1번</span> - 이게 차이다!</div>
+
+        <h3>테스트 4: 생산자-소비자</h3>
+
+        <div class="test-result">
+<span class="label">[3 Producers, 1 Consumer]</span>
+  Producer1: Signal! → Consumer: 처리!
+  Producer2: Signal! → Consumer: 처리!
+  Producer3: Signal! → Consumer: 처리!
+  ...
+  총 처리: <span class="value">9개</span>
+
+  → 소비자는 생산될 때만 깨어남!</div>
+
+        <h2>용도별 정리</h2>
+
+        <table>
+            <tr>
+                <th>용도</th>
+                <th>뭘 써?</th>
+                <th>이유</th>
+            </tr>
+            <tr>
+                <td>데이터 보호 (한 놈만 들어와)</td>
+                <td><strong>뮤텍스</strong></td>
+                <td>소유권으로 안전하게 보호</td>
+            </tr>
+            <tr>
+                <td>신호 전달 (야 끝났어!)</td>
+                <td><strong>바이너리 세마포어</strong></td>
+                <td>다른 스레드가 깨워줄 수 있음</td>
+            </tr>
+            <tr>
+                <td>리소스 제한 (N명만 들어와)</td>
+                <td><strong>카운팅 세마포어</strong></td>
+                <td>커넥션 풀, 동시 접속 제한</td>
+            </tr>
+        </table>
+
+        <div class="info-box">
+            <strong>Windows에서는?</strong><br>
+            신호 전달 용도로 <strong>Event 객체</strong>를 따로 제공한다.<br>
+            <code>CreateEvent</code>, <code>SetEvent</code>, <code>WaitForSingleObject</code>
+        </div>
+
+        <div class="summary">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>뮤텍스</strong> = 소유권 있음 → 잠근 놈만 풀 수 있음 → <strong>보호용</strong></li>
+                <li><strong>세마포어</strong> = 소유권 없음 → 아무나 Signal 가능 → <strong>신호용</strong></li>
+                <li><strong>바이너리 세마포어</strong> ≠ 뮤텍스 (count=1이어도 다른 물건)</li>
+                <li><strong>count=0 시작</strong> = 신호 올 때까지 대기하는 패턴</li>
+                <li><strong>폴링 vs 대기</strong> = 400만 회 vs 1회 (CPU 효율 차이)</li>
+            </ul>
+        </div>
+
+    </div>
+</body>
+</html>
