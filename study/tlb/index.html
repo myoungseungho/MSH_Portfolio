@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TLB와 주소 변환 캐시 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            margin: 24px 0;
+        }
+        .result-box h4 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .result-box .result-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        .result-box .result-item {
+            text-align: center;
+        }
+        .result-box .result-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .result-box .result-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+        .result-box .result-note {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+        .result-box .result-highlight {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <header class="header">
+            <h1>TLB, 주소 변환도 캐싱이 필요해</h1>
+            <p>TLB Hit vs TLB Miss, 24배 성능 차이의 비밀</p>
+        </header>
+
+        <!-- Part 1: 주소 변환 문제 -->
+        <div class="conversation">
+            <h2>Part 1. 가상 주소 → 물리 주소, 어떻게 알아?</h2>
+
+            <div class="chat">
+                <div class="q">프로그램에서 0x1000 주소에 접근하면, 실제 물리 주소는 어떻게 알아?</div>
+                <div class="a">
+                    <p><span class="highlight">페이지 테이블</span>에서 변환 정보를 찾아.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">페이지 테이블은 어디에 있어?</div>
+                <div class="a">
+                    <p><span class="highlight">RAM (메모리)</span>에 있어. 커널이 관리하고.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">어? 그럼 문제 아니야?</div>
+                <div class="a">
+                    <p><span class="warning">맞아, 문제야!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">너의 코드: "0x1000 주소 읽고 싶어"
+    │
+    ▼
+CPU: "0x1000이 물리 주소 몇 번이지? 페이지 테이블 봐야겠다"
+    │
+    ▼
+메모리 접근 ①: 페이지 테이블 읽기 (RAM)
+    │
+    ▼
+CPU: "아, 물리 주소 0x5000이구나"
+    │
+    ▼
+메모리 접근 ②: 실제 데이터 읽기 (RAM)
+
+→ 메모리 1번 읽으려고 메모리 2번 접근!</div>
+        </div>
+
+        <!-- Part 2: TLB 등장 -->
+        <div class="conversation">
+            <h2>Part 2. 해결책: TLB</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>자주 쓰는 주소 변환 결과를 캐싱하자!</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">[CPU 안에 작은 캐시 = TLB]
+
+가상 주소 0x1000 → 물리 주소 0x5000
+가상 주소 0x2000 → 물리 주소 0x8000
+가상 주소 0x3000 → 물리 주소 0xA000
+...
+
+TLB = Translation Lookaside Buffer
+    = 주소 변환 캐시</div>
+
+            <div class="code-block">[TLB 있을 때]
+
+너의 코드: "0x1000 주소 읽고 싶어"
+    │
+    ▼
+CPU: "TLB에 있나?" ──→ ✅ 있다! (TLB Hit)
+    │
+    ▼
+바로 물리 주소 0x5000으로 접근
+    │
+    ▼
+메모리 접근 ①: 실제 데이터 읽기 (1번만!)
+
+→ 메모리 1번 읽는데 메모리 1번만 접근!</div>
+
+            <div class="chat">
+                <div class="q">TLB가 CPU 안에 있으면 얼마나 빨라?</div>
+                <div class="a">
+                    <p><span class="key-point">CPU 가까울수록 빠르니까, 엄청 빠르지!</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>속도</th>
+                </tr>
+                <tr>
+                    <td class="good">TLB Hit (CPU 안에서 찾음)</td>
+                    <td>~1 사이클 (0.3ns)</td>
+                </tr>
+                <tr>
+                    <td class="bad">TLB Miss (페이지 테이블 접근)</td>
+                    <td>10~100 사이클</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3: TLB Miss -->
+        <div class="conversation">
+            <h2>Part 3. 근데 TLB도 한계가 있어</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p>TLB는 CPU 안에 있어서 <span class="warning">크기가 작아</span>.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[TLB 크기]
+
+일반적으로 64~1024개 엔트리만 저장 가능
+
+페이지 크기가 4KB라면:
+64개 × 4KB = 256KB만 커버 가능
+
+너의 프로그램이 1GB 메모리 쓰면?
+→ 다 못 담아!
+→ TLB Miss 발생!</div>
+
+            <div class="chat">
+                <div class="q">TLB Miss가 자주 나는 상황은?</div>
+                <div class="a">
+                    <p>메모리를 <span class="warning">랜덤하게 여기저기</span> 접근하면!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[순차 접근]
+arr[0], arr[1], arr[2], arr[3]...
+
+페이지 0 → 0 → 0 → 0 → 페이지 1 → 1 → 1...
+TLB Hit  Hit  Hit  Hit    Miss    Hit  Hit...
+
+→ 4KB마다 1번 Miss (0.1% 미만)
+
+[랜덤 접근]
+arr[58391], arr[7283], arr[991823]...
+
+페이지 58 → 페이지 7 → 페이지 991...
+TLB Miss     Miss       Miss...
+
+→ 매번 다른 페이지 = TLB Miss 폭발!</div>
+        </div>
+
+        <!-- Part 4: 캐시 미스와의 차이 -->
+        <div class="conversation">
+            <h2>Part 4. 잠깐, 이거 캐시 미스랑 뭐가 달라?</h2>
+
+            <div class="chat">
+                <div class="q">순차 vs 랜덤이면 캐시 미스 테스트랑 똑같은 거 아니야?</div>
+                <div class="a">
+                    <p><span class="key-point">좋은 지적!</span> 구분해야 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[캐시 미스]
+- "데이터 자체"가 캐시에 없음
+- 데이터 크기가 크면 발생
+
+[TLB 미스]
+- "주소 변환 정보"가 TLB에 없음
+- 접근하는 "페이지 수"가 많으면 발생</div>
+
+            <div class="chat">
+                <div class="q">그럼 TLB만 테스트하려면?</div>
+                <div class="a">
+                    <p><strong>핵심: 데이터는 작게, 페이지는 많이!</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">[TLB만 테스트하는 방법]
+
+[A] 같은 페이지 내에서만 접근
+arr[0], arr[1], arr[2]...
+→ 1개 페이지, 데이터 4096바이트
+→ TLB Hit, 캐시 Hit
+
+[B] 4KB(페이지 크기) 간격으로 점프
+arr[0], arr[4096], arr[8192], arr[12288]...
+→ 4096개 페이지, 데이터 4096바이트 (같음!)
+→ TLB Miss, 캐시 Hit!
+
+[그림]
+페이지0  페이지1  페이지2  페이지3  ...
+[*...]   [*...]   [*...]   [*...]
+ ↑        ↑        ↑        ↑
+ 4KB      4KB      4KB      4KB
+
+* = 접근하는 1바이트 (캐시에 다 들어감)
+→ 페이지만 다름 = 순수 TLB 오버헤드!</div>
+        </div>
+
+        <!-- Part 5: 실측 -->
+        <div class="conversation">
+            <h2>Part 5. 실측 테스트</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>테스트:</strong> 40,960회 접근 (동일), 페이지 수만 다르게</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h4>접근 방식별 속도</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">같은 페이지</div>
+                        <div class="result-value">0.21 ns</div>
+                        <div class="result-note">TLB Hit</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">페이지마다 점프</div>
+                        <div class="result-value">5.02 ns</div>
+                        <div class="result-note">TLB Miss</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">랜덤 페이지</div>
+                        <div class="result-value">4.28 ns</div>
+                        <div class="result-note">TLB Miss</div>
+                    </div>
+                </div>
+                <div class="result-highlight">
+                    TLB Miss가 24배 느림!
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">왜 이런 차이가 나?</div>
+            </div>
+
+            <div class="code-block">[A] 같은 페이지 반복
+→ 1바이트씩 4096번 접근
+→ 항상 같은 페이지 (TLB에 1개만 필요)
+→ TLB Hit!
+
+[B] 페이지마다 1바이트
+→ 1바이트씩 4096번 접근 (데이터 양 동일!)
+→ 매번 다른 페이지 (4096개 페이지)
+→ TLB에 다 안 들어감
+→ TLB Miss!
+
+같은 양의 데이터인데 24배 차이!
+= 순수 TLB 오버헤드</div>
+        </div>
+
+        <!-- Part 6: 개발자 실천 지침 -->
+        <div class="conversation">
+            <h2>Part 6. 개발자를 위한 실천 지침</h2>
+
+            <div class="chat">
+                <div class="q">평소 코딩할 때 TLB 미스 안 나게 뭘 주의해야 해?</div>
+                <div class="a">
+                    <p><strong>핵심 원칙:</strong> <span class="key-point">접근하는 페이지 수를 줄여라!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[지침 1] 배열은 순차 접근
+
+// 좋음 ✅ - 페이지 순서대로
+for (int i = 0; i < size; i++) {
+    sum += arr[i];
+}
+
+// 나쁨 ❌ - 페이지 뒤죽박죽
+for (int i = 0; i < size; i++) {
+    sum += arr[randomIndex[i]];
+}</div>
+
+            <div class="code-block">[지침 2] 2차원 배열은 행(row) 우선 접근
+
+int matrix[1000][1000];
+
+// 좋음 ✅ - 메모리 연속 (같은 페이지)
+for (int i = 0; i < 1000; i++) {
+    for (int j = 0; j < 1000; j++) {
+        matrix[i][j] = 0;  // 행 우선
+    }
+}
+
+// 나쁨 ❌ - 메모리 점프 (다른 페이지)
+for (int j = 0; j < 1000; j++) {
+    for (int i = 0; i < 1000; i++) {
+        matrix[i][j] = 0;  // 열 우선 = 4KB마다 점프!
+    }
+}</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>왜?</strong> C/C++은 행 우선 저장 (Row-major order)</p>
+                    <p>matrix[0][0], matrix[0][1], matrix[0][2]... 이 연속</p>
+                    <p>matrix[0][0], matrix[1][0], matrix[2][0]... 은 4000바이트 간격!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[지침 3] 관련 데이터는 모아서 저장
+
+// 나쁨 ❌ - 데이터 흩어짐 (Structure of Arrays)
+struct GameData {
+    float x[1000];  // 페이지 A
+    float y[1000];  // 페이지 B
+    float z[1000];  // 페이지 C
+};
+
+for (int i = 0; i < 1000; i++) {
+    process(data.x[i], data.y[i], data.z[i]);  // 3개 페이지 접근!
+}
+
+// 좋음 ✅ - 데이터 모음 (Array of Structures)
+struct Entity {
+    float x, y, z;  // 한 곳에 모임
+};
+Entity entities[1000];
+
+for (int i = 0; i < 1000; i++) {
+    process(entities[i].x, entities[i].y, entities[i].z);  // 1개 페이지!
+}</div>
+
+            <div class="code-block">[지침 4] 해시 테이블/트리는 주의
+
+// 해시 테이블: 랜덤 접근 = TLB Miss
+hashTable[hash("key1")];  // 페이지 X
+hashTable[hash("key2")];  // 페이지 Y (전혀 다른 곳)
+
+// 대안: 핫 데이터 캐싱
+if (hotCache.contains(key)) {
+    return hotCache[key];  // 지역성 있는 캐시
+}
+return hashTable[key];  // 어쩔 수 없을 때만</div>
+
+            <div class="code-block">[지침 5] 큰 메모리면 Huge Page 고려
+
+// 기본 페이지: 4KB
+// 4096개 페이지 = 16MB → TLB 부족
+
+// Huge Page: 2MB
+// 8개 페이지 = 16MB → TLB 충분!
+
+// Linux
+mmap(..., MAP_HUGETLB, ...);
+
+// Windows
+VirtualAlloc(..., MEM_LARGE_PAGES, ...);</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>지침</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>배열 순회</td>
+                    <td class="good">순차 접근</td>
+                    <td>같은 페이지 재사용</td>
+                </tr>
+                <tr>
+                    <td>2D 배열</td>
+                    <td class="good">행 우선 (i, j 순서)</td>
+                    <td>메모리 연속</td>
+                </tr>
+                <tr>
+                    <td>구조체</td>
+                    <td class="good">AoS (Array of Structs)</td>
+                    <td>관련 데이터 모음</td>
+                </tr>
+                <tr>
+                    <td>해시 테이블</td>
+                    <td>핫 데이터 캐싱</td>
+                    <td>랜덤 접근 최소화</td>
+                </tr>
+                <tr>
+                    <td>대용량 메모리</td>
+                    <td>Huge Page</td>
+                    <td>페이지 수 감소</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 7: 요약 체크리스트 -->
+        <div class="conversation">
+            <h2>Part 7. 코드 리뷰 체크리스트</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>코드 작성 후 스스로 물어보자:</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">□ 배열을 랜덤하게 접근하고 있진 않나?
+□ 2D 배열을 열 우선으로 순회하고 있진 않나?
+□ 관련 데이터가 메모리에 흩어져 있진 않나?
+□ 루프 안에서 여러 페이지를 왔다 갔다 하진 않나?
+□ 대용량 데이터인데 Huge Page를 안 쓰고 있진 않나?
+
+→ 하나라도 해당되면 TLB Miss 의심!</div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>페이지 테이블</strong> = 가상→물리 주소 변환 정보, RAM에 있음</li>
+                <li><strong>문제</strong> = 메모리 1번 읽는데 주소 변환 위해 메모리 또 접근</li>
+                <li><strong>TLB</strong> = CPU 안의 주소 변환 캐시, 자주 쓰는 변환 저장</li>
+                <li><strong>TLB Hit</strong> = CPU 안에서 바로 변환 (~1 사이클)</li>
+                <li><strong>TLB Miss</strong> = 페이지 테이블 가서 찾음 (10~100 사이클)</li>
+                <li><strong>실측</strong> = TLB Miss가 TLB Hit보다 24배 느림</li>
+                <li><strong>실천</strong> = 순차 접근, 행 우선, AoS, Huge Page</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-cs/">← CS 기초</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
