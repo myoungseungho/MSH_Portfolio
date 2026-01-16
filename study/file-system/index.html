@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파일 시스템 기초 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <header class="header">
+            <h1>파일 시스템 기초</h1>
+            <p>inode, 블록, 디렉토리, 저널링 - 파일이 디스크에 저장되는 원리</p>
+        </header>
+
+        <!-- Part 1: 파일이란 -->
+        <div class="conversation">
+            <h2>Part 1. 파일이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">파일이 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">이름이 붙은 데이터 덩어리</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">파일 = 이름 + 데이터
+
+report.txt = "report.txt" + "Hello World"</div>
+
+            <div class="chat">
+                <div class="q">그 파일을 "저장"하면 어디에 들어가?</div>
+                <div class="a">
+                    <p><span class="highlight">디스크</span> (HDD나 SSD)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 블록 -->
+        <div class="conversation">
+            <h2>Part 2. 디스크는 어떻게 생겼어?</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p>디스크를 아주 단순하게 보면 <span class="highlight">블록들의 배열</span>이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">디스크 구조:
+
+┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+│ 0 │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9 │ ...
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+  ↑
+  블록 (보통 4KB)
+
+각 블록은 번호가 있음!</div>
+
+            <div class="chat">
+                <div class="q">블록 크기는 왜 4KB야?</div>
+                <div class="a">
+                    <p>페이지 크기랑 맞춤 (TLB에서 배운 거!)</p>
+                    <p>너무 작으면: 블록 번호 관리가 복잡</p>
+                    <p>너무 크면: 작은 파일에 낭비 (1바이트 파일도 4KB 차지)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 메타데이터 분리 -->
+        <div class="conversation">
+            <h2>Part 3. 파일 정보는 어디에 저장해?</h2>
+
+            <div class="chat">
+                <div class="q">"report.txt"를 저장하면 뭐가 저장돼야 해?</div>
+                <div class="a">
+                    <p>1. 파일 <strong>내용</strong> ("Hello World")</p>
+                    <p>2. 파일 <strong>정보</strong> (이름, 크기, 날짜, 어디에 저장됐는지...)</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">같은 곳에 저장하면 안 돼?</div>
+                <div class="a">
+                    <p><span class="warning">문제 발생!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[같이 저장한 경우]
+
+블록 5: "report.txt" + 크기:11 + "Hello World"
+블록 6: "photo.jpg" + 크기:5MB + (사진 데이터...)
+블록 7~1200: (photo.jpg 데이터 계속...)
+
+파일 목록 보여줘! (ls 명령어)
+→ 이름이랑 크기만 보여주면 되는데...
+→ 5MB 사진 데이터까지 다 읽어야 함!
+→ 엄청 느림!</div>
+
+            <div class="chat">
+                <div class="q">그럼 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="key-point">파일 정보와 데이터를 분리!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[분리해서 저장]
+
+[파일 정보 영역]
+블록 0: "report.txt", 크기:11, 데이터위치: 블록100
+블록 1: "photo.jpg", 크기:5MB, 데이터위치: 블록200
+
+[파일 데이터 영역]
+블록 100: "Hello World"
+블록 200~1400: (사진 데이터)
+
+파일 목록 보여줘!
+→ 파일 정보 영역만 읽음 (몇 KB)
+→ 빠름!</div>
+        </div>
+
+        <!-- Part 4: inode -->
+        <div class="conversation">
+            <h2>Part 4. inode란?</h2>
+
+            <div class="chat">
+                <div class="q">파일 정보를 저장하는 구조체 이름이 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">inode</span> (index node)</p>
+                    <p>파일 데이터의 "위치(인덱스)"를 가진 노드!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[inode에 저장되는 것]
+
+- 파일 크기
+- 생성/수정 날짜
+- 권한 (읽기/쓰기/실행)
+- 소유자
+- 데이터가 어느 블록에 있는지 ← 핵심!</div>
+
+            <div class="code-block">[그림]
+
+inode 42                         데이터 블록
+┌─────────────────┐
+│ 크기: 11        │              블록 100
+│ 날짜: 2025-01-16│              ┌─────────────┐
+│ 권한: rw-r--r-- │              │ Hello World │
+│ 데이터: 블록 100 ─────────────→│             │
+└─────────────────┘              └─────────────┘</div>
+        </div>
+
+        <!-- Part 5: 큰 파일 처리 -->
+        <div class="conversation">
+            <h2>Part 5. 큰 파일은 어떻게?</h2>
+
+            <div class="chat">
+                <div class="q">파일이 커서 블록 하나에 안 들어가면?</div>
+                <div class="a">
+                    <p>inode에 여러 블록 번호를 적어야 해.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">근데 inode 크기는 고정(256바이트)인데, 블록 번호 수천 개를 어떻게 적어?</div>
+                <div class="a">
+                    <p><span class="key-point">간접 블록!</span> 전화번호부 비유로 설명할게.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[문제 상황]
+
+"친구 25만 명 전화번호를 내 명함에 적어야 해"
+명함 크기: 256바이트 (작음!)
+→ 안 들어감!
+
+[해결책]
+
+명함에 이렇게 적어:
+"전화번호부 3권에 있음"
+
+명함               전화번호부 3권
+┌──────────┐       ┌──────────────┐
+│ 전화번호: │       │ 철수: 010-... │
+│ 3권 참고 ────────→│ 영희: 010-... │
+└──────────┘       │ 민수: 010-... │
+                   └──────────────┘
+
+명함에 직접 안 쓰고, "어디 가면 있는지"만 적는 거야!</div>
+
+            <div class="code-block">[파일 시스템도 똑같아]
+
+inode (명함)              블록 500 (전화번호부)
+┌──────────────┐          ┌──────────────┐
+│ 크기: 1GB    │          │ 블록 100     │
+│ 데이터 위치: │          │ 블록 101     │
+│ 블록 500 참고 ─────────→│ 블록 102     │
+└──────────────┘          │ ...          │
+                          └──────────────┘
+                               │
+         ┌─────────────────────┼────────────┐
+         ▼                     ▼            ▼
+    블록 100              블록 101     블록 102
+   (데이터)              (데이터)     (데이터)
+
+블록 500 = "간접 블록" = 블록 번호들의 목록</div>
+
+            <div class="chat">
+                <div class="q">그럼 inode 크기는 파일이 커져도 안 변해?</div>
+                <div class="a">
+                    <p><span class="key-point">맞아!</span> inode는 항상 256바이트. 간접 블록이 대신 늘어남!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[실제 inode 구조]
+
+inode
+┌─────────────────────┐
+│ 직접 블록 0~11      │ → 12개 × 4KB = 48KB
+│ 간접 블록           │ → 1024 × 4KB = 4MB
+│ 이중 간접 블록      │ → 1024² × 4KB = 4GB
+│ 삼중 간접 블록      │ → 1024³ × 4KB = 4TB!
+└─────────────────────┘
+
+작은 파일: 직접 블록만 (1단계, 빠름!)
+큰 파일: 간접 블록 (2~4단계, 조금 느림)</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>파일 크기</th>
+                    <th>사용하는 블록</th>
+                    <th>단계</th>
+                </tr>
+                <tr>
+                    <td>~48KB</td>
+                    <td class="good">직접 블록</td>
+                    <td>1단계 (빠름)</td>
+                </tr>
+                <tr>
+                    <td>~4MB</td>
+                    <td>간접 블록</td>
+                    <td>2단계</td>
+                </tr>
+                <tr>
+                    <td>~4GB</td>
+                    <td>이중 간접</td>
+                    <td>3단계</td>
+                </tr>
+                <tr>
+                    <td>~4TB</td>
+                    <td>삼중 간접</td>
+                    <td>4단계</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 6: 디렉토리 -->
+        <div class="conversation">
+            <h2>Part 6. 디렉토리(폴더)는 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">폴더 안에 뭐가 들어있어?</div>
+                <div class="a">
+                    <p>파일 이름들 목록!</p>
+                    <p>근데 이름만 있으면 파일을 찾을 수 없어. 뭐가 더 필요해?</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">inode 번호?</div>
+                <div class="a">
+                    <p><span class="key-point">정확해!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[디렉토리 = 이름 + inode 번호 목록]
+
+/home/ 디렉토리 내용:
+┌─────────────┬────────────┐
+│ 이름        │ inode 번호 │
+├─────────────┼────────────┤
+│ report.txt  │ 42         │
+│ photo.jpg   │ 87         │
+│ music/      │ 123        │
+└─────────────┴────────────┘</div>
+
+            <div class="chat">
+                <div class="q">디렉토리는 어디에 저장돼?</div>
+                <div class="a">
+                    <p>블록에 저장! 그리고 디렉토리 정보는 inode에.</p>
+                    <p><span class="key-point">디렉토리도 파일이야!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[파일 vs 디렉토리]
+
+일반 파일:
+inode → 블록 → "Hello World" (텍스트 데이터)
+
+디렉토리:
+inode → 블록 → "report.txt:42, photo.jpg:87" (이름:inode 목록)
+
+차이점은 블록 안에 뭐가 들어있냐 뿐!</div>
+        </div>
+
+        <!-- Part 7: 경로 탐색 -->
+        <div class="conversation">
+            <h2>Part 7. 파일 경로는 어떻게 찾아?</h2>
+
+            <div class="chat">
+                <div class="q">/home/report.txt 파일 열 때 무슨 일이 일어나?</div>
+                <div class="a">
+                    <p>루트 디렉토리부터 따라가!</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">근데 루트 디렉토리는 어떻게 찾아?</div>
+                <div class="a">
+                    <p><span class="highlight">루트 디렉토리 inode 번호는 항상 2번!</span> (고정)</p>
+                    <p>모두가 알고 있는 시작점이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[/home/report.txt 찾는 과정]
+
+1단계: inode 2번 (루트 /) 읽기
+       → 블록에서 "home → inode 50" 발견
+
+2단계: inode 50번 (/home/) 읽기
+       → 블록에서 "report.txt → inode 42" 발견
+
+3단계: inode 42번 (report.txt) 읽기
+       → 데이터 블록 번호 확인: 블록 100
+
+4단계: 블록 100 읽기
+       → "Hello World" 드디어 읽음!</div>
+
+            <div class="code-block">[그림으로 보면]
+
+inode 2 (/) → "home은 inode 50"
+     ↓
+inode 50 (/home/) → "report.txt는 inode 42"
+     ↓
+inode 42 (report.txt) → "데이터는 블록 100"
+     ↓
+블록 100 → "Hello World"
+
+경로의 각 단계마다 inode → 블록 → 다음 inode 반복!</div>
+        </div>
+
+        <!-- Part 8: 저널링 -->
+        <div class="conversation">
+            <h2>Part 8. 저장 중 전원이 꺼지면?</h2>
+
+            <div class="chat">
+                <div class="q">파일 저장하다가 갑자기 전원이 꺼지면?</div>
+                <div class="a">
+                    <p><span class="warning">파일 깨짐!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[최악의 상황]
+
+report.txt 저장 중...
+
+1. 데이터 블록에 "Hello World" 쓰기 ✅ 완료
+2. inode 업데이트 (블록 번호 기록) ← 하는 중...
+
+전원 꺼짐! 💥
+
+결과:
+- 데이터 블록: "Hello World" 있음
+- inode: 블록 번호 기록 안 됨
+→ 데이터는 있는데 찾을 수가 없음!
+→ 파일 깨짐 + 블록 낭비</div>
+
+            <div class="chat">
+                <div class="q">어떻게 해결해?</div>
+                <div class="a">
+                    <p><span class="key-point">로그 남겨서 복구!</span> 이게 <strong>저널링 (Journaling)</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">[저널링 방식]
+
+파일 저장 전에 먼저 로그(저널)에 기록:
+
+저널: "report.txt에 블록 100 연결할 예정"
+     ↓
+1. 데이터 블록 100에 쓰기
+2. inode 업데이트
+     ↓
+저널: "완료!" (로그 삭제)
+
+[전원 꺼지면?]
+
+재부팅 후 저널 확인:
+"report.txt에 블록 100 연결할 예정... 완료 표시 없음!"
+
+→ 아, 작업 중에 꺼졌구나
+→ 저널 보고 복구하거나 롤백!</div>
+
+            <div class="code-block">[비유]
+
+저널 없이:
+그냥 작업함 → 중간에 꺼짐 → 뭘 하다 꺼졌는지 모름 → 망함
+
+저널 있으면:
+"할 일 메모" 먼저 적음 → 작업 → 중간에 꺼짐
+→ 메모 보고 "아 이거 하다 꺼졌구나" → 복구 가능!</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>파일 시스템</th>
+                    <th>저널링</th>
+                    <th>안전성</th>
+                </tr>
+                <tr>
+                    <td>ext3, ext4 (Linux)</td>
+                    <td class="good">O</td>
+                    <td>안전</td>
+                </tr>
+                <tr>
+                    <td>NTFS (Windows)</td>
+                    <td class="good">O</td>
+                    <td>안전</td>
+                </tr>
+                <tr>
+                    <td>FAT32 (USB)</td>
+                    <td class="bad">X</td>
+                    <td>위험!</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p>이래서 USB 뺄 때 <strong>"안전하게 제거"</strong> 하라고 하는 거야!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>파일</strong> = 이름 + 데이터</li>
+                <li><strong>블록</strong> = 디스크 저장 단위 (보통 4KB)</li>
+                <li><strong>inode</strong> = 파일 메타데이터 + 데이터 블록 위치</li>
+                <li><strong>직접 블록</strong> = 작은 파일용 (빠름)</li>
+                <li><strong>간접 블록</strong> = 큰 파일용 (블록 번호의 목록을 저장)</li>
+                <li><strong>디렉토리</strong> = 이름:inode 매핑 (디렉토리도 파일!)</li>
+                <li><strong>루트 inode</strong> = 항상 2번 (시작점)</li>
+                <li><strong>저널링</strong> = 로그 먼저 기록 → 안전한 저장</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-cs/">← CS 기초</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
