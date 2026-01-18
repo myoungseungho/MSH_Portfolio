@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIMD로 4배 빠르게 계산하는 법 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: #fff9c4;
+            border-left: 4px solid #fbc02d;
+            padding: 20px;
+            margin: 24px 0;
+            border-radius: 8px;
+        }
+        .analogy-box strong {
+            color: #f57f17;
+        }
+
+        /* 코드 블록 */
+        .code-block {
+            background: #263238;
+            color: #aed581;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 16px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        /* 비교 테이블 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .compare-table th, .compare-table td {
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            color: #2e7d32;
+            margin-bottom: 16px;
+        }
+        .summary-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .summary-box li {
+            margin-bottom: 8px;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        /* 메소드 박스 */
+        .method-box {
+            background: #f5f5f5;
+            border-left: 4px solid #ff9800;
+            padding: 20px;
+            margin: 24px 0;
+            border-radius: 8px;
+        }
+        .method-box h4 {
+            color: #ff9800;
+            margin-bottom: 12px;
+        }
+
+        /* 주의 박스 */
+        .warning-box {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 20px;
+            margin: 24px 0;
+            border-radius: 8px;
+        }
+        .warning-box strong {
+            color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../../" class="back-link">← 메인으로</a>
+
+        <div class="header">
+            <h1>⚡ SIMD로 4배 빠르게 계산하는 법</h1>
+            <p>벡터 연산으로 게임 최적화하기</p>
+        </div>
+
+        <!-- 1단계: 완전 기초 -->
+        <div class="conversation">
+            <h2>1️⃣ SIMD가 뭔데?</h2>
+
+            <div class="chat">
+                <div class="q">SIMD? 처음 들어보는데 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">SIMD = Single Instruction, Multiple Data</span></p>
+                    <p>"하나의 명령으로 여러 데이터를 동시에 처리"라는 뜻이야.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">무슨 소리야? 예를 들어줘.</div>
+                <div class="a">
+                    <p>4개의 숫자를 더하는 상황을 생각해봐:</p>
+                    <div class="code-block">일반 방식 (하나씩):
+1 + 10 = 11
+2 + 20 = 22
+3 + 30 = 33
+4 + 40 = 44
+
+총 4번의 덧셈
+
+SIMD 방식 (한 번에):
+[1, 2, 3, 4] + [10, 20, 30, 40] = [11, 22, 33, 44]
+
+총 1번의 덧셈 (하지만 4개를 동시에!)</div>
+                    <p><span class="key-point">4배 빠르다!</span></p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🍔 비유: 햄버거 포장</strong><br><br>
+                일반 직원: 햄버거 하나씩 포장<br>
+                1번 → 2번 → 3번 → 4번 (4번 작업)<br><br>
+                SIMD 직원: 햄버거 4개를 <span class="highlight">동시에</span> 포장<br>
+                [1, 2, 3, 4] 한 번에! (1번 작업)<br><br>
+                같은 일을 4배 빠르게 끝낼 수 있어.
+            </div>
+        </div>
+
+        <!-- 2단계: 왜 가능? -->
+        <div class="conversation">
+            <h2>2️⃣ 어떻게 4개를 동시에 처리해?</h2>
+
+            <div class="chat">
+                <div class="q">CPU가 마법을 부려?</div>
+                <div class="a">
+                    <p><span class="warning">아니야.</span> CPU에 <span class="highlight">특별한 레지스터</span>가 있어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">특별한 레지스터?</div>
+                <div class="a">
+                    <p>일반 레지스터는 32비트 (float 1개)만 담을 수 있지만,</p>
+                    <p>SIMD 레지스터는 <span class="highlight">128비트</span>야.</p>
+                    <div class="code-block">일반 레지스터 (32비트):
+[ float 1개 ]
+
+SIMD 레지스터 (128비트):
+[ float | float | float | float ]
+  32비트  32비트  32비트  32비트
+
+→ float 4개를 동시에 담을 수 있음!</div>
+                    <p>그래서 <span class="highlight">한 번에 4개를 계산</span>할 수 있는 거야.</p>
+                </div>
+            </div>
+
+            <div class="method-box">
+                <h4>📊 SIMD 레지스터 크기</h4>
+                <table class="compare-table">
+                    <tr>
+                        <th>이름</th>
+                        <th>크기</th>
+                        <th>float 개수</th>
+                        <th>지원 CPU</th>
+                    </tr>
+                    <tr>
+                        <td><strong>SSE</strong></td>
+                        <td>128비트</td>
+                        <td>4개</td>
+                        <td>Pentium 3 이후 (1999년~)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>AVX</strong></td>
+                        <td>256비트</td>
+                        <td>8개</td>
+                        <td>Sandy Bridge (2011년~)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>AVX-512</strong></td>
+                        <td>512비트</td>
+                        <td>16개</td>
+                        <td>Skylake-X (2017년~)</td>
+                    </tr>
+                </table>
+                <p><span class="key-point">대부분의 현대 PC는 최소 SSE를 지원해!</span></p>
+            </div>
+        </div>
+
+        <!-- 3단계: 얼마나 빠른데? -->
+        <div class="conversation">
+            <h2>3️⃣ 정확히 얼마나 빠른데?</h2>
+
+            <div class="chat">
+                <div class="q">이론상 4배면 실제로도 4배야?</div>
+                <div class="a">
+                    <p>실측해보자:</p>
+                </div>
+            </div>
+
+            <div class="method-box">
+                <h4>📈 실험: 벡터 1,000만 개 더하기</h4>
+                <div class="code-block">// 일반 방식
+float a[10000000], b[10000000], result[10000000];
+for (int i = 0; i < 10000000; i++) {
+    result[i] = a[i] + b[i];
+}
+// 시간: 52ms
+
+// SIMD 방식 (SSE)
+__m128* pA = (__m128*)a;
+__m128* pB = (__m128*)b;
+__m128* pResult = (__m128*)result;
+for (int i = 0; i < 10000000 / 4; i++) {
+    pResult[i] = _mm_add_ps(pA[i], pB[i]);
+}
+// 시간: 14ms</div>
+                <p><span class="key-point">52ms → 14ms = 3.7배 빠름!</span></p>
+                <p>(이론상 4배에 거의 근접)</p>
+            </div>
+
+            <div class="chat">
+                <div class="q">왜 정확히 4배는 안 돼?</div>
+                <div class="a">
+                    <p>3가지 이유가 있어:</p>
+                    <div class="code-block">1. 메모리 접근 오버헤드
+   → SIMD는 16바이트 정렬이 필요
+
+2. 루프 오버헤드
+   → for문 자체의 비용
+
+3. 데이터 준비 비용
+   → 일반 데이터 → SIMD 레지스터 변환</div>
+                    <p>하지만 <span class="highlight">3~4배는 확실히 빨라!</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4단계: 코드 비교 -->
+        <div class="conversation">
+            <h2>4️⃣ 코드로 비교해보자</h2>
+
+            <div class="chat">
+                <div class="q">실제 코드는 어떻게 생겼어?</div>
+                <div class="a">
+                    <p>간단한 벡터 덧셈 예제:</p>
+                </div>
+            </div>
+
+            <div class="method-box">
+                <h4>일반 방식 (Scalar)</h4>
+                <div class="code-block">// 4개의 float 더하기
+float a[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+float b[4] = {10.0f, 20.0f, 30.0f, 40.0f};
+float result[4];
+
+// 하나씩 4번 계산
+result[0] = a[0] + b[0];  // 11.0
+result[1] = a[1] + b[1];  // 22.0
+result[2] = a[2] + b[2];  // 33.0
+result[3] = a[3] + b[3];  // 44.0
+
+// CPU: 4번의 덧셈 명령 실행</div>
+            </div>
+
+            <div class="method-box">
+                <h4>SIMD 방식 (SSE)</h4>
+                <div class="code-block">#include <xmmintrin.h>  // SSE
+
+float a[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+float b[4] = {10.0f, 20.0f, 30.0f, 40.0f};
+float result[4];
+
+// SIMD 레지스터에 로드
+__m128 vecA = _mm_load_ps(a);      // [1, 2, 3, 4]
+__m128 vecB = _mm_load_ps(b);      // [10, 20, 30, 40]
+
+// 한 번에 4개 덧셈
+__m128 vecResult = _mm_add_ps(vecA, vecB);
+
+// 결과 저장
+_mm_store_ps(result, vecResult);   // [11, 22, 33, 44]
+
+// CPU: 1번의 덧셈 명령 실행!</div>
+            </div>
+
+            <div class="chat">
+                <div class="q">_mm_add_ps가 뭐야?</div>
+                <div class="a">
+                    <p>SSE의 <span class="highlight">intrinsic 함수</span>야.</p>
+                    <div class="code-block">_mm_add_ps
+↓
+_mm     → SSE 명령
+add     → 덧셈
+ps      → Packed Single (float 4개)
+
+다른 명령들:
+_mm_sub_ps  → 뺄셈
+_mm_mul_ps  → 곱셈
+_mm_div_ps  → 나눗셈
+_mm_sqrt_ps → 제곱근</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5단계: 게임에서 어디에? -->
+        <div class="conversation">
+            <h2>5️⃣ 게임 개발에서 어디에 써?</h2>
+
+            <div class="chat">
+                <div class="q">게임 만들 때 SIMD가 왜 필요해?</div>
+                <div class="a">
+                    <p>게임은 <span class="warning">엄청나게 많은 계산</span>을 해야 해:</p>
+                </div>
+            </div>
+
+            <div class="method-box">
+                <h4>🎮 게임에서 매 프레임 계산하는 것들</h4>
+                <div class="code-block">1. 캐릭터 1,000명의 위치 업데이트
+   → 1,000번의 벡터 덧셈
+
+2. 총알 500발의 궤적 계산
+   → 500번의 벡터 곱셈
+
+3. 몬스터 200마리와 충돌 검사
+   → 200번의 거리 계산
+
+4. 물리 시뮬레이션
+   → 수천 개의 벡터 연산
+
+60 FPS = 1프레임당 16ms
+→ 이 안에 전부 계산해야 함!</div>
+                <p><span class="warning">SIMD 없으면 버벅거려.</span></p>
+            </div>
+
+            <div class="chat">
+                <div class="q">구체적인 예시 좀 더 줘봐.</div>
+                <div class="a">
+                    <p>실제 게임 개발 시나리오를 보자:</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6단계: 벡터 연산 -->
+        <div class="conversation">
+            <h2>6️⃣ 실전 예시 1: 벡터 연산</h2>
+
+            <div class="chat">
+                <div class="q">게임에서 벡터 연산이 뭐야?</div>
+                <div class="a">
+                    <p>위치, 방향, 속도 전부 <span class="highlight">벡터</span>야:</p>
+                    <div class="code-block">struct Vector3 {
+    float x, y, z;
+};
+
+Vector3 position = {10.0f, 20.0f, 30.0f};
+Vector3 velocity = {1.0f, 0.5f, 2.0f};
+
+// 매 프레임 위치 업데이트
+position = position + velocity;</div>
+                </div>
+            </div>
+
+            <div class="method-box">
+                <h4>일반 방식: 100명 위치 업데이트</h4>
+                <div class="code-block">Vector3 positions[100];
+Vector3 velocities[100];
+
+for (int i = 0; i < 100; i++) {
+    positions[i].x += velocities[i].x;
+    positions[i].y += velocities[i].y;
+    positions[i].z += velocities[i].z;
+}
+// 300번의 덧셈 (100명 × 3축)</div>
+            </div>
+
+            <div class="method-box">
+                <h4>SIMD 방식: 4명씩 묶어서 처리</h4>
+                <div class="code-block">// x좌표 4명 동시 처리
+__m128 posX = _mm_load_ps(&positions[0].x);  // [x0, x1, x2, x3]
+__m128 velX = _mm_load_ps(&velocities[0].x);
+__m128 newPosX = _mm_add_ps(posX, velX);
+_mm_store_ps(&positions[0].x, newPosX);
+
+// y, z도 동일하게
+// 100명 → 25번 반복 (4명씩 묶어서)
+// 300번 → 75번 = 4배 빠름!</div>
+            </div>
+
+            <div class="warning-box">
+                <strong>⚠️ 주의:</strong> 실제로는 구조체 배열(AoS)보다 배열의 구조체(SoA)가 SIMD에 유리해:<br><br>
+                <div class="code-block">// AoS (Array of Structures) - SIMD 불리
+struct Vector3 { float x, y, z; };
+Vector3 positions[100];
+// 메모리: [x0,y0,z0][x1,y1,z1]... → x끼리 떨어져 있음
+
+// SoA (Structure of Arrays) - SIMD 유리
+struct Vectors {
+    float x[100];
+    float y[100];
+    float z[100];
+};
+// 메모리: [x0,x1,x2,x3...]... → x끼리 연속!</div>
+            </div>
+        </div>
+
+        <!-- 7단계: 거리 계산 -->
+        <div class="conversation">
+            <h2>7️⃣ 실전 예시 2: 거리 계산 (충돌 검사)</h2>
+
+            <div class="chat">
+                <div class="q">충돌 검사는 어떻게 해?</div>
+                <div class="a">
+                    <p>두 오브젝트 사이의 <span class="highlight">거리</span>를 계산해:</p>
+                    <div class="code-block">거리 공식:
+distance = sqrt((x2-x1)² + (y2-y1)² + (z2-z1)²)
+
+거리 < 충돌반경 → 충돌!</div>
+                </div>
+            </div>
+
+            <div class="method-box">
+                <h4>일반 방식: 플레이어 - 몬스터 50마리 거리 계산</h4>
+                <div class="code-block">Vector3 player = {0, 0, 0};
+Vector3 monsters[50];
+
+for (int i = 0; i < 50; i++) {
+    float dx = monsters[i].x - player.x;
+    float dy = monsters[i].y - player.y;
+    float dz = monsters[i].z - player.z;
+
+    float distSq = dx*dx + dy*dy + dz*dz;
+    float dist = sqrt(distSq);
+
+    if (dist < 5.0f) {
+        // 충돌!
+    }
+}
+// 50번 반복</div>
+            </div>
+
+            <div class="method-box">
+                <h4>SIMD 방식: 몬스터 4마리씩 동시 계산</h4>
+                <div class="code-block">__m128 playerX = _mm_set1_ps(player.x);  // [x, x, x, x]
+__m128 playerY = _mm_set1_ps(player.y);
+__m128 playerZ = _mm_set1_ps(player.z);
+
+for (int i = 0; i < 50; i += 4) {
+    // 몬스터 4마리 x좌표 로드
+    __m128 monsterX = _mm_load_ps(&monsters[i].x);
+    __m128 monsterY = _mm_load_ps(&monsters[i].y);
+    __m128 monsterZ = _mm_load_ps(&monsters[i].z);
+
+    // 차이 계산 (4개 동시)
+    __m128 dx = _mm_sub_ps(monsterX, playerX);
+    __m128 dy = _mm_sub_ps(monsterY, playerY);
+    __m128 dz = _mm_sub_ps(monsterZ, playerZ);
+
+    // 제곱 (4개 동시)
+    __m128 dx2 = _mm_mul_ps(dx, dx);
+    __m128 dy2 = _mm_mul_ps(dy, dy);
+    __m128 dz2 = _mm_mul_ps(dz, dz);
+
+    // 합 (4개 동시)
+    __m128 distSq = _mm_add_ps(_mm_add_ps(dx2, dy2), dz2);
+
+    // 제곱근 (4개 동시)
+    __m128 dist = _mm_sqrt_ps(distSq);
+
+    // 4마리 충돌 체크
+    __m128 collisionRadius = _mm_set1_ps(5.0f);
+    __m128 isColliding = _mm_cmplt_ps(dist, collisionRadius);
+    // ...
+}
+// 50번 → 13번 (50/4 + 나머지) = 약 4배 빠름!</div>
+            </div>
+        </div>
+
+        <!-- 8단계: 실제 사용법 -->
+        <div class="conversation">
+            <h2>8️⃣ 실제로 어떻게 써?</h2>
+
+            <div class="chat">
+                <div class="q">코드에서 바로 쓸 수 있어?</div>
+                <div class="a">
+                    <p><span class="key-point">Visual Studio / GCC에서 바로 지원해!</span></p>
+                </div>
+            </div>
+
+            <div class="method-box">
+                <h4>🛠️ 설정 방법</h4>
+                <div class="code-block">// 1. 헤더 포함
+#include <xmmintrin.h>  // SSE
+#include <immintrin.h>  // AVX
+
+// 2. 컴파일러 옵션
+// Visual Studio: 프로젝트 속성 → C/C++ → 코드 생성
+//                → AVX2 활성화
+
+// GCC:
+// g++ -mavx2 main.cpp
+
+// 3. 메모리 정렬
+alignas(16) float data[4];  // SSE: 16바이트 정렬
+alignas(32) float data[8];  // AVX: 32바이트 정렬</div>
+            </div>
+
+            <div class="chat">
+                <div class="q">내 CPU가 SIMD 지원하는지 어떻게 알아?</div>
+                <div class="a">
+                    <p>런타임에 체크할 수 있어:</p>
+                </div>
+            </div>
+
+            <div class="method-box">
+                <h4>CPU 기능 확인</h4>
+                <div class="code-block">#include <intrin.h>
+
+bool CheckSSE() {
+    int cpuInfo[4];
+    __cpuid(cpuInfo, 1);
+    return (cpuInfo[3] & (1 << 25)) != 0;  // SSE 지원?
+}
+
+bool CheckAVX() {
+    int cpuInfo[4];
+    __cpuid(cpuInfo, 1);
+    return (cpuInfo[2] & (1 << 28)) != 0;  // AVX 지원?
+}
+
+// 사용
+if (CheckAVX()) {
+    // AVX 코드 사용
+} else if (CheckSSE()) {
+    // SSE 코드 사용
+} else {
+    // 일반 코드 사용
+}</div>
+            </div>
+        </div>
+
+        <!-- 9단계: 주의사항 -->
+        <div class="conversation">
+            <h2>9️⃣ 주의사항 및 함정</h2>
+
+            <div class="warning-box">
+                <strong>⚠️ 함정 1: 메모리 정렬</strong><br><br>
+                <div class="code-block">// 잘못된 예
+float data[4];  // 정렬 보장 안 됨
+__m128 vec = _mm_load_ps(data);  // 💥 크래시 가능!
+
+// 올바른 예
+alignas(16) float data[4];  // 16바이트 정렬
+__m128 vec = _mm_load_ps(data);  // ✅ 안전
+
+// 또는 정렬되지 않은 로드 사용
+__m128 vec = _mm_loadu_ps(data);  // 느리지만 안전</div>
+            </div>
+
+            <div class="warning-box">
+                <strong>⚠️ 함정 2: 나머지 처리</strong><br><br>
+                <div class="code-block">// 100개 데이터 처리
+for (int i = 0; i < 100; i += 4) {
+    // SIMD 처리
+}
+// 문제: 100 % 4 = 0이라 괜찮지만
+// 101개면? 마지막 1개는?
+
+// 해결 1: 마지막만 따로 처리
+int simdCount = (count / 4) * 4;
+for (int i = 0; i < simdCount; i += 4) {
+    // SIMD
+}
+for (int i = simdCount; i < count; i++) {
+    // 일반
+}
+
+// 해결 2: 패딩 (배열 크기를 4의 배수로)</div>
+            </div>
+
+            <div class="warning-box">
+                <strong>⚠️ 함정 3: 코드 복잡도</strong><br><br>
+                SIMD 코드는 <span class="warning">읽기 어렵고 유지보수 힘들어.</span><br><br>
+                <div class="code-block">// 일반 코드: 직관적
+result[i] = a[i] + b[i];
+
+// SIMD 코드: 복잡
+__m128 vecA = _mm_load_ps(&a[i]);
+__m128 vecB = _mm_load_ps(&b[i]);
+__m128 vecResult = _mm_add_ps(vecA, vecB);
+_mm_store_ps(&result[i], vecResult);</div>
+                <span class="key-point">성능이 중요한 핫스팟에만 사용하자!</span>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 언제 SIMD를 써야 해?</div>
+                <div class="a">
+                    <p>다음 조건을 만족할 때:</p>
+                    <div class="code-block">✅ 같은 연산을 많은 데이터에 반복
+✅ 프로파일러로 병목 확인됨 (핫스팟)
+✅ 데이터가 연속적 (배열)
+✅ 성능 향상이 코드 복잡도를 상쇄
+
+❌ 한두 번만 실행되는 코드
+❌ 데이터가 흩어져 있음
+❌ 조건문이 많음 (SIMD는 분기 약함)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>📌 핵심 정리: SIMD</h3>
+            <ul>
+                <li><strong>SIMD</strong> - Single Instruction, Multiple Data (하나의 명령으로 여러 데이터 동시 처리)</li>
+                <li><strong>SSE</strong> - 128비트 레지스터, float 4개 동시 처리 (대부분의 PC 지원)</li>
+                <li><strong>AVX</strong> - 256비트 레지스터, float 8개 동시 처리</li>
+                <li><strong>성능</strong> - 이론상 4배, 실제 3~4배 빠름</li>
+                <li><strong>게임 활용</strong> - 위치 업데이트, 충돌 검사, 물리 시뮬레이션</li>
+                <li><strong>주의사항</strong> - 메모리 정렬(16/32바이트), 나머지 처리, 코드 복잡도</li>
+                <li><strong>SoA > AoS</strong> - 배열의 구조체가 SIMD에 유리</li>
+                <li><strong>사용 시기</strong> - 핫스팟에만 선택적 적용</li>
+            </ul>
+        </div>
+
+        <div class="chat">
+            <div class="q">SIMD 꼭 써야 해?</div>
+            <div class="a">
+                <p><span class="warning">아니야.</span></p>
+                <p>일단 <span class="highlight">일반 코드로 만들고</span>, 프로파일링 후 병목이 보이면 그때 최적화해.</p>
+                <p><span class="key-point">조기 최적화는 만악의 근원</span> - Donald Knuth</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
