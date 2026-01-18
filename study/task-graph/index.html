@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>10만 유저 MMO 서버를 락 없이 만드는 법 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        /* 코드 블록 */
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* 비교 테이블 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: #fffbf0;
+            border-left: 4px solid #ffa726;
+            border-radius: 0 12px 12px 0;
+            padding: 20px;
+            margin: 16px 0;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+
+        .emoji-step {
+            font-size: 1.3rem;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-thread/" class="back-link">← 멀티스레드</a>
+
+        <header class="header">
+            <h1>10만 유저 MMO 서버를 락 없이 만드는 법</h1>
+            <p>Task Graph - 멀티스레드의 락 컨텐션과 작업분배 불균형을 동시에 해결하기</p>
+        </header>
+
+        <!-- Part 0: 서론 -->
+        <div class="conversation">
+            <h2><span class="emoji-step">🎯</span> 우리가 풀어야 할 문제</h2>
+
+            <div class="chat">
+                <div class="q">MMO 게임 서버가 달성해야 할 목표가 뭐야?</div>
+                <div class="a">
+                    <p><strong>크게 4가지가 있어:</strong></p>
+                    <p>1. <span class="highlight">확장성 (Scalability)</span> - 많은 유저를 수용해야 함</p>
+                    <p>2. <span class="highlight">안정성 (Stability)</span> - 서버 다운 없이 오래 돌아야 함</p>
+                    <p>3. <span class="highlight">일관성 (Consistency)</span> - 모든 유저에게 공정한 경험</p>
+                    <p>4. <span class="highlight">응답성 (Responsiveness)</span> - 유저 입력에 빠르게 반응</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그중에서 가장 어려운 게 뭐야?</div>
+                <div class="a">
+                    <p><span class="key-point">확장성</span>이야.</p>
+                    <p>100명 잘 돌아가던 서버가 1만 명 되면 <span class="warning">느려지거나 죽는 문제</span>.</p>
+                    <p>이걸 해결하기 위해 <strong>멀티스레드</strong>를 쓰는데, 멀티스레드는 또 다른 문제가 있어.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 1: 멀티스레드의 문제 -->
+        <div class="conversation">
+            <h2><span class="emoji-step">1️⃣</span> 멀티스레드는 왜 어려워?</h2>
+
+            <div class="chat">
+                <div class="q">멀티스레드가 뭔데? 쓰레드가 여러 개란 얘기야?</div>
+                <div class="a">
+                    <p>맞아. <span class="highlight">스레드 = 작업 실행 흐름</span>이야.</p>
+                    <p>멀티스레드 = 여러 스레드가 동시에 일함 = 병렬 처리</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🍽️ 비유: 레스토랑 주방</strong><br><br>
+                <strong>싱글 스레드:</strong> 요리사 1명이 주문 받고, 요리하고, 서빙까지 다 함<br>
+                → 손님 10명 오면 10배 느려짐<br><br>
+                <strong>멀티스레드:</strong> 요리사 4명이 동시에 요리함<br>
+                → 손님 100명 와도 감당 가능
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 멀티스레드가 답이네? 뭐가 문제야?</div>
+                <div class="a">
+                    <p><span class="warning">두 가지 큰 문제가 있어.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>문제 1. 락 컨텐션 (Lock Contention)</strong></p>
+                    <p><span class="highlight">락(Lock)</span>이 뭔지부터 알아야 해.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🔒 비유: 화장실 문 자물쇠</strong><br><br>
+                공유 자원 = 화장실 1개<br>
+                스레드 = 사람 10명<br><br>
+                <strong>락 = 자물쇠</strong><br>
+                → 한 사람이 들어가면 문 잠금 (락 획득)<br>
+                → 다른 사람들은 밖에서 기다림 (대기)<br>
+                → 나오면 문 열림 (락 해제)<br>
+                → 다음 사람 들어감<br><br>
+                <strong>락 컨텐션 = 화장실 앞에 줄 서 있는 상황</strong>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>게임 서버에서 "공유 자원"이 뭔데?</p>
+                    <p>• <strong>유저 정보</strong> (HP, 위치, 인벤토리)</p>
+                    <p>• <strong>길드 정보</strong> (멤버 리스트, 창고)</p>
+                    <p>• <strong>경매장</strong> (아이템 목록)</p>
+                    <p>이런 데이터를 여러 스레드가 동시에 수정하면 <span class="warning">값이 꼬여.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+예: 길드 멤버 추가
+
+스레드 A: 길드.멤버수 = 10
+스레드 B: 길드.멤버수 = 10  (동시에 읽음)
+
+스레드 A: 길드.멤버수 = 11  (저장)
+스레드 B: 길드.멤버수 = 11  (저장)
+
+결과: 2명 추가했는데 멤버수는 11 (1명만 증가)
+→ 데이터 꼬임!
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>그래서 <strong>락을 걸어야 해</strong>:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+스레드 A: 락 획득 → 길드 수정 → 락 해제
+스레드 B: 대기... 대기... → 락 획득 → 길드 수정 → 락 해제
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">문제는 대기 시간이야.</span></p>
+                    <p>스레드가 10개인데 9개가 기다리면? <span class="warning">병렬 처리 의미 없음.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>문제 2. 작업분배 불균형 (Load Imbalance)</strong></p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>📦 비유: 택배 배송</strong><br><br>
+                배달원 4명, 택배 100개<br><br>
+                <strong>이상적인 경우:</strong> 각자 25개씩<br>
+                → 동시에 끝남<br><br>
+                <strong>현실:</strong><br>
+                배달원 A: 50개 (강남 밀집 지역)<br>
+                배달원 B: 10개 (한적한 곳)<br>
+                배달원 C: 30개<br>
+                배달원 D: 10개<br><br>
+                → A가 끝날 때까지 B, D는 놀고 있음
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>게임 서버에서:</p>
+                    <p>• 스레드 1번: 길드 처리 (부하 80%)</p>
+                    <p>• 스레드 2번: 채팅 처리 (부하 20%)</p>
+                    <p>• 스레드 3번: 거래 처리 (부하 50%)</p>
+                    <p>• 스레드 4번: 퀘스트 처리 (부하 10%)</p>
+                    <p><span class="warning">역할을 고정으로 나누면 불균형 발생</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그래서? 어떻게 해결해?</div>
+                <div class="a">
+                    <p>기존에는 이런 방법들을 썼어:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>방법</th>
+                    <th>설명</th>
+                    <th>문제점</th>
+                </tr>
+                <tr>
+                    <td><strong>1. 락 직접 사용</strong></td>
+                    <td>공유 자원마다 락 걸기</td>
+                    <td>락 컨텐션 심각, 데드락 위험</td>
+                </tr>
+                <tr>
+                    <td><strong>2. 싱글 로직 스레드</strong></td>
+                    <td>로직은 1개 스레드, I/O만 멀티</td>
+                    <td>로직 병렬 처리 불가능</td>
+                </tr>
+                <tr>
+                    <td><strong>3. 역할별 분리</strong></td>
+                    <td>길드 스레드, 채팅 스레드, 전투 스레드...</td>
+                    <td>작업분배 불균형, 스레드 간 동기화 복잡</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="warning">결론: 락과 스레드 직접 관리로는 한계가 있다.</span></p>
+                    <p>그래서 나온 개념이 <span class="highlight">Task와 Task Graph</span>야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: Task란 무엇인가 -->
+        <div class="conversation">
+            <h2><span class="emoji-step">2️⃣</span> Task가 뭔데?</h2>
+
+            <div class="chat">
+                <div class="q">Task? 작업? 그냥 함수 아니야?</div>
+                <div class="a">
+                    <p>비슷한데 좀 달라.</p>
+                    <p><span class="highlight">Task = 자체 컨텍스트를 가진 독립적인 실행 단위</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">"컨텍스트를 가진다"가 무슨 뜻이야?</div>
+                <div class="a">
+                    <p>Task는 <strong>어떤 스레드에서 실행될지 미리 모르는</strong> 작업이야.</p>
+                    <p>스레드 = 실행 환경 / Task = 실행할 내용</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>📝 비유: 배달 주문서</strong><br><br>
+                <strong>함수:</strong> "A 배달원이 강남역에 가서 치킨 배달해"<br>
+                → 배달원 고정<br><br>
+                <strong>Task:</strong> "강남역에 치킨 배달 (배달원: 미정)"<br>
+                → 주문서만 작성, 배달원은 나중에 배정<br>
+                → Task 스케줄러가 "지금 한가한 배달원"한테 할당
+            </div>
+
+            <div class="chat">
+                <div class="q">게임 서버에서 Task 예시 좀 줘봐.</div>
+                <div class="a">
+                    <p><strong>Task 단위로 나눌 수 있는 작업들:</strong></p>
+                    <p>• 길드 생성</p>
+                    <p>• 길드 멤버 초대</p>
+                    <p>• 닉네임 변경</p>
+                    <p>• 아이템 구매</p>
+                    <p>• 던전 입장</p>
+                    <p>• 친구 추가</p>
+                    <p>각각이 <strong>독립적으로 실행 가능</strong>해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+// C# 예시
+
+// Task 생성 & 실행
+Task.Run(() => CreateGuild(guildName));
+Task.Run(() => InviteMember(guildId, userId));
+Task.Run(() => ChangeNickname(userId, newName));
+
+// Task 스케줄러가 알아서 스레드 풀의 한가한 스레드에 배정
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 Task 스케줄러가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">Task 스케줄러 = Task를 스레드에 할당하는 관리자</span></p>
+                    <p>개발자는 "이런 작업 해줘"만 요청하고, 스케줄러가 알아서:</p>
+                    <p>1. 어느 스레드가 한가한지 확인</p>
+                    <p>2. Task를 그 스레드에 배정</p>
+                    <p>3. 스레드가 Task 실행</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>Task 스케줄러의 똑똑한 최적화:</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+1. Global Task Queue (전역 작업 대기열)
+   → 모든 Task가 여기에 쌓임
+
+2. Thread-local Queue (스레드별 개인 대기열)
+   → 각 스레드가 자기 할 일을 따로 관리
+   → Global Queue 경합 감소
+
+3. Work Stealing (워크 스틸링)
+   → 한가한 스레드가 바쁜 스레드의 Task를 가져옴
+   → 작업분배 불균형 자동 해결
+
+4. Thread Injection/Retirement
+   → 바쁘면 스레드 추가, 한가하면 스레드 줄임
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">결론: Task를 쓰면 작업분배 불균형은 해결!</span></p>
+                    <p>스케줄러가 알아서 균등하게 배분해줌.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 락 컨텐션은?</div>
+                <div class="a">
+                    <p><span class="warning">아직 안 풀렸어.</span></p>
+                    <p>Task를 써도 공유 자원 문제는 여전히 있어.</p>
+                    <p>그래서 필요한 게 <span class="highlight">Task Graph</span>야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: Task Graph -->
+        <div class="conversation">
+            <h2><span class="emoji-step">3️⃣</span> Task Graph로 락 없애기</h2>
+
+            <div class="chat">
+                <div class="q">Task만으로는 왜 공유 자원 문제가 안 풀려?</div>
+                <div class="a">
+                    <p>예를 들어볼게.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+Task A: 길드 생성 (길드 마스터 정보 수정)
+Task B: 닉네임 변경 (같은 유저 정보 수정)
+
+→ 동시 실행되면?
+→ 유저 정보 꼬임!
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p>Task 스케줄러는 <strong>"어떤 Task가 어떤 자원을 쓰는지"</strong> 몰라.</p>
+                    <p>그냥 한가한 스레드에 할당할 뿐.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그래서 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="highlight">Task Graph = Task 간의 실행 순서를 정의</span></p>
+                    <p>"B는 A가 끝난 후에 실행해"라고 명시하는 거야.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🍳 비유: 요리 순서</strong><br><br>
+                <strong>Task:</strong><br>
+                - A: 물 끓이기<br>
+                - B: 면 삶기<br>
+                - C: 계란 삶기<br>
+                - D: 스프 만들기<br><br>
+                <strong>Task Graph (의존성):</strong><br>
+                - B는 A가 끝나야 시작 가능 (물 먼저 끓여야 면 삶음)<br>
+                - C는 A가 끝나야 시작 가능<br>
+                - D는 아무때나 가능 (병렬 실행)<br><br>
+                → A → B / C 동시, D는 독립
+            </div>
+
+            <div class="chat">
+                <div class="q">Graph가 뭔데?</div>
+                <div class="a">
+                    <p><span class="highlight">그래프 = 노드(점)와 엣지(화살표)로 관계를 표현</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+Task Graph 예시:
+
+    [Task A]
+       ↓
+    [Task B] → [Task D]
+       ↓
+    [Task C]
+
+화살표 = "먼저 실행되어야 함"
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>Task Graph의 핵심 특성:</strong></p>
+                    <p>1. <span class="highlight">DAG (Directed Acyclic Graph)</span> = 방향성 있고, 순환 없음</p>
+                    <p>2. 의존성이 명확함</p>
+                    <p>3. Task 스케줄러가 <strong>순서를 보장</strong>해줌</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">"순환 없음"이 왜 중요해?</div>
+                <div class="a">
+                    <p>순환이 있으면 <span class="warning">데드락</span>이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+순환 예시 (금지):
+
+A → B → C → A
+
+A는 B가 끝나야 실행
+B는 C가 끝나야 실행
+C는 A가 끝나야 실행
+
+→ 무한 대기 = 데드락!
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">Task Graph를 쓰면?</span></p>
+                    <p>1. 락 없이도 실행 순서 보장</p>
+                    <p>2. 의존성 없는 Task는 병렬 실행</p>
+                    <p>3. 데드락 원천 차단</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+예: 길드 생성 & 닉네임 변경
+
+Task A: 길드 생성 (유저 X 정보 필요)
+Task B: 닉네임 변경 (유저 X 정보 필요)
+
+Task Graph:
+A → B
+
+→ A가 끝나고 B 실행
+→ 유저 X 정보 동시 접근 없음
+→ 락 불필요!
+            </code>
+        </div>
+
+        <!-- Part 4: 정적 Task Graph -->
+        <div class="conversation">
+            <h2><span class="emoji-step">4️⃣</span> 정적 Task Graph - 디스트릭트 처리</h2>
+
+            <div class="chat">
+                <div class="q">Task Graph를 어떻게 만들어? 매번 수동으로?</div>
+                <div class="a">
+                    <p>두 가지 방법이 있어:</p>
+                    <p>1. <span class="highlight">정적 Task Graph</span> - 미리 그래프 구조 고정</p>
+                    <p>2. <span class="highlight">동적 Task Graph</span> - 런타임에 자동 생성</p>
+                    <p>먼저 정적부터 볼게.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">정적이 뭐야?</div>
+                <div class="a">
+                    <p><strong>미리 계산 가능한 작업 순서</strong>를 고정으로 만들어두는 거야.</p>
+                    <p>MMO 서버의 <span class="highlight">월드 업데이트</span>가 대표적인 예시야.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">월드 업데이트가 뭔데?</div>
+                <div class="a">
+                    <p>MMO에서 월드를 <span class="highlight">섹션(Section)</span>이라는 격자로 나눠.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+┌────┬────┬────┬────┬────┐
+│ 1  │ 2  │ 3  │ 4  │ 5  │  ← 각 칸 = 섹션
+├────┼────┼────┼────┼────┤
+│ 6  │ 7  │ 8  │ 9  │ 10 │    (예: 50m × 50m)
+├────┼────┼────┼────┼────┤
+│ 11 │ 12 │ 13 │ 14 │ 15 │
+├────┼────┼────┼────┼────┤
+│ 16 │ 17 │ 18 │ 19 │ 20 │
+└────┴────┴────┴────┴────┘
+
+전체 = District (디스트릭트)
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p>매 프레임마다 각 섹션의 <strong>캐릭터 AI, 전투, 이동</strong> 처리해야 해.</p>
+                    <p>문제: 20개 섹션을 어떻게 병렬로 처리해?</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그냥 20개 Task 만들어서 동시 실행하면 안 돼?</div>
+                <div class="a">
+                    <p><span class="warning">안 돼!</span></p>
+                    <p><strong>인접 섹션끼리는 영향을 줘.</strong></p>
+                    <p>예: 섹션 7에 있는 유저가 스킬 쓰면 섹션 8의 적도 맞을 수 있어.</p>
+                    <p>→ 섹션 7과 8을 동시 처리하면 데이터 꼬임!</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">핵심 아이디어: "시야 거리" 제약</span></p>
+                    <p>캐릭터가 영향을 줄 수 있는 최대 거리 = 시야 거리 (예: 50m)</p>
+                    <p>→ <strong>2칸 이상 떨어진 섹션은 동시 처리 가능!</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+동시 처리 가능한 섹션 조합:
+
+체커보드 패턴 (1단계):
+┌────┬────┬────┬────┬────┐
+│ ■  │    │ ■  │    │ ■  │  ← 검은 칸만 동시 처리
+├────┼────┼────┼────┼────┤
+│    │    │    │    │    │
+├────┼────┼────┼────┼────┤
+│ ■  │    │ ■  │    │ ■  │
+├────┼────┼────┼────┼────┤
+│    │    │    │    │    │
+└────┴────┴────┴────┴────┘
+
+체커보드 패턴 (2단계):
+┌────┬────┬────┬────┬────┐
+│    │    │    │    │    │
+├────┼────┼────┼────┼────┤
+│    │ ■  │    │ ■  │    │  ← 다음 프레임에 이 칸들
+├────┼────┼────┼────┼────┤
+│    │    │    │    │    │
+├────┼────┼────┼────┼────┤
+│    │ ■  │    │ ■  │    │
+└────┴────┴────┴────┴────┘
+
+→ 4~5단계 반복하면 전체 디스트릭트 처리 완료
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p>이걸 <strong>Task Graph</strong>로 표현하면:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+Stage 1:  [섹션1] [섹션3] [섹션5] [섹션11] [섹션13] ...
+            ↓       ↓       ↓        ↓        ↓
+
+Stage 2:  [섹션2] [섹션4] [섹션7] [섹션9] ...
+            ↓       ↓       ↓       ↓
+
+Stage 3:  [섹션6] [섹션8] [섹션12] [섹션14] ...
+            ↓       ↓        ↓        ↓
+
+Stage 4:  [섹션17] [섹션19] ...
+            ↓        ↓
+
+→ 각 Stage 내 Task는 병렬 실행
+→ Stage 간에는 순차 실행
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">장점:</span></p>
+                    <p>• 락 없이 병렬 처리</p>
+                    <p>• 매 프레임 같은 패턴 = 예측 가능</p>
+                    <p>• Task 스케줄러가 자동으로 균등 분배</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">이거 "정적"이라고 부르는 이유가 뭐야?</div>
+                <div class="a">
+                    <p><strong>그래프 구조가 고정</strong>이기 때문이야.</p>
+                    <p>디스트릭트 크기가 정해지면 Task Graph도 고정.</p>
+                    <p>매 프레임 같은 그래프 실행.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 동적 Task Graph -->
+        <div class="conversation">
+            <h2><span class="emoji-step">5️⃣</span> 동적 Task Graph - 유저 행동 처리</h2>
+
+            <div class="chat">
+                <div class="q">디스트릭트 말고 다른 작업들은?</div>
+                <div class="a">
+                    <p>유저가 하는 행동들은 <strong>런타임에 발생</strong>해:</p>
+                    <p>• 길드 생성</p>
+                    <p>• 길드 멤버 초대</p>
+                    <p>• 닉네임 변경</p>
+                    <p>• 아이템 거래</p>
+                    <p>이런 건 <strong>미리 그래프를 그릴 수 없어.</strong></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="highlight">동적 Task Graph</span> = Task가 실행될 때 <strong>필요한 공유 자원을 명시</strong>하면</p>
+                    <p>시스템이 자동으로 의존성 추가.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>예시: 길드 관련 작업</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+Task A: 길드 생성
+  → 필요한 자원: [유저X]
+
+Task B: 길드 멤버 초대
+  → 필요한 자원: [유저X, 길드G, 유저Y]
+
+Task C: 길드 공지 수정
+  → 필요한 자원: [길드G]
+
+Task D: 닉네임 변경 (유저X)
+  → 필요한 자원: [유저X]
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p>시스템이 자동으로 판단:</p>
+                    <p>• A와 B는 [유저X] 공통 → <strong>순차 실행</strong></p>
+                    <p>• B와 C는 [길드G] 공통 → <strong>순차 실행</strong></p>
+                    <p>• C와 D는 공통 자원 없음 → <strong>병렬 실행 가능</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+자동 생성된 Task Graph:
+
+[Task A: 길드 생성]
+    ↓ (유저X)
+[Task B: 멤버 초대] ────┐
+    ↓ (길드G)           │ 병렬 가능
+[Task C: 공지 수정]     [Task D: 닉네임 변경]
+            </code>
+
+            <div class="chat">
+                <div class="q">이걸 어떻게 구현해?</div>
+                <div class="a">
+                    <p><span class="highlight">Exclusive Task</span>라는 개념을 써.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>핵심 아이디어:</strong></p>
+                    <p>각 공유 자원마다 <strong>"마지막 Task"</strong>를 기록해둬.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+// 의사코드
+
+공유자원 → 마지막 Task 맵핑:
+{
+  "유저X": Task A,
+  "길드G": null,
+  "유저Y": null
+}
+
+Task B 실행 요청:
+1. 필요한 자원: [유저X, 길드G, 유저Y]
+2. 각 자원의 "마지막 Task" 찾기:
+   - 유저X → Task A
+   - 길드G → null (없음)
+   - 유저Y → null
+3. Task B의 선행 Task = Task A
+4. Task B를 Task A 이후에 배치
+5. 맵핑 업데이트:
+   {
+     "유저X": Task B,
+     "길드G": Task B,
+     "유저Y": Task B
+   }
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p>이 방식의 이름이 <span class="highlight">ExchangeTailTask</span>:</p>
+                    <p>"마지막 Task"를 교환(Exchange)한다는 의미.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+// C# 의사코드
+
+class ExclusiveTask
+{
+    void Execute(params Resource[] resources)
+    {
+        // 1. 선행 Task 수집
+        var prevTasks = new List<Task>();
+        foreach (var res in resources)
+        {
+            var prev = res.GetLastTask();
+            if (prev != null)
+                prevTasks.Add(prev);
+        }
+
+        // 2. 선행 Task들이 모두 끝날 때까지 대기하는 Task 생성
+        var waitTask = Task.WhenAll(prevTasks);
+
+        // 3. 대기 후 실제 작업 실행
+        var myTask = waitTask.ContinueWith(() => DoWork());
+
+        // 4. 내가 이제 마지막 Task
+        foreach (var res in resources)
+        {
+            res.SetLastTask(myTask);
+        }
+    }
+}
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>Task.WhenAll</strong> = 여러 Task가 모두 끝나면 알려줌</p>
+                    <p><strong>ContinueWith</strong> = 이전 Task 끝나면 다음 Task 실행</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">순환 그래프 생길 위험은 없어?</div>
+                <div class="a">
+                    <p>있어. 그래서 코드에서 <strong>스피닝(대기)</strong>으로 방지해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+// 순환 방지
+
+while (이전 Task가 그래프 빌드 중)
+{
+    // 잠깐 대기 (스피닝)
+    // 실제 Task 실행을 기다리는 게 아니라
+    // 그래프 "구성"만 기다림
+    // → 오버헤드 거의 없음
+}
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">최적화 팁:</span></p>
+                    <p>공유 자원이 <strong>1개</strong>인 경우 (가장 흔함):</p>
+                    <p>→ 스피닝 필요 없음! 바로 의존성 추가 가능</p>
+                    <p>→ 성능 향상</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 실전 적용 -->
+        <div class="conversation">
+            <h2><span class="emoji-step">6️⃣</span> 실전 적용 사례</h2>
+
+            <div class="chat">
+                <div class="q">실제 게임에서 써봤어?</div>
+                <div class="a">
+                    <p>넥슨의 여러 프로젝트에 적용됐어:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>게임</th>
+                    <th>장르</th>
+                    <th>적용 서버</th>
+                </tr>
+                <tr>
+                    <td><strong>HIT</strong></td>
+                    <td>액션 RPG</td>
+                    <td>월드 서버, 인증 서버</td>
+                </tr>
+                <tr>
+                    <td><strong>오버히트</strong></td>
+                    <td>액션 RPG</td>
+                    <td>월드 서버</td>
+                </tr>
+                <tr>
+                    <td><strong>V4</strong></td>
+                    <td>MMORPG</td>
+                    <td>월드 서버, 로비 서버</td>
+                </tr>
+                <tr>
+                    <td><strong>HIT 2</strong></td>
+                    <td>액션 RPG</td>
+                    <td>전체 서버</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>적용 예시: 길드 시스템</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+// 실제 게임 시나리오
+
+유저 A: 길드 생성
+  → ExclusiveTask([유저A])
+
+유저 B: A 길드에 가입 신청
+  → ExclusiveTask([유저B, 길드])
+
+유저 A: B를 승인
+  → ExclusiveTask([유저A, 길드, 유저B])
+
+유저 C: 같은 길드에 가입 신청
+  → ExclusiveTask([유저C, 길드])
+
+→ 시스템이 자동으로 순서 보장
+→ 락 없이 안전한 처리
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>적용 예시: 거래소</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+유저 X: 아이템 등록
+  → ExclusiveTask([유저X, 거래소])
+
+유저 Y: 같은 아이템 구매
+  → ExclusiveTask([유저Y, 거래소, 아이템ID])
+
+유저 Z: 다른 아이템 구매
+  → ExclusiveTask([유저Z, 거래소, 다른아이템ID])
+
+→ Y와 Z는 병렬 실행 가능 (아이템 ID 다름)
+            </code>
+        </div>
+
+        <!-- Part 7: 한계 -->
+        <div class="conversation">
+            <h2><span class="emoji-step">7️⃣</span> Task Graph의 한계</h2>
+
+            <div class="chat">
+                <div class="q">완벽한 해결책처럼 들리는데, 단점은 없어?</div>
+                <div class="a">
+                    <p><span class="warning">있어. 크게 두 가지야.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>한계 1. 컨텍스트 차이</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+// 문제 상황
+
+// Task 생성 시점
+if (user.GuildId == null)
+{
+    // 길드 없으면 생성
+    Task.Run(() => CreateGuild(user));
+}
+
+// Task 실행 시점 (나중에)
+void CreateGuild(user)
+{
+    if (user.GuildId == null)  // 다시 체크 필요!
+    {
+        // 실제 생성
+    }
+    else
+    {
+        // 이미 다른 Task가 길드 만들었음
+        return;
+    }
+}
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="highlight">Task 생성 시점</span>과 <span class="highlight">Task 실행 시점</span>이 달라.</p>
+                    <p>→ Task 생성할 때 확인한 조건이 실행할 때 바뀔 수 있어.</p>
+                    <p>→ <strong>Task 내부에서 조건 재확인 필수</strong></p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>📝 비유: 배달 주문</strong><br><br>
+                <strong>주문 시점:</strong> "집에 우유 없으니까 사줘"<br>
+                <strong>배달 시점:</strong> 가족이 이미 우유 사옴<br>
+                → 배달원이 도착해서 다시 확인해야 함<br><br>
+                Task도 마찬가지!
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>한계 2. 오버헤드</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+Task 사용 시 추가 비용:
+
+1. Task 객체 생성 비용
+2. Task Graph 구성 비용 (의존성 추가)
+3. Task 스케줄링 비용 (큐 조작)
+4. 컨텍스트 스위칭 비용
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p>특히 <strong>너무 작은 Task</strong>를 만들면 오버헤드가 커져.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+❌ 나쁜 예:
+
+Task.Run(() => x = x + 1);  // 실행 시간 1ns
+                            // Task 생성 비용 100ns
+                            // → 100배 손해
+
+✅ 좋은 예:
+
+Task.Run(() => {
+    // 100개 유저 처리
+    for (user in users)
+        ProcessUser(user);
+});
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">경험적 기준:</span></p>
+                    <p>Task 실행 시간 > 10μs (마이크로초) 정도는 되어야 효율적.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 8: 정리 -->
+        <div class="conversation">
+            <h2><span class="emoji-step">8️⃣</span> 전체 흐름 정리</h2>
+
+            <div class="chat">
+                <div class="q">한 문장으로 요약하면?</div>
+                <div class="a">
+                    <p><span class="key-point">Task Graph = 락 대신 실행 순서로 동기화</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>기존 방식 (락)</th>
+                    <th>Task Graph</th>
+                </tr>
+                <tr>
+                    <td><strong>동기화</strong></td>
+                    <td>락으로 접근 제어</td>
+                    <td>실행 순서로 제어</td>
+                </tr>
+                <tr>
+                    <td><strong>병렬성</strong></td>
+                    <td>락 대기로 제한됨</td>
+                    <td>의존성 없으면 병렬</td>
+                </tr>
+                <tr>
+                    <td><strong>작업분배</strong></td>
+                    <td>수동 분배 (불균형)</td>
+                    <td>스케줄러 자동 분배</td>
+                </tr>
+                <tr>
+                    <td><strong>데드락</strong></td>
+                    <td>발생 가능</td>
+                    <td>DAG로 원천 차단</td>
+                </tr>
+                <tr>
+                    <td><strong>코드 복잡도</strong></td>
+                    <td>락 관리 복잡</td>
+                    <td>자원 명시만 하면 됨</td>
+                </tr>
+            </table>
+
+            <div class="code-block">
+전체 프로세스:
+
+1. 유저 요청 들어옴 (예: 길드 생성)
+
+2. ExclusiveTask 생성
+   → 필요한 자원 명시: [유저A]
+
+3. 시스템이 자동으로:
+   - 유저A의 마지막 Task 찾기
+   - 의존성 추가 (Task Graph 구성)
+   - Task 스케줄러에 제출
+
+4. Task 스케줄러:
+   - 의존성 확인
+   - 선행 Task 완료 대기
+   - 한가한 스레드에 배정
+
+5. 스레드에서 실행
+   - 조건 재확인 (컨텍스트 검증)
+   - 실제 작업 수행
+   - 완료 표시
+
+6. 자원의 "마지막 Task" 업데이트
+            </code>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>언제 써야 해?</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+✅ Task Graph가 좋은 경우:
+
+- MMO 서버 (공유 자원 많음)
+- 고성능 병렬 처리 필요
+- 락 관리가 복잡해지는 경우
+- 작업분배 불균형 문제
+
+❌ 굳이 안 써도 되는 경우:
+
+- 단순한 CRUD API 서버
+- 공유 자원이 거의 없음
+- 트래픽 낮음
+- Task 생성 오버헤드가 실제 작업보다 큰 경우
+            </code>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>📌 핵심 정리: Task Graph</h3>
+            <ul>
+                <li><strong>Task</strong> - 자체 컨텍스트를 가진 독립 실행 단위</li>
+                <li><strong>Task 스케줄러</strong> - Task를 스레드에 자동 배정 (작업분배 불균형 해결)</li>
+                <li><strong>Task Graph</strong> - Task 간 의존성으로 실행 순서 제어 (락 불필요)</li>
+                <li><strong>DAG</strong> - 방향성 있고 순환 없는 그래프 (데드락 차단)</li>
+                <li><strong>정적 Task Graph</strong> - 미리 구조 고정 (디스트릭트 처리)</li>
+                <li><strong>동적 Task Graph</strong> - 런타임에 자동 생성 (유저 행동 처리)</li>
+                <li><strong>ExchangeTailTask</strong> - 자원별 마지막 Task 기록 방식</li>
+                <li><strong>한계</strong> - 컨텍스트 차이, 오버헤드 (작은 Task 주의)</li>
+                <li><strong>결론</strong> - 락 컨텐션 + 작업분배 불균형 동시 해결</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-thread/">← 멀티스레드</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>

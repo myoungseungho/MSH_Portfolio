@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>100만 오브젝트 충돌 검사를 1ms로 줄이는 법 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: #fff9c4;
+            border-left: 4px solid #fbc02d;
+            padding: 20px;
+            margin: 24px 0;
+            border-radius: 8px;
+        }
+        .analogy-box strong {
+            color: #f57f17;
+        }
+
+        /* 코드 블록 */
+        .code-block {
+            background: #263238;
+            color: #aed581;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 16px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            font-size: 0.9rem;
+        }
+
+        .code-comment {
+            color: #78909c;
+        }
+
+        /* 비교 테이블 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .compare-table th, .compare-table td {
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            color: #2e7d32;
+            margin-bottom: 16px;
+        }
+        .summary-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .summary-box li {
+            margin-bottom: 8px;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        /* 메소드 박스 */
+        .method-box {
+            background: #f5f5f5;
+            border-left: 4px solid #00bcd4;
+            padding: 20px;
+            margin: 24px 0;
+            border-radius: 8px;
+        }
+        .method-box h4 {
+            color: #00bcd4;
+            margin-bottom: 12px;
+        }
+
+        /* Step 박스 */
+        .step-box {
+            background: white;
+            border: 2px solid #00bcd4;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+        .step-box h4 {
+            color: #00bcd4;
+            margin-bottom: 16px;
+            font-size: 1.1rem;
+        }
+
+        /* 시각화 이미지 */
+        .visual-section {
+            text-align: center;
+            margin: 24px 0;
+        }
+        .step-gif {
+            max-width: 100%;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+        }
+        .gif-caption {
+            margin-top: 8px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../../" class="back-link">← 메인으로</a>
+
+        <div class="header">
+            <h1>🌳 100만 오브젝트 충돌 검사를 1ms로 줄이는 법</h1>
+            <p>Quadtree와 Octree로 게임 최적화하기</p>
+        </div>
+
+        <!-- 1단계: 문제 상황 -->
+        <div class="conversation">
+            <h2>1️⃣ 뭐가 문제야?</h2>
+
+            <div class="chat">
+                <div class="q">RPG 게임에서 몬스터 1000마리가 있어. 플레이어 근처 몬스터만 공격하게 하려면?</div>
+                <div class="a">
+                    <p>가장 쉬운 방법? <span class="highlight">전부 검사</span>하는 거지.</p>
+                    <div class="code-block">// 가장 단순한 방법
+for (int i = 0; i < 1000; i++) {
+    float dist = Distance(player, monsters[i]);
+    if (dist < attackRange) {
+        monsters[i].Attack(player);
+    }
+}
+
+// 시간복잡도: O(N) - 몬스터 1000마리 전부 검사</div>
+                    <p><span class="warning">문제:</span> 몬스터가 10,000마리면? 100,000마리면?</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="key-point">공간을 나눠!</span></p>
+                    <div class="code-block">상황 1: 몬스터 1000마리 전부 검사
+→ 1000번 거리 계산
+
+상황 2: 공간을 4개 구역으로 나눔
+→ 플레이어가 있는 구역만 검사
+→ 250번만 거리 계산!
+
+→ 4배 빠름!</div>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🏢 비유: 아파트 찾기</strong><br><br>
+                친구 집 찾기:<br><br>
+                <strong>무식한 방법:</strong> 서울 전체 아파트 다 돌아다니며 확인<br>
+                → 100만 집 전부 방문 (100만 번 검사)<br><br>
+                <strong>똑똑한 방법:</strong> 강남구 → 대치동 → 은마아파트 → 101동<br>
+                → 4단계만 내려가면 됨 (4번 검사)<br><br>
+                이게 바로 <span class="highlight">공간 분할 (Spatial Partitioning)</span>이야.
+            </div>
+
+            <div class="visual-section">
+                <h4>🎬 시각화: 문제 상황</h4>
+                <img src="./step1.gif" alt="Brute Force - 모든 오브젝트 검사" class="step-gif">
+                <p class="gif-caption">❌ Brute Force: 50,000개 전부 검사 (느림)</p>
+                <p style="font-size: 1.1rem; font-weight: 600; color: #c62828; margin-top: 8px;">
+                    → 평균 <strong>1,132 FPS</strong> | 검사 50,000번 | 쿼리 0.82ms
+                </p>
+            </div>
+
+            <div class="visual-section">
+                <h4>🎬 시각화: Octree 해결</h4>
+                <img src="./step2.gif" alt="Octree - 공간 분할" class="step-gif">
+                <p class="gif-caption">✅ Octree: 필요한 부분만 검사 (빠름)</p>
+                <p style="font-size: 1.1rem; font-weight: 600; color: #2e7d32; margin-top: 8px;">
+                    → 평균 <strong>1,496 FPS</strong> | 검사 10,545번 | 쿼리 0.60ms
+                </p>
+            </div>
+        </div>
+
+        <!-- 2단계: Quadtree 기본 -->
+        <div class="conversation">
+            <h2>2️⃣ Quadtree가 뭔데?</h2>
+
+            <div class="chat">
+                <div class="q">Quadtree? 처음 들어봐.</div>
+                <div class="a">
+                    <p><span class="highlight">Quad = 4개</span>, <span class="highlight">Tree = 나무 구조</span></p>
+                    <p>2D 공간을 <span class="key-point">4개씩 쪼개는 트리</span>야.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">어떻게 쪼개?</div>
+                <div class="a">
+                    <p>공간을 십자로 나눠서 4개로 만들어:</p>
+                    <div class="code-block">전체 공간:
+┌─────────────┐
+│             │
+│             │
+│             │
+└─────────────┘
+
+4개로 분할:
+┌──────┬──────┐
+│  NW  │  NE  │  (NorthWest, NorthEast)
+├──────┼──────┤
+│  SW  │  SE  │  (SouthWest, SouthEast)
+└──────┴──────┘</div>
+                    <p>오브젝트가 많은 구역은 <span class="highlight">다시 4개로 쪼개!</span></p>
+                </div>
+            </div>
+
+            <div class="method-box">
+                <h4>📊 분할 규칙</h4>
+                <div class="code-block">규칙 1: 한 노드에 최대 N개까지만 허용 (예: 4개)
+규칙 2: N개 초과하면 4개로 분할
+규칙 3: 최대 깊이 제한 (예: 8단계)</div>
+            </div>
+        </div>
+
+        <!-- 3단계: 단계별 구축 -->
+        <div class="conversation">
+            <h2>3️⃣ 단계별로 만들어보자</h2>
+
+            <div class="step-box">
+                <h4>Step 1: 초기 상태 (오브젝트 10개)</h4>
+                <div class="code-block">전체 공간: 1024x1024
+오브젝트: 10개 랜덤 배치
+
+┌─────────────────┐
+│ • •             │
+│     •   •       │
+│  •      •  •    │
+│    • •     •    │
+└─────────────────┘
+
+→ 10개 < 최대 개수 (예: 4개)라면 분할 안 함
+→ 10개 > 4개니까 분할 시작!</div>
+            </div>
+
+            <div class="step-box">
+                <h4>Step 2: 1차 분할 (4개 구역)</h4>
+                <div class="code-block">┌────────┬────────┐
+│ NW(3)  │ NE(2)  │
+│ • •    │        │
+│     •  │   •  • │
+├────────┼────────┤
+│ SW(3)  │ SE(2)  │
+│  •     │   •    │
+│    • • │     •  │
+└────────┴────────┘
+
+NW: 3개 (4개 이하, 분할 안 함)
+NE: 2개 (4개 이하, 분할 안 함)
+SW: 3개 (4개 이하, 분할 안 함)
+SE: 2개 (4개 이하, 분할 안 함)
+
+→ 모든 구역이 4개 이하니까 완료!</div>
+            </div>
+
+            <div class="step-box">
+                <h4>Step 3: 오브젝트 추가 (NW에 5개 더 추가)</h4>
+                <div class="code-block">┌────────┬────────┐
+│ NW(8)  │ NE(2)  │
+│ •••••  │        │
+│  ••• • │   •  • │
+├────────┼────────┤
+│ SW(3)  │ SE(2)  │
+│  •     │   •    │
+│    • • │     •  │
+└────────┴────────┘
+
+NW: 8개 → 4개 초과!
+→ NW를 다시 4개로 분할!</div>
+            </div>
+
+            <div class="step-box">
+                <h4>Step 4: NW 구역 재분할</h4>
+                <div class="code-block">┌────┬───┬────────┐
+│NW-NW│NW-│ NE(2)  │
+│ ••• │NE │        │
+│─────│ • │   •  • │
+│NW-SW│NW-│────────┤
+│ ••  │SE │ SE(2)  │
+│  •  │ • │   •    │
+│     │   │     •  │
+├─────┴───┼────────┤
+│ SW(3)   │        │
+│  •      │        │
+│    • •  │        │
+└─────────┴────────┘
+
+최종 구조:
+- NW → 4개로 분할됨
+  - NW-NW: 3개
+  - NW-NE: 1개
+  - NW-SW: 3개
+  - NW-SE: 1개
+- NE: 2개
+- SW: 3개
+- SE: 2개</div>
+            </div>
+
+            <div class="method-box">
+                <h4>🎯 검색 최적화</h4>
+                <div class="code-block">플레이어가 NW-NW에 있다면?
+
+무식한 방법: 전체 15개 검사
+Quadtree: NW-NW의 3개만 검사!
+
+→ 5배 빠름!
+
+오브젝트 100만 개면?
+→ 깊이 20단계 정도면 충분
+→ log₄(1000000) ≈ 10단계
+→ 100만 번 → 10번 검색!</div>
+            </div>
+        </div>
+
+        <!-- 4단계: Octree (3D) -->
+        <div class="conversation">
+            <h2>4️⃣ Octree는 뭐야? (3D 확장)</h2>
+
+            <div class="chat">
+                <div class="q">Quadtree는 2D잖아? 3D 게임은?</div>
+                <div class="a">
+                    <p><span class="highlight">Octree</span>를 써!</p>
+                    <p><span class="key-point">Oct = 8개</span>, 3D 공간을 8개씩 쪼개.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">어떻게 나눠?</div>
+                <div class="a">
+                    <p>X, Y, Z 축을 모두 반으로 나눠서 <span class="highlight">8개 큐브</span>로 만들어:</p>
+                    <div class="code-block">Quadtree (2D): 4개로 분할
+┌──────┬──────┐
+│  NW  │  NE  │
+├──────┼──────┤
+│  SW  │  SE  │
+└──────┴──────┘
+
+Octree (3D): 8개로 분할
+       상층 (Top)           하층 (Bottom)
+    ┌──────┬──────┐      ┌──────┬──────┐
+    │ TNW  │ TNE  │      │ BNW  │ BNE  │
+    ├──────┼──────┤      ├──────┼──────┤
+    │ TSW  │ TSE  │      │ BSW  │ BSE  │
+    └──────┴──────┘      └──────┴──────┘</div>
+                    <p><span class="key-point">핵심:</span> Quadtree와 똑같은 원리인데, Y축이 추가된 것뿐!</p>
+                </div>
+            </div>
+
+            <div class="method-box">
+                <h4>📝 Quadtree vs Octree</h4>
+                <table class="compare-table">
+                    <tr>
+                        <th>항목</th>
+                        <th>Quadtree (2D)</th>
+                        <th>Octree (3D)</th>
+                    </tr>
+                    <tr>
+                        <td>자식 개수</td>
+                        <td>4개</td>
+                        <td>8개</td>
+                    </tr>
+                    <tr>
+                        <td>분할 축</td>
+                        <td>X, Z만</td>
+                        <td>X, Y, Z 전부</td>
+                    </tr>
+                    <tr>
+                        <td>용도</td>
+                        <td>2D 게임, 미니맵, 타일</td>
+                        <td>3D 게임, FPS, 오픈월드</td>
+                    </tr>
+                    <tr>
+                        <td>메모리</td>
+                        <td>적음</td>
+                        <td>2배 많음</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- 5단계: 최적화 팁 -->
+        <div class="conversation">
+            <h2>5️⃣ 실전 최적화 팁</h2>
+
+            <div class="method-box">
+                <h4>💡 Tip 1: 동적 업데이트</h4>
+                <div class="code-block"><span class="warning">문제:</span> 오브젝트가 움직이면 Quadtree가 망가짐
+
+<span class="key-point">해결책 1:</span> 매 프레임 Quadtree 재구성
+→ 간단하지만 느림 (오브젝트가 적을 때만)
+
+<span class="key-point">해결책 2:</span> Loose Quadtree
+→ 노드 경계를 약간 크게 (예: 2배)
+→ 오브젝트가 조금 움직여도 재배치 안 해도 됨
+
+<span class="key-point">해결책 3:</span> Remove & Reinsert
+→ 이동한 오브젝트만 제거 후 재삽입
+→ 가장 효율적</div>
+            </div>
+
+            <div class="method-box">
+                <h4>💡 Tip 2: 메모리 풀링</h4>
+                <div class="code-block"><span class="warning">문제:</span> 노드 생성/삭제가 잦으면 GC 발생
+
+<span class="key-point">해결책:</span> Object Pooling
+→ 노드를 미리 만들어두고 재사용
+→ new 대신 풀에서 가져오기</div>
+            </div>
+
+            <div class="method-box">
+                <h4>💡 Tip 3: 적절한 파라미터</h4>
+                <table class="compare-table">
+                    <tr>
+                        <th>파라미터</th>
+                        <th>추천값</th>
+                        <th>이유</th>
+                    </tr>
+                    <tr>
+                        <td>MAX_OBJECTS</td>
+                        <td>4~8개</td>
+                        <td>너무 작으면 트리가 깊어짐, 너무 크면 검색 느려짐</td>
+                    </tr>
+                    <tr>
+                        <td>MAX_DEPTH</td>
+                        <td>6~10</td>
+                        <td>너무 깊으면 메모리 낭비, 너무 얕으면 효율 낮음</td>
+                    </tr>
+                    <tr>
+                        <td>World Size</td>
+                        <td>2의 제곱수</td>
+                        <td>1024, 2048 등 → 분할이 깔끔함</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="method-box">
+                <h4>💡 Tip 4: AOI vs Quadtree</h4>
+                <table class="compare-table">
+                    <tr>
+                        <th>기법</th>
+                        <th>용도</th>
+                        <th>특징</th>
+                    </tr>
+                    <tr>
+                        <td><strong>AOI</strong></td>
+                        <td>네트워크 동기화</td>
+                        <td>관심 영역만 패킷 전송</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Quadtree</strong></td>
+                        <td>물리/충돌 검사</td>
+                        <td>근처 오브젝트 빠른 검색</td>
+                    </tr>
+                    <tr>
+                        <td><strong>둘 다 사용</strong></td>
+                        <td>MMO 게임</td>
+                        <td>AOI로 네트워크, Quadtree로 물리</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- 6단계: 핵심 정리 -->
+        <div class="conversation">
+            <h2>6️⃣ 핵심 정리</h2>
+        </div>
+        <div class="summary-box">
+            <h3>📌 Spatial Partitioning 핵심</h3>
+            <ul>
+                <li><strong>문제</strong> - N개 전부 검사는 O(N), 느림</li>
+                <li><strong>해결</strong> - 공간 분할로 O(log N), 빠름</li>
+                <li><strong>Quadtree</strong> - 2D 공간을 4개씩 분할, 2D 게임용</li>
+                <li><strong>Octree</strong> - 3D 공간을 8개씩 분할, 3D 게임용</li>
+                <li><strong>삽입</strong> - 영역 확인 → 자식 있으면 위임 → 없으면 추가 → 초과하면 분할</li>
+                <li><strong>검색</strong> - 범위 겹침 확인 → 자식 재귀 탐색 → 리프 노드에서 실제 검사</li>
+                <li><strong>성능</strong> - 100만 개 → 10번 검색으로 줄임 (log₄ 1000000 ≈ 10)</li>
+                <li><strong>동적 업데이트</strong> - Loose Quadtree 또는 Remove & Reinsert</li>
+                <li><strong>파라미터</strong> - MAX_OBJECTS: 4~8, MAX_DEPTH: 6~10</li>
+                <li><strong>실전 활용</strong> - 충돌 검사, 레이캐스팅, 근처 오브젝트 검색, 렌더링, AI</li>
+            </ul>
+        </div>
+
+        <div class="chat">
+            <div class="q">언제 써야 해?</div>
+            <div class="a">
+                <p><span class="key-point">오브젝트가 많고, 범위 검색이 잦을 때!</span></p>
+                <div class="code-block">사용 예시:
+- 총알 충돌 검사 (수천 개 총알)
+- 몬스터 AI (근처 플레이어 찾기)
+- 파티클 시스템 (100만 개 파티클)
+- RTS 유닛 선택 (드래그 박스)
+
+안 쓰는 경우:
+- 오브젝트 100개 이하
+- 전부 검사해도 1ms 이하
+- 정적 오브젝트 (움직임 없음) → BVH 더 나음</div>
+            </div>
+        </div>
+
+        <!-- 실전 활용 사례 -->
+        <div class="conversation">
+            <h2>7️⃣ 실제 게임에서는 어떻게 써?</h2>
+
+            <div class="method-box">
+                <h4>🎮 사례 1: FPS 게임 - 총알 충돌 검사</h4>
+                <div class="code-block"><span class="warning">문제:</span> 총알 100발 × 적 50명 = 5,000번 검사 (매 프레임!)
+
+<span class="key-point">Octree 적용:</span>
+- 총알이 있는 구역만 검사
+- 5,000번 → 150번 검사
+- 33배 빠름!
+
+실제 게임: Call of Duty, Battlefield 시리즈
+→ 레이캐스팅 + Octree로 총알 충돌 최적화</div>
+            </div>
+
+            <div class="method-box">
+                <h4>🎮 사례 2: 오픈월드 - Frustum Culling</h4>
+                <div class="code-block"><span class="warning">문제:</span> GTA 같은 오픈월드에서 건물 100만 개 렌더링?
+
+<span class="key-point">Octree 적용:</span>
+- 카메라 시야(Frustum)에 있는 것만 렌더링
+- 100만 개 → 3,000개만 렌더링
+- FPS 10 → 60으로 향상
+
+실제 게임: GTA V, Assassin's Creed, Red Dead Redemption
+→ 건물, 나무, NPC 렌더링 최적화</div>
+            </div>
+
+            <div class="method-box">
+                <h4>🎮 사례 3: 배틀로얄 - 네트워크 동기화</h4>
+                <div class="code-block"><span class="warning">문제:</span> 플레이어 100명 × 100명 = 10,000번 위치 전송?
+
+<span class="key-point">Quadtree + AOI 적용:</span>
+- 근처 플레이어만 동기화
+- 10,000번 → 50번 패킷 전송
+- 네트워크 대역폭 200배 절감
+
+실제 게임: PUBG, Fortnite, Apex Legends
+→ AOI(Area of Interest) 시스템에 Quadtree 활용</div>
+            </div>
+
+            <div class="method-box">
+                <h4>🎮 사례 4: RTS 게임 - 유닛 선택</h4>
+                <div class="code-block"><span class="warning">문제:</span> 드래그 박스로 유닛 선택 시 전체 10,000개 검사?
+
+<span class="key-point">Quadtree 적용:</span>
+- 드래그 영역과 겹치는 노드만 검사
+- 10,000번 → 80번 검사
+- 클릭 반응 속도 125배 향상
+
+실제 게임: 스타크래프트, Age of Empires, Command & Conquer
+→ 유닛 선택, 건물 배치, 공격 범위 계산</div>
+            </div>
+
+            <div class="method-box">
+                <h4>🎮 사례 5: 마인크래프트 - 블록 관리</h4>
+                <div class="code-block"><span class="warning">문제:</span> 월드 크기 무한대? 블록 수억 개를 어떻게 관리?
+
+<span class="key-point">Octree 적용:</span>
+- 청크(Chunk) 시스템 = Octree 변형
+- 빈 공간(공기)은 노드 하나로 압축
+- 수억 개 블록 → 수만 개 노드로 압축
+
+실제 게임: Minecraft
+→ 청크 로딩, 블록 업데이트, 충돌 검사</div>
+            </div>
+
+            <div class="method-box">
+                <h4>🎮 사례 6: MMO - 몬스터 AI</h4>
+                <div class="code-block"><span class="warning">문제:</span> 몬스터 10,000마리가 "가장 가까운 플레이어" 찾기?
+
+<span class="key-point">Octree 적용:</span>
+- 반경 20m 내 플레이어만 검색
+- 몬스터당 10,000번 → 5번 검사
+- AI 업데이트 2,000배 빠름
+
+실제 게임: World of Warcraft, Final Fantasy XIV
+→ 몬스터 어그로, 스킬 범위, 경로 탐색</div>
+            </div>
+
+            <div class="method-box">
+                <h4>🎮 사례 7: 레이싱 - 충돌 검사</h4>
+                <div class="code-block"><span class="warning">문제:</span> 자동차 20대 × 장애물 5,000개 = 100,000번 검사?
+
+<span class="key-point">Octree 적용:</span>
+- 자동차 주변만 검사
+- 100,000번 → 150번 검사
+- 물리 시뮬레이션 666배 빠름
+
+실제 게임: Forza Horizon, Gran Turismo
+→ 차량 충돌, 도로 경계, 지형 충돌</div>
+            </div>
+
+            <div class="method-box">
+                <h4>🎮 사례 8: 파티클 시스템</h4>
+                <div class="code-block"><span class="warning">문제:</span> 폭발 이펙트 100만 개 파티클 간 충돌?
+
+<span class="key-point">Octree 적용:</span>
+- 근처 파티클만 검사
+- 1조 번 → 100만 번 검사
+- 파티클 충돌 1,000,000배 빠름
+
+실제 게임: Diablo 시리즈, Path of Exile
+→ 스킬 이펙트, 폭발, 물리 파티클</div>
+            </div>
+
+            <div class="method-box">
+                <h4>🎮 사례 9: VR/AR - 손 인터랙션</h4>
+                <div class="code-block"><span class="warning">문제:</span> VR에서 손으로 물체 집기 - 10,000개 오브젝트 전부 검사?
+
+<span class="key-point">Octree 적용:</span>
+- 손 주변 30cm만 검사
+- 10,000번 → 20번 검사
+- VR 프레임 드롭 없이 90 FPS 유지
+
+실제 게임: Half-Life: Alyx, Beat Saber
+→ 손 충돌, 오브젝트 집기, 제스처 인식</div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>💡 핵심 패턴</strong><br><br>
+                Quadtree/Octree는 <span class="highlight">"전체 검색을 구역 검색으로"</span> 바꿔주는 마법이야.<br><br>
+                <strong>공통점:</strong><br>
+                - 오브젝트가 많을수록 효과 큼<br>
+                - 범위 검색(Range Query)에 최적화<br>
+                - 동적 업데이트 가능 (Loose Octree)<br><br>
+                <strong>실전 조합:</strong><br>
+                - Octree + Frustum Culling = 렌더링 최적화<br>
+                - Quadtree + AOI = 네트워크 최적화<br>
+                - Octree + Raycasting = 물리 최적화<br>
+                - Quadtree + AI = 게임플레이 최적화
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>
