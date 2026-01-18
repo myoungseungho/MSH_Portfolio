@@ -310,11 +310,11 @@ WHERE id = 'admin' AND password = '1234' OR 1=1--'
                 <div class="q">게임에서는 어떻게 써먹을 수 있어?</div>
                 <div class="a">
                     <p><strong>예시 1: 아이템 검색</strong></p>
-                    <div class="code-block bad">❌ 취약한 코드 (C# 예시):
+                    <div class="code-block bad">❌ 취약한 코드 (C++ 예시):
 
-string itemName = packet.ItemName; // 클라이언트가 보낸 값
+string itemName = packet->itemName; // 클라이언트가 보낸 값
 string query = "SELECT * FROM items WHERE name = '" + itemName + "'";
-DB.Execute(query);</div>
+_dbConn->Execute(query.c_str());</div>
 
                     <p>해커가 보내는 패킷:</p>
                     <div class="code-block bad">itemName: "Sword' OR price = 0--"</div>
@@ -331,11 +331,11 @@ WHERE name = 'Sword' OR price = 0--'</div>
                 <div class="q">그럼 아이템을 훔칠 수도 있어?</div>
                 <div class="a">
                     <p><strong>예시 2: 아이템 추가</strong></p>
-                    <div class="code-block bad">❌ 취약한 코드:
+                    <div class="code-block bad">❌ 취약한 코드 (C++):
 
-string characterName = packet.CharacterName;
+string characterName = packet->characterName;
 string query = "INSERT INTO inventory (character, item) VALUES ('" + characterName + "', 'Potion')";
-DB.Execute(query);</div>
+_dbConn->Execute(query.c_str());</div>
 
                     <p>해커가 보내는 패킷:</p>
                     <div class="code-block bad">characterName: "Hacker', 'LegendSword'); --"</div>
@@ -372,18 +372,18 @@ VALUES ('Hacker', 'LegendSword'); --', 'Potion')</div>
                 <div class="q">Prepared Statement가 뭐야?</div>
                 <div class="a">
                     <p><strong>SQL 쿼리와 데이터를 분리하는 거야.</strong></p>
-                    <div class="code-block good">✅ 안전한 코드 (C# ADO.NET):
+                    <div class="code-block good">✅ 안전한 코드 (C++ MySQL):
 
-string itemName = packet.ItemName;
-string query = "SELECT * FROM items WHERE name = @ItemName";
+string itemName = packet->itemName;
+string query = "SELECT * FROM items WHERE name = ?";
 
-SqlCommand cmd = new SqlCommand(query, connection);
-cmd.Parameters.AddWithValue("@ItemName", itemName);
-cmd.ExecuteReader();</div>
+auto stmt = _dbConn->PrepareStatement(query);
+stmt->setString(1, itemName);  // 1번 파라미터에 바인딩
+stmt->executeQuery();</div>
 
                     <p><strong>무슨 일이 일어나?</strong></p>
-                    <div class="code-block">1. SQL 쿼리 템플릿: "WHERE name = @ItemName"
-2. @ItemName은 "값이 들어갈 자리"라고 DB에 알림
+                    <div class="code-block">1. SQL 쿼리 템플릿: "WHERE name = ?"
+2. ?는 "값이 들어갈 자리"라고 DB에 알림
 3. itemName 값은 "순수한 데이터"로 전달
 4. DB가 알아서 이스케이프 처리</div>
 
@@ -400,15 +400,19 @@ cmd.ExecuteReader();</div>
                 <div class="q">ORM이 뭐야?</div>
                 <div class="a">
                     <p><strong>Object-Relational Mapping</strong> - SQL을 직접 안 쓰고 코드로 쿼리를 만드는 거야.</p>
-                    <div class="code-block good">✅ 안전한 코드 (Entity Framework):
+                    <div class="code-block good">✅ 안전한 코드 (C++ sqlpp11 ORM):
 
-string itemName = packet.ItemName;
-var items = dbContext.Items
-    .Where(item => item.Name == itemName)
-    .ToList();</div>
+string itemName = packet->itemName;
+auto items = db(select(all_of(tab))
+    .from(tab)
+    .where(tab.name == itemName));
 
-                    <p>ORM이 알아서 Prepared Statement로 변환해줘.<br>
-                    <span class="key-point">개발자가 SQL을 직접 안 쓰니까 실수할 일이 없어.</span></p>
+// 또는 Prepared Statement 직접 사용
+auto stmt = _dbConn->PrepareStatement("SELECT * FROM items WHERE name = ?");
+stmt->setString(1, itemName);</div>
+
+                    <p><strong>C++에서는</strong> Prepared Statement를 직접 쓰는 게 일반적이야.<br>
+                    <span class="key-point">ORM보다는 명시적으로 파라미터 바인딩하는 걸 추천해.</span></p>
                 </div>
             </div>
 
@@ -417,17 +421,18 @@ var items = dbContext.Items
                 <div class="q">그래도 혹시 모르니까 입력값을 체크하면 안 돼?</div>
                 <div class="a">
                     <p><span class="key-point">당연히 해야 해!</span> 하지만 <strong>이것만으로는 부족해.</strong></p>
-                    <div class="code-block good">✅ 추가 방어:
+                    <div class="code-block good">✅ 추가 방어 (C++):
 
 // 1. 길이 체크
-if (itemName.Length > 50) return;
+if (itemName.length() > 50) return;
 
 // 2. 특수문자 거부
-if (itemName.Contains("'") || itemName.Contains("--"))
+if (itemName.find('\'') != string::npos || itemName.find("--") != string::npos)
     return;
 
-// 3. 화이트리스트 방식
-if (!Regex.IsMatch(itemName, "^[a-zA-Z0-9_]+$"))
+// 3. 화이트리스트 방식 (정규식)
+regex pattern("^[a-zA-Z0-9_]+$");
+if (!regex_match(itemName, pattern))
     return;</div>
 
                     <p><span class="warning">주의:</span> 이건 보조 수단일 뿐이야.<br>
