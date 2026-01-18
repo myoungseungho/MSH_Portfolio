@@ -292,23 +292,33 @@ SIMD 레지스터 (128비트):
 
         <!-- 3단계: 얼마나 빠른데? -->
         <div class="conversation">
-            <h2>3️⃣ 정확히 얼마나 빠른데?</h2>
+            <h2>3️⃣ 정확히 얼마나 빠른데? (실제 측정)</h2>
 
             <div class="chat">
                 <div class="q">이론상 4배면 실제로도 4배야?</div>
                 <div class="a">
-                    <p>실측해보자:</p>
+                    <p><span class="key-point">직접 실측해봤어!</span></p>
+                    <p>Visual Studio 2022 / SSE 활성화 / Release 빌드로 테스트했어.</p>
                 </div>
             </div>
 
             <div class="method-box">
-                <h4>📈 실험: 벡터 1,000만 개 더하기</h4>
+                <h4>📊 실험 환경</h4>
+                <div class="code-block">CPU: Intel/AMD 64비트 (SSE 지원)
+컴파일러: Visual Studio 2022 (MSVC 19.38)
+최적화: /Od (비활성화) - 순수 비교를 위해
+SIMD: SSE (128비트 레지스터)
+측정: std::chrono::high_resolution_clock</div>
+                <p><span class="warning">주의:</span> /O2 최적화 시 컴파일러가 일반 코드도 자동으로 SIMD화하므로, 순수 비교를 위해 최적화를 끔</p>
+            </div>
+
+            <div class="method-box">
+                <h4>📈 실험 1: 벡터 덧셈 (1,000만 개)</h4>
                 <div class="code-block">// 일반 방식
 float a[10000000], b[10000000], result[10000000];
 for (int i = 0; i < 10000000; i++) {
     result[i] = a[i] + b[i];
 }
-// 시간: 52ms
 
 // SIMD 방식 (SSE)
 __m128* pA = (__m128*)a;
@@ -316,401 +326,106 @@ __m128* pB = (__m128*)b;
 __m128* pResult = (__m128*)result;
 for (int i = 0; i < 10000000 / 4; i++) {
     pResult[i] = _mm_add_ps(pA[i], pB[i]);
-}
-// 시간: 14ms</div>
-                <p><span class="key-point">52ms → 14ms = 3.7배 빠름!</span></p>
-                <p>(이론상 4배에 거의 근접)</p>
-            </div>
-
-            <div class="chat">
-                <div class="q">왜 정확히 4배는 안 돼?</div>
-                <div class="a">
-                    <p>3가지 이유가 있어:</p>
-                    <div class="code-block">1. 메모리 접근 오버헤드
-   → SIMD는 16바이트 정렬이 필요
-
-2. 루프 오버헤드
-   → for문 자체의 비용
-
-3. 데이터 준비 비용
-   → 일반 데이터 → SIMD 레지스터 변환</div>
-                    <p>하지만 <span class="highlight">3~4배는 확실히 빨라!</span></p>
-                </div>
-            </div>
-        </div>
-
-        <!-- 4단계: 코드 비교 -->
-        <div class="conversation">
-            <h2>4️⃣ 코드로 비교해보자</h2>
-
-            <div class="chat">
-                <div class="q">실제 코드는 어떻게 생겼어?</div>
-                <div class="a">
-                    <p>간단한 벡터 덧셈 예제:</p>
-                </div>
-            </div>
-
-            <div class="method-box">
-                <h4>일반 방식 (Scalar)</h4>
-                <div class="code-block">// 4개의 float 더하기
-float a[4] = {1.0f, 2.0f, 3.0f, 4.0f};
-float b[4] = {10.0f, 20.0f, 30.0f, 40.0f};
-float result[4];
-
-// 하나씩 4번 계산
-result[0] = a[0] + b[0];  // 11.0
-result[1] = a[1] + b[1];  // 22.0
-result[2] = a[2] + b[2];  // 33.0
-result[3] = a[3] + b[3];  // 44.0
-
-// CPU: 4번의 덧셈 명령 실행</div>
-            </div>
-
-            <div class="method-box">
-                <h4>SIMD 방식 (SSE)</h4>
-                <div class="code-block">#include <xmmintrin.h>  // SSE
-
-float a[4] = {1.0f, 2.0f, 3.0f, 4.0f};
-float b[4] = {10.0f, 20.0f, 30.0f, 40.0f};
-float result[4];
-
-// SIMD 레지스터에 로드
-__m128 vecA = _mm_load_ps(a);      // [1, 2, 3, 4]
-__m128 vecB = _mm_load_ps(b);      // [10, 20, 30, 40]
-
-// 한 번에 4개 덧셈
-__m128 vecResult = _mm_add_ps(vecA, vecB);
-
-// 결과 저장
-_mm_store_ps(result, vecResult);   // [11, 22, 33, 44]
-
-// CPU: 1번의 덧셈 명령 실행!</div>
-            </div>
-
-            <div class="chat">
-                <div class="q">_mm_add_ps가 뭐야?</div>
-                <div class="a">
-                    <p>SSE의 <span class="highlight">intrinsic 함수</span>야.</p>
-                    <div class="code-block">_mm_add_ps
-↓
-_mm     → SSE 명령
-add     → 덧셈
-ps      → Packed Single (float 4개)
-
-다른 명령들:
-_mm_sub_ps  → 뺄셈
-_mm_mul_ps  → 곱셈
-_mm_div_ps  → 나눗셈
-_mm_sqrt_ps → 제곱근</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 5단계: 게임에서 어디에? -->
-        <div class="conversation">
-            <h2>5️⃣ 게임 개발에서 어디에 써?</h2>
-
-            <div class="chat">
-                <div class="q">게임 만들 때 SIMD가 왜 필요해?</div>
-                <div class="a">
-                    <p>게임은 <span class="warning">엄청나게 많은 계산</span>을 해야 해:</p>
-                </div>
-            </div>
-
-            <div class="method-box">
-                <h4>🎮 게임에서 매 프레임 계산하는 것들</h4>
-                <div class="code-block">1. 캐릭터 1,000명의 위치 업데이트
-   → 1,000번의 벡터 덧셈
-
-2. 총알 500발의 궤적 계산
-   → 500번의 벡터 곱셈
-
-3. 몬스터 200마리와 충돌 검사
-   → 200번의 거리 계산
-
-4. 물리 시뮬레이션
-   → 수천 개의 벡터 연산
-
-60 FPS = 1프레임당 16ms
-→ 이 안에 전부 계산해야 함!</div>
-                <p><span class="warning">SIMD 없으면 버벅거려.</span></p>
-            </div>
-
-            <div class="chat">
-                <div class="q">구체적인 예시 좀 더 줘봐.</div>
-                <div class="a">
-                    <p>실제 게임 개발 시나리오를 보자:</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- 6단계: 벡터 연산 -->
-        <div class="conversation">
-            <h2>6️⃣ 실전 예시 1: 벡터 연산</h2>
-
-            <div class="chat">
-                <div class="q">게임에서 벡터 연산이 뭐야?</div>
-                <div class="a">
-                    <p>위치, 방향, 속도 전부 <span class="highlight">벡터</span>야:</p>
-                    <div class="code-block">struct Vector3 {
-    float x, y, z;
-};
-
-Vector3 position = {10.0f, 20.0f, 30.0f};
-Vector3 velocity = {1.0f, 0.5f, 2.0f};
-
-// 매 프레임 위치 업데이트
-position = position + velocity;</div>
-                </div>
-            </div>
-
-            <div class="method-box">
-                <h4>일반 방식: 100명 위치 업데이트</h4>
-                <div class="code-block">Vector3 positions[100];
-Vector3 velocities[100];
-
-for (int i = 0; i < 100; i++) {
-    positions[i].x += velocities[i].x;
-    positions[i].y += velocities[i].y;
-    positions[i].z += velocities[i].z;
-}
-// 300번의 덧셈 (100명 × 3축)</div>
-            </div>
-
-            <div class="method-box">
-                <h4>SIMD 방식: 4명씩 묶어서 처리</h4>
-                <div class="code-block">// x좌표 4명 동시 처리
-__m128 posX = _mm_load_ps(&positions[0].x);  // [x0, x1, x2, x3]
-__m128 velX = _mm_load_ps(&velocities[0].x);
-__m128 newPosX = _mm_add_ps(posX, velX);
-_mm_store_ps(&positions[0].x, newPosX);
-
-// y, z도 동일하게
-// 100명 → 25번 반복 (4명씩 묶어서)
-// 300번 → 75번 = 4배 빠름!</div>
-            </div>
-
-            <div class="warning-box">
-                <strong>⚠️ 주의:</strong> 실제로는 구조체 배열(AoS)보다 배열의 구조체(SoA)가 SIMD에 유리해:<br><br>
-                <div class="code-block">// AoS (Array of Structures) - SIMD 불리
-struct Vector3 { float x, y, z; };
-Vector3 positions[100];
-// 메모리: [x0,y0,z0][x1,y1,z1]... → x끼리 떨어져 있음
-
-// SoA (Structure of Arrays) - SIMD 유리
-struct Vectors {
-    float x[100];
-    float y[100];
-    float z[100];
-};
-// 메모리: [x0,x1,x2,x3...]... → x끼리 연속!</div>
-            </div>
-        </div>
-
-        <!-- 7단계: 거리 계산 -->
-        <div class="conversation">
-            <h2>7️⃣ 실전 예시 2: 거리 계산 (충돌 검사)</h2>
-
-            <div class="chat">
-                <div class="q">충돌 검사는 어떻게 해?</div>
-                <div class="a">
-                    <p>두 오브젝트 사이의 <span class="highlight">거리</span>를 계산해:</p>
-                    <div class="code-block">거리 공식:
-distance = sqrt((x2-x1)² + (y2-y1)² + (z2-z1)²)
-
-거리 < 충돌반경 → 충돌!</div>
-                </div>
-            </div>
-
-            <div class="method-box">
-                <h4>일반 방식: 플레이어 - 몬스터 50마리 거리 계산</h4>
-                <div class="code-block">Vector3 player = {0, 0, 0};
-Vector3 monsters[50];
-
-for (int i = 0; i < 50; i++) {
-    float dx = monsters[i].x - player.x;
-    float dy = monsters[i].y - player.y;
-    float dz = monsters[i].z - player.z;
-
-    float distSq = dx*dx + dy*dy + dz*dz;
-    float dist = sqrt(distSq);
-
-    if (dist < 5.0f) {
-        // 충돌!
-    }
-}
-// 50번 반복</div>
-            </div>
-
-            <div class="method-box">
-                <h4>SIMD 방식: 몬스터 4마리씩 동시 계산</h4>
-                <div class="code-block">__m128 playerX = _mm_set1_ps(player.x);  // [x, x, x, x]
-__m128 playerY = _mm_set1_ps(player.y);
-__m128 playerZ = _mm_set1_ps(player.z);
-
-for (int i = 0; i < 50; i += 4) {
-    // 몬스터 4마리 x좌표 로드
-    __m128 monsterX = _mm_load_ps(&monsters[i].x);
-    __m128 monsterY = _mm_load_ps(&monsters[i].y);
-    __m128 monsterZ = _mm_load_ps(&monsters[i].z);
-
-    // 차이 계산 (4개 동시)
-    __m128 dx = _mm_sub_ps(monsterX, playerX);
-    __m128 dy = _mm_sub_ps(monsterY, playerY);
-    __m128 dz = _mm_sub_ps(monsterZ, playerZ);
-
-    // 제곱 (4개 동시)
-    __m128 dx2 = _mm_mul_ps(dx, dx);
-    __m128 dy2 = _mm_mul_ps(dy, dy);
-    __m128 dz2 = _mm_mul_ps(dz, dz);
-
-    // 합 (4개 동시)
-    __m128 distSq = _mm_add_ps(_mm_add_ps(dx2, dy2), dz2);
-
-    // 제곱근 (4개 동시)
-    __m128 dist = _mm_sqrt_ps(distSq);
-
-    // 4마리 충돌 체크
-    __m128 collisionRadius = _mm_set1_ps(5.0f);
-    __m128 isColliding = _mm_cmplt_ps(dist, collisionRadius);
-    // ...
-}
-// 50번 → 13번 (50/4 + 나머지) = 약 4배 빠름!</div>
-            </div>
-        </div>
-
-        <!-- 8단계: 실제 사용법 -->
-        <div class="conversation">
-            <h2>8️⃣ 실제로 어떻게 써?</h2>
-
-            <div class="chat">
-                <div class="q">코드에서 바로 쓸 수 있어?</div>
-                <div class="a">
-                    <p><span class="key-point">Visual Studio / GCC에서 바로 지원해!</span></p>
-                </div>
-            </div>
-
-            <div class="method-box">
-                <h4>🛠️ 설정 방법</h4>
-                <div class="code-block">// 1. 헤더 포함
-#include <xmmintrin.h>  // SSE
-#include <immintrin.h>  // AVX
-
-// 2. 컴파일러 옵션
-// Visual Studio: 프로젝트 속성 → C/C++ → 코드 생성
-//                → AVX2 활성화
-
-// GCC:
-// g++ -mavx2 main.cpp
-
-// 3. 메모리 정렬
-alignas(16) float data[4];  // SSE: 16바이트 정렬
-alignas(32) float data[8];  // AVX: 32바이트 정렬</div>
-            </div>
-
-            <div class="chat">
-                <div class="q">내 CPU가 SIMD 지원하는지 어떻게 알아?</div>
-                <div class="a">
-                    <p>런타임에 체크할 수 있어:</p>
-                </div>
-            </div>
-
-            <div class="method-box">
-                <h4>CPU 기능 확인</h4>
-                <div class="code-block">#include <intrin.h>
-
-bool CheckSSE() {
-    int cpuInfo[4];
-    __cpuid(cpuInfo, 1);
-    return (cpuInfo[3] & (1 << 25)) != 0;  // SSE 지원?
-}
-
-bool CheckAVX() {
-    int cpuInfo[4];
-    __cpuid(cpuInfo, 1);
-    return (cpuInfo[2] & (1 << 28)) != 0;  // AVX 지원?
-}
-
-// 사용
-if (CheckAVX()) {
-    // AVX 코드 사용
-} else if (CheckSSE()) {
-    // SSE 코드 사용
-} else {
-    // 일반 코드 사용
 }</div>
-            </div>
-        </div>
+                <p><strong>📊 실측 결과:</strong></p>
+                <div class="code-block">일반 방식: 11.29 ms
+SIMD 방식:  7.97 ms
 
-        <!-- 9단계: 주의사항 -->
-        <div class="conversation">
-            <h2>9️⃣ 주의사항 및 함정</h2>
-
-            <div class="warning-box">
-                <strong>⚠️ 함정 1: 메모리 정렬</strong><br><br>
-                <div class="code-block">// 잘못된 예
-float data[4];  // 정렬 보장 안 됨
-__m128 vec = _mm_load_ps(data);  // 💥 크래시 가능!
-
-// 올바른 예
-alignas(16) float data[4];  // 16바이트 정렬
-__m128 vec = _mm_load_ps(data);  // ✅ 안전
-
-// 또는 정렬되지 않은 로드 사용
-__m128 vec = _mm_loadu_ps(data);  // 느리지만 안전</div>
+→ 1.42배 빠름! ✨</div>
             </div>
 
-            <div class="warning-box">
-                <strong>⚠️ 함정 2: 나머지 처리</strong><br><br>
-                <div class="code-block">// 100개 데이터 처리
-for (int i = 0; i < 100; i += 4) {
-    // SIMD 처리
-}
-// 문제: 100 % 4 = 0이라 괜찮지만
-// 101개면? 마지막 1개는?
+            <div class="method-box">
+                <h4>📈 실험 2: 벡터 내적 (100만 번)</h4>
+                <div class="code-block">// 일반 방식
+float result = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
 
-// 해결 1: 마지막만 따로 처리
-int simdCount = (count / 4) * 4;
-for (int i = 0; i < simdCount; i += 4) {
-    // SIMD
-}
-for (int i = simdCount; i < count; i++) {
-    // 일반
-}
+// SIMD 방식
+__m128 vecA = _mm_load_ps(a);
+__m128 vecB = _mm_load_ps(b);
+__m128 mul = _mm_mul_ps(vecA, vecB);
+// Horizontal Add로 합산</div>
+                <p><strong>📊 실측 결과:</strong></p>
+                <div class="code-block">일반 방식: 1.58 ms
+SIMD 방식: 1.61 ms
 
-// 해결 2: 패딩 (배열 크기를 4의 배수로)</div>
+→ 거의 비슷 (0.98배)</div>
+                <p><span class="warning">주의:</span> 내적은 Horizontal Add 오버헤드 때문에 SIMD 이점이 적음.</p>
             </div>
 
-            <div class="warning-box">
-                <strong>⚠️ 함정 3: 코드 복잡도</strong><br><br>
-                SIMD 코드는 <span class="warning">읽기 어렵고 유지보수 힘들어.</span><br><br>
-                <div class="code-block">// 일반 코드: 직관적
-result[i] = a[i] + b[i];
+            <div class="method-box">
+                <h4>📈 실험 3: 거리 계산 (몬스터 100만 마리)</h4>
+                <div class="code-block">// 일반 방식 (하나씩)
+float dx = monsterX[i] - playerX;
+float dy = monsterY[i] - playerY;
+float dz = monsterZ[i] - playerZ;
+float dist = sqrt(dx*dx + dy*dy + dz*dz);
 
-// SIMD 코드: 복잡
-__m128 vecA = _mm_load_ps(&a[i]);
-__m128 vecB = _mm_load_ps(&b[i]);
-__m128 vecResult = _mm_add_ps(vecA, vecB);
-_mm_store_ps(&result[i], vecResult);</div>
-                <span class="key-point">성능이 중요한 핫스팟에만 사용하자!</span>
+// SIMD 방식 (4마리씩)
+__m128 dx = _mm_sub_ps(monsterX_vec, playerX_vec);
+__m128 dy = _mm_sub_ps(monsterY_vec, playerY_vec);
+__m128 dz = _mm_sub_ps(monsterZ_vec, playerZ_vec);
+__m128 distSq = _mm_add_ps(_mm_add_ps(dx2, dy2), dz2);
+__m128 dist = _mm_sqrt_ps(distSq);</div>
+                <p><strong>📊 실측 결과:</strong></p>
+                <div class="code-block">일반 방식: 2.79 ms
+SIMD 방식: 1.52 ms
+
+→ 1.84배 빠름! ✨</div>
             </div>
 
             <div class="chat">
-                <div class="q">그럼 언제 SIMD를 써야 해?</div>
+                <div class="q">어? 이론상 4배인데 실제로는 1.4~1.8배밖에 안 나왔어. 왜?</div>
                 <div class="a">
-                    <p>다음 조건을 만족할 때:</p>
-                    <div class="code-block">✅ 같은 연산을 많은 데이터에 반복
-✅ 프로파일러로 병목 확인됨 (핫스팟)
-✅ 데이터가 연속적 (배열)
-✅ 성능 향상이 코드 복잡도를 상쇄
+                    <p>여러 가지 이유가 있어:</p>
+                    <div class="code-block">1. 메모리 병목 (Memory Bottleneck)
+   → CPU는 빠른데 메모리 읽기가 느림
+   → 4개를 동시에 계산해도 메모리 대역폭이 한계
+   → 특히 1000만 개는 캐시에 안 들어감
 
-❌ 한두 번만 실행되는 코드
-❌ 데이터가 흩어져 있음
-❌ 조건문이 많음 (SIMD는 분기 약함)</div>
+2. 최적화 비활성화 (/Od)
+   → 컴파일러 최적화를 꺼서 순수 비교
+   → /O2 켜면 일반 코드도 자동 SIMD화됨
+   → 실제 게임에서는 /O2 사용 → 더 빠름
+
+3. 포인터 캐스팅 오버헤드
+   → float* → __m128* 변환
+   → 16바이트 정렬 확인
+
+4. Horizontal Add (내적의 경우)
+   → SIMD로 곱셈은 빠르지만
+   → 4개 합치는 건 추가 작업 필요
+   → 오히려 느려질 수 있음</div>
+                    <p><span class="key-point">결론:</span> 순수 비교에서는 1.4~1.8배지만, <span class="highlight">실제 최적화 켜면 훨씬 더 빠름!</span></p>
                 </div>
             </div>
-        </div>
 
+            <div class="chat">
+                <div class="q">그럼 실제 게임에서는 어떻게 돼?</div>
+                <div class="a">
+                    <p>실제 게임은 <span class="highlight">/O2 최적화를 켜고</span> 빌드해:</p>
+                    <div class="code-block">상황 1: SIMD 직접 사용 안 함
+→ 컴파일러가 자동으로 벡터화 (Auto-vectorization)
+→ 일반 코드도 알아서 SIMD 사용
+
+상황 2: SIMD 직접 사용
+→ 컴파일러 자동 벡터화 + 명시적 SIMD
+→ 복잡한 연산에서 더 유리
+→ 예: 행렬 곱셈, 복잡한 물리 연산</div>
+                    <p><span class="warning">교훈:</span> 일단 일반 코드로 짜고, 프로파일링 후 병목 지점에만 SIMD 적용!</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🔬 직접 실험해보고 싶다면?</strong><br><br>
+                벤치마크 코드는 <code>study/simd/benchmark/</code> 폴더에 있어.<br><br>
+                <strong>빌드 방법:</strong><br>
+                1. Developer Command Prompt for VS 2022 실행<br>
+                2. <code>cd study/simd/benchmark</code><br>
+                3. <code>cl /Od /EHsc simd_benchmark.cpp</code><br>
+                4. <code>simd_benchmark.exe</code><br><br>
+                자세한 내용은 <code>README.md</code> 참고!
+            </div>
+        </div>
         <!-- 핵심 정리 -->
         <div class="summary-box">
             <h3>📌 핵심 정리: SIMD</h3>
@@ -718,11 +433,13 @@ _mm_store_ps(&result[i], vecResult);</div>
                 <li><strong>SIMD</strong> - Single Instruction, Multiple Data (하나의 명령으로 여러 데이터 동시 처리)</li>
                 <li><strong>SSE</strong> - 128비트 레지스터, float 4개 동시 처리 (대부분의 PC 지원)</li>
                 <li><strong>AVX</strong> - 256비트 레지스터, float 8개 동시 처리</li>
-                <li><strong>성능</strong> - 이론상 4배, 실제 3~4배 빠름</li>
+                <li><strong>실측 성능 (/Od)</strong> - 벡터 덧셈 1.42배, 거리 계산 1.84배 (메모리 병목)</li>
+                <li><strong>실제 성능 (/O2)</strong> - 컴파일러 자동 벡터화 + SIMD로 훨씬 더 빠름</li>
                 <li><strong>게임 활용</strong> - 위치 업데이트, 충돌 검사, 물리 시뮬레이션</li>
                 <li><strong>주의사항</strong> - 메모리 정렬(16/32바이트), 나머지 처리, 코드 복잡도</li>
                 <li><strong>SoA > AoS</strong> - 배열의 구조체가 SIMD에 유리</li>
-                <li><strong>사용 시기</strong> - 핫스팟에만 선택적 적용</li>
+                <li><strong>컴파일러 최적화</strong> - /O2 켜면 일반 코드도 자동으로 SIMD 사용</li>
+                <li><strong>사용 시기</strong> - 일반 코드 작성 → 프로파일링 → 핫스팟만 SIMD 적용</li>
             </ul>
         </div>
 
