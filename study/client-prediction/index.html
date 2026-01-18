@@ -316,33 +316,6 @@ void Validate(packet) {
                 </div>
             </div>
 
-            <div class="chat">
-                <div class="q">P2P랑 뭐가 달라?</div>
-                <div class="a">
-                    <table class="compare-table">
-                        <tr>
-                            <th>방식</th>
-                            <th>장점</th>
-                            <th>단점</th>
-                        </tr>
-                        <tr>
-                            <td><strong>P2P</strong></td>
-                            <td>빠름 (직접 전송)</td>
-                            <td>❌ 검증 없음 → 핵 가능</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Dedicated Server<br>(일반)</strong></td>
-                            <td>✅ 검증 확실</td>
-                            <td>❌ 느림 (40ms)</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Client Simulate<br>(카트라이더)</strong></td>
-                            <td>✅ 빠름 (0ms)<br>✅ 검증 있음</td>
-                            <td>⚠️ 복잡함 (다음 섹션)</td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
         </div>
 
         <!-- 3-1. 기본 개념 vs 카트라이더 -->
@@ -637,36 +610,97 @@ A클라 화면에 그대로 표시하면:
             </div>
 
             <div class="chat">
-                <div class="q">어떻게 미래를 예측해?</div>
+                <div class="q">미래를 예측하려면 뭘 알아야 해?</div>
                 <div class="a">
-                    <p><strong>4가지 정보를 패킷에 실어 보내:</strong></p>
+                    <p><strong>생각해보자. 일상에서 이런 상황:</strong></p>
+                    <div class="code-block visual">친구: "나 5분 전에 집에서 출발했어!"
+
+Q. 지금 어디쯤 있을까?
+A. ...모르겠는데?
+
+왜 모를까?
+→ 얼마나 빨리 오는지 모르니까!</div>
+                    <p><span class="key-point">위치만으로는 미래를 예측 못 해!</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 속도를 알면 돼?</div>
+                <div class="a">
+                    <p><strong>한 번 더 생각해보자:</strong></p>
+                    <div class="code-block visual">친구: "나 강남역에서 출발했어!"
+친구: "시속 60km로 오는 중!"
+
+Q. 지금 어디쯤 있을까?
+A. ...이것도 모르겠는데?
+
+왜 모를까?
+→ "언제" 출발했는지 모르니까!</div>
+                    <p><span class="warning">시간도 필요해!</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 3가지 정보만 있으면 돼?</div>
+                <div class="a">
+                    <p><span class="key-point">정답!</span> 위치 + 속도 + 시간</p>
+                    <div class="code-block visual">친구: "강남역(0km)에서 5분 전에 출발했어!"
+친구: "시속 60km로 오는 중!"
+
+계산:
+- 5분 = 5/60시간 = 0.083시간
+- 거리 = 속도 × 시간
+- 거리 = 60km/h × 0.083h = 5km
+
+답: 지금 5km 지점에 있어! ✅</div>
+                    <div class="analogy-box">
+                        <strong>📐 공식</strong><br><br>
+                        현재 위치 = 과거 위치 + (속도 × 지난 시간)
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">카트라이더도 이렇게 해?</div>
+                <div class="a">
+                    <p><strong>딱 맞아!</strong> 같은 원리야:</p>
+                    <div class="code-block visual">서버에서 패킷 받음:
+- 위치: 100m
+- 속도: 100m/s
+- 보낸 시간: 9.8초
+
+현재 시간: 10.0초
+→ 지난 시간 = 10.0 - 9.8 = 0.2초
+
+계산:
+현재 위치 = 100m + (100m/s × 0.2초)
+         = 100m + 20m
+         = 120m ✅</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">코드로는 어떻게 생겼어?</div>
+                <div class="a">
+                    <p><strong>패킷에 3가지 정보를 담아:</strong></p>
                     <div class="code-block">struct MovementPacket {
     float timestamp;        // 1. 보낸 시간
     Vector3 position;       // 2. 위치
-    Vector3 linearVelocity; // 3. 선형 속도
-    Vector3 angularVelocity;// 4. 각속도 (회전)
+    Vector3 linearVelocity; // 3. 속도
 };</div>
 
                     <p><strong>받는 쪽에서 계산:</strong></p>
                     <div class="code-block">void OnReceive(MovementPacket packet) {
-    // 1. 시간 차이 계산
-    float latency = CurrentServerTime - packet.timestamp;
-    // latency = 200ms (0.2초)
+    // 1. 지난 시간 계산
+    float latency = CurrentTime - packet.timestamp;
+    // 예: 10.0 - 9.8 = 0.2초
 
-    // 2. 현재 위치 예측 (거리 = 속도 × 시간)
+    // 2. 현재 위치 예측
     Vector3 predictedPosition =
         packet.position + (packet.linearVelocity * latency);
-
-    // 예: position=100m, velocity=100m/s, latency=0.2s
-    // → predictedPosition = 100 + (100 × 0.2) = 120m ✅
-
-    // 3. 회전도 예측
-    Vector3 predictedRotation =
-        packet.rotation + (packet.angularVelocity * latency);
-
-    // 4. 부드럽게 보간 (급격한 변화 방지)
-    currentPosition = Lerp(currentPosition, predictedPosition, 0.8);
+    // 예: 100 + (100 × 0.2) = 120m ✅
 }</div>
+                    <p><span class="key-point">우리가 친구 위치 계산하던 것과 똑같아!</span></p>
                 </div>
             </div>
 
