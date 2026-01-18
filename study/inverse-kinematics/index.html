@@ -330,6 +330,147 @@ IK: 목표 위치를 알려줌 → 각도가 자동 계산됨
             </div>
         </div>
 
+        <!-- 3-1. FK와 IK 함께 쓰기 -->
+        <div class="conversation">
+            <h2>3-1. 잠깐, FK와 IK 중 하나만 써?</h2>
+
+            <div class="chat">
+                <div class="q">그럼 평지에서는 FK, 계단에서는 IK로 전환하는 거야?</div>
+                <div class="a">
+                    <p><span class="warning">아니! 전환이 아니야.</span></p>
+                    <p><span class="key-point">FK는 계속 재생되고, IK는 그 위에 덮어써!</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">무슨 말이야? 더 자세히!</div>
+                <div class="a">
+                    <p><strong>걷기 애니메이션은 원래 FK로 만들어진 거야:</strong></p>
+                    <div class="code-block">애니메이터가 Maya에서 만든 "평지 걷기" 애니메이션
+→ 각 프레임마다 골반, 무릎, 발목 각도가 정해져 있음
+→ 이게 FK 방식으로 계속 재생됨</div>
+
+                    <p><strong>하지만 게임에서는 이렇게 동작해:</strong></p>
+                    <div class="code-block visual">🎬 1단계: FK로 평지 걷기 애니메이션 재생
+   → 발 위치: (10, 0, 0)  ← 평지 높이
+
+🔍 2단계: 게임 엔진이 실제 지면 체크 (Raycast)
+   → 아, 여기 계단이네? 실제 높이: (10, 20, 0)
+
+✨ 3단계: IK로 발 위치만 보정
+   → "발을 (10, 20, 0)으로 옮겨!"
+   → 무릎/골반 각도가 자동으로 재계산됨
+   → FK 애니메이션 위에 IK 보정을 덮어씀</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">비유로 설명해줘!</div>
+                <div class="a">
+                    <div class="analogy-box">
+                        <strong>🎨 비유: 포토샵 레이어</strong><br><br>
+                        <strong>레이어 1 (FK):</strong> 기본 걷기 애니메이션 (평지용, 계속 재생)<br>
+                        <strong>레이어 2 (IK):</strong> 발 위치 보정 레이어 (필요할 때만 적용)<br><br>
+
+                        <strong>평지에서:</strong><br>
+                        - FK 레이어 100% 적용<br>
+                        - IK 레이어 0% (꺼져있음)<br><br>
+
+                        <strong>계단에서:</strong><br>
+                        - FK 레이어 100% 재생 (그대로)<br>
+                        - IK 레이어 100% 적용 (발만 보정)<br>
+                        - <span class="key-point">결과 = FK 움직임 + IK 보정!</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">코드로는 어떻게 생겼어?</div>
+                <div class="a">
+                    <div class="code-block">// 매 프레임마다
+void Update() {
+    // 1. FK 애니메이션은 계속 재생 (기본)
+    animator.Play("Walk");  // ← FK 방식으로 재생
+
+    // 2. 지면 높이 체크
+    RaycastHit hit;
+    if (Physics.Raycast(leftFoot.position, Vector3.down, out hit)) {
+        float groundHeight = hit.point.y;
+
+        // 3. IK로 발만 보정
+        animator.SetIKPositionWeight(LeftFoot, 1.0f);  // IK 100% 적용
+        animator.SetIKPosition(LeftFoot, hit.point);   // 발을 지면에
+
+        // ← 이 순간 무릎/골반 각도가 자동으로 조정됨 (IK)
+    }
+}</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">가중치를 조절할 수도 있어?</div>
+                <div class="a">
+                    <p><span class="key-point">당연하지! 0%~100% 사이로 조절 가능해.</span></p>
+                    <div class="code-block">// 평지: IK 가중치 0% (FK만 사용)
+animator.SetIKPositionWeight(LeftFoot, 0.0f);
+
+// 약간의 경사: IK 가중치 50% (FK + IK 섞음)
+animator.SetIKPositionWeight(LeftFoot, 0.5f);
+
+// 계단: IK 가중치 100% (IK 보정 최대)
+animator.SetIKPositionWeight(LeftFoot, 1.0f);</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">부위별로 다르게 쓸 수도 있어?</div>
+                <div class="a">
+                    <p><strong>그게 바로 현대 게임의 방식이야!</strong></p>
+                    <table class="compare-table">
+                        <tr>
+                            <th>신체 부위</th>
+                            <th>FK 비중</th>
+                            <th>IK 비중</th>
+                            <th>이유</th>
+                        </tr>
+                        <tr>
+                            <td><strong>상체</strong></td>
+                            <td>100%</td>
+                            <td>0%</td>
+                            <td>칼 휘두르기 등 미리 만든 애니메이션</td>
+                        </tr>
+                        <tr>
+                            <td><strong>하체</strong></td>
+                            <td>80%</td>
+                            <td>20%</td>
+                            <td>걷기 애니메이션 + 지면 보정</td>
+                        </tr>
+                        <tr>
+                            <td><strong>손</strong></td>
+                            <td>0%</td>
+                            <td>100%</td>
+                            <td>총 겨누기, 문손잡이 잡기 (정확한 위치 필요)</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">정리하면?</div>
+                <div class="a">
+                    <div class="code-block visual">❌ 오해: FK 모드 ↔ IK 모드로 전환한다
+
+✅ 실제: FK는 계속 재생, IK는 필요한 부분만 덮어쓰기
+
+마치:
+- FK = 베이스 음악 (항상 재생)
+- IK = 이퀄라이저 (특정 주파수만 조정)
+- 음악은 계속 나오는데, 소리만 조금 바꾸는 거야!</div>
+                    <p><span class="key-point">게임은 FK와 IK를 레이어처럼 섞어서 써!</span></p>
+                </div>
+            </div>
+        </div>
+
         <!-- 4. IK 원리 (간단한 2-Joint) -->
         <div class="conversation">
             <h2>4. IK 원리: 2개 관절은 어떻게 계산해?</h2>
