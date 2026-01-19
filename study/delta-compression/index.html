@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>델타 압축으로 패킷 크기 8배 줄이는 법 - MSH Portfolio</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.8;
+            background: #fafafa;
+            color: #333;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 60px;
+            border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .breadcrumb {
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .breadcrumb a {
+            color: #666;
+            text-decoration: none;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: #1a237e;
+            margin-bottom: 20px;
+            line-height: 1.3;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            color: #666;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #e0e0e0;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            color: #1a237e;
+            margin: 50px 0 25px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        h3 {
+            font-size: 1.3rem;
+            color: #333;
+            margin: 30px 0 15px 0;
+        }
+
+        h4 {
+            font-size: 1.1rem;
+            color: #555;
+            margin: 20px 0 10px 0;
+        }
+
+        .chat {
+            margin: 30px 0;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+        }
+
+        .q {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #1976d2;
+            margin-bottom: 15px;
+            padding-left: 20px;
+            border-left: 4px solid #1976d2;
+        }
+
+        .a {
+            font-size: 1.05rem;
+            color: #333;
+            line-height: 1.8;
+        }
+
+        .a p {
+            margin: 15px 0;
+        }
+
+        .highlight {
+            background: linear-gradient(transparent 60%, #b3d9ff 60%);
+            font-weight: 600;
+            padding: 0 4px;
+        }
+
+        .key-point {
+            background: linear-gradient(transparent 60%, #c8e6c9 60%);
+            font-weight: 600;
+            padding: 0 4px;
+        }
+
+        .warning {
+            background: linear-gradient(transparent 60%, #ffcdd2 60%);
+            font-weight: 600;
+            padding: 0 4px;
+        }
+
+        .code-block {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .visual-section {
+            background: #f0f4f8;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 30px 0;
+            border: 2px solid #e0e0e0;
+        }
+
+        .visual-section h4 {
+            color: #1a237e;
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+        }
+
+        .step-gif {
+            width: 100%;
+            max-width: 600px;
+            border-radius: 8px;
+            margin: 20px auto;
+            display: block;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .gif-caption {
+            text-align: center;
+            color: #666;
+            font-size: 0.95rem;
+            margin-top: 15px;
+            font-style: italic;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .compare-table th {
+            background: #1a237e;
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .compare-table td {
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .compare-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .compare-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .analogy-box {
+            background: #fff9e6;
+            border-left: 5px solid #ffc107;
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 8px;
+        }
+
+        .analogy-box strong {
+            color: #f57c00;
+            font-size: 1.1rem;
+        }
+
+        .summary-box {
+            background: #e8f5e9;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 40px 0;
+            border: 2px solid #4caf50;
+        }
+
+        .summary-box h3 {
+            color: #2e7d32;
+            margin-bottom: 20px;
+            font-size: 1.4rem;
+        }
+
+        .summary-box ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .summary-box li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .summary-box li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4caf50;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .data-table th {
+            background: #f5f5f5;
+            padding: 12px;
+            text-align: center;
+            font-weight: 600;
+            border: 1px solid #e0e0e0;
+        }
+
+        .data-table td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+
+        .data-table tr:hover {
+            background: #fafafa;
+        }
+
+        .note {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            h2 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="breadcrumb">
+            <a href="../../">홈</a> &gt;
+            <a href="../network/">네트워크</a> &gt;
+            델타 압축
+        </div>
+
+        <h1>100명 방에서 트래픽을 8배 줄이는 법</h1>
+        <p class="subtitle">델타 압축(Delta Compression)으로 네트워크 패킷 최적화하기</p>
+
+        <div class="chat">
+            <div class="q">Q. 멀티플레이 게임 만들었는데 서버비가 너무 많이 나와요.</div>
+            <div class="a">
+                <p>서버비의 큰 부분이 <span class="highlight">네트워크 트래픽 비용</span>이에요.</p>
+                <p>특히 실시간 게임은 캐릭터 위치를 계속 주고받아야 하니까 트래픽이 엄청나죠.</p>
+            </div>
+        </div>
+
+        <div class="chat">
+            <div class="q">Q. 위치 데이터가 그렇게 큰가요?</div>
+            <div class="a">
+                <p>계산해볼게요.</p>
+                <div class="code-block">일반적인 위치 패킷:
+{
+    playerId: 12345,        // 4 bytes (int)
+    x: 123.456789,          // 4 bytes (float)
+    y: 456.789012,          // 4 bytes (float)
+    z: 789.012345,          // 4 bytes (float)
+    rotationY: 45.123       // 4 bytes (float)
+}
+
+총 크기: 20 bytes</div>
+                <p><span class="key-point">별로 안 큰 것 같죠?</span></p>
+                <p>근데 이걸 초당 20번씩 보낸다고 생각해보세요.</p>
+            </div>
+        </div>
+
+        <div class="chat">
+            <div class="q">Q. 얼마나 나오는데요?</div>
+            <div class="a">
+                <p>실제 계산해봤어요.</p>
+
+                <table class="data-table">
+                    <tr>
+                        <th>조건</th>
+                        <th>값</th>
+                    </tr>
+                    <tr>
+                        <td>플레이어 수</td>
+                        <td>100명</td>
+                    </tr>
+                    <tr>
+                        <td>패킷 크기</td>
+                        <td>20 bytes</td>
+                    </tr>
+                    <tr>
+                        <td>전송 주기</td>
+                        <td>초당 20회</td>
+                    </tr>
+                    <tr>
+                        <td><strong>초당 트래픽</strong></td>
+                        <td><strong>100명 × 20 bytes × 20회 = 40KB/s</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>시간당 트래픽</strong></td>
+                        <td><strong>144MB/hour</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>하루 트래픽</strong></td>
+                        <td><strong>3.5GB/day</strong></td>
+                    </tr>
+                </table>
+
+                <p>방 하나에서 하루에 <span class="warning">3.5GB</span>예요.</p>
+                <p>방이 10개면? 35GB.</p>
+                <p>방이 100개면? <span class="warning">350GB/day</span>.</p>
+            </div>
+        </div>
+
+        <h2>💡 첫 번째 의문</h2>
+
+        <div class="chat">
+            <div class="q">Q. 매번 전체 위치를 보내야 해요?</div>
+            <div class="a">
+                <p>처음엔 저도 그렇게 했어요.</p>
+                <div class="code-block">// 매 프레임마다
+SendPosition(playerId, x, y, z, rotation);</div>
+                <p>근데 생각해보니까 이상한 거예요.</p>
+            </div>
+        </div>
+
+        <div class="chat">
+            <div class="q">Q. 뭐가 이상한데요?</div>
+            <div class="a">
+                <p>캐릭터가 천천히 걸어가고 있다고 해봐요.</p>
+
+                <div class="code-block">0.00초: x = 100.0, y = 50.0, z = 200.0
+0.05초: x = 100.1, y = 50.0, z = 200.0
+0.10초: x = 100.2, y = 50.0, z = 200.0
+0.15초: x = 100.3, y = 50.0, z = 200.0</div>
+
+                <p><span class="key-point">y랑 z는 안 바뀌잖아요?</span></p>
+                <p>x도 0.1씩만 바뀌고요.</p>
+                <p>근데 매번 전부 다 보내고 있어요.</p>
+            </div>
+        </div>
+
+        <div class="analogy-box">
+            <strong>🏪 비유: 재고 보고</strong><br><br>
+
+            <strong>일반적인 방식 (전체 전송):</strong><br>
+            - 월요일: "사과 100개, 바나나 50개, 오렌지 30개"<br>
+            - 화요일: "사과 99개, 바나나 50개, 오렌지 30개"<br>
+            - 수요일: "사과 98개, 바나나 50개, 오렌지 30개"<br>
+            → 매일 전부 다 보고<br><br>
+
+            <strong>델타 방식 (변화량만):</strong><br>
+            - 월요일: "사과 100개, 바나나 50개, 오렌지 30개" (초기)<br>
+            - 화요일: "사과 -1개"<br>
+            - 수요일: "사과 -1개"<br>
+            → 바뀐 것만 보고
+        </div>
+
+        <h2>🎯 델타 압축 (Delta Compression)</h2>
+
+        <div class="chat">
+            <div class="q">Q. 그럼 변화량만 보내면 되는 거 아냐?</div>
+            <div class="a">
+                <p><span class="key-point">정확해요!</span></p>
+                <p>그게 <span class="highlight">델타 압축(Delta Compression)</span>이에요.</p>
+
+                <div class="code-block">// 이전 위치 저장
+previousPosition = currentPosition;
+
+// 다음 프레임
+delta = currentPosition - previousPosition;
+
+// 변화가 있으면 델타만 전송
+if (delta != 0) {
+    SendDelta(playerId, delta);
+}</div>
+            </div>
+        </div>
+
+        <div class="chat">
+            <div class="q">Q. 실제 패킷은 어떻게 생겼어요?</div>
+            <div class="a">
+                <p>비교해볼게요.</p>
+
+                <h4>일반 패킷 (Full State)</h4>
+                <div class="code-block">{
+    type: "POSITION",       // 1 byte
+    playerId: 12345,        // 4 bytes
+    x: 123.456,             // 4 bytes
+    y: 456.789,             // 4 bytes
+    z: 789.012,             // 4 bytes
+    rotation: 45.123        // 4 bytes
+}
+→ 총 21 bytes</div>
+
+                <h4>델타 패킷 (Delta)</h4>
+                <div class="code-block">{
+    type: "DELTA",          // 1 byte
+    playerId: 12345,        // 4 bytes
+    dx: 0.1,                // 2 bytes (short, -32K ~ 32K)
+    dy: 0.0,                // 2 bytes
+    dz: 0.0,                // 2 bytes
+    dRotation: 0.0          // 2 bytes
+}
+→ 총 13 bytes</div>
+
+                <p><span class="key-point">21 bytes → 13 bytes</span></p>
+                <p>약 <span class="highlight">38% 절약</span>이에요.</p>
+            </div>
+        </div>
+
+        <div class="chat">
+            <div class="q">Q. 어? 생각보다 별로 안 줄었는데요?</div>
+            <div class="a">
+                <p>맞아요. 아직 더 할 게 있어요.</p>
+                <p><span class="key-point">변화가 없으면 아예 안 보내면 되잖아요?</span></p>
+
+                <div class="code-block">// 변화 없으면 전송 안 함
+if (abs(delta.x) > 0.01 ||
+    abs(delta.y) > 0.01 ||
+    abs(delta.z) > 0.01) {
+    SendDelta(playerId, delta);
+}</div>
+
+                <p>서 있는 캐릭터는 패킷을 안 보내요.</p>
+                <p>이게 진짜 큰 차이예요.</p>
+            </div>
+        </div>
+
+        <h2>📊 실측 데이터</h2>
+
+        <div class="chat">
+            <div class="q">Q. 실제로 얼마나 줄어들어요?</div>
+            <div class="a">
+                <p>100명 방에서 테스트해봤어요.</p>
+
+                <table class="compare-table">
+                    <tr>
+                        <th>방식</th>
+                        <th>패킷 크기</th>
+                        <th>초당 전송 횟수</th>
+                        <th>초당 트래픽</th>
+                    </tr>
+                    <tr>
+                        <td><strong>Full State</strong><br>(모든 플레이어, 매번)</td>
+                        <td>21 bytes</td>
+                        <td>100명 × 20회 = 2,000회</td>
+                        <td>42 KB/s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Delta (움직일 때만)</strong><br>(약 30%만 움직임)</td>
+                        <td>13 bytes</td>
+                        <td>30명 × 20회 = 600회</td>
+                        <td>7.8 KB/s</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Delta + 임계값</strong><br>(유의미한 변화만)</td>
+                        <td>13 bytes</td>
+                        <td>20명 × 15회 = 300회</td>
+                        <td><strong>3.9 KB/s</strong></td>
+                    </tr>
+                </table>
+
+                <p><span class="key-point">42 KB/s → 3.9 KB/s</span></p>
+                <p><span class="highlight">약 10.8배 절약!</span></p>
+            </div>
+        </div>
+
+        <div class="chat">
+            <div class="q">Q. 하루 트래픽으로 계산하면?</div>
+            <div class="a">
+                <table class="data-table">
+                    <tr>
+                        <th>방식</th>
+                        <th>초당</th>
+                        <th>시간당</th>
+                        <th>하루</th>
+                    </tr>
+                    <tr>
+                        <td>Full State</td>
+                        <td>42 KB/s</td>
+                        <td>151 MB/h</td>
+                        <td>3.6 GB/day</td>
+                    </tr>
+                    <tr>
+                        <td>Delta 압축</td>
+                        <td>3.9 KB/s</td>
+                        <td>14 MB/h</td>
+                        <td><strong>0.34 GB/day</strong></td>
+                    </tr>
+                </table>
+
+                <p>방 100개면:</p>
+                <ul>
+                    <li>Full State: <span class="warning">360 GB/day</span></li>
+                    <li>Delta 압축: <span class="key-point">34 GB/day</span></li>
+                </ul>
+
+                <p><span class="highlight">326 GB 절약</span>이에요!</p>
+            </div>
+        </div>
+
+        <h2>⚠️ 문제점</h2>
+
+        <div class="chat">
+            <div class="q">Q. 델타만 보내면 문제 없어요?</div>
+            <div class="a">
+                <p><span class="warning">문제가 있어요.</span></p>
+                <p>패킷이 유실되면 큰일나요.</p>
+            </div>
+        </div>
+
+        <div class="chat">
+            <div class="q">Q. 왜요?</div>
+            <div class="a">
+                <p>예를 들어볼게요.</p>
+
+                <div class="code-block">초기 위치: x = 100
+
+[서버 → 클라이언트]
+패킷 1: dx = +10  → 클라이언트: x = 110 ✓
+패킷 2: dx = +10  → <span class="warning">유실!</span>
+패킷 3: dx = +10  → 클라이언트: x = 120 ✗ (실제론 130이어야 함)
+
+<span class="warning">10의 오차 발생!</span></div>
+
+                <p>델타는 <span class="highlight">누적</span>이기 때문에</p>
+                <p>한 번 틀어지면 계속 틀어진 채로 가요.</p>
+            </div>
+        </div>
+
+        <div class="chat">
+            <div class="q">Q. 그럼 어떻게 해요?</div>
+            <div class="a">
+                <p><span class="key-point">주기적으로 전체 위치를 보내요.</span></p>
+
+                <div class="code-block">frameCount = 0;
+
+void Update() {
+    frameCount++;
+
+    // 델타 전송
+    if (HasMoved()) {
+        SendDelta(delta);
+    }
+
+    // 5초마다 전체 위치 전송 (보정)
+    if (frameCount % 100 == 0) {  // 20fps 기준 5초
+        SendFullState(position);
+    }
+}</div>
+
+                <p>이렇게 하면:</p>
+                <ul>
+                    <li>평소: 델타 (작음, 빠름)</li>
+                    <li>5초마다: 전체 위치 (동기화 보정)</li>
+                </ul>
+
+                <p><span class="key-point">오차가 5초 이상 누적되지 않아요.</span></p>
+            </div>
+        </div>
+
+        <h2>📦 패킷 구조 이해하기</h2>
+
+        <div class="chat">
+            <div class="q">Q. 똑같은 구조체로 패킷을 보낸다고 해도 델타형 구조체랑 일반 풀스테이트 구조체가 두 개가 나눠져 있겠네요?</div>
+            <div class="a">
+                <p><span class="key-point">정확해요!</span></p>
+                <p>실제로는 <span class="highlight">두 개의 다른 패킷 타입</span>이 있어요.</p>
+
+                <h4>패킷 타입 정의</h4>
+                <div class="code-block">// 패킷 타입 enum
+enum class PacketType : uint8_t
+{
+    FULL_STATE = 0x01,  // 전체 위치
+    DELTA = 0x02        // 변화량만
+};</div>
+
+                <h4>1. Full State 패킷 (21 bytes)</h4>
+                <div class="code-block">struct FullStatePacket
+{
+    uint8_t type;        // 1 byte: 0x01
+    int32_t playerId;    // 4 bytes
+    float x;             // 4 bytes
+    float y;             // 4 bytes
+    float z;             // 4 bytes
+    float rotation;      // 4 bytes
+} __attribute__((packed));  // 패딩 제거
+
+// 총 21 bytes</div>
+
+                <h4>2. Delta 패킷 (13 bytes)</h4>
+                <div class="code-block">struct DeltaPacket
+{
+    uint8_t type;        // 1 byte: 0x02
+    int32_t playerId;    // 4 bytes
+    int16_t dx;          // 2 bytes (-327.68 ~ 327.67)
+    int16_t dy;          // 2 bytes
+    int16_t dz;          // 2 bytes
+    int16_t dRotation;   // 2 bytes
+} __attribute__((packed));
+
+// 총 13 bytes</div>
+
+                <p><span class="key-point">크기도 다르고, 내용도 달라요.</span></p>
+                <p>수신측에서는 <span class="highlight">첫 바이트(type)를 보고 어느 구조체로 파싱할지 결정</span>해요.</p>
+            </div>
+        </div>
+
+        <h2>🔧 실제 구현</h2>
+
+        <div class="chat">
+            <div class="q">Q. 코드로 보여주세요.</div>
+            <div class="a">
+                <h4>서버 측 (C++)</h4>
+                <div class="code-block">class PositionSync
+{
+private:
+    Vector3 previousPosition;
+    float previousRotation;
+    int frameCount = 0;
+
+    static constexpr float DELTA_THRESHOLD = 0.01f;  // 1cm
+    static constexpr int FULL_SYNC_INTERVAL = 100;   // 5초 (20fps 기준)
+
+public:
+    void Update(Player& player)
+    {
+        frameCount++;
+
+        Vector3 currentPos = player.GetPosition();
+        float currentRot = player.GetRotation();
+
+        // 델타 계산
+        Vector3 delta = currentPos - previousPosition;
+        float deltaRot = currentRot - previousRotation;
+
+        // 유의미한 변화가 있거나, 5초 주기
+        bool shouldSend =
+            delta.Magnitude() > DELTA_THRESHOLD ||
+            std::abs(deltaRot) > 0.1f ||
+            frameCount % FULL_SYNC_INTERVAL == 0;
+
+        if (shouldSend)
+        {
+            if (frameCount % FULL_SYNC_INTERVAL == 0)
+            {
+                // 전체 동기화
+                SendFullState(player.GetId(), currentPos, currentRot);
+            }
+            else
+            {
+                // 델타 전송
+                SendDelta(player.GetId(), delta, deltaRot);
+            }
+
+            previousPosition = currentPos;
+            previousRotation = currentRot;
+        }
+    }
+
+private:
+    void SendDelta(int playerId, const Vector3& delta, float deltaRot)
+    {
+        DeltaPacket packet;
+        packet.type = static_cast<uint8_t>(PacketType::DELTA);
+        packet.playerId = playerId;
+        packet.dx = FloatToShort(delta.x);
+        packet.dy = FloatToShort(delta.y);
+        packet.dz = FloatToShort(delta.z);
+        packet.dRotation = FloatToShort(deltaRot);
+
+        // 패킷 전송
+        BroadcastToRoom(&packet, sizeof(DeltaPacket));  // 13 bytes
+    }
+
+    void SendFullState(int playerId, const Vector3& pos, float rot)
+    {
+        FullStatePacket packet;
+        packet.type = static_cast<uint8_t>(PacketType::FULL_STATE);
+        packet.playerId = playerId;
+        packet.x = pos.x;
+        packet.y = pos.y;
+        packet.z = pos.z;
+        packet.rotation = rot;
+
+        // 패킷 전송
+        BroadcastToRoom(&packet, sizeof(FullStatePacket));  // 21 bytes
+    }
+
+    // float를 short로 압축 (정밀도 0.01)
+    int16_t FloatToShort(float value)
+    {
+        return static_cast<int16_t>(value * 100.0f);  // -327.68 ~ 327.67
+    }
+};</div>
+
+                <h4>클라이언트 측 (C++)</h4>
+                <div class="code-block">class ClientPositionSync
+{
+private:
+    std::unordered_map<int, Vector3> playerPositions;
+
+public:
+    void OnReceivePacket(const uint8_t* data, size_t size)
+    {
+        // 첫 바이트로 패킷 타입 확인
+        PacketType type = static_cast<PacketType>(data[0]);
+
+        switch (type)
+        {
+        case PacketType::FULL_STATE:
+            HandleFullState(data, size);
+            break;
+
+        case PacketType::DELTA:
+            HandleDelta(data, size);
+            break;
+
+        default:
+            std::cerr << "Unknown packet type: "
+                      << static_cast<int>(data[0]) << std::endl;
+            break;
+        }
+    }
+
+private:
+    void HandleFullState(const uint8_t* data, size_t size)
+    {
+        if (size < sizeof(FullStatePacket)) return;
+
+        // 구조체로 캐스팅
+        const FullStatePacket* packet =
+            reinterpret_cast<const FullStatePacket*>(data);
+
+        Vector3 position(packet->x, packet->y, packet->z);
+
+        // 위치 직접 설정 (동기화 보정)
+        playerPositions[packet->playerId] = position;
+        UpdatePlayerPosition(packet->playerId, position, packet->rotation);
+    }
+
+    void HandleDelta(const uint8_t* data, size_t size)
+    {
+        if (size < sizeof(DeltaPacket)) return;
+
+        const DeltaPacket* packet =
+            reinterpret_cast<const DeltaPacket*>(data);
+
+        // short → float 변환
+        Vector3 delta(
+            ShortToFloat(packet->dx),
+            ShortToFloat(packet->dy),
+            ShortToFloat(packet->dz)
+        );
+        float deltaRot = ShortToFloat(packet->dRotation);
+
+        // 이전 위치에 델타 적용
+        auto it = playerPositions.find(packet->playerId);
+        if (it != playerPositions.end())
+        {
+            Vector3 newPos = it->second + delta;
+            playerPositions[packet->playerId] = newPos;
+
+            UpdatePlayerPosition(packet->playerId, newPos, deltaRot);
+        }
+    }
+
+    float ShortToFloat(int16_t value)
+    {
+        return value / 100.0f;
+    }
+};</div>
+
+                <div class="note">
+                    <strong>💡 핵심 포인트:</strong><br>
+                    - 첫 바이트(type)로 패킷 타입 구분<br>
+                    - Full State: 21 bytes, 전체 위치 전송<br>
+                    - Delta: 13 bytes, 변화량만 전송<br>
+                    - 클라이언트는 switch로 분기 처리
+                </div>
+            </div>
+        </div>
+
+        <h2>🎛️ 최적화 팁</h2>
+
+        <div class="chat">
+            <div class="q">Q. 더 줄일 방법은 없어요?</div>
+            <div class="a">
+                <p>몇 가지 더 있어요.</p>
+
+                <h4>1. 비트 패킹 (Bit Packing)</h4>
+                <div class="code-block">// dx, dy, dz가 -3.27 ~ 3.27 범위라면
+// short (2 bytes) 대신 10 bits만 사용 가능
+
+// 3개 delta = 30 bits = 4 bytes (vs 6 bytes)</div>
+
+                <h4>2. 가변 길이 인코딩</h4>
+                <div class="code-block">// 작은 값은 1 byte, 큰 값은 2 bytes
+if (abs(delta) < 127) {
+    SendByte(delta);      // 1 byte
+} else {
+    SendShort(delta);     // 2 bytes
+}</div>
+
+                <h4>3. 예측 + 보정</h4>
+                <div class="code-block">// 클라이언트가 움직임 예측
+// 예측이 맞으면 패킷 안 보냄
+// 예측이 틀리면 보정 패킷만 보냄</div>
+
+                <p>이런 기법들을 조합하면</p>
+                <p><span class="key-point">20배 이상도 가능해요.</span></p>
+            </div>
+        </div>
+
+        <div class="chat">
+            <div class="q">Q. 그럼 무조건 델타 방식이 좋은 거예요?</div>
+            <div class="a">
+                <p><span class="warning">아니에요.</span> Trade-off가 있어요.</p>
+
+                <table class="compare-table">
+                    <tr>
+                        <th>항목</th>
+                        <th>Full State</th>
+                        <th>Delta Compression</th>
+                    </tr>
+                    <tr>
+                        <td>패킷 크기</td>
+                        <td>큼 (21 bytes)</td>
+                        <td>작음 (13 bytes)</td>
+                    </tr>
+                    <tr>
+                        <td>CPU 사용량</td>
+                        <td>낮음</td>
+                        <td>약간 높음 (델타 계산)</td>
+                    </tr>
+                    <tr>
+                        <td>패킷 유실</td>
+                        <td>문제 없음</td>
+                        <td>오차 누적 가능</td>
+                    </tr>
+                    <tr>
+                        <td>신규 접속자</td>
+                        <td>바로 동기화</td>
+                        <td>초기 상태 필요</td>
+                    </tr>
+                    <tr>
+                        <td>구현 복잡도</td>
+                        <td>쉬움</td>
+                        <td>복잡함</td>
+                    </tr>
+                </table>
+
+                <p><span class="key-point">적절한 혼용이 답이에요.</span></p>
+            </div>
+        </div>
+
+        <h2>🎮 실제 게임 사례</h2>
+
+        <div class="chat">
+            <div class="q">Q. 실제 게임은 어떻게 쓰나요?</div>
+            <div class="a">
+                <h4>Overwatch</h4>
+                <p>델타 압축 + 예측 + 보정</p>
+                <ul>
+                    <li>평소: 델타만 전송</li>
+                    <li>빠른 움직임: Full State</li>
+                    <li>클라이언트 예측으로 부드러움 유지</li>
+                </ul>
+
+                <h4>League of Legends</h4>
+                <p>하이브리드 방식</p>
+                <ul>
+                    <li>중요 이벤트: Full State (스킬 시전)</li>
+                    <li>일반 이동: Delta</li>
+                    <li>시야 밖 유닛: 전송 안 함</li>
+                </ul>
+
+                <h4>PUBG</h4>
+                <p>거리 기반 차등 전송</p>
+                <ul>
+                    <li>가까운 플레이어: 높은 빈도 + Full State</li>
+                    <li>먼 플레이어: 낮은 빈도 + Delta</li>
+                    <li>시야 밖: 전송 안 함</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>📌 핵심 정리: 델타 압축</h3>
+            <ul>
+                <li><strong>델타 압축</strong> - 변화량만 전송해서 패킷 크기 줄이기</li>
+                <li><strong>실측 결과</strong> - 42 KB/s → 3.9 KB/s, 약 10.8배 절약</li>
+                <li><strong>핵심 원리</strong> - 변화 없으면 아예 안 보냄</li>
+                <li><strong>주의사항</strong> - 패킷 유실 시 오차 누적, 주기적 전체 동기화 필요</li>
+                <li><strong>구현 팁</strong> - 5초마다 Full State로 보정</li>
+                <li><strong>추가 최적화</strong> - 비트 패킹, 가변 길이 인코딩, 예측</li>
+                <li><strong>실전 적용</strong> - Full State와 Delta 혼용이 최선</li>
+            </ul>
+        </div>
+
+        <div class="note">
+            <strong>💡 Tip:</strong> 델타 압축은 트래픽 절약의 시작점이에요.
+            여기에 더해 "중요도 기반 전송", "시야 범위 필터링", "예측 알고리즘"을 조합하면
+            더 극적인 최적화가 가능합니다.
+        </div>
+
+    </div>
+</body>
+</html>
