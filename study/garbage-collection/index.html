@@ -475,6 +475,131 @@ a = null, b = null 후:
             </table>
         </div>
 
+        <!-- Part 5.5: GC의 실제 동작 3단계 -->
+        <div class="conversation">
+            <h2>Part 5.5. GC가 실제로 하는 일 3단계</h2>
+
+            <div class="chat">
+                <div class="q">마크 앤 스윕이면 끝이야? 뭔가 더 있을 것 같은데.</div>
+                <div class="a">
+                    <p>좋은 질문! 실제로는 <span class="highlight">3단계</span>야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[GC의 3단계]
+
+1. Mark (표시)   → 살아있는 객체 표시
+2. Sweep (해제)  → 죽은 객체 해제
+3. Compact (압축) → 살아있는 객체 재배치  ← 이게 숨어있었음!</div>
+
+            <div class="chat">
+                <div class="q">왜 Compact가 필요해?</div>
+                <div class="a">
+                    <p>Sweep만 하면 <span class="warning">외부 단편화</span>가 생겨!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Mark-Sweep만 하면 생기는 문제]
+
+해제 전:
+[A][B][C][D][E][F][G][H]
+
+B, D, F 해제 후:
+[A][  ][C][  ][E][  ][G][H]
+    ↑      ↑      ↑
+   구멍   구멍   구멍  ← 외부 단편화!
+
+새 객체가 3칸 필요하면?
+→ 빈칸은 총 3칸인데... 연속이 아니라서 못 넣음!
+→ 메모리 할당 전략 문서에서 본 그 문제!</div>
+
+            <div class="chat">
+                <div class="q">그래서 Compact가 뭘 해?</div>
+                <div class="a">
+                    <p>살아있는 객체를 <span class="key-point">한쪽으로 밀어서</span> 빈 공간을 합쳐!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Compact 단계]
+
+Sweep 후:
+[A][  ][C][  ][E][  ][G][H]
+
+Compact 후:
+[A][C][E][G][H][         ]
+                ↑ 연속된 빈 공간!
+
+→ 이제 3칸짜리 객체도 들어갈 수 있음!</div>
+
+            <div class="chat">
+                <div class="q">근데 그럼 참조 주소가 바뀌잖아?</div>
+                <div class="a">
+                    <p><span class="warning">맞아!</span> 그래서 Compact가 비싸.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Compact의 비용]
+
+객체 이동하면:
+1. 모든 포인터/참조를 업데이트해야 함
+2. 이동 중에는 프로그램 완전 정지 필요
+3. 메모리 복사 비용
+
+→ Stop-the-World 시간이 더 길어짐!
+→ 그래서 매번 안 하고, 필요할 때만 하거나
+   아예 다른 방식을 쓰기도 함</div>
+
+            <div class="chat">
+                <div class="q">다른 방식?</div>
+                <div class="a">
+                    <p><span class="highlight">Copying GC</span>라는 방법이 있어!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Copying GC]
+
+메모리를 반으로 나눔: From 영역 / To 영역
+
+[From 영역]              [To 영역]
+[A][ ][B][ ][C]          [        ]
+ ↓   살아있는 것만 복사!
+[From 영역]              [To 영역]
+[A][ ][B][ ][C]          [A][B][C]
+                              ↑ 복사하면서 자연스럽게 압축!
+
+그 다음 From/To 역할 교체!
+
+장점: 압축이 공짜!
+단점: 메모리의 절반만 사용 가능</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>GC 방식</th>
+                    <th>단편화</th>
+                    <th>비용</th>
+                    <th>메모리</th>
+                </tr>
+                <tr>
+                    <td>Mark-Sweep</td>
+                    <td class="bad">발생함</td>
+                    <td class="good">빠름</td>
+                    <td class="good">효율적</td>
+                </tr>
+                <tr>
+                    <td>Mark-Sweep-Compact</td>
+                    <td class="good">해결</td>
+                    <td class="bad">느림 (이동)</td>
+                    <td class="good">효율적</td>
+                </tr>
+                <tr>
+                    <td>Copying GC</td>
+                    <td class="good">해결</td>
+                    <td>중간</td>
+                    <td class="bad">2배 필요</td>
+                </tr>
+            </table>
+        </div>
+
         <!-- Part 6: GC 장단점 -->
         <div class="conversation">
             <h2>Part 6. GC의 장단점</h2>
@@ -659,6 +784,112 @@ sb.Append(maxHp);
   → 거의 검사 안 함
 
 → 전체 검사보다 효율적!</div>
+
+            <div class="chat">
+                <div class="q">Unity랑 Unreal은 GC가 어떻게 달라?</div>
+                <div class="a">
+                    <p><span class="highlight">완전히 다른 철학</span>이야!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Unity - 전부 GC가 관리]
+
+언어: C#
+방식: 모든 C# 객체를 GC가 자동 관리
+
+// Unity 코드
+GameObject enemy = new GameObject();  // GC 관리 대상
+Vector3 pos = new Vector3(1, 2, 3);   // 구조체라 스택 (GC 아님)
+
+특징:
+- Boehm GC (비압축, 비세대별) → 최근 버전은 Incremental GC
+- 모든 class 객체가 GC 대상
+- 개발자가 해제 시점 제어 불가
+- GC 스파이크 주의 필요!</div>
+
+            <div class="code-block">[Unreal - 이원화된 메모리 관리]
+
+언어: C++
+방식: 일반 C++ + UObject 전용 GC
+
+// 일반 C++ 객체 - 수동 관리
+FVector* vec = new FVector(1, 2, 3);
+delete vec;  // 직접 해제
+
+// 스마트 포인터 - 참조 카운팅
+TSharedPtr<MyClass> ptr = MakeShared<MyClass>();
+// 참조 없으면 자동 해제 (순환 참조 주의!)
+
+// UObject 파생 클래스 - 전용 GC
+UPROPERTY()
+UStaticMesh* Mesh;  // 언리얼 GC가 관리
+
+특징:
+- UObject만 GC 대상 (AActor, UActorComponent 등)
+- 일반 C++ 객체는 수동 or 스마트 포인터
+- UPROPERTY() 매크로 필수 (GC에게 알려주는 것)
+- 더 세밀한 제어 가능, 더 복잡함</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>Unity (C#)</th>
+                    <th>Unreal (C++)</th>
+                </tr>
+                <tr>
+                    <td>GC 대상</td>
+                    <td>모든 class 객체</td>
+                    <td>UObject 계열만</td>
+                </tr>
+                <tr>
+                    <td>일반 객체</td>
+                    <td>GC 자동 관리</td>
+                    <td>수동 or 스마트 포인터</td>
+                </tr>
+                <tr>
+                    <td>GC 방식</td>
+                    <td>Mark-Sweep (Incremental)</td>
+                    <td>Mark-Sweep (UObject 전용)</td>
+                </tr>
+                <tr>
+                    <td>개발 난이도</td>
+                    <td class="good">쉬움 (자동)</td>
+                    <td class="bad">어려움 (혼합)</td>
+                </tr>
+                <tr>
+                    <td>성능 제어</td>
+                    <td class="bad">제한적</td>
+                    <td class="good">세밀함</td>
+                </tr>
+                <tr>
+                    <td>메모리 최적화</td>
+                    <td>오브젝트 풀링 필수</td>
+                    <td>수동 관리로 GC 회피 가능</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">결국 어느 게 더 좋아?</div>
+                <div class="a">
+                    <p><strong>Trade-off야!</strong></p>
+                    <p>Unity: 편하지만 GC 스파이크 조심</p>
+                    <p>Unreal: 귀찮지만 성능 제어 가능</p>
+                </div>
+            </div>
+
+            <div class="code-block">[실무 팁]
+
+Unity에서 GC 줄이기:
+- 오브젝트 풀링 필수
+- struct 활용 (Vector3 등)
+- string 조심, StringBuilder 사용
+- Update()에서 new 금지!
+
+Unreal에서 메모리 관리:
+- UObject는 UPROPERTY() 붙이기
+- 일반 객체는 TSharedPtr/TUniquePtr 활용
+- Raw 포인터 최소화
+- AddToRoot() / RemoveFromRoot() 주의</div>
         </div>
 
         <!-- 핵심 정리 -->
@@ -669,9 +900,12 @@ sb.Append(maxHp);
                 <li><strong>가비지 컬렉션</strong> = 가비지를 자동으로 찾아서 해제</li>
                 <li><strong>참조 카운팅</strong> = 참조 수 세기, 순환 참조 문제</li>
                 <li><strong>마크 앤 스윕</strong> = 루트에서 탐색, 순환 참조 해결</li>
+                <li><strong>GC 3단계</strong> = Mark → Sweep → Compact (외부 단편화 해결)</li>
+                <li><strong>Copying GC</strong> = 살아있는 것만 복사, 압축이 공짜</li>
                 <li><strong>Stop-the-World</strong> = GC 중 프로그램 멈춤</li>
-                <li><strong>게임에서</strong> = 프레임 드랍 원인, 오브젝트 풀링으로 해결</li>
                 <li><strong>세대별 GC</strong> = 젊은 객체 위주로 검사, 효율적</li>
+                <li><strong>Unity</strong> = 전부 GC, 오브젝트 풀링 필수</li>
+                <li><strong>Unreal</strong> = UObject만 GC, 나머지 수동/스마트포인터</li>
             </ul>
         </div>
 
