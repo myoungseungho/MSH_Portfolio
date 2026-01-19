@@ -3,507 +3,766 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>리니지2 게임 DB MSSQL에서 MySQL 전환 - NDC 발표 정리</title>
+    <title>14년 된 게임 DB를 갈아엎는다고? MSSQL에서 MySQL로 - MSH Portfolio</title>
     <style>
-        :root {
-            --primary-color: #4CAF50;
-            --primary-dark: #388E3C;
-            --primary-light: #C8E6C9;
-            --bg-color: #f5f5f5;
-            --card-bg: #ffffff;
-            --text-color: #333333;
-            --text-muted: #666666;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            line-height: 1.6;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
         }
-
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        header {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-            color: white;
-            padding: 40px 20px;
-            text-align: center;
-            margin-bottom: 30px;
-            border-radius: 10px;
-        }
-
-        header h1 {
-            font-size: 1.8rem;
-            margin-bottom: 10px;
-        }
-
-        header .subtitle {
-            font-size: 1rem;
-            opacity: 0.9;
-        }
-
-        header .meta {
-            margin-top: 15px;
-            font-size: 0.9rem;
-            opacity: 0.8;
-        }
-
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
         .back-link {
             display: inline-block;
-            margin-bottom: 20px;
-            color: var(--primary-color);
+            margin-bottom: 24px;
+            color: #666;
             text-decoration: none;
-            font-weight: 500;
         }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
 
-        .back-link:hover {
-            text-decoration: underline;
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
         }
-
-        .qa-section {
-            background: var(--card-bg);
-            border-radius: 10px;
-            padding: 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            border-left: 4px solid var(--primary-color);
-        }
-
-        .qa-section h2 {
-            color: var(--primary-dark);
+        .conversation h2 {
             font-size: 1.3rem;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            color: #2e7d32;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #c8e6c9;
         }
 
-        .qa-section h2::before {
-            content: "Q";
-            background: var(--primary-color);
-            color: white;
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1rem;
-            flex-shrink: 0;
-        }
-
-        .answer {
-            padding-left: 40px;
-        }
-
-        .answer p {
-            margin-bottom: 12px;
-        }
-
-        .answer ul, .answer ol {
-            margin-left: 20px;
-            margin-bottom: 15px;
-        }
-
-        .answer li {
-            margin-bottom: 8px;
-        }
-
-        .highlight-box {
-            background: var(--primary-light);
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-        }
-
-        .highlight-box.warning {
+        .chat { margin-bottom: 20px; }
+        .q {
             background: #fff3e0;
             border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e8f5e9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1b5e20;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
         }
 
-        .highlight-box.info {
-            background: #e3f2fd;
-            border-left: 4px solid #2196f3;
-        }
-
+        /* 코드 블록 */
         .code-block {
             background: #263238;
-            color: #aed581;
-            padding: 15px;
             border-radius: 8px;
-            font-family: 'Consolas', 'Monaco', monospace;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
             font-size: 0.9rem;
+            color: #eceff1;
             overflow-x: auto;
-            margin: 15px 0;
+            line-height: 1.6;
+            white-space: pre-wrap;
         }
 
-        .comparison-table {
+        /* 비교 테이블 */
+        .compare-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0;
+            margin: 16px 0;
+            font-size: 0.9rem;
         }
-
-        .comparison-table th, .comparison-table td {
+        .compare-table th, .compare-table td {
             padding: 12px;
+            border: 1px solid #e0e0e0;
             text-align: left;
-            border-bottom: 1px solid #e0e0e0;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good { background: #e8f5e9; color: #2e7d32; }
+        .compare-table .bad { background: #ffebee; color: #c62828; }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: #f3e5f5;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #9c27b0;
+        }
+        .analogy-box strong {
+            color: #7b1fa2;
         }
 
-        .comparison-table th {
-            background: var(--primary-light);
-            color: var(--primary-dark);
+        /* 결과 박스 */
+        .result-box {
+            background: #e8f5e9;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #4caf50;
+        }
+        .result-box strong {
+            color: #2e7d32;
         }
 
-        .comparison-table tr:hover {
-            background: #fafafa;
+        /* 경고 박스 */
+        .warning-box {
+            background: #fff3e0;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #ff9800;
+        }
+        .warning-box strong {
+            color: #e65100;
         }
 
-        .tag {
-            display: inline-block;
-            background: var(--primary-light);
-            color: var(--primary-dark);
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 0.85rem;
-            margin-right: 8px;
-            margin-bottom: 8px;
+        /* 가이드라인 박스 */
+        .guide-box {
+            background: #e8f5e9;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #4caf50;
         }
+        .guide-box strong {
+            color: #2e7d32;
+        }
+        .guide-box ul {
+            margin-top: 12px;
+            margin-left: 20px;
+        }
+        .guide-box li {
+            margin: 8px 0;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #a5d6a7;
+        }
+
+        /* 정보 박스 */
+        .info-box {
+            background: #e3f2fd;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #2196f3;
+        }
+        .info-box strong {
+            color: #1565c0;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #2e7d32;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
 
         .youtube-link {
-            background: var(--card-bg);
-            border-radius: 10px;
+            background: white;
+            border-radius: 12px;
             padding: 20px;
-            margin-top: 30px;
+            margin-top: 32px;
             text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
         }
-
         .youtube-link a {
             color: #ff0000;
             text-decoration: none;
             font-weight: 500;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
         }
-
-        .youtube-link a:hover {
-            text-decoration: underline;
-        }
-
-        footer {
-            text-align: center;
-            padding: 30px;
-            color: var(--text-muted);
-            font-size: 0.9rem;
-        }
-
-        @media (max-width: 768px) {
-            header h1 {
-                font-size: 1.4rem;
-            }
-
-            .qa-section {
-                padding: 15px;
-            }
-
-            .answer {
-                padding-left: 20px;
-            }
-        }
+        .youtube-link a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <div class="container">
-        <a href="../index.html#db-cache" class="back-link">&larr; DB/캐시 카테고리로 돌아가기</a>
+        <a href="../category-db/" class="back-link">< DB / 캐시</a>
 
-        <header>
-            <h1>리니지2 게임 DB를 MSSQL에서 MySQL로 전환</h1>
-            <div class="subtitle">엔씨소프트 리니지2팀 김인정 - NDC 발표</div>
-            <div class="meta">
-                <span class="tag">DB Migration</span>
-                <span class="tag">MSSQL</span>
-                <span class="tag">MySQL</span>
-                <span class="tag">자동화</span>
-            </div>
+        <header class="header">
+            <h1>14년 된 게임 DB를 갈아엎는다고? MSSQL에서 MySQL로</h1>
+            <p>리니지2 DB 마이그레이션 - NDC 발표 정리 (엔씨소프트 김인정)</p>
         </header>
 
-        <section class="qa-section">
-            <h2>리니지2는 어떤 규모의 게임인가?</h2>
-            <div class="answer">
-                <ul>
-                    <li><strong>2017년 10월 기준 14주년</strong>을 맞은 장수 MMORPG</li>
-                    <li><strong>라이브와 클래식</strong> 두 가지 버전으로 서비스</li>
-                    <li>7개국 이상에서 서비스 중</li>
-                    <li><strong>3개월 주기</strong>로 콘텐츠 업데이트</li>
-                    <li>라이브와 클래식은 완전히 다른 버전 - DB 전환 작업을 각각 별도로 진행해야 함</li>
-                </ul>
-            </div>
-        </section>
+        <!-- Part 1: 프로젝트 배경 -->
+        <div class="conversation">
+            <h2>Part 1. 리니지2가 DB를 바꾼다고?</h2>
 
-        <section class="qa-section">
-            <h2>왜 자동화가 필수였나?</h2>
-            <div class="answer">
-                <div class="highlight-box warning">
-                    <strong>핵심 제약 조건:</strong> 작업자 1명, 최대 2년간 두 DB(MSSQL + MySQL) 동시 지원 필요
-                </div>
-                <ul>
-                    <li>라이브 버전 전환만 6개월 예상 (1인 기준)</li>
-                    <li>게임 업데이트가 계속되므로 DB 전환 작업도 반복 필요</li>
-                    <li>해외 서비스는 퍼블리셔별 협의가 필요해 전환 시점이 각각 다름</li>
-                    <li>클래식 버전도 별도 작업 필요</li>
-                    <li>해외는 현지 맞춤 컨텐츠로 또 다른 전환 작업 발생</li>
-                </ul>
-                <div class="highlight-box">
-                    <strong>"개발자가 도망가면 안 돼요"</strong> - 2년간 1명에게 수동 작업을 전담시키면 비효율적이고, 개발자 이탈 위험
+            <div class="chat">
+                <div class="q">리니지2가 뭔데? 얼마나 큰 게임이야?</div>
+                <div class="a">
+                    <p><span class="highlight">2017년 기준 14주년</span>된 장수 MMORPG야.</p>
+                    <p>7개국 이상에서 서비스 중이고, <span class="key-point">라이브와 클래식</span> 두 가지 버전이 있어.</p>
+                    <p>3개월마다 콘텐츠 업데이트가 나오고, 라이브와 클래식은 완전히 다른 DB를 써.</p>
                 </div>
             </div>
-        </section>
 
-        <section class="qa-section">
-            <h2>DB 스키마 규모와 마이그레이션 방법은?</h2>
-            <div class="answer">
-                <p><strong>리니지2 DB 규모:</strong></p>
-                <ul>
-                    <li>테이블 300여 개</li>
-                    <li>컬럼 2,100여 개</li>
-                    <li>MSSQL의 거의 모든 데이터 타입 사용</li>
-                </ul>
-                <p><strong>사용 도구:</strong> MySQL Workbench의 Database Migration 기능</p>
-                <div class="highlight-box info">
-                    Workbench는 오픈소스이며 대부분 Python으로 작성되어 있어 Script Shell로 커스터마이징 가능
+            <div class="chat">
+                <div class="q">근데 왜 잘 돌아가던 MSSQL을 MySQL로 바꿔?</div>
+                <div class="a">
+                    <p>여러 이유가 있겠지만, 핵심은 <span class="highlight">비용과 라이선스</span>야.</p>
+                    <p>MSSQL은 상용 라이선스 비용이 비싸고, MySQL은 오픈소스라 비용이 적어.</p>
+                    <p>특히 해외 서비스할 때 DBMS 라이선스 문제가 복잡해지거든.</p>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <section class="qa-section">
-            <h2>Workbench 변환 시 어떤 문제가 발생했나?</h2>
-            <div class="answer">
-                <table class="comparison-table">
-                    <tr>
-                        <th>문제 유형</th>
-                        <th>상세 내용</th>
-                    </tr>
-                    <tr>
-                        <td><strong>16진수 기본값 누락</strong></td>
-                        <td>컬럼 기본값이 0x0 같은 16진수면 변환 시 누락됨</td>
-                    </tr>
-                    <tr>
-                        <td><strong>BINARY 타입 기본값 변형</strong></td>
-                        <td>BINARY/VARBINARY 컬럼의 기본값 0이 문자열 '0'으로 변환됨</td>
-                    </tr>
-                    <tr>
-                        <td><strong>인코딩 강제 설정</strong></td>
-                        <td>UCS-KR 사용해도 Workbench가 무조건 UTF-8 MB4로 강제 변환</td>
-                    </tr>
-                    <tr>
-                        <td><strong>AUTO_INCREMENT 누락</strong></td>
-                        <td>MySQL에서 AUTO_INCREMENT는 PRIMARY KEY/UNIQUE 컬럼만 가능 - 해당 조건 미충족 시 속성 누락</td>
-                    </tr>
-                </table>
-                <p><strong>해결:</strong> Workbench Script Shell로 Python 커스터마이징하여 모든 테이블 자동 변환</p>
-            </div>
-        </section>
+        <!-- Part 2: 왜 자동화가 필수인가 -->
+        <div class="conversation">
+            <h2>Part 2. 혼자서 어떻게 해?</h2>
 
-        <section class="qa-section">
-            <h2>Stored Procedure 변환은 어떻게 했나?</h2>
-            <div class="answer">
-                <p><strong>SP 규모:</strong></p>
-                <ul>
-                    <li>약 3만 라인 코드</li>
-                    <li>다양한 트랜잭션, 인덱스, 게임 로직 포함</li>
-                    <li>MSSQL 전용 내장 함수 사용</li>
-                </ul>
-                <p><strong>변환 도구 선정:</strong></p>
-                <ul>
-                    <li>오픈소스 도구, 상용 도구, 자체 제작 모두 검토</li>
-                    <li>최종 선택: <strong>Ispirer (상용 변환 툴)</strong></li>
-                </ul>
-                <div class="highlight-box">
-                    <strong>Ispirer 선택 이유:</strong>
-                    <ul>
-                        <li>DB 마이그레이션 전문 회사</li>
-                        <li>트라이얼 버전 테스트 시 약 90% 변환 성공률</li>
-                        <li>지속적인 버전 업데이트</li>
-                        <li>본사 및 한국 총판(이지딥스)의 빠른 문의 대응</li>
-                    </ul>
+            <div class="chat">
+                <div class="q">DB 전환 작업은 팀 단위로 하는 거 아냐?</div>
+                <div class="a">
+                    <p><span class="warning">작업자 1명이야.</span></p>
+                    <p>거기다 최대 <span class="highlight">2년간 MSSQL + MySQL 동시 지원</span>해야 해.</p>
                 </div>
             </div>
-        </section>
 
-        <section class="qa-section">
-            <h2>DB 테스트는 어떻게 자동화했나?</h2>
-            <div class="answer">
-                <p><strong>게임 QA만으로는 불충분한 이유:</strong></p>
-                <ul>
-                    <li>SQL은 컴파일이 없어 신택스 에러 등 기본 검수 안 됨</li>
-                    <li>QA 중 에러 발생 시 → 개발팀 수정 → QA 처음부터 재시작 (일정 불가능)</li>
-                    <li>게임 DB 내부 로직은 게임에서 드러나지 않는 영역 존재</li>
-                </ul>
-                <p><strong>해결: SP UnitTest 프로그램 자체 개발</strong></p>
-                <ul>
-                    <li>다양한 파라미터로 전체 SP 실행</li>
-                    <li>신택스 에러 및 로직 에러 상당수 검증 성공</li>
-                    <li>실제 게임 QA 시 중단 이슈 전혀 발생하지 않음</li>
-                    <li>게임 QA 불가 영역도 SP 실행으로 검증</li>
-                </ul>
+            <div class="warning-box">
+                <strong>제약 조건 정리</strong><br><br>
+                - 라이브 버전 전환만 6개월 예상 (1인 기준)<br>
+                - 게임 업데이트가 계속 됨 = DB 전환 작업도 반복<br>
+                - 해외는 퍼블리셔별 전환 시점이 다름<br>
+                - 클래식 버전도 별도 작업 필요
             </div>
-        </section>
 
-        <section class="qa-section">
-            <h2>데이터 마이그레이션은 어떻게 진행했나?</h2>
-            <div class="answer">
-                <p><strong>제약 조건:</strong></p>
-                <ul>
-                    <li>라이브 서비스 중 - 정기 점검 시간 내에 완료 필수</li>
-                    <li>초기 테스트: 데이터 이전 약 10시간, 검증 약 6시간 = 총 16시간</li>
-                    <li>점검 연장 불가 (유저 경험에 직접적 악영향)</li>
-                </ul>
-                <p><strong>사용 도구:</strong> Workbench의 Copy Table Data 기능</p>
-                <div class="highlight-box warning">
-                    <strong>주의:</strong> Workbench 6.3.10 버전에 버그 존재 - 6.3.99 버전 업데이트 후 정상 작동
-                </div>
-                <p><strong>성능 최적화:</strong></p>
-                <ul>
-                    <li><strong>Thread 개수 지정:</strong> 각 스레드가 테이블 하나씩 담당 (코어 수만큼 할당)</li>
-                    <li><strong>Bulk Data Transfer:</strong> 한 번에 여러 row 복사</li>
-                </ul>
-            </div>
-        </section>
-
-        <section class="qa-section">
-            <h2>데이터 검증은 어떻게 했나?</h2>
-            <div class="answer">
-                <p><strong>Data Compare 툴 자체 개발:</strong></p>
-                <ul>
-                    <li>초기: Python으로 개발 → 6시간 이상 소요</li>
-                    <li>개선: C++로 재작성하여 성능 향상</li>
-                </ul>
-                <p><strong>실제 적용 전략:</strong></p>
-                <div class="highlight-box">
-                    정기점검 시간 내 검증까지는 무리 → <strong>일주일 전 백업본으로 마이그레이션 테스트 + 데이터 검증</strong> 완료 후, 일주일 사이 발생한 문제는 운영적으로 대처
+            <div class="chat">
+                <div class="q">그러면 2년간 수동으로 계속 작업해야 해?</div>
+                <div class="a">
+                    <p><span class="key-point">"개발자가 도망가면 안 돼요"</span></p>
+                    <p>발표자 본인 말이야. 2년간 1명에게 수동 작업 전담시키면:</p>
+                    <p>1. 비효율적이고</p>
+                    <p>2. 개발자 이탈 위험이 있어</p>
                 </div>
             </div>
-        </section>
 
-        <section class="qa-section">
-            <h2>MSSQL과 MySQL의 가장 큰 차이점은?</h2>
-            <div class="answer">
-                <div class="highlight-box">
-                    <strong>핵심 차이:</strong> MSSQL은 <strong>"관대"</strong>하고, MySQL은 <strong>"정확"</strong>하다
-                </div>
-                <table class="comparison-table">
-                    <tr>
-                        <th>항목</th>
-                        <th>MSSQL</th>
-                        <th>MySQL</th>
-                    </tr>
-                    <tr>
-                        <td><strong>ODBC 에러 처리</strong></td>
-                        <td>연결 끊김 시 PrepareSQL, Execute 모두 "Connection Closed" 반환</td>
-                        <td>PrepareSQL에서 에러 반환 후, Execute는 "Function Sequence Error" 반환 (원인 추적 어려움)</td>
-                    </tr>
-                    <tr>
-                        <td><strong>문자열 인코딩</strong></td>
-                        <td>캐릭터 인코딩 맞지 않아도 저장해줌</td>
-                        <td>잘못된 인코딩은 절대 저장 안 함 (강제 옵션 켜도 '?'로 변환)</td>
-                    </tr>
-                    <tr>
-                        <td><strong>16진수 상수</strong></td>
-                        <td>컬럼 타입에 맞춰 0xFF → INTEGER 반환</td>
-                        <td>리터럴 그대로 0xFF → STRING 반환</td>
-                    </tr>
-                </table>
+            <div class="analogy-box">
+                <strong>빵집 비유</strong><br><br>
+                매일 빵 100개를 손으로 반죽해야 해. 2년 동안.<br>
+                당연히 반죽기 사야지!<br><br>
+                DB 전환도 마찬가지. <strong>자동화 도구가 반죽기</strong>야.
             </div>
-        </section>
 
-        <section class="qa-section">
-            <h2>ODBC 멀티스레드 이슈는?</h2>
-            <div class="answer">
-                <p>리니지2 서버는 C++ 애플리케이션으로 ODBC를 통해 DB 접근</p>
+            <div class="result-box">
+                <strong>결론: 자동화가 필수!</strong><br><br>
+                손으로 하면 2년 걸리는 일을 자동화로 해결해야 했어.
+            </div>
+        </div>
+
+        <!-- Part 3: 스키마 변환 -->
+        <div class="conversation">
+            <h2>Part 3. 테이블 300개를 어떻게 변환해?</h2>
+
+            <div class="chat">
+                <div class="q">리니지2 DB 규모가 어느 정도야?</div>
+                <div class="a">
+                    <p>테이블 <span class="highlight">300여 개</span>, 컬럼 <span class="highlight">2,100여 개</span>.</p>
+                    <p>MSSQL의 거의 모든 데이터 타입을 사용하고 있었어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">뭘로 변환했어?</div>
+                <div class="a">
+                    <p><span class="key-point">MySQL Workbench</span>의 Database Migration 기능을 썼어.</p>
+                    <p>오픈소스고 대부분 Python으로 작성되어 있어서 커스터마이징이 가능했거든.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">근데 자동 변환이 완벽하게 됐어?</div>
+                <div class="a">
+                    <p><span class="warning">당연히 문제가 있었지!</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>문제 유형</th>
+                    <th>뭐가 잘못됐나</th>
+                </tr>
+                <tr>
+                    <td>16진수 기본값 누락</td>
+                    <td>0x0 같은 16진수 기본값이 변환 시 사라짐</td>
+                </tr>
+                <tr>
+                    <td>BINARY 타입 변형</td>
+                    <td>기본값 0이 문자열 '0'으로 변환</td>
+                </tr>
+                <tr>
+                    <td>인코딩 강제 설정</td>
+                    <td>EUC-KR 써도 무조건 UTF-8 MB4로 강제</td>
+                </tr>
+                <tr>
+                    <td>AUTO_INCREMENT 누락</td>
+                    <td>PK/UNIQUE 아닌 컬럼은 AUTO_INCREMENT 속성 사라짐</td>
+                </tr>
+            </table>
+
+            <div class="result-box">
+                <strong>해결 방법</strong><br><br>
+                Workbench Script Shell로 <strong>Python 코드 커스터마이징</strong>해서<br>
+                모든 테이블을 자동 변환하도록 수정했어.
+            </div>
+        </div>
+
+        <!-- Part 4: SP 변환 -->
+        <div class="conversation">
+            <h2>Part 4. Stored Procedure 3만 라인을 어떻게?</h2>
+
+            <div class="chat">
+                <div class="q">테이블만 옮기면 되는 거 아냐?</div>
+                <div class="a">
+                    <p>아니, <span class="highlight">SP(Stored Procedure)</span>도 있어.</p>
+                    <p>약 <span class="key-point">3만 라인</span>의 코드가 있었어.</p>
+                    <p>트랜잭션, 인덱스, 게임 로직, MSSQL 전용 함수들...</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- MSSQL 전용 문법들
+ISNULL(column, default)     -- MySQL은 IFNULL
+GETDATE()                   -- MySQL은 NOW()
+@@IDENTITY                  -- MySQL은 LAST_INSERT_ID()
+RAISERROR                   -- MySQL은 SIGNAL SQLSTATE
+            </div>
+
+            <div class="chat">
+                <div class="q">이것도 Workbench로?</div>
+                <div class="a">
+                    <p>아니, SP 변환은 <span class="key-point">Ispirer</span>라는 상용 도구를 썼어.</p>
+                    <p>오픈소스 도구, 상용 도구, 직접 제작 다 검토한 결과야.</p>
+                </div>
+            </div>
+
+            <div class="guide-box">
+                <strong>Ispirer를 선택한 이유</strong>
                 <ul>
-                    <li>ODBC 장점: DBMS 종류 상관없이 동일 인터페이스 (코드 변경 불필요)</li>
-                    <li>ODBC 단점: 각 DBMS 개발사가 별도 구현 → 내부 동작이 다름</li>
+                    <li>DB 마이그레이션 전문 회사</li>
+                    <li>트라이얼 테스트 결과 <strong>약 90% 변환 성공률</strong></li>
+                    <li>지속적인 버전 업데이트</li>
+                    <li>빠른 문의 대응 (본사 + 한국 총판)</li>
                 </ul>
-                <div class="highlight-box warning">
-                    <strong>MySQL ODBC 주의:</strong> 기본 옵션 사용 시 <strong>멀티스레드 세이프하지 않음!</strong>
-                    <br><br>
-                    해결: <code>NO_SSPS=1</code> (서버 사이드 프리페어 미사용) 옵션 설정 시 멀티스레드 세이프하게 동작
+            </div>
+
+            <div class="chat">
+                <div class="q">90%면 10%는 수동이잖아?</div>
+                <div class="a">
+                    <p>맞아. 하지만 3만 라인의 90%를 자동화하면</p>
+                    <p><span class="highlight">27,000라인은 자동</span>, <span class="warning">3,000라인만 수동</span>이야.</p>
+                    <p>그 차이가 엄청나지.</p>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <section class="qa-section">
-            <h2>MySQL 성능 우려 사항은?</h2>
-            <div class="answer">
-                <p>가장 걱정되는 부분은 성능:</p>
-                <div class="code-block">
+        <!-- Part 5: 테스트 자동화 -->
+        <div class="conversation">
+            <h2>Part 5. 변환한 건 어떻게 검증해?</h2>
+
+            <div class="chat">
+                <div class="q">QA팀이 게임 테스트하면 되는 거 아냐?</div>
+                <div class="a">
+                    <p><span class="warning">그것만으론 부족해!</span></p>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <strong>게임 QA만으로 불충분한 이유</strong><br><br>
+                1. SQL은 컴파일이 없어서 문법 에러가 미리 안 잡혀<br>
+                2. QA 중 에러 발생 -> 수정 -> QA 처음부터 = 일정 불가능<br>
+                3. DB 내부 로직은 게임에서 안 보이는 부분이 있어
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 어떻게 했어?</div>
+                <div class="a">
+                    <p><span class="key-point">SP UnitTest 프로그램을 직접 만들었어!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+[SP UnitTest 동작 방식]
+
+1. 모든 SP 목록 가져오기
+2. 각 SP에 다양한 파라미터 조합으로 실행
+3. 문법 에러, 런타임 에러 자동 검출
+4. 결과 리포트 생성
+
+-> 게임 QA 전에 대부분의 에러를 잡아냄!
+            </div>
+
+            <div class="result-box">
+                <strong>결과</strong><br><br>
+                실제 게임 QA 시 <strong>중단 이슈 전혀 발생하지 않음!</strong><br>
+                게임 QA로 확인 불가능한 영역도 SP 실행으로 검증 성공.
+            </div>
+        </div>
+
+        <!-- Part 6: 데이터 마이그레이션 -->
+        <div class="conversation">
+            <h2>Part 6. 데이터 옮기기 - 점검 시간 내에 가능해?</h2>
+
+            <div class="chat">
+                <div class="q">스키마랑 SP 옮기면 끝 아냐?</div>
+                <div class="a">
+                    <p>아니, <span class="highlight">실제 데이터</span>도 옮겨야지!</p>
+                    <p>유저 정보, 아이템, 캐릭터, 퀘스트 진행 상황...</p>
+                    <p>이게 <span class="warning">라이브 서비스 중</span>이라 문제야.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">라이브 중이면 뭐가 문제야?</div>
+                <div class="a">
+                    <p><span class="key-point">정기 점검 시간 내에 끝내야 해!</span></p>
+                    <p>점검 연장하면 유저들이 난리 나거든.</p>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <strong>초기 테스트 결과</strong><br><br>
+                데이터 이전: 약 10시간<br>
+                데이터 검증: 약 6시간<br>
+                <strong>총 16시간 - 정기 점검으로는 불가능!</strong>
+            </div>
+
+            <div class="chat">
+                <div class="q">어떻게 시간을 줄였어?</div>
+                <div class="a">
+                    <p><span class="highlight">Thread + Bulk Transfer</span>로 최적화했어.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+[성능 최적화 방법]
+
+1. Thread 개수 지정
+   -> 각 스레드가 테이블 하나씩 담당
+   -> CPU 코어 수만큼 병렬 처리
+
+2. Bulk Data Transfer
+   -> 한 번에 여러 row 복사
+   -> INSERT INTO ... VALUES (...), (...), (...)
+            </div>
+
+            <div class="info-box">
+                <strong>주의: Workbench 버전 문제</strong><br><br>
+                Workbench 6.3.10 버전에 버그가 있었어.<br>
+                6.3.99로 업데이트 후 정상 동작!<br><br>
+                <strong>최신 도구도 항상 의심하고 테스트해야 해.</strong>
+            </div>
+        </div>
+
+        <!-- Part 7: 데이터 검증 -->
+        <div class="conversation">
+            <h2>Part 7. 데이터가 제대로 옮겨졌는지 어떻게 알아?</h2>
+
+            <div class="chat">
+                <div class="q">옮긴 데이터가 맞는지 확인은?</div>
+                <div class="a">
+                    <p><span class="key-point">Data Compare 툴</span>을 직접 개발했어.</p>
+                    <p>MSSQL 데이터 vs MySQL 데이터를 비교하는 거야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+[Data Compare 개발 과정]
+
+초기: Python으로 개발
+-> 6시간 이상 소요 (느림!)
+
+개선: C++로 재작성
+-> 성능 대폭 향상!
+            </div>
+
+            <div class="chat">
+                <div class="q">근데 점검 시간 내에 검증까지 가능해?</div>
+                <div class="a">
+                    <p><span class="warning">솔직히 무리였어.</span></p>
+                    <p>그래서 전략을 바꿨지.</p>
+                </div>
+            </div>
+
+            <div class="guide-box">
+                <strong>실제 적용 전략</strong>
+                <ul>
+                    <li><strong>일주일 전</strong> 백업본으로 마이그레이션 테스트</li>
+                    <li>데이터 검증까지 완료</li>
+                    <li>실제 점검일에는 <strong>이전만 수행</strong></li>
+                    <li>일주일 사이 발생한 문제는 <strong>운영적으로 대처</strong></li>
+                </ul>
+            </div>
+
+            <div class="analogy-box">
+                <strong>이사 비유</strong><br><br>
+                이사 당일에 짐 싸고, 옮기고, 정리까지 다 하면 하루로 안 돼.<br>
+                미리 짐 정리해두고, 당일엔 옮기기만 하면 빠르지!
+            </div>
+        </div>
+
+        <!-- Part 8: MSSQL vs MySQL 차이 -->
+        <div class="conversation">
+            <h2>Part 8. MSSQL이랑 MySQL이 그렇게 달라?</h2>
+
+            <div class="chat">
+                <div class="q">둘 다 SQL 쓰는 거 아냐?</div>
+                <div class="a">
+                    <p>표준 SQL은 비슷한데, <span class="highlight">내부 동작이 완전 달라!</span></p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <strong>핵심 차이 한 줄 요약</strong><br><br>
+                <span style="font-size: 1.2rem;">MSSQL은 <strong>"관대"</strong>하고, MySQL은 <strong>"정확"</strong>하다</span>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>MSSQL</th>
+                    <th>MySQL</th>
+                </tr>
+                <tr>
+                    <td><strong>ODBC 에러</strong></td>
+                    <td class="good">연결 끊김 시 모두 "Connection Closed"</td>
+                    <td class="bad">"Function Sequence Error" (원인 추적 어려움)</td>
+                </tr>
+                <tr>
+                    <td><strong>문자열 인코딩</strong></td>
+                    <td class="good">인코딩 안 맞아도 일단 저장</td>
+                    <td class="bad">잘못된 인코딩은 절대 저장 안 함</td>
+                </tr>
+                <tr>
+                    <td><strong>16진수 상수</strong></td>
+                    <td class="good">0xFF -> INTEGER 반환</td>
+                    <td class="bad">0xFF -> STRING 반환</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">MySQL이 까다롭네?</div>
+                <div class="a">
+                    <p>까다로운 게 아니라 <span class="key-point">정확한 거야.</span></p>
+                    <p>MSSQL이 "대충 해줄게"라면, MySQL은 "규칙대로 해"야.</p>
+                    <p>사실 MySQL 방식이 더 안전한 측면도 있어.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 9: ODBC 멀티스레드 이슈 -->
+        <div class="conversation">
+            <h2>Part 9. ODBC 함정 - 멀티스레드</h2>
+
+            <div class="chat">
+                <div class="q">리니지2 서버는 C++이라며? ODBC 쓰는 거야?</div>
+                <div class="a">
+                    <p>응, ODBC의 장점이 <span class="highlight">DBMS 상관없이 동일 인터페이스</span>라서</p>
+                    <p>코드 변경 없이 DB만 바꿀 수 있거든.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 코드 안 바꿔도 되는 거 아냐?</div>
+                <div class="a">
+                    <p><span class="warning">함정이 있어!</span></p>
+                    <p>ODBC 스펙은 같아도 <span class="highlight">각 DBMS 개발사가 별도 구현</span>하거든.</p>
+                    <p>내부 동작이 달라.</p>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <strong>MySQL ODBC 치명적 이슈</strong><br><br>
+                기본 옵션 사용 시 <strong>멀티스레드 세이프하지 않음!</strong><br><br>
+                게임 서버는 당연히 멀티스레드인데...<br>
+                기본 설정으로 쓰면 크래시 날 수 있어!
+            </div>
+
+            <div class="code-block">
+[해결 방법]
+
+연결 문자열에 옵션 추가:
+NO_SSPS=1
+
+-> 서버 사이드 프리페어를 사용하지 않음
+-> 멀티스레드 세이프하게 동작
+            </div>
+        </div>
+
+        <!-- Part 10: 성능 이슈 -->
+        <div class="conversation">
+            <h2>Part 10. 성능은 괜찮아?</h2>
+
+            <div class="chat">
+                <div class="q">MySQL로 바꾸면 성능은?</div>
+                <div class="a">
+                    <p>발표에서 가장 걱정한 부분이 바로 이거야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
 SELECT ISNULL(column, default_value) ...
+            </div>
+
+            <div class="warning-box">
+                <strong>충격적인 결과</strong><br><br>
+                ISNULL 같은 기본 쿼리가 MySQL에서 <strong>약 1,000배 느림!</strong>
+            </div>
+
+            <div class="chat">
+                <div class="q">1,000배? 어떻게 해결했어?</div>
+                <div class="a">
+                    <p>발표 당시엔 아직 진행 중이었어.</p>
+                    <p>"내년쯤 되면 더 많은 얘기를 할 수 있을 것"이라고 했지.</p>
+                    <p>아마 <span class="highlight">쿼리 최적화나 인덱스 튜닝</span>을 진행했을 거야.</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Part 11: 최종 파이프라인 -->
+        <div class="conversation">
+            <h2>Part 11. 최종 자동화 파이프라인</h2>
+
+            <div class="chat">
+                <div class="q">결국 어떤 시스템을 만든 거야?</div>
+                <div class="a">
+                    <p>개발자가 MSSQL만 작업하면 <span class="key-point">MySQL 버전이 자동 생성</span>되는 파이프라인이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+[자동화 파이프라인]
+
+1. [개발자] MSSQL 테이블/SP 작업
+       |
+       v
+2. [일일 빌드] MSSQL 버전 DB 생성
+       |
+       v
+3. [내부 DB 툴] 개인 서버에 MSSQL 적용
+       |
+       v
+4. [자동 변환 툴] MySQL 버전 자동 생성
+       |
+       v
+5. [내부 DB 툴] MySQL 버전 적용
+            </div>
+
+            <div class="result-box">
+                <strong>결과</strong><br><br>
+                <strong>2년 넘게</strong> MSSQL과 MySQL 두 버전을<br>
+                자동 변환/테스트하며 <strong>성공적으로 유지!</strong>
+            </div>
+        </div>
+
+        <!-- Part 12: 배울 점 -->
+        <div class="conversation">
+            <h2>Part 12. 이 발표에서 뭘 배워야 해?</h2>
+
+            <div class="guide-box">
+                <strong>핵심 교훈 6가지</strong>
                 <ul>
-                    <li>ISNULL 같은 기본적인 쿼리문이 MySQL에서 <strong>약 1,000배 느림</strong></li>
-                    <li>발표 당시 "내년(다음 해) 정도 되면 더 많은 얘기를 할 수 있을 것"이라고 언급</li>
-                </ul>
-            </div>
-        </section>
-
-        <section class="qa-section">
-            <h2>최종 자동화 파이프라인은?</h2>
-            <div class="answer">
-                <div class="code-block">
-[개발자] MSSQL 테이블/SP 작업
-    ↓
-[일일 빌드] MSSQL 버전 DB 생성
-    ↓
-[내부 DB 툴] 개인 서버에 MSSQL 적용
-    ↓
-[자동 변환 툴] MySQL 버전 자동 생성
-    ↓
-[내부 DB 툴] MySQL 버전 적용
-                </div>
-                <p><strong>결과:</strong> 2년 넘게 MSSQL과 MySQL 두 버전을 자동 변환/테스트하며 성공적으로 유지</p>
-            </div>
-        </section>
-
-        <section class="qa-section">
-            <h2>이 발표에서 배울 점은?</h2>
-            <div class="answer">
-                <ol>
                     <li><strong>자동화 우선:</strong> 반복 작업은 사람이 아닌 도구가 해야 함</li>
                     <li><strong>도구 검증:</strong> 자동 변환 결과를 무조건 믿지 말고 테스트 필수</li>
                     <li><strong>테스트 자동화:</strong> SQL은 컴파일이 없으므로 별도 테스트 프로그램 필요</li>
                     <li><strong>성능 최적화:</strong> 멀티스레드 + 벌크 처리로 마이그레이션 시간 단축</li>
-                    <li><strong>DBMS 특성 이해:</strong> MSSQL의 "관대함" vs MySQL의 "정확함" 차이 인지</li>
-                    <li><strong>버전 확인:</strong> 최신 도구에도 버그 존재 가능 - 항상 의심</li>
-                </ol>
+                    <li><strong>DBMS 특성 이해:</strong> MSSQL "관대" vs MySQL "정확"</li>
+                    <li><strong>버전 확인:</strong> 최신 도구에도 버그 있음 - 항상 의심</li>
+                </ul>
             </div>
-        </section>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리: DB 마이그레이션</h3>
+            <ul>
+                <li><strong>자동화 필수</strong> - 1명이 2년간 두 DB 동시 지원해야 함</li>
+                <li><strong>스키마 변환</strong> - Workbench + Python 커스터마이징</li>
+                <li><strong>SP 변환</strong> - Ispirer (90% 자동화)</li>
+                <li><strong>테스트 자동화</strong> - SP UnitTest 직접 개발</li>
+                <li><strong>데이터 이전</strong> - Thread + Bulk로 시간 단축</li>
+                <li><strong>DBMS 차이</strong> - MSSQL은 관대, MySQL은 정확</li>
+                <li><strong>ODBC 주의</strong> - MySQL은 NO_SSPS=1 필수</li>
+            </ul>
+        </div>
 
         <div class="youtube-link">
             <p>원본 발표 영상:</p>
             <a href="https://www.youtube.com/watch?v=example" target="_blank">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#ff0000">
-                    <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/>
-                </svg>
                 NDC 발표 영상 보기 (리니지2 게임 DB MSSQL에서 MySQL로 전환)
             </a>
+            <p style="margin-top: 12px; color: #666; font-size: 0.9rem;">발표자: 엔씨소프트 리니지2팀 김인정</p>
         </div>
 
-        <footer>
-            <p>NDC 발표 내용을 정리한 학습 노트입니다.</p>
-            <p>발표자: 엔씨소프트 리니지2팀 김인정</p>
-        </footer>
+        <div class="nav-links">
+            <a href="../category-db/">< DB / 캐시</a>
+            <a href="../../">홈으로 ></a>
+        </div>
     </div>
 </body>
 </html>

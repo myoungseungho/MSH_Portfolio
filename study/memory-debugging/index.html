@@ -3,758 +3,706 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>쉽게 발자 알아야 윈도우 메모리 디버깅 - 마비노기 조성원 NDC 발표</title>
+    <title>램은 남는데 왜 튕겨? 윈도우 메모리 디버깅 - MSH Portfolio</title>
     <style>
-        :root {
-            --primary-color: #607D8B;
-            --primary-light: #90A4AE;
-            --primary-dark: #455A64;
-            --bg-color: #ECEFF1;
-            --text-color: #263238;
-            --card-bg: #FFFFFF;
-            --accent: #78909C;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            line-height: 1.8;
-            padding: 20px;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
         }
-
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        header {
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-            color: white;
-            padding: 40px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-        }
-
-        header h1 {
-            font-size: 1.8rem;
-            margin-bottom: 15px;
-        }
-
-        .meta-info {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            font-size: 0.95rem;
-            opacity: 0.9;
-        }
-
-        .meta-info span {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .category-badge {
-            background: rgba(255,255,255,0.2);
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-        }
-
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
         .back-link {
             display: inline-block;
-            margin-bottom: 20px;
-            color: var(--primary-color);
+            margin-bottom: 24px;
+            color: #666;
             text-decoration: none;
-            font-weight: 500;
-            transition: color 0.3s;
         }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
 
-        .back-link:hover {
-            color: var(--primary-dark);
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
         }
-
-        .qa-section {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 30px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            border-left: 4px solid var(--primary-color);
-        }
-
-        .qa-section h2 {
-            color: var(--primary-dark);
+        .conversation h2 {
             font-size: 1.3rem;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid var(--bg-color);
+            color: #455A64;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #ECEFF1;
         }
 
-        .qa-item {
-            margin-bottom: 25px;
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
         }
-
-        .qa-item:last-child {
-            margin-bottom: 0;
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
         }
-
-        .question {
-            background: var(--bg-color);
-            padding: 15px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            color: var(--primary-dark);
-            margin-bottom: 12px;
-            position: relative;
-            padding-left: 35px;
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
         }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
 
-        .question::before {
-            content: "Q";
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: var(--primary-color);
-            color: white;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-        }
-
-        .answer {
-            padding: 15px 20px;
-            padding-left: 35px;
-            position: relative;
-            color: var(--text-color);
-        }
-
-        .answer::before {
-            content: "A";
-            position: absolute;
-            left: 12px;
-            top: 15px;
-            background: var(--accent);
-            color: white;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-        }
-
-        .highlight-box {
-            background: #FFF8E1;
-            border: 1px solid #FFE082;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 15px 0;
-        }
-
-        .highlight-box.warning {
-            background: #FFEBEE;
-            border-color: #FFCDD2;
-        }
-
-        .highlight-box.info {
-            background: #E3F2FD;
-            border-color: #90CAF9;
-        }
-
-        .highlight-box.success {
-            background: #E8F5E9;
-            border-color: #A5D6A7;
-        }
-
-        code {
-            background: #263238;
-            color: #ECEFF1;
-            padding: 3px 8px;
+        .highlight {
+            background: #ECEFF1;
+            padding: 2px 8px;
             border-radius: 4px;
-            font-family: 'Consolas', 'D2Coding', monospace;
-            font-size: 0.9em;
+            font-weight: 600;
+            color: #455A64;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
         }
 
-        pre {
+        /* 코드 블록 */
+        .code-block {
             background: #263238;
-            color: #ECEFF1;
-            padding: 20px;
             border-radius: 8px;
-            overflow-x: auto;
-            font-family: 'Consolas', 'D2Coding', monospace;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
             font-size: 0.9rem;
-            margin: 15px 0;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
         }
 
-        .tool-card {
-            background: var(--bg-color);
-            border-radius: 8px;
-            padding: 20px;
-            margin: 15px 0;
-        }
-
-        .tool-card h4 {
-            color: var(--primary-dark);
-            margin-bottom: 10px;
-        }
-
-        ul, ol {
-            margin-left: 20px;
-            margin-top: 10px;
-        }
-
-        li {
-            margin-bottom: 8px;
-        }
-
-        table {
+        /* 비교 테이블 */
+        .compare-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 15px 0;
+            margin: 16px 0;
+            font-size: 0.9rem;
         }
-
-        th, td {
-            border: 1px solid var(--primary-light);
+        .compare-table th, .compare-table td {
             padding: 12px;
+            border: 1px solid #e0e0e0;
             text-align: left;
         }
-
-        th {
-            background: var(--primary-color);
+        .compare-table th {
+            background: #607D8B;
             color: white;
+            font-weight: 600;
         }
+        .compare-table .good { background: #e8f5e9; color: #2e7d32; }
+        .compare-table .bad { background: #ffebee; color: #c62828; }
 
-        tr:nth-child(even) {
-            background: var(--bg-color);
-        }
-
-        .step-list {
-            counter-reset: step-counter;
-            list-style: none;
-            margin-left: 0;
-        }
-
-        .step-list li {
-            counter-increment: step-counter;
-            position: relative;
-            padding-left: 40px;
-            margin-bottom: 15px;
-        }
-
-        .step-list li::before {
-            content: counter(step-counter);
-            position: absolute;
-            left: 0;
-            top: 0;
-            background: var(--primary-color);
-            color: white;
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 0.85rem;
-        }
-
-        footer {
-            background: var(--card-bg);
+        /* 비유 박스 */
+        .analogy-box {
+            background: #f3e5f5;
             border-radius: 12px;
-            padding: 30px;
-            margin-top: 30px;
-            text-align: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #9c27b0;
+        }
+        .analogy-box strong {
+            color: #7b1fa2;
         }
 
-        footer a {
-            color: var(--primary-color);
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        footer a:hover {
-            text-decoration: underline;
-        }
-
-        .youtube-link {
-            display: inline-block;
-            background: #FF0000;
-            color: white;
-            padding: 12px 25px;
-            border-radius: 8px;
-            text-decoration: none;
-            margin: 15px 0;
-            transition: background 0.3s;
-        }
-
-        .youtube-link:hover {
-            background: #CC0000;
-            text-decoration: none;
-        }
-
-        .summary-box {
-            background: linear-gradient(135deg, var(--primary-light), var(--primary-color));
-            color: white;
-            padding: 25px;
+        /* 결과 박스 */
+        .result-box {
+            background: #e8f5e9;
             border-radius: 12px;
-            margin: 20px 0;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #4caf50;
+        }
+        .result-box strong {
+            color: #2e7d32;
         }
 
-        .summary-box h3 {
-            margin-bottom: 15px;
+        /* 경고 박스 */
+        .warning-box {
+            background: #fff3e0;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #ff9800;
+        }
+        .warning-box strong {
+            color: #e65100;
         }
 
-        .summary-box ul {
+        /* 가이드라인 박스 */
+        .guide-box {
+            background: #ECEFF1;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #607D8B;
+        }
+        .guide-box strong {
+            color: #455A64;
+        }
+        .guide-box ul {
+            margin-top: 12px;
             margin-left: 20px;
         }
-
-        @media (max-width: 768px) {
-            header {
-                padding: 25px;
-            }
-
-            header h1 {
-                font-size: 1.4rem;
-            }
-
-            .qa-section {
-                padding: 20px;
-            }
-
-            .meta-info {
-                flex-direction: column;
-                gap: 10px;
-            }
+        .guide-box li {
+            margin: 8px 0;
         }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #607D8B 0%, #455A64 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #B0BEC5;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #607D8B;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <div class="container">
-        <a href="../index.html#cs-fundamentals" class="back-link">&larr; CS기초 카테고리로 돌아가기</a>
+        <a href="../category-cs/" class="back-link">< CS기초</a>
 
-        <header>
-            <h1>쉽게 발자 알아야 윈도우 메모리 디버깅</h1>
-            <div class="meta-info">
-                <span class="category-badge">CS기초</span>
-                <span>발표자: 조성원 (마비노기 프로젝트)</span>
-                <span>NDC 발표</span>
-            </div>
+        <header class="header">
+            <h1>램은 남는데 왜 튕겨? 윈도우 메모리 디버깅</h1>
+            <p>마비노기 조성원님 NDC 발표 - 메모리 릭 찾는 실전 기법</p>
         </header>
 
-        <!-- 발표 배경 -->
-        <section class="qa-section">
-            <h2>발표 배경 및 동기</h2>
+        <!-- Part 1: 발표 배경 -->
+        <div class="conversation">
+            <h2>Part 1. 왜 이 발표를 하게 됐어?</h2>
 
-            <div class="qa-item">
-                <div class="question">발표자는 어떤 배경에서 이 발표를 하게 되었나요?</div>
-                <div class="answer">
-                    <p>발표자는 2014년 마비노기 10주년에 신입으로 합류했습니다. 2004년부터 마비노기 유저였던 "성공한 덕후"로, 던전 콘텐츠 업데이트 후 메모리 부족으로 클라이언트 크래시가 급증하는 문제가 발생했습니다.</p>
-                    <div class="highlight-box">
-                        <strong>핵심 계기:</strong> 입사 4개월차에 메모리 릭 이슈를 담당하게 되었고, 이 경험을 통해 메모리 디버깅 기법을 체득하게 되었습니다.
-                    </div>
+            <div class="chat">
+                <div class="q">발표자는 어떤 사람이야?</div>
+                <div class="a">
+                    <p>2014년 마비노기 10주년에 신입으로 합류한 개발자야.</p>
+                    <p>2004년부터 마비노기 유저였던 <span class="key-point">"성공한 덕후"</span>지!</p>
                 </div>
             </div>
 
-            <div class="qa-item">
-                <div class="question">왜 메모리 릭 찾기가 어려웠나요?</div>
-                <div class="answer">
-                    <p>마비노기는 14년간 활발한 업데이트를 이어온 게임이라 코드 양이 상상 이상으로 많았습니다. 던전 플레이라는 비교적 명확한 재현 스텝이 있음에도, 던전에는 전투, 스킬 등 수많은 기능이 포함되어 있어 눈으로 delete 누락을 찾는 것은 "사막에서 바늘 찾기"와 같았습니다.</p>
-                </div>
-            </div>
-        </section>
-
-        <!-- 메모리 부족 현상의 이해 -->
-        <section class="qa-section">
-            <h2>메모리 부족 현상 (Out of Memory)</h2>
-
-            <div class="qa-item">
-                <div class="question">"메모리 부족하다면서 튀는데 램은 남아있다" - 이게 무슨 현상인가요?</div>
-                <div class="answer">
-                    <p>대부분의 경우 <strong>프로세스의 가상 메모리</strong>가 부족한 현상입니다. 물리 메모리(RAM)가 부족한 경우도 있지만, 대부분은 우리가 만든 응용프로그램의 문제입니다.</p>
-                    <div class="highlight-box warning">
-                        <strong>중요:</strong> 메모리 부족은 유저분들 컴퓨터 사양 탓이 아닙니다!
-                    </div>
+            <div class="chat">
+                <div class="q">메모리 디버깅을 왜 공부하게 됐어?</div>
+                <div class="a">
+                    <p>던전 콘텐츠 업데이트 후 클라이언트가 <span class="warning">메모리 부족으로 크래시</span>나는 문제가 급증했어.</p>
+                    <p>입사 4개월차에 이 문제를 담당하게 됐는데...</p>
                 </div>
             </div>
 
-            <div class="qa-item">
-                <div class="question">운영체제의 가상 메모리와 프로세스의 가상 메모리는 어떻게 다른가요?</div>
-                <div class="answer">
-                    <table>
-                        <tr>
-                            <th>구분</th>
-                            <th>운영체제의 가상 메모리</th>
-                            <th>프로세스의 가상 메모리</th>
-                        </tr>
-                        <tr>
-                            <td>정의</td>
-                            <td>디스크 일부를 RAM처럼 사용하는 시스템</td>
-                            <td>프로세스에게 할당된 논리적 주소 공간</td>
-                        </tr>
-                        <tr>
-                            <td>특징</td>
-                            <td>실제 RAM보다 큰 메모리 할당 가능</td>
-                            <td>RAM 용량과 무관하게 플랫폼에 의해 결정</td>
-                        </tr>
-                        <tr>
-                            <td>설정</td>
-                            <td>제어판에서 수정 가능</td>
-                            <td>32bit/64bit에 따라 고정</td>
-                        </tr>
-                    </table>
+            <div class="analogy-box">
+                <strong>사막에서 바늘 찾기</strong><br><br>
+                마비노기는 14년간 업데이트된 게임이라 코드가 엄청 많아.<br>
+                던전에는 전투, 스킬, AI 등 수많은 기능이 들어있어서<br>
+                눈으로 <code>delete</code> 누락을 찾는 건 <strong>거의 불가능</strong>했어.
+            </div>
+        </div>
+
+        <!-- Part 2: 메모리 부족 현상 이해 -->
+        <div class="conversation">
+            <h2>Part 2. "램은 남는데 튕겨요" 무슨 현상이야?</h2>
+
+            <div class="chat">
+                <div class="q">유저가 "메모리 16GB인데 왜 튕겨요?" 라고 물어봐. 뭐라고 해야 해?</div>
+                <div class="a">
+                    <p><span class="highlight">프로세스의 가상 메모리</span>가 부족한 거야!</p>
+                    <p>물리 메모리(RAM)하고는 다른 개념이야.</p>
                 </div>
             </div>
 
-            <div class="qa-item">
-                <div class="question">32비트 프로세스의 가상 메모리 한계는 얼마인가요?</div>
-                <div class="answer">
-                    <p>32비트는 이론상 2^32 = <strong>4GB</strong>까지 표현 가능하지만, 실제로는 <strong>2GB</strong>만 사용 가능합니다.</p>
-                    <div class="highlight-box info">
-                        <strong>이유:</strong> 4GB 중 절반인 2GB는 커널 모드(운영체제)가 사용합니다. 이 커널 영역에는 최근 이슈가 된 CPU 보안 취약점 관련 메모리 영역도 포함됩니다.
-                    </div>
-                    <p><strong>결론:</strong> 32비트 윈도우를 지원한다면, 가상 메모리 한계를 <strong>2GB</strong>로 생각해야 합니다.</p>
+            <div class="warning-box">
+                <strong>중요!</strong><br><br>
+                메모리 부족은 유저 컴퓨터 사양 탓이 아니야!<br>
+                대부분 <strong>우리가 만든 프로그램의 문제</strong>야.
+            </div>
+
+            <div class="chat">
+                <div class="q">운영체제 가상 메모리랑 프로세스 가상 메모리가 다르다고?</div>
+                <div class="a">
+                    <p>응, 완전 다른 개념이야!</p>
                 </div>
             </div>
 
-            <div class="qa-item">
-                <div class="question">가상 메모리가 한계를 초과하면 어떻게 되나요?</div>
-                <div class="answer">
-                    <ul>
-                        <li><code>malloc()</code> → <strong>NULL</strong> 리턴</li>
-                        <li><code>new</code> 연산자 → <strong>std::bad_alloc</strong> 예외 던짐</li>
-                        <li>bad_alloc 예외 처리가 없다면 → <strong>프로그램 크래시</strong></li>
-                    </ul>
+            <table class="compare-table">
+                <tr>
+                    <th>구분</th>
+                    <th>운영체제의 가상 메모리</th>
+                    <th>프로세스의 가상 메모리</th>
+                </tr>
+                <tr>
+                    <td>정의</td>
+                    <td>디스크 일부를 RAM처럼 사용</td>
+                    <td>프로세스에게 할당된 논리적 주소 공간</td>
+                </tr>
+                <tr>
+                    <td>특징</td>
+                    <td>실제 RAM보다 큰 메모리 사용 가능</td>
+                    <td>RAM 용량과 무관, 플랫폼이 결정</td>
+                </tr>
+                <tr>
+                    <td>설정</td>
+                    <td>제어판에서 수정 가능</td>
+                    <td>32bit/64bit에 따라 고정</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">32비트 프로세스는 메모리를 얼마나 쓸 수 있어?</div>
+                <div class="a">
+                    <p>이론상 2^32 = <span class="highlight">4GB</span>까지 가능한데...</p>
+                    <p>실제로는 <span class="warning">2GB만</span> 쓸 수 있어!</p>
                 </div>
             </div>
 
-            <div class="qa-item">
-                <div class="question">64비트면 메모리 릭을 안 고쳐도 되지 않나요?</div>
-                <div class="answer">
-                    <p><strong>아닙니다!</strong> 64비트에서도 메모리 릭은 심각한 문제를 일으킵니다:</p>
-                    <ul>
-                        <li><strong>페이지 폴트 증가:</strong> 찾는 정보가 RAM에 없어 디스크까지 찾아야 하는 경우 증가</li>
-                        <li><strong>캐시 미스 증가:</strong> 누수된 메모리로 인한 지역성(locality) 저하</li>
-                        <li><strong>퍼포먼스 저하:</strong> 심각한 경우 서버 성능까지 영향</li>
-                        <li><strong>극단적 상황:</strong> 메모리 때문에 서버 전체가 멈춰서 점검해야 하는 경우도 발생</li>
-                    </ul>
-                </div>
+            <div class="analogy-box">
+                <strong>왜 절반밖에 못 써?</strong><br><br>
+                4GB 중 절반인 2GB는 <strong>커널 모드(운영체제)</strong>가 사용해.<br>
+                이 영역에는 최근 이슈가 된 CPU 보안 취약점 관련 메모리도 포함돼있어.<br><br>
+                <strong>결론:</strong> 32비트 윈도우 지원하면 → 가상 메모리 한계 = 2GB
             </div>
-        </section>
 
-        <!-- 작업 관리자 측정 방법 -->
-        <section class="qa-section">
-            <h2>메모리 사용량 측정 방법</h2>
-
-            <div class="qa-item">
-                <div class="question">작업 관리자에서 메모리를 볼 때 어떤 컬럼을 봐야 하나요?</div>
-                <div class="answer">
-                    <table>
-                        <tr>
-                            <th>컬럼</th>
-                            <th>영문명</th>
-                            <th>의미</th>
-                            <th>용도</th>
-                        </tr>
-                        <tr>
-                            <td>작업 집합</td>
-                            <td>Working Set</td>
-                            <td>현재 실제로 RAM에 올라와 있는 메모리</td>
-                            <td>실시간 RAM 사용량 확인</td>
-                        </tr>
-                        <tr>
-                            <td><strong>커밋 크기</strong></td>
-                            <td>Commit Size</td>
-                            <td>OS로부터 할당받은 모든 메모리 (사용 중 + 노는 중)</td>
-                            <td><strong>메모리 릭 추적 시 사용!</strong></td>
-                        </tr>
-                    </table>
-                    <div class="highlight-box info">
-                        <strong>팁:</strong> 커밋 크기 컬럼은 기본으로 표시되지 않습니다. 작업 관리자에서 컬럼 헤더를 우클릭하여 직접 선택해야 합니다.
-                    </div>
+            <div class="chat">
+                <div class="q">가상 메모리가 꽉 차면 어떻게 돼?</div>
+                <div class="a">
+                    <p>할당 함수들이 실패해:</p>
                 </div>
             </div>
 
-            <div class="qa-item">
-                <div class="question">메모리 분석에 유용한 도구들은 무엇인가요?</div>
-                <div class="answer">
-                    <div class="tool-card">
-                        <h4>Process Explorer</h4>
-                        <p>프로세스의 상세 메모리 정보 확인 가능</p>
-                    </div>
-                    <div class="tool-card">
-                        <h4>VMMap</h4>
-                        <p>가상 메모리 맵 시각화 도구</p>
-                    </div>
-                    <div class="tool-card">
-                        <h4>성능 모니터 (Performance Monitor)</h4>
-                        <p>주기적으로 수치를 기록해야 할 때 유용</p>
-                    </div>
-                    <p><strong>추천 자료:</strong> 지니넷 "윈도우 시스템 메모리 개념잡기" 슬라이드 (송창섭님)</p>
-                </div>
-            </div>
-        </section>
+            <div class="code-block">
+malloc()  → NULL 리턴
+new       → std::bad_alloc 예외 던짐
 
-        <!-- 재현 가능한 메모리 릭 -->
-        <section class="qa-section">
-            <h2>재현 가능한 메모리 릭 디버깅</h2>
+bad_alloc 예외 처리 없으면? → 프로그램 크래시!</div>
 
-            <div class="qa-item">
-                <div class="question">메모리 릭을 어떻게 분류하나요?</div>
-                <div class="answer">
-                    <table>
-                        <tr>
-                            <th>분류</th>
-                            <th>특징</th>
-                            <th>난이도</th>
-                        </tr>
-                        <tr>
-                            <td><strong>재현 가능한 메모리 릭</strong></td>
-                            <td>로컬에서 재현 방법이 있는 경우</td>
-                            <td>비교적 쉬움 (99% 해결 가능)</td>
-                        </tr>
-                        <tr>
-                            <td>재현 불가능한 메모리 릭</td>
-                            <td>재현 조건을 찾기 힘든 경우</td>
-                            <td>어려움</td>
-                        </tr>
-                    </table>
+            <div class="chat">
+                <div class="q">64비트면 메모리 릭 안 고쳐도 되는 거 아냐?</div>
+                <div class="a">
+                    <p><span class="warning">절대 아니야!</span> 64비트에서도 문제가 심각해:</p>
                 </div>
             </div>
 
-            <div class="qa-item">
-                <div class="question">메모리 릭 디버깅의 핵심 전략은 무엇인가요?</div>
-                <div class="answer">
-                    <p>우리가 알아야 하는 정보는 <strong>"어디서 메모리가 새는가"</strong> = <strong>콜 스택</strong>입니다.</p>
-                    <ol class="step-list">
-                        <li><strong>스택 수집:</strong> 메모리 할당이 일어나는 콜 스택 수집 (할당 함수 후킹 + 스택 트레이스)</li>
-                        <li><strong>스냅샷 1:</strong> 메모리 릭 재현 전에 메모리 상태 저장</li>
-                        <li><strong>재현:</strong> 메모리 릭 재현</li>
-                        <li><strong>스냅샷 2:</strong> 재현 후 메모리 상태 저장</li>
-                        <li><strong>비교:</strong> 두 스냅샷 비교 → 어떤 콜스택에서 메모리가 증가했는지 확인</li>
-                    </ol>
-                </div>
-            </div>
-
-            <div class="qa-item">
-                <div class="question">UMDH란 무엇이고 어떻게 사용하나요?</div>
-                <div class="answer">
-                    <p><strong>UMDH (User-Mode Dump Heap)</strong>: 동적 할당 메모리를 분석할 수 있는 무료 도구로, Windows Debugging Tools에 포함되어 있습니다.</p>
-
-                    <h4>1. GFlags로 UST 플래그 활성화</h4>
-                    <pre>gflags.exe /i [프로그램명] +ust</pre>
-                    <p>UST (User-mode Stack Trace): 다음 실행부터 콜 스택을 자동 수집</p>
-
-                    <h4>2. 첫 번째 스냅샷 (재현 전)</h4>
-                    <pre>umdh -p:[PID] -f:log1.txt</pre>
-
-                    <h4>3. 메모리 릭 재현</h4>
-
-                    <h4>4. 두 번째 스냅샷 (재현 후)</h4>
-                    <pre>umdh -p:[PID] -f:log2.txt</pre>
-
-                    <h4>5. 스냅샷 비교</h4>
-                    <pre>umdh log1.txt log2.txt > diff.txt</pre>
-
-                    <div class="highlight-box success">
-                        <strong>결과:</strong> diff.txt에서 두 스냅샷 사이에 할당되고 해제되지 않은 메모리(누수된 메모리)의 콜스택 확인 가능!
-                    </div>
-                </div>
-            </div>
-
-            <div class="qa-item">
-                <div class="question">UMDH 외에 다른 메모리 디버깅 도구는 없나요?</div>
-                <div class="answer">
-                    <ul>
-                        <li><strong>Visual Studio 메모리 스냅샷</strong> (2015부터): 더 쉽지만 VS 설치 환경에서만 가능</li>
-                        <li><strong>Application Verifier</strong></li>
-                        <li><strong>Valgrind (리눅스)</strong></li>
-                        <li><strong>CRT Debug Library</strong></li>
-                    </ul>
-                    <p><strong>추천 자료:</strong> 김이주님의 "디버깅 어디까지 해봤니" NDC 세션</p>
-                </div>
-            </div>
-        </section>
-
-        <!-- 재현 불가능한 메모리 릭 -->
-        <section class="qa-section">
-            <h2>재현 불가능한 메모리 릭 디버깅</h2>
-
-            <div class="qa-item">
-                <div class="question">서버에서 발생하는 메모리 릭은 왜 추적하기 어려운가요?</div>
-                <div class="answer">
-                    <ul>
-                        <li>메모리가 증가하는 패턴이나 메시지를 특정짓기 어려움</li>
-                        <li>시간당 메모리 증가량이 매우 작음</li>
-                        <li>처리하는 메시지 수가 매우 많음</li>
-                    </ul>
-                    <div class="highlight-box warning">
-                        <strong>UMDH의 한계:</strong> 라이브 서버에 UMDH(UST 플래그)를 적용하면 부팅부터 너무 오래 걸리고 반응성이 크게 떨어져 실사용이 불가능합니다.
-                    </div>
-                </div>
-            </div>
-
-            <div class="qa-item">
-                <div class="question">덤프 파일이란 무엇인가요?</div>
-                <div class="answer">
-                    <p><strong>덤프(Dump)</strong>: 특정 시점에 프로그램 작업 상태를 기록한 파일</p>
-                    <ul>
-                        <li>레지스터 상태</li>
-                        <li>스택 상태</li>
-                        <li>메모리 정보</li>
-                    </ul>
-                    <p><strong>풀 덤프(Full Dump)</strong>: 프로세스의 모든 메모리 정보를 포함 → 누수된 메모리도 포함!</p>
-                </div>
-            </div>
-
-            <div class="qa-item">
-                <div class="question">WinDbg로 힙 분석하는 방법은?</div>
-                <div class="answer">
-                    <p><strong>WinDbg</strong>: Microsoft 제공 무료 디버거, 강력한 힙 분석 기능 제공</p>
-
-                    <ol class="step-list">
-                        <li>
-                            <strong>전체 힙 상태 확인</strong>
-                            <pre>!heap -s</pre>
-                            <p>→ 여러 힙 중 가장 많은 메모리를 사용하는 힙 찾기</p>
-                        </li>
-                        <li>
-                            <strong>힙 통계 확인</strong>
-                            <pre>!heap -stat -h [힙주소]</pre>
-                            <p>→ 해당 힙에서 사이즈별 할당 개수 통계</p>
-                        </li>
-                        <li>
-                            <strong>사이즈 필터링</strong>
-                            <pre>!heap -flt s [사이즈]</pre>
-                            <p>→ 특정 사이즈 메모리 블록 모두 검색</p>
-                        </li>
-                        <li>
-                            <strong>메모리 내용 분석</strong>
-                            <p>→ 누수된 메모리 블록 내 데이터 확인</p>
-                        </li>
-                    </ol>
-                </div>
-            </div>
-
-            <div class="qa-item">
-                <div class="question">누수된 메모리가 가상 함수가 있는 객체라면?</div>
-                <div class="answer">
-                    <p>전생에 나라를 구한 경우입니다! (가장 쉬운 케이스)</p>
-                    <ul>
-                        <li>가상 함수가 있는 객체는 맨 앞에 <strong>vftable 포인터</strong>가 있음</li>
-                        <li>WinDbg가 자동으로 역참조하여 <strong>실제 타입(클래스 이름)</strong> 표시</li>
-                        <li>클래스 이름을 알면 해당 포인터를 캐스팅하여 어떤 정보를 가진 객체인지 확인 가능</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="qa-item">
-                <div class="question">누수된 메모리가 문자열이라면?</div>
-                <div class="answer">
-                    <p>게임 서버에서 많이 발생하는 케이스입니다. (마비노기의 2.9GB 누수가 이 경우)</p>
-
-                    <h4>힙 세그먼트 확인</h4>
-                    <pre>!heap [힙주소]</pre>
-                    <p>→ 힙이 사용하는 메모리 영역 나열</p>
-
-                    <div class="highlight-box info">
-                        <strong>힙 메모리 배치 특성:</strong>
-                        <ul>
-                            <li>낮은 번지: 오래전 할당된 메모리 (데이터 로딩, 캐싱)</li>
-                            <li>높은 번지: 최근 할당된 메모리 (활발히 사용 중)</li>
-                            <li>중간: 누수된 메모리가 차곡차곡 쌓여있음!</li>
-                        </ul>
-                    </div>
-
-                    <h4>메모리 내용 확인</h4>
-                    <pre>du [메모리주소]  (유니코드 문자열)
-da [메모리주소]  (ASCII 문자열)</pre>
-                    <p>또는 Visual Studio 메모리 창 사용</p>
-
-                    <p><strong>결과:</strong> 어떤 문자열이 누수되는지 알면 → 코드/데이터에서 해당 문자열 정의 부분을 찾아 재현 방법 특정 가능!</p>
-                </div>
-            </div>
-
-            <div class="qa-item">
-                <div class="question">누수된 메모리에 문자열도 없고 vftable도 없다면?</div>
-                <div class="answer">
-                    <p>아직 방법이 남아있습니다:</p>
-
-                    <h4>사이즈가 유니크한 경우</h4>
-                    <p>예: 4000바이트 버퍼, 380바이트 객체</p>
-                    <pre>_CrtSetAllocHook()</pre>
-                    <p>→ 메모리 할당에 훅 설치, 같은 사이즈 할당 시 브레이크포인트/로그</p>
-                    <p><strong>참고:</strong> NDC 2010 "온라인 게임에서 사례로 살펴보는 디버깅" (턱이님)</p>
-
-                    <h4>사이즈가 흔한 경우 (48바이트 등)</h4>
-                    <ul>
-                        <li>인력 투입하여 메모리 블록 내 데이터 분석</li>
-                        <li>내부 테스트 서버에 UMDH 적용</li>
-                        <li>문제 발생 시점 코드 변경점 전체 리뷰</li>
-                        <li>메모리 증가 시점의 유저 로그 분석</li>
-                    </ul>
-
-                    <div class="highlight-box success">
-                        <strong>핵심:</strong> 재현 불가능한 메모리 릭 → 재현 가능한 메모리 릭으로 만드는 것이 목표!
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- 요약 -->
-        <section class="qa-section">
-            <h2>핵심 요약</h2>
-
-            <div class="summary-box">
-                <h3>기억해야 할 핵심 포인트</h3>
+            <div class="guide-box">
+                <strong>64비트에서도 메모리 릭이 위험한 이유</strong>
                 <ul>
-                    <li><strong>32비트 윈도우 지원 시</strong> 가상 메모리 한계는 <strong>2GB</strong></li>
-                    <li>메모리 분석 시 <strong>커밋 크기(Commit Size)</strong> 확인 필수</li>
-                    <li><strong>재현 가능한 메모리 릭</strong>: UMDH 등 도구로 콜스택 추적</li>
-                    <li><strong>재현 불가능한 메모리 릭</strong>: WinDbg로 풀 덤프의 힙 분석</li>
-                    <li>최종 목표: 재현 불가능 → 재현 가능으로 전환</li>
+                    <li><strong>페이지 폴트 증가</strong> - 찾는 정보가 RAM에 없어서 디스크까지 뒤져야 함</li>
+                    <li><strong>캐시 미스 증가</strong> - 누수된 메모리로 인한 지역성(locality) 저하</li>
+                    <li><strong>퍼포먼스 저하</strong> - 심하면 서버 성능까지 영향</li>
+                    <li><strong>극단적 상황</strong> - 메모리 때문에 서버 전체 멈춰서 긴급 점검!</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Part 3: 메모리 사용량 측정 -->
+        <div class="conversation">
+            <h2>Part 3. 메모리 사용량 어떻게 봐?</h2>
+
+            <div class="chat">
+                <div class="q">작업 관리자에서 메모리 보려면 어떤 컬럼을 봐야 해?</div>
+                <div class="a">
+                    <p>두 가지가 있어:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>컬럼</th>
+                    <th>영문명</th>
+                    <th>의미</th>
+                    <th>용도</th>
+                </tr>
+                <tr>
+                    <td>작업 집합</td>
+                    <td>Working Set</td>
+                    <td>현재 RAM에 올라와 있는 메모리</td>
+                    <td>실시간 RAM 사용량</td>
+                </tr>
+                <tr>
+                    <td class="good"><strong>커밋 크기</strong></td>
+                    <td>Commit Size</td>
+                    <td>OS로부터 할당받은 모든 메모리</td>
+                    <td class="good"><strong>메모리 릭 추적!</strong></td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <strong>주의!</strong><br><br>
+                커밋 크기 컬럼은 기본으로 안 보여!<br>
+                작업 관리자에서 컬럼 헤더 우클릭해서 직접 추가해야 해.
+            </div>
+
+            <div class="chat">
+                <div class="q">더 자세히 볼 수 있는 도구는 없어?</div>
+                <div class="a">
+                    <p>좋은 도구들이 있어:</p>
+                </div>
+            </div>
+
+            <div class="guide-box">
+                <strong>메모리 분석 도구들</strong>
+                <ul>
+                    <li><strong>Process Explorer</strong> - 프로세스 상세 메모리 정보</li>
+                    <li><strong>VMMap</strong> - 가상 메모리 맵 시각화</li>
+                    <li><strong>성능 모니터</strong> - 주기적으로 수치 기록할 때</li>
                 </ul>
             </div>
 
-            <div class="qa-item">
-                <div class="question">메모리 부족의 다양한 원인들</div>
-                <div class="answer">
-                    <ul>
-                        <li>메모리 릭 (delete 누락, 소멸자 virtual 미선언 등)</li>
-                        <li>과도한 캐싱</li>
-                        <li>대용량 리소스 로딩</li>
-                        <li>메모리 단편화</li>
-                        <li>외부 라이브러리 문제</li>
-                    </ul>
-                    <p>각 원인을 구분하려면 다양한 도구와 지표를 확인해야 합니다.</p>
+            <div class="result-box">
+                <strong>추천 자료</strong><br><br>
+                지니넷 "윈도우 시스템 메모리 개념잡기" (송창섭님)
+            </div>
+        </div>
+
+        <!-- Part 4: 재현 가능한 메모리 릭 -->
+        <div class="conversation">
+            <h2>Part 4. 재현 가능한 메모리 릭 잡기</h2>
+
+            <div class="chat">
+                <div class="q">메모리 릭은 어떻게 분류해?</div>
+                <div class="a">
+                    <p>크게 두 가지로 나눠:</p>
                 </div>
             </div>
-        </section>
 
-        <footer>
-            <p>발표 영상 보기:</p>
-            <a href="https://www.youtube.com/watch?v=example" class="youtube-link" target="_blank">
-                YouTube에서 NDC 발표 보기
-            </a>
-            <p style="margin-top: 20px; color: #666;">
-                <a href="../index.html#cs-fundamentals">&larr; CS기초 카테고리로 돌아가기</a>
-            </p>
-        </footer>
+            <table class="compare-table">
+                <tr>
+                    <th>분류</th>
+                    <th>특징</th>
+                    <th>난이도</th>
+                </tr>
+                <tr>
+                    <td class="good"><strong>재현 가능한 메모리 릭</strong></td>
+                    <td>로컬에서 재현 방법이 있음</td>
+                    <td class="good">비교적 쉬움 (99% 해결!)</td>
+                </tr>
+                <tr>
+                    <td class="bad">재현 불가능한 메모리 릭</td>
+                    <td>재현 조건을 찾기 어려움</td>
+                    <td class="bad">어려움</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">재현 가능하면 어떻게 찾아?</div>
+                <div class="a">
+                    <p>우리가 알아야 하는 건 <span class="key-point">"어디서 메모리가 새나?"</span> = <span class="highlight">콜 스택</span>이야!</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+메모리 릭 디버깅 핵심 전략:
+
+1. 스택 수집  → 메모리 할당 콜 스택 수집 (할당 함수 후킹 + 스택 트레이스)
+2. 스냅샷 1   → 재현 전 메모리 상태 저장
+3. 재현      → 메모리 릭 재현
+4. 스냅샷 2   → 재현 후 메모리 상태 저장
+5. 비교      → 두 스냅샷 비교 → 어디서 메모리가 늘었나?</div>
+
+            <div class="chat">
+                <div class="q">UMDH가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">User-Mode Dump Heap</span> - 동적 할당 메모리를 분석하는 무료 도구야!</p>
+                    <p>Windows Debugging Tools에 포함되어 있어.</p>
+                </div>
+            </div>
+
+            <div class="guide-box">
+                <strong>UMDH 사용법</strong>
+                <ul>
+                    <li><strong>1단계:</strong> GFlags로 UST 플래그 활성화</li>
+                    <li><strong>2단계:</strong> 재현 전 스냅샷</li>
+                    <li><strong>3단계:</strong> 메모리 릭 재현</li>
+                    <li><strong>4단계:</strong> 재현 후 스냅샷</li>
+                    <li><strong>5단계:</strong> 두 스냅샷 비교</li>
+                </ul>
+            </div>
+
+            <div class="code-block">
+-- 1. UST 플래그 활성화 (다음 실행부터 콜 스택 자동 수집)
+gflags.exe /i [프로그램명] +ust
+
+-- 2. 첫 번째 스냅샷 (재현 전)
+umdh -p:[PID] -f:log1.txt
+
+-- 3. 메모리 릭 재현
+
+-- 4. 두 번째 스냅샷 (재현 후)
+umdh -p:[PID] -f:log2.txt
+
+-- 5. 스냅샷 비교
+umdh log1.txt log2.txt > diff.txt</div>
+
+            <div class="result-box">
+                <strong>결과!</strong><br><br>
+                diff.txt에서 두 스냅샷 사이에 할당되고 해제되지 않은 메모리의 <strong>콜스택 확인 가능!</strong>
+            </div>
+
+            <div class="chat">
+                <div class="q">UMDH 말고 다른 도구는 없어?</div>
+                <div class="a">
+                    <p>여러 가지가 있어:</p>
+                </div>
+            </div>
+
+            <div class="guide-box">
+                <strong>다른 메모리 디버깅 도구들</strong>
+                <ul>
+                    <li><strong>Visual Studio 메모리 스냅샷</strong> (2015부터) - 더 쉬움, VS 환경 필요</li>
+                    <li><strong>Application Verifier</strong></li>
+                    <li><strong>Valgrind</strong> (리눅스)</li>
+                    <li><strong>CRT Debug Library</strong></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Part 5: 재현 불가능한 메모리 릭 -->
+        <div class="conversation">
+            <h2>Part 5. 재현 불가능한 메모리 릭 잡기</h2>
+
+            <div class="chat">
+                <div class="q">서버에서 발생하는 메모리 릭은 왜 찾기 어려워?</div>
+                <div class="a">
+                    <p>여러 가지 이유가 있어:</p>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <strong>재현 불가능한 메모리 릭이 어려운 이유</strong><br><br>
+                <ul style="margin-left: 20px;">
+                    <li>메모리 증가 패턴이나 메시지를 특정짓기 어려움</li>
+                    <li>시간당 메모리 증가량이 매우 작음</li>
+                    <li>처리하는 메시지 수가 너무 많음</li>
+                </ul>
+            </div>
+
+            <div class="chat">
+                <div class="q">라이브 서버에 UMDH 쓰면 안 돼?</div>
+                <div class="a">
+                    <p><span class="warning">절대 안 돼!</span></p>
+                    <p>UST 플래그 적용하면 부팅부터 너무 오래 걸리고 반응성이 크게 떨어져.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="key-point">덤프 파일</span>을 분석해!</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>덤프(Dump)란?</strong><br><br>
+                특정 시점에 프로그램 작업 상태를 기록한 파일이야.<br><br>
+                <ul style="margin-left: 20px;">
+                    <li>레지스터 상태</li>
+                    <li>스택 상태</li>
+                    <li>메모리 정보</li>
+                </ul><br>
+                <strong>풀 덤프(Full Dump)</strong> = 프로세스의 모든 메모리 정보 포함 = 누수된 메모리도 포함!
+            </div>
+
+            <div class="chat">
+                <div class="q">WinDbg로 힙 분석하는 방법 알려줘!</div>
+                <div class="a">
+                    <p><span class="highlight">WinDbg</span>는 Microsoft 제공 무료 디버거야. 강력한 힙 분석 기능이 있어!</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 1. 전체 힙 상태 확인
+!heap -s
+→ 여러 힙 중 가장 많은 메모리 사용하는 힙 찾기
+
+-- 2. 힙 통계 확인
+!heap -stat -h [힙주소]
+→ 해당 힙에서 사이즈별 할당 개수 통계
+
+-- 3. 사이즈 필터링
+!heap -flt s [사이즈]
+→ 특정 사이즈 메모리 블록 모두 검색
+
+-- 4. 메모리 내용 분석
+→ 누수된 메모리 블록 내 데이터 확인</div>
+
+            <div class="chat">
+                <div class="q">누수된 메모리에 가상 함수가 있는 객체면?</div>
+                <div class="a">
+                    <p><span class="key-point">전생에 나라를 구한 거야!</span> (가장 쉬운 케이스)</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <strong>왜 쉬워?</strong><br><br>
+                가상 함수가 있는 객체는 맨 앞에 <strong>vftable 포인터</strong>가 있어.<br>
+                WinDbg가 자동으로 역참조해서 <strong>실제 타입(클래스 이름)</strong>을 보여줘!<br>
+                클래스 이름 알면 → 해당 포인터 캐스팅 → 어떤 정보를 가진 객체인지 확인!
+            </div>
+
+            <div class="chat">
+                <div class="q">누수된 메모리가 문자열이면?</div>
+                <div class="a">
+                    <p>게임 서버에서 많이 발생하는 케이스야.</p>
+                    <p>(마비노기의 2.9GB 누수가 이 경우였어!)</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 힙 세그먼트 확인
+!heap [힙주소]
+→ 힙이 사용하는 메모리 영역 나열</div>
+
+            <div class="analogy-box">
+                <strong>힙 메모리 배치 특성</strong><br><br>
+                <strong>낮은 번지:</strong> 오래전 할당된 메모리 (데이터 로딩, 캐싱)<br>
+                <strong>높은 번지:</strong> 최근 할당된 메모리 (활발히 사용 중)<br>
+                <strong>중간:</strong> 누수된 메모리가 차곡차곡 쌓여있음!
+            </div>
+
+            <div class="code-block">
+-- 메모리 내용 확인
+du [메모리주소]   (유니코드 문자열)
+da [메모리주소]   (ASCII 문자열)
+
+-- 또는 Visual Studio 메모리 창 사용</div>
+
+            <div class="result-box">
+                <strong>결과!</strong><br><br>
+                어떤 문자열이 누수되는지 알면 → 코드/데이터에서 해당 문자열 정의 부분 찾기 → 재현 방법 특정!
+            </div>
+
+            <div class="chat">
+                <div class="q">문자열도 없고 vftable도 없으면 어떡해?</div>
+                <div class="a">
+                    <p>아직 방법이 남아있어!</p>
+                </div>
+            </div>
+
+            <div class="guide-box">
+                <strong>사이즈가 유니크한 경우 (예: 4000바이트, 380바이트)</strong>
+                <ul>
+                    <li><code>_CrtSetAllocHook()</code>로 메모리 할당에 훅 설치</li>
+                    <li>같은 사이즈 할당 시 브레이크포인트/로그</li>
+                    <li>참고: NDC 2010 "온라인 게임에서 사례로 살펴보는 디버깅" (턱이님)</li>
+                </ul>
+            </div>
+
+            <div class="warning-box">
+                <strong>사이즈가 흔한 경우 (48바이트 등)</strong><br><br>
+                <ul style="margin-left: 20px;">
+                    <li>인력 투입해서 메모리 블록 내 데이터 분석</li>
+                    <li>내부 테스트 서버에 UMDH 적용</li>
+                    <li>문제 발생 시점 코드 변경점 전체 리뷰</li>
+                    <li>메모리 증가 시점의 유저 로그 분석</li>
+                </ul>
+            </div>
+
+            <div class="result-box">
+                <strong>핵심!</strong><br><br>
+                <span style="font-size: 1.1rem; font-weight: bold;">재현 불가능한 메모리 릭 → 재현 가능한 메모리 릭으로 만드는 게 목표!</span>
+            </div>
+        </div>
+
+        <!-- Part 6: 메모리 부족의 다양한 원인 -->
+        <div class="conversation">
+            <h2>Part 6. 메모리 부족의 다양한 원인</h2>
+
+            <div class="chat">
+                <div class="q">메모리 릭 말고도 메모리 부족 원인이 있어?</div>
+                <div class="a">
+                    <p>응, 여러 가지가 있어:</p>
+                </div>
+            </div>
+
+            <div class="guide-box">
+                <strong>메모리 부족의 다양한 원인</strong>
+                <ul>
+                    <li><strong>메모리 릭</strong> - delete 누락, 소멸자 virtual 미선언 등</li>
+                    <li><strong>과도한 캐싱</strong> - 너무 많은 데이터를 메모리에 들고 있음</li>
+                    <li><strong>대용량 리소스 로딩</strong> - 한 번에 너무 많이 로드</li>
+                    <li><strong>메모리 단편화</strong> - 작은 구멍들이 많아서 큰 메모리 할당 불가</li>
+                    <li><strong>외부 라이브러리 문제</strong> - 우리 코드가 아닌 곳에서 발생</li>
+                </ul>
+            </div>
+
+            <div class="chat">
+                <div class="q">어떻게 구분해?</div>
+                <div class="a">
+                    <p>각 원인마다 다양한 도구와 지표를 확인해야 해.</p>
+                    <p>경험이 쌓이면 패턴이 보여!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리: 윈도우 메모리 디버깅</h3>
+            <ul>
+                <li><strong>32비트 윈도우</strong> - 가상 메모리 한계 2GB (RAM과 무관!)</li>
+                <li><strong>커밋 크기</strong> - 메모리 릭 추적 시 봐야 할 컬럼</li>
+                <li><strong>재현 가능</strong> - UMDH로 스냅샷 비교 → 콜스택 추적</li>
+                <li><strong>재현 불가능</strong> - WinDbg로 풀 덤프 힙 분석</li>
+                <li><strong>vftable</strong> - 가상 함수 있으면 클래스 이름 바로 확인</li>
+                <li><strong>문자열</strong> - du/da 명령어로 내용 확인</li>
+                <li><strong>최종 목표</strong> - 재현 불가능 → 재현 가능으로 전환!</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-cs/">< CS기초</a>
+            <a href="../../">홈으로 ></a>
+        </div>
     </div>
 </body>
 </html>
