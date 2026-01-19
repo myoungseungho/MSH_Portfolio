@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>부팅 과정 (Boot Process) - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+
+        .flow-diagram {
+            background: #f5f5f5;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            text-align: center;
+            font-family: 'Consolas', monospace;
+        }
+        .flow-diagram .step {
+            display: inline-block;
+            background: #1a237e;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 8px;
+            font-weight: 600;
+        }
+        .flow-diagram .arrow {
+            color: #666;
+            font-size: 1.5rem;
+            margin: 0 8px;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <header class="header">
+            <h1>부팅 과정 (Boot Process)</h1>
+            <p>전원 버튼 누르면 무슨 일이 일어날까?</p>
+        </header>
+
+        <!-- 전체 흐름 -->
+        <div class="flow-diagram">
+            <span class="step">전원 ON</span>
+            <span class="arrow">→</span>
+            <span class="step">BIOS/UEFI</span>
+            <span class="arrow">→</span>
+            <span class="step">부트로더</span>
+            <span class="arrow">→</span>
+            <span class="step">커널</span>
+            <span class="arrow">→</span>
+            <span class="step">init</span>
+        </div>
+
+        <!-- Part 1: 전원 버튼 -->
+        <div class="conversation">
+            <h2>Part 1. 전원 버튼을 누르면?</h2>
+
+            <div class="chat">
+                <div class="q">컴퓨터 전원 버튼 누르면 바로 Windows가 뜨는 거 아니야?</div>
+                <div class="a">
+                    <p><span class="warning">아니!</span> 그 전에 엄청 많은 일이 일어나.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[전원 버튼 누른 직후]
+
+CPU: "...?" (아무것도 모름)
+RAM: "...?" (텅 비어있음)
+SSD: "...?" (OS가 여기 있긴 한데...)
+
+문제: CPU는 뭘 실행해야 할지 모름!
+      OS는 SSD에 있는데, 어떻게 불러오지?</div>
+
+            <div class="chat">
+                <div class="q">닭이 먼저냐 달걀이 먼저냐 같은 문제네?</div>
+                <div class="a">
+                    <p><span class="key-point">정확해!</span> 이걸 <strong>부트스트랩 문제</strong>라고 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[부트스트랩 문제 (Bootstrap Problem)]
+
+- OS를 실행하려면 메모리에 올려야 함
+- 메모리에 올리려면 프로그램이 필요함
+- 프로그램을 실행하려면 OS가 필요함
+- ...무한 루프!
+
+해결책: 아주 작은 프로그램을 하드웨어에 박아두자!
+       → 이게 BIOS / UEFI</div>
+        </div>
+
+        <!-- Part 2: BIOS -->
+        <div class="conversation">
+            <h2>Part 2. BIOS가 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">BIOS가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">Basic Input/Output System</span></p>
+                    <p>메인보드에 박혀있는 <strong>최초의 프로그램</strong>이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[BIOS의 위치]
+
+          ┌─────────────────────────────┐
+          │        메인보드             │
+          │                             │
+          │   [CPU]     [RAM 슬롯]      │
+          │                             │
+          │   [BIOS 칩] ← 여기에 프로그램이 박혀있음!
+          │   (ROM/Flash)               │
+          │                             │
+          └─────────────────────────────┘
+
+특징:
+- 전원 꺼져도 내용 유지 (비휘발성)
+- 메인보드에 물리적으로 붙어있음
+- 컴퓨터 켜지면 CPU가 제일 먼저 실행</div>
+
+            <div class="chat">
+                <div class="q">CPU가 어떻게 BIOS를 찾아?</div>
+                <div class="a">
+                    <p><span class="key-point">약속된 주소</span>가 있어!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[CPU의 첫 동작]
+
+전원 ON!
+↓
+CPU: "리셋 벡터(Reset Vector) 주소로 점프!"
+     (x86: 0xFFFFFFF0)
+↓
+이 주소에 BIOS 코드가 매핑되어 있음
+↓
+BIOS 실행 시작!
+
+→ CPU는 무조건 정해진 주소부터 시작
+→ 메인보드 설계 시 그 주소에 BIOS를 연결해둠</div>
+
+            <div class="chat">
+                <div class="q">BIOS는 뭘 해?</div>
+                <div class="a">
+                    <p>크게 두 가지: <span class="highlight">POST</span>와 <span class="highlight">부트로더 찾기</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[BIOS가 하는 일]
+
+1. POST (Power-On Self-Test) - 하드웨어 점검
+   ├─ CPU 정상? ✓
+   ├─ RAM 정상? ✓ (메모리 테스트)
+   ├─ 키보드 연결? ✓
+   ├─ 그래픽카드? ✓
+   └─ 문제 있으면 → 삐~~~! (비프음)
+
+2. 부팅 장치 찾기
+   ├─ 설정된 부팅 순서 확인 (SSD → USB → CD)
+   ├─ 첫 번째 장치의 부트 섹터 읽기
+   └─ 부트로더에게 제어권 넘김
+
+→ BIOS는 "하드웨어 점검 + 다음 단계 찾기" 담당</div>
+
+            <div class="chat">
+                <div class="q">POST에서 문제 생기면?</div>
+                <div class="a">
+                    <p>아직 화면 출력이 안 될 수도 있어서 <span class="warning">비프음</span>으로 알려줘!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[비프음 코드 예시]
+
+삐- (짧게 1번): 정상
+삐- 삐- 삐- (짧게 3번): 메모리 문제
+삐----- (길게 1번): 메모리 없음
+삐- 삐----- (짧게+길게): 그래픽카드 문제
+
+→ 모니터 안 켜져도 문제 원인 파악 가능!
+→ 메인보드 제조사마다 코드가 다름</div>
+        </div>
+
+        <!-- Part 3: UEFI -->
+        <div class="conversation">
+            <h2>Part 3. UEFI는 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">요즘은 BIOS 말고 UEFI라던데?</div>
+                <div class="a">
+                    <p><span class="highlight">Unified Extensible Firmware Interface</span></p>
+                    <p>BIOS의 <strong>현대판 후계자</strong>야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[BIOS의 한계]
+
+1. 16비트 모드로 동작 → 1MB 메모리만 접근 가능
+2. 2TB 이상 디스크 부팅 불가 (MBR 한계)
+3. 텍스트 기반 UI만 가능
+4. 부팅 느림
+5. 보안 기능 없음
+
+→ 1975년 설계... 너무 오래됨!</div>
+
+            <div class="code-block">[UEFI의 장점]
+
+1. 32/64비트 모드 → 더 많은 메모리 접근
+2. GPT 지원 → 9.4ZB까지 (사실상 무제한)
+3. 그래픽 UI 가능 (마우스도!)
+4. 빠른 부팅
+5. Secure Boot → 악성코드 차단
+
+→ BIOS를 대체하는 현대 표준</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>BIOS (레거시)</th>
+                    <th>UEFI</th>
+                </tr>
+                <tr>
+                    <td>등장</td>
+                    <td>1975년</td>
+                    <td>2007년</td>
+                </tr>
+                <tr>
+                    <td>모드</td>
+                    <td>16비트</td>
+                    <td class="good">32/64비트</td>
+                </tr>
+                <tr>
+                    <td>디스크 한계</td>
+                    <td class="bad">2TB (MBR)</td>
+                    <td class="good">9.4ZB (GPT)</td>
+                </tr>
+                <tr>
+                    <td>UI</td>
+                    <td>텍스트</td>
+                    <td class="good">그래픽</td>
+                </tr>
+                <tr>
+                    <td>부팅 속도</td>
+                    <td>느림</td>
+                    <td class="good">빠름</td>
+                </tr>
+                <tr>
+                    <td>보안</td>
+                    <td class="bad">없음</td>
+                    <td class="good">Secure Boot</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">Secure Boot가 뭐야?</div>
+                <div class="a">
+                    <p>부팅 과정에서 <span class="key-point">서명된 코드만 실행</span>하는 보안 기능!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Secure Boot]
+
+문제: 부팅 과정에 악성코드 끼어들면?
+      → 백신보다 먼저 실행됨 → 탐지 불가!
+      → 이런 걸 "부트킷(Bootkit)"이라 함
+
+해결: 서명 검증!
+
+UEFI: "이 부트로더, 서명 있어?"
+부트로더: "마이크로소프트 서명이요!"
+UEFI: (검증) "OK, 실행 허가"
+
+UEFI: "이건?"
+악성코드: "..."
+UEFI: "서명 없네? 차단!"
+
+→ 신뢰할 수 있는 코드만 부팅 허용</div>
+        </div>
+
+        <!-- Part 4: 부트로더 -->
+        <div class="conversation">
+            <h2>Part 4. 부트로더는 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">BIOS/UEFI가 OS 바로 실행하면 안 돼?</div>
+                <div class="a">
+                    <p><span class="warning">안 돼!</span> BIOS/UEFI는 너무 작고 단순해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[왜 부트로더가 필요해?]
+
+BIOS/UEFI가 직접 OS 로드하면?
+
+1. 파일 시스템을 이해해야 함 (NTFS, ext4...)
+2. OS 커널 위치를 알아야 함
+3. 커널 압축 해제
+4. 다양한 OS 지원 (Windows, Linux, macOS...)
+
+→ BIOS/UEFI가 이걸 다 하면 너무 복잡해짐
+→ 중간 단계가 필요! = 부트로더</div>
+
+            <div class="chat">
+                <div class="q">부트로더가 뭔데?</div>
+                <div class="a">
+                    <p><span class="highlight">OS 커널을 메모리에 올려주는 프로그램</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[부트로더의 역할]
+
+BIOS/UEFI: "부트로더야, 이제 네 차례!"
+
+부트로더:
+1. 어떤 OS 부팅할지 선택 (듀얼부팅이면)
+2. 파일 시스템 읽기 (커널 파일 찾기)
+3. 커널을 메모리에 로드
+4. 부팅 파라미터 전달
+5. 커널에게 제어권 넘김
+
+→ BIOS/UEFI와 커널 사이의 다리 역할</div>
+
+            <div class="chat">
+                <div class="q">부트로더 예시?</div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>부트로더</th>
+                    <th>OS</th>
+                    <th>특징</th>
+                </tr>
+                <tr>
+                    <td>Windows Boot Manager</td>
+                    <td>Windows</td>
+                    <td>bootmgr, BCD 설정</td>
+                </tr>
+                <tr>
+                    <td>GRUB</td>
+                    <td>Linux</td>
+                    <td>가장 유명, 멀티부팅 지원</td>
+                </tr>
+                <tr>
+                    <td>systemd-boot</td>
+                    <td>Linux</td>
+                    <td>UEFI 전용, 심플</td>
+                </tr>
+                <tr>
+                    <td>boot.efi</td>
+                    <td>macOS</td>
+                    <td>Apple 전용</td>
+                </tr>
+            </table>
+
+            <div class="code-block">[GRUB 메뉴 예시]
+
+┌────────────────────────────────────┐
+│          GNU GRUB                  │
+├────────────────────────────────────┤
+│  ▶ Ubuntu 22.04                    │
+│    Windows 11                      │
+│    Advanced options                │
+│                                    │
+│  Use ↑↓ to select, Enter to boot  │
+└────────────────────────────────────┘
+
+→ 여러 OS 중 선택 가능 (듀얼부팅)
+→ 선택한 OS의 커널을 로드</div>
+
+            <div class="chat">
+                <div class="q">부트 섹터가 뭐야?</div>
+                <div class="a">
+                    <p>디스크의 <span class="highlight">맨 첫 번째 섹터</span>. 부트로더가 여기 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[디스크 구조 - MBR 방식]
+
+섹터 0 (512 bytes)
+┌──────────────────────────────────────┐
+│ 부트 코드 (446 bytes)                │ ← 부트로더 1단계
+├──────────────────────────────────────┤
+│ 파티션 테이블 (64 bytes)             │ ← 파티션 정보
+├──────────────────────────────────────┤
+│ 0x55AA (2 bytes)                     │ ← 부팅 가능 표시
+└──────────────────────────────────────┘
+
+BIOS가 이 512바이트를 메모리에 올리고 실행!
+→ 446바이트로 할 수 있는 게 제한적
+→ 그래서 2단계 부트로더로 넘어감</div>
+        </div>
+
+        <!-- Part 5: 커널 -->
+        <div class="conversation">
+            <h2>Part 5. 커널 로딩</h2>
+
+            <div class="chat">
+                <div class="q">부트로더 다음은?</div>
+                <div class="a">
+                    <p>드디어 <span class="key-point">커널(Kernel)</span>이 로드돼!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[커널이란?]
+
+운영체제의 핵심!
+하드웨어와 소프트웨어 사이의 중재자
+
+┌─────────────────────────────────┐
+│         응용 프로그램            │
+├─────────────────────────────────┤
+│            커널                  │ ← OS의 핵심
+├─────────────────────────────────┤
+│          하드웨어                │
+└─────────────────────────────────┘
+
+역할:
+- 메모리 관리
+- 프로세스 관리
+- 파일 시스템
+- 하드웨어 드라이버
+- 보안</div>
+
+            <div class="chat">
+                <div class="q">커널 로딩할 때 뭐가 일어나?</div>
+            </div>
+
+            <div class="code-block">[커널 부팅 과정]
+
+1. 압축 해제
+   - 커널은 보통 압축되어 있음 (vmlinuz)
+   - 메모리에서 압축 해제
+
+2. 커널 초기화
+   ├─ CPU 설정 (보호 모드 → 롱 모드)
+   ├─ 메모리 맵 설정
+   ├─ 인터럽트 테이블 설정
+   └─ 기본 하드웨어 초기화
+
+3. 드라이버 로드
+   ├─ 디스크 드라이버
+   ├─ 파일 시스템 드라이버
+   └─ 기타 필수 드라이버
+
+4. 루트 파일 시스템 마운트
+   - "/" 디렉토리를 실제 디스크에 연결
+
+5. init 프로세스 실행
+   - PID 1번, 모든 프로세스의 조상!</div>
+
+            <div class="chat">
+                <div class="q">initrd/initramfs가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">임시 루트 파일 시스템</span>이야!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[initrd/initramfs]
+
+문제:
+- 커널이 디스크를 읽으려면 드라이버 필요
+- 드라이버는 디스크에 있음
+- 디스크 읽으려면 드라이버... (닭과 달걀!)
+
+해결:
+필수 드라이버를 RAM에 미리 올려두자!
+
+부트로더가:
+1. 커널 로드
+2. initramfs도 같이 로드 (RAM에)
+
+커널이:
+1. initramfs를 임시 루트로 사용
+2. 필요한 드라이버 로드
+3. 진짜 루트 파일 시스템 마운트
+4. initramfs 버리고 진짜 루트로 전환</div>
+        </div>
+
+        <!-- Part 6: init -->
+        <div class="conversation">
+            <h2>Part 6. init - 첫 번째 프로세스</h2>
+
+            <div class="chat">
+                <div class="q">init이 뭐야?</div>
+                <div class="a">
+                    <p><span class="key-point">PID 1번</span>, 모든 프로세스의 조상!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[init 프로세스]
+
+커널: "하드웨어 준비 완료!"
+커널: "이제 첫 번째 프로세스 실행!"
+커널: → init 실행 (PID = 1)
+
+init의 역할:
+1. 시스템 서비스 시작 (네트워크, 로그, 스케줄러...)
+2. 사용자 로그인 화면 띄우기
+3. 고아 프로세스 수거 (부모 없는 프로세스)
+4. 시스템 종료 처리
+
+→ 커널 다음으로 계속 실행되는 프로세스
+→ init이 죽으면 시스템 패닉!</div>
+
+            <div class="chat">
+                <div class="q">init 종류가 여러 개야?</div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>init 시스템</th>
+                    <th>사용</th>
+                    <th>특징</th>
+                </tr>
+                <tr>
+                    <td>SysVinit</td>
+                    <td>구형 Linux</td>
+                    <td>스크립트 순차 실행, 느림</td>
+                </tr>
+                <tr>
+                    <td>Upstart</td>
+                    <td>Ubuntu (과거)</td>
+                    <td>이벤트 기반, 병렬 실행</td>
+                </tr>
+                <tr>
+                    <td>systemd</td>
+                    <td>현대 Linux</td>
+                    <td class="good">병렬 실행, 의존성 관리, 빠름</td>
+                </tr>
+                <tr>
+                    <td>launchd</td>
+                    <td>macOS</td>
+                    <td>Apple 전용</td>
+                </tr>
+                <tr>
+                    <td>Service Control Manager</td>
+                    <td>Windows</td>
+                    <td>services.msc</td>
+                </tr>
+            </table>
+
+            <div class="code-block">[SysVinit vs systemd]
+
+SysVinit (전통 방식):
+서비스A 시작... 완료
+서비스B 시작... 완료
+서비스C 시작... 완료
+→ 순차 실행, 느림
+
+systemd (현대 방식):
+서비스A 시작 ─┐
+서비스B 시작 ─┼─→ 동시에!
+서비스C 시작 ─┘
+→ 병렬 실행, 빠름
+→ 의존성 있으면 자동으로 순서 조절</div>
+
+            <div class="chat">
+                <div class="q">그래서 init 끝나면?</div>
+                <div class="a">
+                    <p><span class="key-point">로그인 화면!</span> 드디어 사용자 차례.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[부팅 완료!]
+
+init/systemd가:
+1. 모든 시스템 서비스 시작
+2. 그래픽 환경 로드 (X11/Wayland, Windows DWM)
+3. 로그인 매니저 실행
+
+┌─────────────────────────────────┐
+│                                 │
+│     사용자 이름: _              │
+│     비밀번호:   _               │
+│                                 │
+│         [ 로그인 ]              │
+│                                 │
+└─────────────────────────────────┘
+
+→ 전원 버튼 → 로그인 화면까지 완료!</div>
+        </div>
+
+        <!-- Part 7: 전체 정리 -->
+        <div class="conversation">
+            <h2>Part 7. 전체 흐름 정리</h2>
+
+            <div class="code-block">[전원 ON → 로그인까지]
+
+┌─────────────────────────────────────────────────────────┐
+│ 1. 전원 ON                                              │
+│    └─ 전기 공급, CPU 리셋                               │
+├─────────────────────────────────────────────────────────┤
+│ 2. BIOS/UEFI (펌웨어)                                   │
+│    ├─ POST: 하드웨어 점검                               │
+│    ├─ 부팅 장치 찾기                                    │
+│    └─ 부트로더 실행                                     │
+├─────────────────────────────────────────────────────────┤
+│ 3. 부트로더 (GRUB, Windows Boot Manager)                │
+│    ├─ OS 선택 (듀얼부팅 시)                             │
+│    ├─ 커널 + initramfs 로드                             │
+│    └─ 커널에게 제어권 넘김                              │
+├─────────────────────────────────────────────────────────┤
+│ 4. 커널 (OS 핵심)                                       │
+│    ├─ 압축 해제, 초기화                                 │
+│    ├─ 드라이버 로드                                     │
+│    ├─ 루트 파일 시스템 마운트                           │
+│    └─ init 프로세스 실행 (PID 1)                        │
+├─────────────────────────────────────────────────────────┤
+│ 5. init/systemd                                         │
+│    ├─ 시스템 서비스 시작                                │
+│    ├─ 그래픽 환경 로드                                  │
+│    └─ 로그인 화면 표시                                  │
+├─────────────────────────────────────────────────────────┤
+│ 6. 로그인!                                              │
+│    └─ 사용자 환경 시작                                  │
+└─────────────────────────────────────────────────────────┘</div>
+
+            <div class="chat">
+                <div class="q">각 단계의 역할을 한 줄로?</div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>단계</th>
+                    <th>역할</th>
+                    <th>핵심</th>
+                </tr>
+                <tr>
+                    <td>BIOS/UEFI</td>
+                    <td>하드웨어 점검, 부트로더 찾기</td>
+                    <td>전원 → 소프트웨어</td>
+                </tr>
+                <tr>
+                    <td>부트로더</td>
+                    <td>커널을 메모리에 로드</td>
+                    <td>펌웨어 → OS</td>
+                </tr>
+                <tr>
+                    <td>커널</td>
+                    <td>하드웨어 관리, init 실행</td>
+                    <td>OS의 심장</td>
+                </tr>
+                <tr>
+                    <td>init</td>
+                    <td>서비스 시작, 사용자 환경</td>
+                    <td>시스템 → 사용자</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 8: 실전 -->
+        <div class="conversation">
+            <h2>Part 8. 실전에서 알면 좋은 것</h2>
+
+            <div class="chat">
+                <div class="q">부팅 안 되면 어떻게 해?</div>
+                <div class="a">
+                    <p><strong>어디서 멈췄는지</strong>가 힌트야!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[부팅 문제 진단]
+
+증상 → 원인
+
+아무것도 안 뜸, 비프음
+→ POST 실패 → 하드웨어 문제 (RAM, 그래픽카드)
+
+"No bootable device"
+→ 부팅 장치 못 찾음 → BIOS 설정, 디스크 연결 확인
+
+GRUB 메뉴 후 멈춤
+→ 커널 로드 실패 → 커널 손상, initramfs 문제
+
+로고 나오고 멈춤
+→ 드라이버/서비스 문제 → 안전 모드로 부팅</div>
+
+            <div class="chat">
+                <div class="q">게임 개발에서 부팅이 왜 중요해?</div>
+                <div class="a">
+                    <p>콘솔 게임, 임베디드 시스템에서는 <span class="highlight">부트 시간 최적화</span>가 중요!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[게임/임베디드에서의 부팅]
+
+콘솔 게임기:
+- 전원 켜면 빠르게 게임 시작해야 함
+- 커스텀 부트로더 사용
+- 불필요한 서비스 제거
+
+아케이드 기계:
+- 전원 = 바로 게임
+- OS 최소화, 부팅 최적화 필수
+
+자동차, IoT:
+- 부팅 중 사고나면?
+- 초고속 부팅 필수 (1-2초 내)</div>
+
+            <div class="code-block">[Windows 빠른 부팅 (Fast Startup)]
+
+원리:
+- 종료 시 커널 상태를 디스크에 저장 (최대 절전 비슷)
+- 다음 부팅 시 저장된 상태 복원
+- 콜드 부팅 vs 웜 부팅
+
+→ 부팅 시간 단축
+→ 단, 듀얼부팅이나 드라이버 업데이트 시 문제 가능</div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>부트스트랩 문제</strong> = OS 로드하려면 OS가 필요한 모순 → BIOS로 해결</li>
+                <li><strong>BIOS/UEFI</strong> = 하드웨어에 박힌 최초 프로그램, POST + 부트로더 찾기</li>
+                <li><strong>UEFI</strong> = BIOS의 현대판, GPT 지원, Secure Boot</li>
+                <li><strong>부트로더</strong> = 커널을 메모리에 올리는 프로그램 (GRUB, bootmgr)</li>
+                <li><strong>커널</strong> = OS의 핵심, 하드웨어 관리, init 실행</li>
+                <li><strong>initramfs</strong> = 임시 루트 파일 시스템, 드라이버 로드용</li>
+                <li><strong>init (PID 1)</strong> = 모든 프로세스의 조상, 서비스 관리</li>
+                <li><strong>systemd</strong> = 현대 Linux init, 병렬 실행, 빠른 부팅</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-cs/">← CS 기초</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
