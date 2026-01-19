@@ -916,6 +916,125 @@ if (abs(delta) < 127) {
             </div>
         </div>
 
+        <h2>💼 실무 적용: 게임 시나리오별 패킷 선택</h2>
+
+        <div class="chat">
+            <div class="q">Q. 실제 게임에서 어떤 상황에 어떤 패킷을 보내나요?</div>
+            <div class="a">
+                <p>게임 상황에 따라 <span class="highlight">전략적으로 선택</span>해요.</p>
+
+                <h4>📍 시나리오 1: 일반 이동</h4>
+                <div class="code-block">// 플레이어가 걸어다니는 경우
+if (player.IsWalking())
+{
+    // Delta 사용 (13 bytes)
+    // 이유: 부드러운 움직임, 예측 가능
+    SendDelta(playerId, deltaPos, deltaRot);
+}
+
+✅ Delta 선택 이유:
+- 연속적인 움직임
+- 패킷 유실되어도 다음 패킷으로 보정
+- 트래픽 절약 효과 큼</div>
+
+                <h4>⚡ 시나리오 2: 순간이동/텔레포트</h4>
+                <div class="code-block">// 텔레포트 스킬 사용
+if (player.UsedTeleport())
+{
+    // Full State 사용 (21 bytes)
+    // 이유: 불연속적 이동, 정확성 필요
+    SendFullState(playerId, newPos, newRot);
+}
+
+✅ Full State 선택 이유:
+- 이전 위치와 관계 없음
+- Delta로 표현 불가능한 큰 변화
+- 패킷 하나로 정확한 위치 보장</div>
+
+                <h4>🎯 시나리오 3: 스킬 시전</h4>
+                <div class="code-block">// 공격 스킬 사용
+if (player.CastSkill())
+{
+    // Full State + 스킬 정보 (25 bytes)
+    SendFullStateWithSkill(playerId, pos, rot, skillId);
+}
+
+✅ Full State 선택 이유:
+- 중요한 이벤트 (실패 불가)
+- 다른 데이터(skillId)와 함께 전송
+- 클라이언트 동기화 보장</div>
+
+                <h4>🚪 시나리오 4: 신규 접속자</h4>
+                <div class="code-block">// 새 플레이어가 방에 입장
+void OnPlayerJoinRoom(Player* newPlayer)
+{
+    // 기존 플레이어들의 Full State 전송
+    for (auto& player : roomPlayers)
+    {
+        SendFullState(player.id, player.pos, player.rot);
+    }
+}
+
+✅ Full State 선택 이유:
+- 이전 상태가 없음
+- 초기 동기화 필요
+- Delta 계산 기준점 설정</div>
+
+                <h4>🔄 시나리오 5: 주기적 보정</h4>
+                <div class="code-block">// 5초마다 전체 동기화
+if (frameCount % 100 == 0)  // 20fps 기준
+{
+    // Full State로 강제 동기화
+    SendFullState(playerId, pos, rot);
+}
+else
+{
+    // 평소에는 Delta
+    if (HasSignificantChange())
+        SendDelta(playerId, deltaPos, deltaRot);
+}
+
+✅ Full State 선택 이유:
+- 누적 오차 제거
+- 패킷 유실 복구
+- 동기화 품질 유지</div>
+
+                <h4>🏃 시나리오 6: 빠른 움직임 (대시, 점프)</h4>
+                <div class="code-block">// 대시 스킬 사용
+if (player.IsDashing())
+{
+    // 빠른 움직임 → 높은 빈도 + Full State
+    SendFullState(playerId, pos, rot);  // 초당 60회
+}
+else
+{
+    // 일반 이동 → Delta
+    SendDelta(playerId, deltaPos, deltaRot);  // 초당 20회
+}</div>
+
+                <div class="note">
+                    <strong>💡 실무 가이드라인:</strong><br><br>
+                    <strong>Full State를 쓰는 경우:</strong><br>
+                    • 텔레포트, 순간이동<br>
+                    • 중요 이벤트 (스킬 시전, 피격)<br>
+                    • 신규 접속자 초기화<br>
+                    • 주기적 보정 (5초마다)<br>
+                    • 빠른 움직임 (대시, 점프)<br><br>
+
+                    <strong>Delta를 쓰는 경우:</strong><br>
+                    • 일반 걷기/달리기<br>
+                    • 연속적인 회전<br>
+                    • 예측 가능한 움직임<br>
+                    • 변화가 작은 경우 (<1m)<br><br>
+
+                    <strong>아예 안 보내는 경우:</strong><br>
+                    • 변화 없음 (정지)<br>
+                    • 변화가 임계값 미만 (<1cm)<br>
+                    • 시야 밖 플레이어
+                </div>
+            </div>
+        </div>
+
         <h2>🎮 실제 게임 사례</h2>
 
         <div class="chat">
