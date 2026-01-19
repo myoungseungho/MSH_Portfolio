@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unity ECS, Job System 분석 및 적용 - 학습 노트</title>
+    <style>
+        :root {
+            --primary: #9C27B0;
+            --primary-dark: #7B1FA2;
+            --primary-light: #E1BEE7;
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --text: #eee;
+            --text-muted: #aaa;
+            --accent: #CE93D8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+            border-radius: 16px;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        header .subtitle {
+            color: var(--primary-light);
+            font-size: 1.1rem;
+        }
+
+        header .meta {
+            margin-top: 15px;
+            color: rgba(255,255,255,0.8);
+            font-size: 0.9rem;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .qa-section {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .qa-section h2 {
+            color: var(--accent);
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(156, 39, 176, 0.3);
+        }
+
+        .qa-item {
+            margin-bottom: 25px;
+        }
+
+        .qa-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .question {
+            color: var(--primary-light);
+            font-weight: 600;
+            font-size: 1.05rem;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .question::before {
+            content: "Q";
+            background: var(--primary);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .answer {
+            color: var(--text);
+            padding-left: 32px;
+        }
+
+        .answer p {
+            margin-bottom: 10px;
+        }
+
+        .answer ul, .answer ol {
+            margin-left: 20px;
+            margin-bottom: 10px;
+        }
+
+        .answer li {
+            margin-bottom: 5px;
+        }
+
+        .highlight-box {
+            background: rgba(156, 39, 176, 0.15);
+            border: 1px solid rgba(156, 39, 176, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .highlight-box.warning {
+            background: rgba(255, 152, 0, 0.15);
+            border-color: rgba(255, 152, 0, 0.3);
+        }
+
+        .highlight-box.success {
+            background: rgba(76, 175, 80, 0.15);
+            border-color: rgba(76, 175, 80, 0.3);
+        }
+
+        code {
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9em;
+            color: var(--accent);
+        }
+
+        pre {
+            background: rgba(0,0,0,0.4);
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: var(--text);
+        }
+
+        .diagram {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            text-align: center;
+            font-family: monospace;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid rgba(156, 39, 176, 0.3);
+        }
+
+        .comparison-table th {
+            background: rgba(156, 39, 176, 0.2);
+            color: var(--accent);
+        }
+
+        .comparison-table tr:nth-child(even) {
+            background: rgba(0,0,0,0.2);
+        }
+
+        .key-concept {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            margin: 2px;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, rgba(156, 39, 176, 0.2), rgba(123, 31, 162, 0.2));
+            border-radius: 12px;
+            padding: 25px;
+            margin-top: 30px;
+        }
+
+        .summary-box h3 {
+            color: var(--accent);
+            margin-bottom: 15px;
+        }
+
+        .youtube-link {
+            display: block;
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            border-radius: 8px;
+            color: #ff6b6b;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .youtube-link:hover {
+            background: rgba(255, 0, 0, 0.2);
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.5rem;
+            }
+
+            .qa-section {
+                padding: 20px 15px;
+            }
+
+            .answer {
+                padding-left: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../index.html#gpu" class="back-link">GPU/Graphics 카테고리로 돌아가기</a>
+
+        <header>
+            <h1>Unity ECS, Job System 분석 및 적용</h1>
+            <div class="subtitle">타일맵 기반 게임 적용 사례</div>
+            <div class="meta">
+                넥슨코리아 모다스튜디오 | NDC 발표<br>
+                발표자: 함동기 (클라이언트 프로그래머)
+            </div>
+        </header>
+
+        <!-- 섹션 1: 배경과 동기 -->
+        <section class="qa-section">
+            <h2>1. 발표 배경과 동기</h2>
+
+            <div class="qa-item">
+                <div class="question">프로젝트 배경은 무엇인가?</div>
+                <div class="answer">
+                    <p>발표자는 넥슨 모다스튜디오에서 도미네이션즈 중국버전 개발 후, 신규 모바일 시뮬레이션 게임을 개발 중이었다.</p>
+                    <div class="highlight-box">
+                        <strong>프로젝트 특성:</strong>
+                        <ul>
+                            <li>1600 x 1600 타일 기반의 광활한 맵</li>
+                            <li>멀티플레이어 게임 (유저 증가에 따라 유닛 수 증가)</li>
+                            <li>기병 유닛 등 다수의 오브젝트가 동시 존재</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">기존 방식으로 개발했을 때 어떤 문제가 발생했는가?</div>
+                <div class="answer">
+                    <p>도미네이션즈처럼 기존 유니티 방식으로 개발하니 <strong>악순환</strong>이 반복되었다:</p>
+                    <div class="diagram">
+CPU 쓰로틀링 → 프레임 저하 → 최적화 시도 → 일시적 개선 → 다시 저하</div>
+                    <p>구글 검색, PPT 자료, 책까지 참고했지만 <strong>근본적인 한계</strong>를 느꼈다.</p>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">근본적인 한계란 무엇이었나?</div>
+                <div class="answer">
+                    <p>두 가지 관점에서 고민:</p>
+                    <ol>
+                        <li><strong>하드웨어 활용:</strong> 모바일 기기 성능이 좋아지는데, 우리가 그 성능을 최대한 사용하고 있는가?</li>
+                        <li><strong>설계 패러다임:</strong> OOP 외에 다른 방법은 없는가?</li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <!-- 섹션 2: Data Oriented Design -->
+        <section class="qa-section">
+            <h2>2. Data Oriented Design (DOD)</h2>
+
+            <div class="qa-item">
+                <div class="question">DOD(데이터 기반 디자인)를 어떻�게 알게 되었나?</div>
+                <div class="answer">
+                    <p>인디 게임 개발자 <strong>Tol</strong>의 블로그 글을 발견했다. 게임 개발 관점에서 DOD를 설명한 글이었다.</p>
+                    <div class="highlight-box">
+                        <strong>핵심 주장 2가지:</strong>
+                        <ol>
+                            <li>"게임이 하는 일은 어떤 데이터를 다른 데이터로 변환하는 것이 전부다"</li>
+                            <li>"게임 속도 저하의 원인은 메모리에 랜덤하게 접근하는 패턴과 캐시 미스(적중률 저하)다"</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">DOD를 적용하면 어떤 장점이 있나?</div>
+                <div class="answer">
+                    <ul>
+                        <li><strong>병렬화 용이:</strong> 멀티코어 CPU 활용 가능</li>
+                        <li><strong>캐시 적중률 향상:</strong> 메모리 접근 패턴 최적화</li>
+                        <li><strong>보너스:</strong> 모듈화, 테스트 용이성</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">유니티에서 DOD를 어떻게 적용할 수 있나?</div>
+                <div class="answer">
+                    <p>유니티 CTO이자 공동 창립자인 <strong>Joachim Ante</strong>의 GDC 발표를 발견했다.</p>
+                    <p>주제: "ECS를 통한 성능 향상과 데이터 기반 디자인을 유니티에 적용"</p>
+                    <p>비슷한 시기에 ECS 데모 프로젝트도 공개되어 검토 후 적용을 결정했다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 섹션 3: 기존 유니티의 한계 -->
+        <section class="qa-section">
+            <h2>3. 기존 유니티 개발 방식의 한계</h2>
+
+            <div class="qa-item">
+                <div class="question">기존 방식(클래식)의 가장 큰 문제점은?</div>
+                <div class="answer">
+                    <p><strong>비효율적이고 비대한 GameObject</strong>가 문제다.</p>
+                    <p>DOD 관점에서 보면:</p>
+                    <ul>
+                        <li>데이터가 메모리 공간 여기저기에 흩어져 있음</li>
+                        <li>랜덤 메모리 접근으로 인한 캐시 적중률 저하</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">캐시(Cache)가 왜 중요한가?</div>
+                <div class="answer">
+                    <p><strong>CPU vs 메모리 발전 속도 격차</strong>가 핵심이다.</p>
+                    <div class="diagram">
+CPU 발전 ████████████████████████████  (빠름)
+메모리 발전 ████████                      (느림)</div>
+                    <p>느린 메모리에서 데이터를 가져오는 시간 = <strong>병목(Bottleneck)</strong></p>
+                    <ul>
+                        <li>메모리: 크고 느림</li>
+                        <li>캐시: 작고 매우 빠름</li>
+                    </ul>
+                    <p>따라서 <strong>캐시 접근 확률을 높이고 메모리 접근을 줄이는 것</strong>이 핵심이다.</p>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">캐시 적중률을 높이려면 어떻게 해야 하나?</div>
+                <div class="answer">
+                    <p>캐시는 <strong>데이터 지역성(Locality)</strong> 원리로 작동한다:</p>
+                    <table class="comparison-table">
+                        <tr>
+                            <th>지역성 종류</th>
+                            <th>설명</th>
+                        </tr>
+                        <tr>
+                            <td>시간 지역성</td>
+                            <td>최근 접근한 데이터에 다시 접근할 가능성이 높음</td>
+                        </tr>
+                        <tr>
+                            <td>공간 지역성</td>
+                            <td>접근한 데이터 주변 공간에 다시 접근할 가능성이 높음</td>
+                        </tr>
+                    </table>
+                    <div class="highlight-box success">
+                        <strong>결론:</strong> 메모리상에 데이터를 촘촘하게(연속적으로) 배치해야 한다.<br>
+                        이것이 바로 <strong>Unity ECS가 추구하는 방향</strong>이다.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 섹션 4: ECS 구조 -->
+        <section class="qa-section">
+            <h2>4. ECS (Entity-Component-System) 구조</h2>
+
+            <div class="qa-item">
+                <div class="question">Component란 무엇인가?</div>
+                <div class="answer">
+                    <p><strong>데이터만 보관</strong>하는 역할. 로직이 전혀 없다.</p>
+                    <div class="highlight-box">
+                        <strong>제약사항:</strong>
+                        <ul>
+                            <li>클래스가 아닌 <strong>구조체(struct)</strong>로만 구현</li>
+                            <li>멤버는 참조 형식이 아닌 <strong>값 타입(value type)</strong>만 가능</li>
+                        </ul>
+                    </div>
+                    <p><strong>장점:</strong> 가비지 컬렉터(GC)에 의해 관리되지 않음 → "가비지 딸꾹질" 없음</p>
+                    <pre><code>public struct TroopMove : IComponentData
+{
+    public float speed;
+    public float3 targetPosition;
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">Shared Component는 무엇인가?</div>
+                <div class="answer">
+                    <p>여러 Entity가 <strong>공유하는</strong> 컴포넌트. 인스턴스가 1개만 생성된다.</p>
+                    <p>예: <code>RenderMesh</code> - Material, Mesh 같은 렌더링 데이터 공유</p>
+                    <div class="diagram">
+Entity A ─┐
+Entity B ─┼─→ [ Shared Component (1개 인스턴스) ]
+Entity C ─┘</div>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">System이란 무엇인가?</div>
+                <div class="answer">
+                    <p><strong>로직 담당</strong>. "어떤 데이터를 다른 데이터로 변환"하는 처리를 수행.</p>
+                    <ul>
+                        <li>Entity가 뭔지 모름</li>
+                        <li>Entity 타입에 상관없이, <strong>어떤 Component를 가지고 있는지</strong>에 따라 작동</li>
+                        <li>Component 조합으로 쿼리를 던져서 처리 대상 선택</li>
+                    </ul>
+                    <pre><code>// Translation과 TroopMove 컴포넌트를 가진 Entity에 대해 처리
+Entities.ForEach((ref Translation pos, in TroopMove move) => {
+    // 이동 로직
+}).Schedule();</code></pre>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">Entity란 무엇인가?</div>
+                <div class="answer">
+                    <p>극단적으로 말하면:</p>
+                    <table class="comparison-table">
+                        <tr>
+                            <th>클래식</th>
+                            <th>ECS</th>
+                        </tr>
+                        <tr>
+                            <td>GameObject = 거의 모든 것 (Everything)</td>
+                            <td>Entity = 거의 아무것도 아님 (Nothing)</td>
+                        </tr>
+                    </table>
+                    <p>Entity는 내부적으로 그냥 <strong>int 타입 하나</strong>일 뿐이다.</p>
+                    <p>Component들을 <strong>논리적으로 묶어주는 식별자</strong> 역할만 한다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 섹션 5: Archetype과 Chunk -->
+        <section class="qa-section">
+            <h2>5. Archetype과 Chunk - 데이터 저장 구조</h2>
+
+            <div class="qa-item">
+                <div class="question">Archetype이란 무엇인가?</div>
+                <div class="answer">
+                    <p>ECS 데이터 저장 방식의 <strong>핵심 개념</strong>. Component 배열을 모아놓은 형태.</p>
+                    <div class="diagram">
+Archetype (Position, Rotation, Renderer, Rigidbody를 가진 Entity들)
+┌─────────────────────────────────────────────────────┐
+│ Position[]   │ [pos0] [pos1] [pos2] [pos3] ...     │
+│ Rotation[]   │ [rot0] [rot1] [rot2] [rot3] ...     │
+│ Renderer[]   │ [ren0] [ren1] [ren2] [ren3] ...     │
+│ Rigidbody[]  │ [rig0] [rig1] [rig2] [rig3] ...     │
+└─────────────────────────────────────────────────────┘
+       ↑          ↑       ↑       ↑       ↑
+   Entity =    E0      E1      E2      E3</div>
+                    <p><strong>세로 방향 같은 인덱스</strong>가 하나의 Entity를 구성한다.</p>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">Archetype의 장점은?</div>
+                <div class="answer">
+                    <ul>
+                        <li><strong>배열 형태 저장</strong> → 인접한 메모리 공간에 촘촘하게 저장</li>
+                        <li><strong>효과적인 반복 처리</strong> (Iteration)</li>
+                        <li><strong>메모리 공간 최적화</strong></li>
+                        <li><strong>캐시 적중률 향상</strong> (공간 지역성 활용)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">Entity 구조를 변경하면 어떤 일이 발생하나?</div>
+                <div class="answer">
+                    <div class="highlight-box warning">
+                        <strong>주의:</strong> Component를 추가/삭제하면 <strong>메모리 이동</strong>이 발생한다.
+                    </div>
+                    <p>예: Entity에서 Rigidbody를 제거하면 → 다른 Archetype으로 이동</p>
+                    <p>이는 <strong>성능 저하</strong>를 유발하므로, 설계 시 구조 변경을 최소화해야 한다.</p>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">Chunk란 무엇인가?</div>
+                <div class="answer">
+                    <p>Archetype을 쪼개면 <strong>Chunk</strong>로 구성되어 있다.</p>
+                    <ul>
+                        <li>크기: 고정 <strong>16KB</strong></li>
+                        <li>Chunk 내부는 배열 → 캐시 적중률 높음</li>
+                        <li>Chunk 간은 <strong>연결 리스트</strong> → 삽입/삭제 비용 최소화</li>
+                    </ul>
+                    <div class="diagram">
+Archetype
+┌─────────┐    ┌─────────┐    ┌─────────┐
+│ Chunk 1 │ ←→ │ Chunk 2 │ ←→ │ Chunk 3 │  (연결 리스트)
+│  16KB   │    │  16KB   │    │  16KB   │
+└─────────┘    └─────────┘    └─────────┘
+  (배열)         (배열)         (배열)</div>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">Chunk 설계 시 주의할 점은?</div>
+                <div class="answer">
+                    <p>하나의 Chunk(16KB)에 최대한 많은 Entity를 넣는 것이 메모리 효율적.</p>
+                    <div class="highlight-box">
+                        <strong>Component 수가 많아지면:</strong>
+                        <ul>
+                            <li>가로(Component)가 길어짐</li>
+                            <li>Chunk당 들어갈 수 있는 Entity 수 감소</li>
+                        </ul>
+                        <strong>설계 원칙:</strong> "이 Entity에 이 Component가 정말 필요한가?" 항상 고민
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 섹션 6: Job System -->
+        <section class="qa-section">
+            <h2>6. Job System - 병렬 처리</h2>
+
+            <div class="qa-item">
+                <div class="question">Job System이란?</div>
+                <div class="answer">
+                    <p><strong>멀티스레딩을 쉽게</strong> 해주는 시스템.</p>
+                    <ul>
+                        <li>Deadlock, Race Condition 등을 <strong>컴파일 타임에 방지</strong></li>
+                        <li>Job = Thread (정확히 같진 않지만 개념적으로 유사)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">ECS와 Job System의 관계는?</div>
+                <div class="answer">
+                    <ul>
+                        <li><strong>Job System</strong>: 이미 릴리즈됨, ECS 없이도 사용 가능</li>
+                        <li><strong>ECS</strong>: 아직 프리뷰 단계 (발표 당시)</li>
+                    </ul>
+                    <p><code>JobComponentSystem</code>을 사용하면 쉽게 병렬 프로그래밍 가능:</p>
+                    <pre><code>public class TroopMoveSystem : JobComponentSystem
+{
+    struct TroopMoveJob : IJobForEach<Translation, TroopMove>
+    {
+        public void Execute(ref Translation pos, ref TroopMove move)
+        {
+            pos.Value.x += move.speed * deltaTime;
+        }
+    }
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">DOTS란 무엇인가?</div>
+                <div class="answer">
+                    <p><strong>Data-Oriented Technology Stack</strong> - 유니티의 마케팅 용어.</p>
+                    <div class="highlight-box">
+                        <strong>DOTS = ECS + Job System + Burst Compiler</strong>
+                    </div>
+                    <ul>
+                        <li><strong>ECS:</strong> Entity-Component-System 아키텍처</li>
+                        <li><strong>Job System:</strong> 멀티스레딩</li>
+                        <li><strong>Burst Compiler:</strong> 네이티브 코드 최적화 컴파일러</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- 섹션 7: Entity Debugger -->
+        <section class="qa-section">
+            <h2>7. Entity Debugger - 디버깅 도구</h2>
+
+            <div class="qa-item">
+                <div class="question">Entity Debugger는 왜 필요한가?</div>
+                <div class="answer">
+                    <p>ECS로 개발하면 <strong>기존 에디터에서 Entity를 볼 수 없다</strong>.</p>
+                    <p>GameObject처럼 Hierarchy에서 눈으로 확인할 수 없기 때문에, <strong>유일하게 Entity Debugger를 통해서만</strong> 실행 중인 Entity를 확인할 수 있다.</p>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">Entity Debugger에서 무엇을 확인할 수 있나?</div>
+                <div class="answer">
+                    <p>화면이 3개 부분으로 구성:</p>
+                    <ol>
+                        <li><strong>왼쪽:</strong> System 리스트 (체크박스로 On/Off 가능, 프레임당 수행시간 표시)</li>
+                        <li><strong>가운데:</strong> 선택한 System의 쿼리 조건 (어떤 Component 조합을 처리하는지)</li>
+                        <li><strong>오른쪽:</strong> Chunk Info - Entity가 Chunk에 어떻게 보관되어 있는지 히스토그램으로 표시</li>
+                    </ol>
+                    <div class="highlight-box">
+                        <strong>Chunk Info 해석:</strong><br>
+                        히스토그램 막대가 오른쪽에 가까울수록 메모리 배치가 잘 되어 있음 (Chunk가 꽉 차있음)
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 섹션 8: 프로젝트 적용 사례 -->
+        <section class="qa-section">
+            <h2>8. 프로젝트 적용 사례</h2>
+
+            <div class="qa-item">
+                <div class="question">타일맵에 ECS를 어떻게 적용했나?</div>
+                <div class="answer">
+                    <p><strong>모든 것을 새로 만들 필요 없음!</strong> 기존 것을 대부분 재활용 가능.</p>
+                    <div class="highlight-box">
+                        <strong>변경한 부분:</strong>
+                        <ul>
+                            <li><code>SpriteRenderer</code> → <code>Mesh Renderer</code> (ECS 미지원)</li>
+                            <li>Hybrid 방식으로 풀링 적용</li>
+                        </ul>
+                    </div>
+                    <p><strong>자동 변환 도구:</strong></p>
+                    <pre><code>GameObjectConversionUtility.ConvertGameObjectHierarchy(
+    gameObject,           // 기존 GameObject
+    conversionSettings    // 설정
+);
+// 결과: ECS Entity 반환</code></pre>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">타일맵 적용 결과는?</div>
+                <div class="answer">
+                    <table class="comparison-table">
+                        <tr>
+                            <th>타일 수</th>
+                            <th>결과</th>
+                        </tr>
+                        <tr>
+                            <td>15,000개</td>
+                            <td>무난하게 60fps 이상</td>
+                        </tr>
+                        <tr>
+                            <td>55,000개</td>
+                            <td>프레임 저하 있지만 클래식 방식보다 훨씬 양호</td>
+                        </tr>
+                        <tr>
+                            <td>62,000개</td>
+                            <td>5.38ms로 렌더링 처리 (Entity Debugger 확인)</td>
+                        </tr>
+                    </table>
+                    <div class="highlight-box success">
+                        <strong>의미:</strong> 렌더링 부분만 ECS 적용해도 큰 속도 향상!
+                    </div>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">유닛 생성/이동에 ECS를 어떻게 적용했나?</div>
+                <div class="answer">
+                    <p><strong>Hybrid 방식</strong> 사용 - 클래식과 ECS 혼합 가능!</p>
+                    <p>작성한 코드:</p>
+                    <ol>
+                        <li><code>TroopMove</code> - Component (데이터)</li>
+                        <li><code>TroopMoveSystem</code> - System (로직)</li>
+                        <li><code>TroopMoveProxy</code> - MonoBehaviour 헬퍼 (에디터 연동)</li>
+                        <li><code>UnitSpawnMonoBehaviour</code> - 기존 클래식 스폰 로직</li>
+                    </ol>
+                    <pre><code>// TroopMove Component
+public struct TroopMove : IComponentData
+{
+    public float speed;
+}
+
+// Proxy - 에디터에서 값 설정 가능
+public class TroopMoveProxy : MonoBehaviour, IConvertGameObjectToEntity
+{
+    [SerializeField] float speed;
+
+    public void Convert(Entity entity, EntityManager manager, ...)
+    {
+        manager.AddComponentData(entity, new TroopMove { speed = speed });
+    }
+}</code></pre>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">유닛 이동 적용 결과는?</div>
+                <div class="answer">
+                    <table class="comparison-table">
+                        <tr>
+                            <th>방식</th>
+                            <th>10,000 유닛</th>
+                        </tr>
+                        <tr>
+                            <td>클래식 (MonoBehaviour.Update)</td>
+                            <td>약 8fps</td>
+                        </tr>
+                        <tr>
+                            <td>ECS + Job System</td>
+                            <td>60fps 이상 유지</td>
+                        </tr>
+                    </table>
+                    <p>Profiler로 확인: Main Thread 외에 <strong>Worker Thread들이 활성화</strong>되어 멀티코어 활용</p>
+                    <div class="highlight-box success">
+                        유닛 수를 늘려도 프레임 저하가 크지 않음 - 일괄 처리 + 높은 캐시 적중률 효과
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 섹션 9: 적용 팁 및 주의사항 -->
+        <section class="qa-section">
+            <h2>9. ECS 적용 팁 및 주의사항</h2>
+
+            <div class="qa-item">
+                <div class="question">ECS가 효과적인 경우는?</div>
+                <div class="answer">
+                    <div class="highlight-box success">
+                        <strong>조건:</strong>
+                        <ol>
+                            <li><strong>같은 타입</strong>의 오브젝트가</li>
+                            <li><strong>엄청 많이</strong> (수만 단위)</li>
+                            <li><strong>매 프레임 업데이트</strong>되는 경우</li>
+                        </ol>
+                    </div>
+                    <p><strong>기계적 판단:</strong> <code>MonoBehaviour.Update()</code>가 있다면 → ECS System으로 대체 검토</p>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">ECS가 효과적이지 않은 경우는?</div>
+                <div class="answer">
+                    <ul>
+                        <li>오브젝트 수가 적은 경우</li>
+                        <li>서로 다른 타입이 많은 경우</li>
+                        <li>구조 변경(Component 추가/삭제)이 빈번한 경우</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">ECS의 단점은?</div>
+                <div class="answer">
+                    <ul>
+                        <li><strong>디버깅:</strong> Entity Debugger만 가능, 기존처럼 에디터에서 눈으로 확인 어려움</li>
+                        <li><strong>학습 곡선:</strong> DOD 패러다임이 익숙하지 않으면 어려움</li>
+                        <li><strong>프리뷰 단계:</strong> 잦은 업데이트, API 변경 (Deprecated 다수)</li>
+                    </ul>
+                    <div class="highlight-box warning">
+                        <strong>팁:</strong> Unity Forum의 ECS 섹션을 즐겨찾기하고 수시로 확인하세요!
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 요약 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <p><span class="key-concept">DOD</span> <span class="key-concept">캐시 적중률</span> <span class="key-concept">메모리 연속 배치</span></p>
+            <ol>
+                <li><strong>문제:</strong> 기존 GameObject 방식은 메모리 랜덤 접근 → 캐시 미스 → 성능 저하</li>
+                <li><strong>해결:</strong> ECS로 데이터를 촘촘하게 배치 → 캐시 적중률 향상</li>
+                <li><strong>병렬화:</strong> Job System으로 멀티코어 활용 → 하드웨어 성능 최대 활용</li>
+                <li><strong>적용 기준:</strong> 같은 타입 + 대량 + 매 프레임 업데이트 = ECS 적합</li>
+                <li><strong>Hybrid 가능:</strong> 기존 프리팹/코드 재활용, 점진적 적용</li>
+            </ol>
+            <p style="margin-top: 15px; color: var(--text-muted);">
+                발표자 소감: "설계 단계부터 생각하게 되고, 하드웨어 단계에서도 고민하게 됐다. 더 이상 단순히 응용 프로그래머가 아닌 엔지니어가 된 느낌."
+            </p>
+        </div>
+
+        <!-- YouTube 링크 -->
+        <a href="https://www.youtube.com/results?search_query=NDC+Unity+ECS+Job+System+%EB%AA%A8%EB%8B%A4%EC%8A%A4%ED%8A%9C%EB%94%94%EC%98%A4" target="_blank" class="youtube-link">
+            YouTube에서 원본 영상 검색하기 (NDC Unity ECS Job System 모다스튜디오)
+        </a>
+
+        <footer>
+            <p>학습 노트 | Unity ECS, Job System 분석 및 적용</p>
+            <p>Source: NDC (Nexon Developers Conference) - 넥슨 모다스튜디오</p>
+        </footer>
+    </div>
+</body>
+</html>

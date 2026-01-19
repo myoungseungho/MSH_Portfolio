@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>분산 환경을 위한 ORM 개발 경험 공유 - 학습 노트</title>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --primary-dark: #388E3C;
+            --primary-light: #C8E6C9;
+            --bg-color: #f5f5f5;
+            --card-bg: #ffffff;
+            --text-primary: #212121;
+            --text-secondary: #757575;
+            --border-color: #e0e0e0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .header .speaker {
+            margin-top: 1rem;
+            font-size: 0.95rem;
+            opacity: 0.85;
+        }
+
+        .category-badge {
+            display: inline-block;
+            background-color: rgba(255,255,255,0.2);
+            padding: 0.3rem 1rem;
+            border-radius: 20px;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 2rem;
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .section h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--primary-light);
+        }
+
+        .qa-item {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .qa-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .question {
+            font-weight: 600;
+            color: var(--primary-dark);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .question::before {
+            content: "Q";
+            background-color: var(--primary-color);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 0.75rem;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }
+
+        .answer {
+            color: var(--text-primary);
+            padding-left: 2.25rem;
+        }
+
+        .answer ul {
+            margin-top: 0.5rem;
+            padding-left: 1.25rem;
+        }
+
+        .answer li {
+            margin-bottom: 0.5rem;
+        }
+
+        .highlight-box {
+            background-color: var(--primary-light);
+            border-left: 4px solid var(--primary-color);
+            padding: 1rem 1.25rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .code-block {
+            background-color: #263238;
+            color: #ECEFF1;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        .code-block .comment {
+            color: #78909C;
+        }
+
+        .code-block .keyword {
+            color: #80CBC4;
+        }
+
+        .code-block .string {
+            color: #C5E1A5;
+        }
+
+        .code-block .function {
+            color: #82B1FF;
+        }
+
+        .diagram {
+            background: #fafafa;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            text-align: center;
+        }
+
+        .diagram-title {
+            font-weight: 600;
+            color: var(--primary-dark);
+            margin-bottom: 1rem;
+        }
+
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .flow-box {
+            background: var(--primary-light);
+            border: 2px solid var(--primary-color);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .flow-arrow {
+            color: var(--primary-color);
+            font-size: 1.2rem;
+        }
+
+        .key-points {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .key-point {
+            background: var(--primary-light);
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .key-point-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .key-point-title {
+            font-weight: 600;
+            color: var(--primary-dark);
+        }
+
+        .youtube-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #FF0000;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 2rem;
+            transition: background 0.3s;
+        }
+
+        .youtube-link:hover {
+            background: #CC0000;
+        }
+
+        .youtube-link svg {
+            margin-right: 0.75rem;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .section {
+                padding: 1.5rem;
+            }
+
+            .flow-diagram {
+                flex-direction: column;
+            }
+
+            .flow-arrow {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>분산 환경을 위한 ORM 개발 경험 공유</h1>
+        <p class="subtitle">게임 서버에서 SQL 없이 분산 데이터 처리하기</p>
+        <p class="speaker">발표자: 남지현 (해펀팩토리) - NDC</p>
+        <span class="category-badge">DB/캐시</span>
+    </div>
+
+    <div class="container">
+        <a href="../index.html#db-cache" class="back-link">&larr; DB/캐시 카테고리로 돌아가기</a>
+
+        <!-- ORM 기본 개념 -->
+        <div class="section">
+            <h2>ORM이란 무엇인가?</h2>
+
+            <div class="qa-item">
+                <div class="question">ORM의 정의와 기본 개념은?</div>
+                <div class="answer">
+                    ORM(Object-Relational Mapping)은 데이터베이스를 SQL이 아닌 프로그래밍 언어의 객체로 다룰 수 있게 해주는 기술이다.
+                    <div class="highlight-box">
+                        게임 서버 개발 관점에서 ORM = SQL 작성 없이 객체 조작만으로 DB 데이터 처리
+                    </div>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">SQL 방식 vs ORM 방식 코드 비교?</div>
+                <div class="answer">
+                    <div class="code-block">
+<span class="comment">// SQL 방식: 쿼리 작성 → 실행 → 결과에서 컬럼 읽기</span>
+<span class="keyword">string</span> query = <span class="string">"SELECT name, level FROM Character WHERE id = @id"</span>;
+<span class="function">ExecuteQuery</span>(query);
+<span class="keyword">var</span> name = result[<span class="string">"name"</span>];
+<span class="keyword">var</span> level = result[<span class="string">"level"</span>];
+
+<span class="comment">// ORM 방식: 객체로 직접 접근</span>
+<span class="keyword">var</span> character = <span class="function">Character.Fetch</span>(<span class="string">"대부대이"</span>);
+<span class="keyword">var</span> name = character.Name;
+<span class="keyword">var</span> level = character.Level;
+                    </div>
+                    ORM을 사용하면 훨씬 짧고 직관적인 코드로 동일한 기능 처리 가능
+                </div>
+            </div>
+        </div>
+
+        <!-- 개발 목표 -->
+        <div class="section">
+            <h2>ORM 개발 목표</h2>
+
+            <div class="qa-item">
+                <div class="question">이 ORM을 개발하면서 세운 핵심 목표 3가지는?</div>
+                <div class="answer">
+                    <div class="key-points">
+                        <div class="key-point">
+                            <div class="key-point-icon">1</div>
+                            <div class="key-point-title">SQL 작업 완전 제거</div>
+                        </div>
+                        <div class="key-point">
+                            <div class="key-point-icon">2</div>
+                            <div class="key-point-title">분산 환경 동일 작동</div>
+                        </div>
+                        <div class="key-point">
+                            <div class="key-point-icon">3</div>
+                            <div class="key-point-title">상용 서비스 성능</div>
+                        </div>
+                    </div>
+                    <ul style="margin-top: 1rem;">
+                        <li>서버가 1대에서 2대로 늘어나도 코드 변경 없이 동일하게 작동</li>
+                        <li>라이브 서비스에서 충분한 성능을 낼 수 있어야 함</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 시스템 구조 -->
+        <div class="section">
+            <h2>시스템 구조</h2>
+
+            <div class="qa-item">
+                <div class="question">ORM 시스템의 전체 구조는 어떻게 되어 있나?</div>
+                <div class="answer">
+                    <div class="diagram">
+                        <div class="diagram-title">ORM 아키텍처 계층도</div>
+                        <div style="text-align: left; max-width: 400px; margin: 0 auto;">
+                            <div class="flow-box" style="width: 100%; margin-bottom: 0.5rem;">Object Interface (자동 생성 코드)</div>
+                            <div style="text-align: center; color: var(--primary-color);">↓</div>
+                            <div class="flow-box" style="width: 100%; margin-bottom: 0.5rem;">Object System</div>
+                            <div style="text-align: center; color: var(--primary-color);">↓</div>
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <div class="flow-box" style="flex: 1;">캐시</div>
+                                <div class="flow-box" style="flex: 1;">잠금</div>
+                                <div class="flow-box" style="flex: 1;">RPC</div>
+                            </div>
+                            <div style="text-align: center; color: var(--primary-color);">↓</div>
+                            <div class="flow-box" style="width: 100%;">Event System (트랜잭션, 비동기)</div>
+                        </div>
+                    </div>
+                    <ul>
+                        <li><strong>Object Interface</strong>: 모델 정의 기반 자동 생성되는 코드, 서버 개발자가 사용</li>
+                        <li><strong>Object System</strong>: 캐시, 잠금, RPC 서비스 이용</li>
+                        <li><strong>Event System</strong>: 트랜잭션과 비동기 처리의 기반</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 코드 자동 생성 -->
+        <div class="section">
+            <h2>구현 1: 코드 자동 생성</h2>
+
+            <div class="qa-item">
+                <div class="question">모델 정의부터 코드 생성까지의 흐름은?</div>
+                <div class="answer">
+                    <div class="flow-diagram">
+                        <div class="flow-box">모델 정의</div>
+                        <span class="flow-arrow">&rarr;</span>
+                        <div class="flow-box">빌드</div>
+                        <span class="flow-arrow">&rarr;</span>
+                        <div class="flow-box">인터페이스 코드 생성</div>
+                        <span class="flow-arrow">&rarr;</span>
+                        <div class="flow-box">컨텐츠 구현</div>
+                    </div>
+                    <div class="code-block">
+<span class="comment">// 1. 모델 정의</span>
+<span class="keyword">class</span> Character {
+    <span class="keyword">string</span> Name;
+    <span class="keyword">int</span> Level;
+    <span class="keyword">int</span> HP;
+}
+
+<span class="comment">// 2. 자동 생성되는 인터페이스</span>
+<span class="keyword">static</span> Character <span class="function">Create</span>(<span class="keyword">string</span> name);     <span class="comment">// 오브젝트 생성</span>
+<span class="keyword">static</span> Character <span class="function">Fetch</span>(<span class="keyword">string</span> name);      <span class="comment">// DB에서 불러오기</span>
+<span class="keyword">int</span> <span class="function">GetLevel</span>();                           <span class="comment">// 값 읽기</span>
+<span class="keyword">void</span> <span class="function">SetLevel</span>(<span class="keyword">int</span> value);                 <span class="comment">// 값 설정</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">왜 일반화된 오브젝트로 내부 구현을 했나?</div>
+                <div class="answer">
+                    생성된 클래스는 단순한 래퍼 클래스이고, 실제 구현은 일반화된 오브젝트를 참조한다.
+                    <div class="highlight-box">
+                        <strong>이유</strong>: 캐시, 잠금 등의 시스템은 구체적인 타입을 알 수 없기 때문에 일반화된 오브젝트로 공통 처리
+                    </div>
+                    구현에는 템플릿 엔진(Jinja 등)을 사용
+                </div>
+            </div>
+        </div>
+
+        <!-- 이벤트 시스템 -->
+        <div class="section">
+            <h2>구현 2: 이벤트 시스템</h2>
+
+            <div class="qa-item">
+                <div class="question">이벤트 시스템이 ORM에 왜 필요한가?</div>
+                <div class="answer">
+                    비동기 I/O와 트랜잭션 처리를 위해 필요하다.
+                    <ul>
+                        <li>간단히 말하면: <strong>함수를 실행하는 스레드 풀</strong></li>
+                        <li>함수를 이벤트 큐에 던지면 이벤트 스레드에서 실행됨</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">이벤트 함수의 3가지 상태는?</div>
+                <div class="answer">
+                    <ul>
+                        <li><strong>실행 준비</strong>: 이벤트 큐 중간에 위치, 실행 대기 중</li>
+                        <li><strong>실행</strong>: 큐 맨 앞에서 스레드가 실행 중</li>
+                        <li><strong>중단/롤백</strong>: 더 이상 진행 불가 상태 (DB에서 오브젝트 로드 대기, 다른 이벤트가 잠금 보유 등)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">중단(Suspend) 구현은 어떻게 했나?</div>
+                <div class="answer">
+                    <div class="code-block">
+<span class="comment">// 이벤트 루프</span>
+<span class="keyword">while</span> (<span class="keyword">true</span>) {
+    <span class="keyword">var</span> event = queue.<span class="function">Dequeue</span>();
+    <span class="keyword">try</span> {
+        event.<span class="function">Execute</span>();
+    } <span class="keyword">catch</span> (ObjectNotReadyException ex) {
+        <span class="comment">// 오브젝트가 캐시에 없으면 예외 발생</span>
+        <span class="comment">// DB에서 로드 후 이벤트 재실행</span>
+        <span class="function">LoadFromDB</span>(ex.ObjectId);
+        queue.<span class="function">Enqueue</span>(event);
+    }
+}
+                    </div>
+                    <ul>
+                        <li>중단은 <strong>Exception을 throw</strong>하는 방식으로 구현</li>
+                        <li>TLS(Thread Local Storage)를 활용해 간단히 구현</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">중단 전 오브젝트 수정은 어떻게 처리하나?</div>
+                <div class="answer">
+                    <div class="highlight-box">
+                        오브젝트 수정은 <strong>원본에 바로 저장되지 않고 임시 저장소</strong>에 저장된다.
+                        <ul style="margin-top: 0.5rem;">
+                            <li>중단 시: 임시 저장 내용 삭제 (롤백)</li>
+                            <li>완료 시: 원본 캐시와 DB에 반영 (커밋)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 비동기 I/O -->
+        <div class="section">
+            <h2>구현 3: 비동기 I/O</h2>
+
+            <div class="qa-item">
+                <div class="question">비동기 I/O는 어떻게 구현했나?</div>
+                <div class="answer">
+                    이벤트 시스템을 기반으로 구현:
+                    <ul>
+                        <li>I/O 필요 시 Exception에 I/O 정보를 담아 throw</li>
+                        <li>I/O 진행 중 이벤트 스레드는 <strong>블로킹되지 않고 다른 이벤트 처리</strong></li>
+                        <li>I/O 완료 후 해당 이벤트 재실행</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">중단 오버헤드를 어떻게 최소화했나?</div>
+                <div class="answer">
+                    중단에는 오버헤드가 있기 때문에, <strong>캐시를 이용해 중단 발생을 최대한 줄이는 구현</strong>을 추가했다.
+                </div>
+            </div>
+        </div>
+
+        <!-- 캐시 -->
+        <div class="section">
+            <h2>구현 4: 캐시</h2>
+
+            <div class="qa-item">
+                <div class="question">캐시가 필요한 이유 2가지는?</div>
+                <div class="answer">
+                    <ol>
+                        <li><strong>DB I/O 감소</strong>: 성능 향상의 기본</li>
+                        <li><strong>이벤트 중단 오버헤드 감소</strong>: 캐시 히트 시 중단 없이 진행</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">캐시 구현 방식은?</div>
+                <div class="answer">
+                    <div class="code-block">
+<span class="comment">// 오브젝트 타입 + ID를 키로, 오브젝트 값을 밸류로 하는 맵</span>
+Map&lt;<span class="keyword">string</span>, Object&gt; cache;
+<span class="comment">// 키: "Character:123", 밸류: Character 오브젝트</span>
+                    </div>
+                    <div class="highlight-box">
+                        <strong>중요 규칙</strong>: 서버가 여러 개일 때, 하나의 오브젝트는 <strong>단 하나의 서버 캐시에만 존재</strong>할 수 있다.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 잠금 -->
+        <div class="section">
+            <h2>구현 5: 잠금(Lock)</h2>
+
+            <div class="qa-item">
+                <div class="question">애플리케이션 수준 잠금이 필요한 이유는?</div>
+                <div class="answer">
+                    <ul>
+                        <li>하나의 오브젝트를 여러 곳에서 동시 수정하면 문제 발생</li>
+                        <li>캐시에 로드된 오브젝트는 <strong>SQL 외부에 있어서 DB 잠금 사용 불가</strong></li>
+                        <li>SQL 잠금 사용 시 로직이 DB에 쏠리는 문제</li>
+                        <li>DB 샤딩 시 일반적인 잠금 사용 어려움</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">잠금의 3가지 유형은?</div>
+                <div class="answer">
+                    <ul>
+                        <li><strong>복사본 읽기</strong>: 잠금 없이 사본만 반환 (친구 목록 조회 등)</li>
+                        <li><strong>읽기 잠금</strong>: 여러 이벤트가 동시 읽기 가능</li>
+                        <li><strong>쓰기 잠금</strong>: 단독 점유, 수정 가능</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">데드락 문제는 어떻게 발생하나?</div>
+                <div class="answer">
+                    <div class="code-block">
+<span class="comment">// 이벤트 1</span>
+<span class="keyword">var</span> a = <span class="function">Fetch</span>(<span class="string">"대부대이"</span>);   <span class="comment">// a 잠금</span>
+<span class="keyword">var</span> b = <span class="function">Fetch</span>(<span class="string">"부자이"</span>);     <span class="comment">// b 잠금 대기 (이벤트2가 보유)</span>
+
+<span class="comment">// 이벤트 2 (동시 실행)</span>
+<span class="keyword">var</span> b = <span class="function">Fetch</span>(<span class="string">"부자이"</span>);     <span class="comment">// b 잠금</span>
+<span class="keyword">var</span> a = <span class="function">Fetch</span>(<span class="string">"대부대이"</span>);   <span class="comment">// a 잠금 대기 (이벤트1이 보유)</span>
+
+<span class="comment">// → 서로 상대방의 잠금을 기다리며 영원히 대기: 데드락!</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">데드락 해결을 위해 시도한 방법 2가지는?</div>
+                <div class="answer">
+                    <strong>방법 1: 타이머 기반 (점유 대기 방지)</strong>
+                    <ul>
+                        <li>잠금 획득 불가 시 보유한 모든 잠금 해제 후 일정 시간 뒤 재시도</li>
+                        <li>장점: 구현 간단</li>
+                        <li>단점: 3개 이상 오브젝트 경합 시 데드락 미해결</li>
+                    </ul>
+
+                    <strong>방법 2: 선점형 잠금 (비선점 방지) - 최종 채택</strong>
+                    <ul>
+                        <li>모든 이벤트에 <strong>실행 시간 순서 기반 우선순위</strong> 부여</li>
+                        <li>먼저 발생한 이벤트가 나중 이벤트의 잠금을 강제로 뺏을 수 있음</li>
+                        <li>뺏기는 쪽은 중단 상태에서만 뺏김 (실행 중엔 곧 끝나므로 안전)</li>
+                    </ul>
+                    <div class="highlight-box">
+                        <strong>선점형 잠금 장점</strong>: 큐 기반이라 경합 정도와 무관하게 균등한 성능<br>
+                        <strong>단점</strong>: 경합 없을 때 타이머 방식보다 느림, 구현 복잡
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 분산 환경 -->
+        <div class="section">
+            <h2>구현 6: 분산 환경에서의 캐시와 잠금</h2>
+
+            <div class="qa-item">
+                <div class="question">분산 환경에서 ORM이 작동하려면?</div>
+                <div class="answer">
+                    Fetch 함수로 오브젝트를 불러올 때:
+                    <ul>
+                        <li>불러오려는 오브젝트가 <strong>다른 서버에 캐시되어 있으면</strong></li>
+                        <li>해당 서버로 <strong>RPC를 보내 잠금 획득</strong></li>
+                        <li>해당 서버 캐시에서 오브젝트를 가져옴</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">오브젝트 소유권 관리에 ZooKeeper를 어떻게 사용했나?</div>
+                <div class="answer">
+                    <strong>ZooKeeper</strong>: 오픈소스 분산 코디네이션 서비스
+                    <ul>
+                        <li>클러스터 구성 가능 (단일 장애점 없음)</li>
+                        <li>파일 시스템처럼 사용 (경로에 파일 생성, 내용 저장/읽기)</li>
+                    </ul>
+
+                    <div class="code-block">
+<span class="comment">// 오브젝트 소유권 = 어느 서버가 캐싱했는가</span>
+/objects/1234 → <span class="string">"ServerA"</span>  <span class="comment">// 오브젝트 1234는 ServerA가 소유</span>
+
+<span class="comment">// 캐시에 넣기 전 ZooKeeper에 등록</span>
+<span class="function">CreateFile</span>(<span class="string">"/objects/{objectId}"</span>, <span class="string">"내 서버 ID"</span>);
+                    </div>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">분산 환경에서 오브젝트 접근 흐름은?</div>
+                <div class="answer">
+                    <div class="diagram">
+                        <div class="diagram-title">서버 B가 서버 A의 오브젝트에 접근하는 흐름</div>
+                        <ol style="text-align: left; max-width: 500px; margin: 0 auto;">
+                            <li>서버 B: ZooKeeper에서 /objects/1234 조회</li>
+                            <li>결과: "ServerA" → 서버 A가 소유 중</li>
+                            <li>서버 B → 서버 A: Lease RPC 전송</li>
+                            <li>서버 A: 오브젝트 잠금 + 타임아웃 설정</li>
+                            <li>서버 A → 서버 B: 오브젝트 데이터 응답</li>
+                            <li>서버 B: 이벤트 처리 완료</li>
+                            <li>서버 B → 서버 A: Return RPC (수정 내용 포함)</li>
+                            <li>서버 A: 잠금 해제, 캐시/DB 업데이트</li>
+                        </ol>
+                    </div>
+                    <div class="highlight-box">
+                        <strong>타임아웃이 필요한 이유</strong>: 예기치 못한 버그나 네트워크 장애로 반납이 안 되면 데드락이 전체 서버군으로 확산되는 것을 방지
+                    </div>
+                </div>
+            </div>
+
+            <div class="qa-item">
+                <div class="question">캐시 적중률 문제는 어떻게 해결했나?</div>
+                <div class="answer">
+                    <strong>문제 상황</strong>:
+                    <ul>
+                        <li>로그인 서버가 계정 데이터 캐시</li>
+                        <li>게임 서버는 해당 데이터에 더 자주 접근</li>
+                        <li>매번 RPC가 과도하게 발생</li>
+                    </ul>
+
+                    <strong>해결책</strong>: 접근 빈도 기반 캐시 이전
+                    <ul>
+                        <li>캐시에 오브젝트별 <strong>접근 빈도 계산</strong> 코드 추가</li>
+                        <li>자신보다 높은 빈도로 접근하는 서버가 있으면 <strong>캐시에서 강제로 내림</strong></li>
+                        <li>더 자주 접근하는 서버가 캐시에 올릴 수 있는 환경 조성</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 효과 -->
+        <div class="section">
+            <h2>개발 성과</h2>
+
+            <div class="qa-item">
+                <div class="question">이 ORM을 통해 얻은 효과는?</div>
+                <div class="answer">
+                    <div class="key-points">
+                        <div class="key-point">
+                            <div class="key-point-title">게임 서버 개발 기간 단축</div>
+                        </div>
+                        <div class="key-point">
+                            <div class="key-point-title">SQL 작업 완전 제거</div>
+                        </div>
+                        <div class="key-point">
+                            <div class="key-point-title">분산 환경 투명 지원</div>
+                        </div>
+                        <div class="key-point">
+                            <div class="key-point-title">상용 서비스 성능 달성</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 요약 -->
+        <div class="section">
+            <h2>핵심 요약</h2>
+
+            <div class="qa-item">
+                <div class="question">이 발표의 핵심 메시지는?</div>
+                <div class="answer">
+                    <ol>
+                        <li><strong>ORM 직접 개발</strong>이 게임 서버 환경에서도 충분히 가능하고 효과적</li>
+                        <li><strong>이벤트 시스템</strong>은 비동기 I/O와 트랜잭션의 기반</li>
+                        <li><strong>선점형 잠금</strong>으로 데드락 문제 해결</li>
+                        <li><strong>ZooKeeper</strong>로 분산 환경 오브젝트 소유권 관리</li>
+                        <li><strong>접근 빈도 기반 캐시 이전</strong>으로 분산 캐시 효율화</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <a href="https://www.youtube.com/watch?v=VIDEO_ID" target="_blank" class="youtube-link">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+            NDC 발표 영상 보기
+        </a>
+    </div>
+
+    <div class="footer">
+        <p>학습 노트 | 분산 환경을 위한 ORM 개발 경험 공유 - 남지현 (해펀팩토리)</p>
+        <p style="margin-top: 0.5rem;"><a href="../index.html#db-cache" style="color: var(--primary-color);">DB/캐시 카테고리로 돌아가기</a></p>
+    </div>
+</body>
+</html>
