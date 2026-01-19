@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가비지 컬렉션 (Garbage Collection) - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">← CS 기초</a>
+
+        <header class="header">
+            <h1>가비지 컬렉션 (Garbage Collection)</h1>
+            <p>메모리 자동 청소부 - 왜 필요하고, 어떻게 동작할까?</p>
+        </header>
+
+        <!-- Part 1: 메모리 할당 -->
+        <div class="conversation">
+            <h2>Part 1. 메모리를 쓰려면?</h2>
+
+            <div class="chat">
+                <div class="q">프로그램에서 메모리를 쓰려면 뭘 해야 해?</div>
+                <div class="a">
+                    <p><span class="highlight">할당(Allocation)</span>을 해야 해!</p>
+                </div>
+            </div>
+
+            <div class="code-block">// C++
+int* ptr = new int[100];    // 메모리 할당: "100칸 줘!"
+
+// C#
+int[] arr = new int[100];   // 메모리 할당: "100칸 줘!"
+
+// 공통점: 메모리를 "빌려오는" 것</div>
+
+            <div class="chat">
+                <div class="q">빌려왔으면 뭘 해야 해?</div>
+                <div class="a">
+                    <p><span class="highlight">반납(해제)</span>해야지!</p>
+                </div>
+            </div>
+
+            <div class="code-block">// C++ - 수동으로 반납해야 함
+int* ptr = new int[100];    // 빌림
+// ... 사용 ...
+delete[] ptr;               // 반납: "다 썼어, 돌려줄게"
+
+// 반납 안 하면?
+// → 메모리 누수 (Memory Leak)!</div>
+        </div>
+
+        <!-- Part 2: 수동 관리의 문제 -->
+        <div class="conversation">
+            <h2>Part 2. 수동 관리의 문제점</h2>
+
+            <div class="chat">
+                <div class="q">직접 반납하면 되는 거 아니야?</div>
+                <div class="a">
+                    <p>이론적으론 그래. 근데 실수하기 <span class="warning">너무 쉬워</span>.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[문제 1: 반납 까먹음 - 메모리 누수]
+
+void process() {
+    int* data = new int[1000];
+
+    if (error) {
+        return;  // 😱 delete 안 하고 나감!
+    }
+
+    delete[] data;
+}
+→ error 나면 메모리 누수!</div>
+
+            <div class="code-block">[문제 2: 두 번 반납 - 크래시]
+
+int* ptr = new int[100];
+delete[] ptr;
+delete[] ptr;  // 😱 이미 반납한 거 또 반납!
+→ 프로그램 크래시!</div>
+
+            <div class="code-block">[문제 3: 반납한 거 사용 - Dangling Pointer]
+
+int* ptr = new int[100];
+delete[] ptr;
+ptr[0] = 42;   // 😱 반납한 메모리에 쓰기!
+→ 정의되지 않은 동작 (뭔 일이 일어날지 모름)</div>
+
+            <div class="chat">
+                <div class="q">이런 실수 많이 해?</div>
+                <div class="a">
+                    <p><span class="warning">엄청 많이!</span></p>
+                    <p>C/C++ 버그의 상당수가 메모리 관련.</p>
+                    <p>대형 프로젝트에서는 찾기도 어려움.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 가비지란 -->
+        <div class="conversation">
+            <h2>Part 3. "가비지"가 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">가비지 컬렉션의 "가비지"가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">쓰레기 = 더 이상 사용하지 않는 메모리</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[가비지의 정의]
+
+메모리는 할당됐는데,
+아무도 그 메모리를 가리키지 않는 상태
+
+= 접근할 방법이 없는 메모리
+= 쓸모없는 메모리
+= 가비지!</div>
+
+            <div class="code-block">[예시]
+
+void example() {
+    Object* obj = new Object();  // 메모리 할당, obj가 가리킴
+
+    obj = null;  // 이제 아무도 그 메모리를 안 가리킴!
+
+    // 메모리는 아직 할당된 상태인데
+    // 접근할 방법이 없음
+    // → 이게 "가비지"!
+}</div>
+
+            <div class="chat">
+                <div class="q">그림으로 보면?</div>
+            </div>
+
+            <div class="code-block">[처음]
+obj ──────→ [Object 메모리]
+             (사용 중)
+
+[obj = null 후]
+obj ──→ null
+
+             [Object 메모리]  ← 아무도 안 가리킴!
+             (가비지!)
+
+→ 메모리는 차지하는데 쓸 수가 없음
+→ 누군가 치워줘야 함!</div>
+        </div>
+
+        <!-- Part 4: 가비지 컬렉션이란 -->
+        <div class="conversation">
+            <h2>Part 4. 가비지 컬렉션이란?</h2>
+
+            <div class="chat">
+                <div class="q">그래서 가비지 컬렉션이 뭐야?</div>
+                <div class="a">
+                    <p><span class="key-point">자동으로 가비지를 찾아서 치워주는 것!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[수동 메모리 관리] - C, C++
+
+개발자: "메모리 줘" (new)
+시스템: "여기 있어"
+개발자: (사용)
+개발자: "다 썼어, 반납할게" (delete)  ← 직접 해야 함!
+
+[가비지 컬렉션] - C#, Java, Python, JavaScript
+
+개발자: "메모리 줘" (new)
+시스템: "여기 있어"
+개발자: (사용)
+개발자: (그냥 안 씀)
+GC: "어? 이거 아무도 안 쓰네? 내가 치울게"  ← 자동!</div>
+
+            <div class="chat">
+                <div class="q">개발자가 delete 안 해도 돼?</div>
+                <div class="a">
+                    <p><span class="key-point">맞아!</span> GC가 알아서 해줌.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// C# 예시
+void Example() {
+    var obj = new MyClass();  // 메모리 할당
+
+    // ... 사용 ...
+
+}  // 함수 끝나면 obj가 사라짐
+   // → GC가 나중에 알아서 메모리 정리!
+   // delete 같은 거 안 써도 됨!</div>
+        </div>
+
+        <!-- Part 5: 어떻게 가비지 판단? -->
+        <div class="conversation">
+            <h2>Part 5. 어떻게 가비지인지 알아?</h2>
+
+            <div class="chat">
+                <div class="q">GC가 "이건 가비지다"를 어떻게 판단해?</div>
+                <div class="a">
+                    <p>크게 두 가지 방법이 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[방법 1: 참조 카운팅 (Reference Counting)]
+
+각 객체가 "나를 가리키는 게 몇 개야?"를 셈
+
+Object obj = new Object();  // 참조 카운트 = 1
+Object obj2 = obj;          // 참조 카운트 = 2
+obj = null;                 // 참조 카운트 = 1
+obj2 = null;                // 참조 카운트 = 0 → 가비지!
+
+카운트가 0이 되면 → 바로 해제!</div>
+
+            <div class="chat">
+                <div class="q">참조 카운팅 좋아 보이는데?</div>
+                <div class="a">
+                    <p>간단하지만 <span class="warning">치명적 문제</span>가 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[참조 카운팅의 문제: 순환 참조]
+
+class Node {
+    Node next;
+}
+
+Node a = new Node();  // a 카운트 = 1
+Node b = new Node();  // b 카운트 = 1
+
+a.next = b;           // b 카운트 = 2
+b.next = a;           // a 카운트 = 2
+
+a = null;             // a 카운트 = 1 (b.next가 가리킴)
+b = null;             // b 카운트 = 1 (a.next가 가리킴)
+
+// 둘 다 카운트가 1이라 해제 안 됨!
+// 근데 둘 다 접근 불가능!
+// → 메모리 누수!</div>
+
+            <div class="code-block">[그림으로 보면]
+
+처음:
+a ──→ [Node A] ──→ [Node B] ←── b
+         ↑______________|
+
+a = null, b = null 후:
+
+      [Node A] ──→ [Node B]
+         ↑______________|
+
+         (서로 가리키고 있어서 카운트 0이 안 됨!)
+         (근데 우리는 접근할 방법이 없음!)
+         → 가비지인데 해제 안 됨!</div>
+
+            <div class="chat">
+                <div class="q">그럼 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="highlight">마크 앤 스윕 (Mark and Sweep)</span> 방식!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[방법 2: 마크 앤 스윕 (Mark and Sweep)]
+
+1단계 - Mark (표시):
+  "루트"에서 시작해서 접근 가능한 모든 객체에 표시
+
+  루트 = 전역 변수, 스택의 지역 변수, 레지스터 등
+
+2단계 - Sweep (쓸기):
+  표시 안 된 객체 = 접근 불가능 = 가비지
+  → 전부 해제!</div>
+
+            <div class="code-block">[그림으로 보면]
+
+[루트]
+  │
+  ▼
+[객체 A] ──→ [객체 B]
+
+[객체 C] ──→ [객체 D]  (루트에서 연결 안 됨!)
+
+1단계 - Mark:
+  루트 → A 표시 ✓
+  A → B 표시 ✓
+  C, D는 루트에서 못 감 → 표시 안 됨
+
+2단계 - Sweep:
+  표시 안 된 C, D 해제!
+
+→ 순환 참조도 해결됨!
+  (루트에서 접근 못 하면 순환이든 뭐든 가비지)</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>참조 카운팅</th>
+                    <th>마크 앤 스윕</th>
+                </tr>
+                <tr>
+                    <td>방식</td>
+                    <td>참조 수 세기</td>
+                    <td>루트에서 탐색</td>
+                </tr>
+                <tr>
+                    <td>해제 시점</td>
+                    <td class="good">즉시 (카운트 0일 때)</td>
+                    <td>GC 실행 시</td>
+                </tr>
+                <tr>
+                    <td>순환 참조</td>
+                    <td class="bad">해결 못 함</td>
+                    <td class="good">해결 가능</td>
+                </tr>
+                <tr>
+                    <td>오버헤드</td>
+                    <td>참조마다 카운트 변경</td>
+                    <td>GC 실행 시 일시 정지</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 6: GC 장단점 -->
+        <div class="conversation">
+            <h2>Part 6. GC의 장단점</h2>
+
+            <div class="chat">
+                <div class="q">GC 좋아 보이는데 단점은?</div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>장점</th>
+                    <th>단점</th>
+                </tr>
+                <tr>
+                    <td class="good">메모리 누수 방지</td>
+                    <td class="bad">성능 오버헤드</td>
+                </tr>
+                <tr>
+                    <td class="good">Dangling Pointer 방지</td>
+                    <td class="bad">GC 실행 시 멈춤 (Stop-the-World)</td>
+                </tr>
+                <tr>
+                    <td class="good">개발 편의성</td>
+                    <td class="bad">메모리 해제 시점 예측 불가</td>
+                </tr>
+                <tr>
+                    <td class="good">이중 해제 방지</td>
+                    <td class="bad">메모리 더 많이 사용</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">"Stop-the-World"가 뭐야?</div>
+                <div class="a">
+                    <p><span class="warning">GC 하는 동안 프로그램이 멈추는 것!</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[Stop-the-World]
+
+프로그램: 열심히 실행 중...
+GC: "잠깐! 청소할게"
+프로그램: (멈춤) ...
+GC: (모든 객체 스캔, 가비지 정리)
+GC: "끝!"
+프로그램: 다시 실행!
+
+→ 이 "멈춤" 시간이 문제!
+→ 게임이면 프레임 드랍, 끊김!</div>
+        </div>
+
+        <!-- Part 7: 게임에서의 GC -->
+        <div class="conversation">
+            <h2>Part 7. 게임에서 GC가 문제인 이유</h2>
+
+            <div class="chat">
+                <div class="q">게임에서 GC가 왜 문제야?</div>
+                <div class="a">
+                    <p>게임은 <span class="warning">일정한 프레임</span>을 유지해야 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[60fps 게임]
+
+1프레임 = 16.6ms 안에 모든 처리 완료해야 함
+
+프레임 1: 게임 로직 (10ms) ✅
+프레임 2: 게임 로직 (10ms) ✅
+프레임 3: 게임 로직 (10ms) + GC (50ms) ❌
+          → 총 60ms!
+          → 3프레임 놓침!
+          → 유저 체감: "끊기네?"</div>
+
+            <div class="chat">
+                <div class="q">그럼 게임에서 어떻게 해?</div>
+                <div class="a">
+                    <p><strong>GC를 최소화하는 기법들:</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">[기법 1: 오브젝트 풀링]
+
+// 나쁜 예 - 매번 new
+void Fire() {
+    Bullet b = new Bullet();  // GC 대상 생성!
+    // ...
+}
+
+// 좋은 예 - 오브젝트 풀
+void Fire() {
+    Bullet b = bulletPool.Get();  // 미리 만든 거 재사용
+    // ...
+    bulletPool.Return(b);         // 다 쓰면 풀에 반납
+}
+
+→ new 안 하니까 GC 대상 안 생김!</div>
+
+            <div class="code-block">[기법 2: 구조체 사용 (Unity C#)]
+
+// 클래스 - 힙에 할당 → GC 대상
+class Vector3Class { float x, y, z; }
+
+// 구조체 - 스택에 할당 → GC 대상 아님!
+struct Vector3Struct { float x, y, z; }
+
+→ Unity의 Vector3는 구조체라서 GC 부담 없음!</div>
+
+            <div class="code-block">[기법 3: 문자열 조심]
+
+// 나쁜 예 - 문자열 더하기마다 새 객체 생성
+string s = "HP: " + hp + "/" + maxHp;  // 임시 문자열 여러 개!
+
+// 좋은 예 - StringBuilder 사용
+StringBuilder sb = new StringBuilder();
+sb.Append("HP: ");
+sb.Append(hp);
+sb.Append("/");
+sb.Append(maxHp);
+
+→ 임시 객체 최소화!</div>
+        </div>
+
+        <!-- Part 8: 언어별 차이 -->
+        <div class="conversation">
+            <h2>Part 8. 언어/엔진별 GC</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>언어/엔진</th>
+                    <th>GC 방식</th>
+                    <th>특징</th>
+                </tr>
+                <tr>
+                    <td>C/C++</td>
+                    <td>없음 (수동)</td>
+                    <td>직접 new/delete</td>
+                </tr>
+                <tr>
+                    <td>C# (Unity)</td>
+                    <td>마크 앤 스윕</td>
+                    <td>Boehm GC, 세대별 GC</td>
+                </tr>
+                <tr>
+                    <td>Java</td>
+                    <td>마크 앤 스윕</td>
+                    <td>세대별 GC, G1 GC 등</td>
+                </tr>
+                <tr>
+                    <td>Python</td>
+                    <td>참조 카운팅 + 마크 앤 스윕</td>
+                    <td>순환 참조는 별도 처리</td>
+                </tr>
+                <tr>
+                    <td>Unreal C++</td>
+                    <td>없음 (수동) + 스마트 포인터</td>
+                    <td>UObject는 별도 시스템</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">세대별 GC가 뭐야?</div>
+                <div class="a">
+                    <p><strong>"대부분의 객체는 금방 죽는다"</strong>는 관찰에 기반!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[세대별 GC (Generational GC)]
+
+관찰: 새로 만든 객체의 80%는 금방 안 쓰게 됨
+
+아이디어: 젊은 객체 위주로 자주 검사하자!
+
+[0세대] - 새로 생긴 객체
+  → 자주 검사 (빠름, 작은 영역)
+  → 살아남으면 1세대로 승격
+
+[1세대] - 좀 오래 산 객체
+  → 가끔 검사
+  → 살아남으면 2세대로 승격
+
+[2세대] - 오래 산 객체
+  → 거의 검사 안 함
+
+→ 전체 검사보다 효율적!</div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>가비지</strong> = 할당됐지만 접근 불가능한 메모리</li>
+                <li><strong>가비지 컬렉션</strong> = 가비지를 자동으로 찾아서 해제</li>
+                <li><strong>참조 카운팅</strong> = 참조 수 세기, 순환 참조 문제</li>
+                <li><strong>마크 앤 스윕</strong> = 루트에서 탐색, 순환 참조 해결</li>
+                <li><strong>Stop-the-World</strong> = GC 중 프로그램 멈춤</li>
+                <li><strong>게임에서</strong> = 프레임 드랍 원인, 오브젝트 풀링으로 해결</li>
+                <li><strong>세대별 GC</strong> = 젊은 객체 위주로 검사, 효율적</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-cs/">← CS 기초</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
