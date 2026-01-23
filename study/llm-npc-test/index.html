@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>게임 NPC에 LLM 직접 붙여보기 - MSH Portfolio</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.8;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: #1a237e;
+            margin-bottom: 20px;
+            border-bottom: 4px solid #7C3AED;
+            padding-bottom: 15px;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            color: #1a237e;
+            margin: 50px 0 20px 0;
+            padding-left: 10px;
+            border-left: 5px solid #7C3AED;
+        }
+
+        h3 {
+            font-size: 1.4rem;
+            color: #333;
+            margin: 30px 0 15px 0;
+        }
+
+        h4 {
+            font-size: 1.2rem;
+            color: #555;
+            margin: 20px 0 10px 0;
+        }
+
+        .chat {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .q {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #1a237e;
+            margin-bottom: 15px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .q:before {
+            content: "Q.";
+            position: absolute;
+            left: 0;
+            color: #7C3AED;
+            font-weight: bold;
+        }
+
+        .a {
+            color: #333;
+            padding-left: 20px;
+            border-left: 3px solid #e0e0e0;
+        }
+
+        .a p {
+            margin: 15px 0;
+        }
+
+        .a ul {
+            margin: 10px 0 10px 20px;
+        }
+
+        .a li {
+            margin: 5px 0;
+        }
+
+        .highlight {
+            background: linear-gradient(180deg, transparent 60%, #DDD6FE 60%);
+            font-weight: bold;
+            padding: 0 4px;
+        }
+
+        .key-point {
+            background: linear-gradient(180deg, transparent 60%, #C8E6C9 60%);
+            font-weight: bold;
+            padding: 0 4px;
+        }
+
+        .warning {
+            background: linear-gradient(180deg, transparent 60%, #FFCDD2 60%);
+            font-weight: bold;
+            padding: 0 4px;
+        }
+
+        .analogy-box {
+            background: #FFF9C4;
+            border-left: 5px solid #FBC02D;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 8px;
+        }
+
+        pre.code-block {
+            background: #263238;
+            color: #AED581;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            overflow-x: auto;
+            white-space: pre;
+            line-height: 1.7;
+        }
+
+        .info-box {
+            background: #e8f5e9;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #7C3AED;
+        }
+        .info-box h4 {
+            color: #6D28D9;
+            margin-bottom: 12px;
+            font-size: 1rem;
+        }
+        .info-box p {
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin: 40px 0;
+        }
+
+        .summary-box h3 {
+            color: white;
+            margin-top: 0;
+            font-size: 1.5rem;
+        }
+
+        .summary-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .summary-box li {
+            margin: 15px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        .summary-box li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .compare-table th {
+            background: #7C3AED;
+            color: white;
+            padding: 15px;
+            text-align: left;
+        }
+
+        .compare-table td {
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .compare-table tr:hover {
+            background: #f5f5f5;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #7C3AED;
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 35px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 40px;
+            padding: 12px 24px;
+            background: #7C3AED;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.3s;
+        }
+
+        .back-link:hover {
+            background: #6D28D9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .nav-links a {
+            color: #7C3AED;
+            text-decoration: none;
+        }
+
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>게임 NPC에 LLM 직접 붙여보기</h1>
+
+        <div class="chat">
+            <div class="q">이 문서는 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">1인 개발자가 직접 테스트할 수 있는</span> 실전 가이드!</p>
+                <p>이론은 알겠는데... 어떻게 해야 되는지 모르겠다면?</p>
+                <p>→ <span class="key-point">유니티에서 NPC에 LLM 붙이는 법</span>을 알려줄게!</p>
+            </div>
+        </div>
+
+        <h2>Part 1. 어떤 방법들이 있어?</h2>
+
+        <div class="chat">
+            <div class="q">NPC에 LLM 붙이는 방법이 뭐가 있어?</div>
+            <div class="a">
+                <p>크게 <span class="highlight">4가지 방법</span>이 있어!</p>
+            </div>
+        </div>
+
+        <table class="compare-table">
+            <tr>
+                <th>방법</th>
+                <th>설명</th>
+                <th>장점</th>
+                <th>단점</th>
+            </tr>
+            <tr>
+                <td><strong>1. 폐쇄형 API</strong><br>(OpenAI, Claude)</td>
+                <td>클라우드에 요청</td>
+                <td>
+                    - 바로 쓸 수 있음<br>
+                    - 품질 최고
+                </td>
+                <td>
+                    <span class="warning">- API 비용</span><br>
+                    - 인터넷 필요
+                </td>
+            </tr>
+            <tr>
+                <td><strong>2. 오픈소스 LLM</strong><br>(Llama, Mistral)</td>
+                <td>내 컴퓨터에서 실행</td>
+                <td>
+                    <span class="key-point">- 무료!</span><br>
+                    - 오프라인 가능
+                </td>
+                <td>
+                    - GPU 필요<br>
+                    - 설치 필요
+                </td>
+            </tr>
+            <tr>
+                <td><strong>3. 파인튜닝</strong></td>
+                <td>캐릭터 스타일로 학습</td>
+                <td>
+                    - 캐릭터 일관성
+                </td>
+                <td>
+                    <span class="warning">- 어려움</span><br>
+                    - 데이터 필요
+                </td>
+            </tr>
+            <tr>
+                <td><strong>4. RAG</strong></td>
+                <td>지식 DB 검색 + 생성</td>
+                <td>
+                    - 정확한 정보
+                </td>
+                <td>
+                    - 추가 구현 필요
+                </td>
+            </tr>
+        </table>
+
+        <div class="analogy-box">
+            <strong>🎯 1인 개발자 추천 순서</strong><br><br>
+            <span class="step-number">1</span> <span class="key-point">OpenAI API</span>로 빠르게 프로토타입<br>
+            <span class="step-number">2</span> 작동 확인 후 <span class="key-point">Ollama</span>로 무료 전환<br>
+            <span class="step-number">3</span> 품질 부족하면 파인튜닝 고려
+        </div>
+
+        <h2>Part 2. 공학적 기준: 뭘 보고 선택해?</h2>
+
+        <div class="chat">
+            <div class="q">게임에서 중요한 기술 요소가 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">3가지 핵심 기준!</span></p>
+                <ul>
+                    <li>레이턴시 (응답 속도)</li>
+                    <li>비용</li>
+                    <li>품질 (캐릭터 일관성)</li>
+                </ul>
+            </div>
+        </div>
+
+        <h3><span class="step-number">1</span>레이턴시 (응답 속도)</h3>
+
+<pre class="code-block">유저 기대치:
+
+├── 즉각 반응: < 200ms (기존 정형 응답 수준)
+├── 수용 가능: < 1초  (약간의 타이핑 연출 가능)
+├── 불편함:   1~2초  (로딩 표시 필요)
+└── 이탈:     > 3초  (게임 흐름 끊김)
+</pre>
+
+        <table class="compare-table">
+            <tr>
+                <th>방식</th>
+                <th>평균 레이턴시</th>
+                <th>비고</th>
+            </tr>
+            <tr>
+                <td>GPT-4o</td>
+                <td>800ms ~ 2s</td>
+                <td>네트워크 + 처리 시간</td>
+            </tr>
+            <tr>
+                <td><span class="key-point">GPT-4o-mini</span></td>
+                <td>300ms ~ 800ms</td>
+                <td>가벼운 모델, 추천!</td>
+            </tr>
+            <tr>
+                <td>Llama 8B (로컬)</td>
+                <td>100 ~ 300ms</td>
+                <td>GPU 성능에 따라</td>
+            </tr>
+            <tr>
+                <td>Llama 8B (Ollama)</td>
+                <td>200 ~ 500ms</td>
+                <td>CPU로도 가능</td>
+            </tr>
+        </table>
+
+        <div class="info-box">
+            <h4>💡 해결책: 스트리밍 출력</h4>
+            <p>글자가 하나씩 나오는 타이핑 효과!</p>
+            <p>체감 레이턴시를 확 줄일 수 있어.</p>
+        </div>
+
+        <h3><span class="step-number">2</span>비용</h3>
+
+        <div class="chat">
+            <div class="q">실제로 얼마나 들어?</div>
+            <div class="a">
+                <p><span class="highlight">인디 게임 기준 (동시 접속 100명)</span></p>
+            </div>
+        </div>
+
+<pre class="code-block">가정:
+- NPC 대화: 1회/2분/유저
+- 평균 토큰: 입력 150 + 출력 80 = 230 토큰
+
+시간당: 100명 × 30회 × 230 = 69만 토큰
+일일:   69만 × 24시간 = 1,656만 토큰
+월간:   1,656만 × 30일 = <span class="warning">약 5억 토큰</span>
+</pre>
+
+        <table class="compare-table">
+            <tr>
+                <th>방식</th>
+                <th>월 비용 (5억 토큰)</th>
+                <th>평가</th>
+            </tr>
+            <tr>
+                <td>GPT-4o</td>
+                <td><span class="warning">~$7,500 (약 1,000만원)</span></td>
+                <td>프로덕션 불가</td>
+            </tr>
+            <tr>
+                <td>GPT-4o-mini</td>
+                <td>~$375 (약 50만원)</td>
+                <td>소규모 서비스 가능</td>
+            </tr>
+            <tr>
+                <td>Claude 3.5 Haiku</td>
+                <td>~$500 (약 65만원)</td>
+                <td>소규모 서비스 가능</td>
+            </tr>
+            <tr>
+                <td><span class="key-point">Llama 8B (자체 GPU)</span></td>
+                <td>RTX 4090 전기세 (~5만원)</td>
+                <td>가장 경제적!</td>
+            </tr>
+        </table>
+
+        <div class="analogy-box">
+            <strong>📊 결론</strong><br><br>
+            <span class="key-point">프로토타입</span> → API (빠른 검증)<br>
+            <span class="key-point">프로덕션</span> → 자체 호스팅 (비용 통제)
+        </div>
+
+        <h3><span class="step-number">3</span>품질 (캐릭터 일관성)</h3>
+
+<pre class="code-block">좋은 NPC AI의 조건:
+
+├── ✅ 세계관에 맞는 말투 유지
+├── ✅ 캐릭터 성격 일관성
+├── ✅ 금지된 주제 회피 (현대 기술, 메타 발언)
+├── ✅ 적절한 길이의 답변
+└── ✅ 게임 내 정보와 일치
+</pre>
+
+        <table class="compare-table">
+            <tr>
+                <th>방법</th>
+                <th>효과</th>
+                <th>난이도</th>
+            </tr>
+            <tr>
+                <td><span class="key-point">시스템 프롬프트</span></td>
+                <td>⭐⭐⭐</td>
+                <td>쉬움</td>
+            </tr>
+            <tr>
+                <td>Few-shot 예시</td>
+                <td>⭐⭐⭐</td>
+                <td>쉬움</td>
+            </tr>
+            <tr>
+                <td>출력 필터링</td>
+                <td>⭐⭐</td>
+                <td>보통</td>
+            </tr>
+            <tr>
+                <td>파인튜닝</td>
+                <td>⭐⭐⭐⭐</td>
+                <td>어려움</td>
+            </tr>
+        </table>
+
+        <h2>Part 3. 세계관 유지: 어떻게 통제해?</h2>
+
+        <div class="chat">
+            <div class="q">중세 NPC가 "컴퓨터"라고 말하면 안 되잖아?</div>
+            <div class="a">
+                <p><span class="key-point">시스템 프롬프트가 핵심!</span></p>
+            </div>
+        </div>
+
+<pre class="code-block"><span class="highlight">시스템 프롬프트 예시:</span>
+
+당신은 중세 판타지 세계 '아르케니아'의 대장장이 '볼란'입니다.
+
+<span class="key-point">[캐릭터 설정]</span>
+- 나이: 52세, 성별: 남성
+- 성격: 과묵하지만 일에 대한 자부심이 강함
+- 말투: "~하지", "~다네", 반말 사용
+- 전문 분야: 무기 제작, 방어구 수리
+
+<span class="key-point">[알고 있는 것]</span>
+- 마을의 역사와 주민들
+- 무기와 방어구의 특성
+- 광산과 광석 지식
+
+<span class="warning">[절대 모르는 것 - 언급 금지]</span>
+- 전기, 컴퓨터, 인터넷, 자동차 등 현대 기술
+- 다른 게임이나 현실 세계
+- 자신이 NPC라는 사실
+
+<span class="key-point">[대화 규칙]</span>
+- 3문장 이내로 답변
+- 모르는 질문은 "글쎄, 그건 잘 모르겠네"
+- 절대 사과하지 않음 (AI 티 나는 행동)
+
+<span class="highlight">[대화 예시]</span>
+유저: "좋은 검 추천해줘"
+볼란: "오크 사냥이라면 강철검이 낫지. 10골드다."
+
+유저: "인터넷이 뭐야?"
+볼란: "뭔 소린지 모르겠네. 술이라도 마셨나?"
+</pre>
+
+        <h3>출력 가드레일 (후처리)</h3>
+
+<pre class="code-block"><span class="highlight">금지어 필터 (C# 예시):</span>
+
+string[] forbiddenWords = {
+    "컴퓨터", "인터넷", "스마트폰", "전기", "자동차",
+    "죄송합니다", "AI", "언어모델", "도와드릴게요"
+};
+
+string FilterResponse(string text) {
+    foreach (var word in forbiddenWords) {
+        if (text.Contains(word)) {
+            return "글쎄, 그건 잘 모르겠네.";  // 대체 응답
+        }
+    }
+    return text;
+}
+</pre>
+
+        <h2>Part 4. 실전! OpenAI API + Unity</h2>
+
+        <div class="chat">
+            <div class="q">가장 쉬운 방법이 뭐야?</div>
+            <div class="a">
+                <p><span class="key-point">OpenAI API</span> = 가장 빠른 프로토타입!</p>
+                <p>10분 안에 NPC가 말하게 만들 수 있어.</p>
+            </div>
+        </div>
+
+        <h3><span class="step-number">1</span>API 키 발급</h3>
+
+<pre class="code-block">1. https://platform.openai.com 접속
+2. 로그인 또는 회원가입
+3. 좌측 메뉴 → API Keys
+4. "Create new secret key" 클릭
+5. 키 복사해서 안전한 곳에 저장!
+
+<span class="warning">⚠️ 키는 절대 공개 저장소에 올리지 마!</span>
+</pre>
+
+        <h3><span class="step-number">2</span>Unity 프로젝트 설정</h3>
+
+<pre class="code-block"><span class="highlight">NPCDialogueManager.cs</span>
+
+using UnityEngine;
+using UnityEngine.Networking;
+using System.Collections;
+using System.Text;
+
+public class NPCDialogueManager : MonoBehaviour
+{
+    [SerializeField] private string apiKey = "sk-...";  // 여기에 키 입력
+
+    [TextArea(10, 20)]
+    [SerializeField] private string systemPrompt = @"
+당신은 중세 판타지 세계의 대장장이 '볼란'입니다.
+- 말투: 반말, ~하지, ~다네
+- 성격: 과묵, 무뚝뚝
+- 3문장 이내로 답변
+- 현대 기술 모름";
+
+    public IEnumerator SendMessage(string playerInput, System.Action&lt;string&gt; onResponse)
+    {
+        string requestBody = $@"{{
+            ""model"": ""gpt-4o-mini"",
+            ""messages"": [
+                {{""role"": ""system"", ""content"": ""{EscapeJson(systemPrompt)}""}},
+                {{""role"": ""user"", ""content"": ""{EscapeJson(playerInput)}""}}
+            ],
+            ""max_tokens"": 150
+        }}";
+
+        using (UnityWebRequest request = new UnityWebRequest(
+            "https://api.openai.com/v1/chat/completions", "POST"))
+        {
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(requestBody);
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+            request.SetRequestHeader("Authorization", $"Bearer {apiKey}");
+
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                // 간단한 JSON 파싱 (실제로는 JsonUtility 사용 권장)
+                string response = request.downloadHandler.text;
+                int start = response.IndexOf("\"content\":\"") + 11;
+                int end = response.IndexOf("\"", start);
+                string content = response.Substring(start, end - start);
+                content = content.Replace("\\n", "\n").Replace("\\\"", "\"");
+
+                onResponse?.Invoke(content);
+            }
+            else
+            {
+                onResponse?.Invoke("(NPC가 응답하지 않습니다)");
+                Debug.LogError(request.error);
+            }
+        }
+    }
+
+    private string EscapeJson(string text)
+    {
+        return text.Replace("\\", "\\\\")
+                   .Replace("\"", "\\\"")
+                   .Replace("\n", "\\n")
+                   .Replace("\r", "\\r");
+    }
+}
+</pre>
+
+        <h3><span class="step-number">3</span>테스트용 UI</h3>
+
+<pre class="code-block"><span class="highlight">NPCTestUI.cs</span>
+
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+
+public class NPCTestUI : MonoBehaviour
+{
+    [SerializeField] private TMP_InputField inputField;
+    [SerializeField] private TMP_Text npcText;
+    [SerializeField] private Button sendButton;
+    [SerializeField] private NPCDialogueManager dialogueManager;
+
+    private void Start()
+    {
+        sendButton.onClick.AddListener(OnSendClicked);
+        inputField.onSubmit.AddListener((_) =&gt; OnSendClicked());
+    }
+
+    private void OnSendClicked()
+    {
+        string input = inputField.text.Trim();
+        if (string.IsNullOrEmpty(input)) return;
+
+        inputField.text = "";
+        npcText.text = "볼란: (생각 중...)";
+        sendButton.interactable = false;
+
+        StartCoroutine(dialogueManager.SendMessage(input, (response) =&gt; {
+            npcText.text = $"볼란: {response}";
+            sendButton.interactable = true;
+        }));
+    }
+}
+</pre>
+
+        <div class="info-box">
+            <h4>💰 예상 비용</h4>
+            <p>테스트용: 월 <span class="key-point">$5 이하</span></p>
+            <p>gpt-4o-mini는 100만 토큰당 약 $0.15!</p>
+        </div>
+
+        <h2>Part 5. 실전! Ollama + Unity (무료!)</h2>
+
+        <div class="chat">
+            <div class="q">무료로 하고 싶은데?</div>
+            <div class="a">
+                <p><span class="key-point">Ollama</span> = 내 컴퓨터에서 LLM 실행!</p>
+                <p>API 비용 0원, 인터넷 없이도 가능.</p>
+            </div>
+        </div>
+
+        <h3><span class="step-number">1</span>Ollama 설치</h3>
+
+<pre class="code-block"><span class="highlight">Windows (PowerShell):</span>
+winget install Ollama.Ollama
+
+<span class="highlight">Mac:</span>
+brew install ollama
+
+<span class="highlight">모델 다운로드 (약 4GB):</span>
+ollama pull llama3.1:8b
+
+<span class="highlight">서버 실행:</span>
+ollama serve
+
+<span class="key-point">→ http://localhost:11434 에서 동작!</span>
+</pre>
+
+        <h3><span class="step-number">2</span>Unity 연결</h3>
+
+<pre class="code-block"><span class="highlight">OllamaManager.cs</span>
+
+using UnityEngine;
+using UnityEngine.Networking;
+using System.Collections;
+using System.Text;
+
+public class OllamaManager : MonoBehaviour
+{
+    private const string OLLAMA_URL = "http://localhost:11434/api/generate";
+
+    [TextArea(10, 20)]
+    [SerializeField] private string systemPrompt = @"
+당신은 중세 판타지 세계의 대장장이 '볼란'입니다.
+말투: 반말, ~하지, ~다네
+성격: 과묵하고 무뚝뚝
+3문장 이내로 답변하세요.";
+
+    public IEnumerator SendMessage(string playerInput, System.Action&lt;string&gt; onResponse)
+    {
+        string fullPrompt = $"[시스템]\n{systemPrompt}\n\n[유저]\n{playerInput}\n\n[볼란]";
+
+        string requestBody = $@"{{
+            ""model"": ""llama3.1:8b"",
+            ""prompt"": ""{EscapeJson(fullPrompt)}"",
+            ""stream"": false
+        }}";
+
+        using (UnityWebRequest request = new UnityWebRequest(OLLAMA_URL, "POST"))
+        {
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(requestBody);
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                string json = request.downloadHandler.text;
+                // "response": "..." 파싱
+                int start = json.IndexOf("\"response\":\"") + 12;
+                int end = json.IndexOf("\"", start);
+                string response = json.Substring(start, end - start);
+                response = response.Replace("\\n", "\n");
+
+                onResponse?.Invoke(response);
+            }
+            else
+            {
+                onResponse?.Invoke("(NPC가 응답하지 않습니다)");
+                Debug.LogError(request.error);
+            }
+        }
+    }
+
+    private string EscapeJson(string text)
+    {
+        return text.Replace("\\", "\\\\")
+                   .Replace("\"", "\\\"")
+                   .Replace("\n", "\\n");
+    }
+}
+</pre>
+
+        <div class="analogy-box">
+            <strong>💻 요구 사양</strong><br><br>
+            <strong>최소:</strong> RAM 16GB, CPU만으로도 가능 (느림)<br>
+            <strong>권장:</strong> RAM 16GB + GTX 1060 이상<br>
+            <strong>쾌적:</strong> RAM 32GB + RTX 3060 이상
+        </div>
+
+        <h2>Part 6. 실전! LM Studio (GUI로 쉽게)</h2>
+
+        <div class="chat">
+            <div class="q">터미널 싫은데... GUI 없어?</div>
+            <div class="a">
+                <p><span class="key-point">LM Studio</span> = 클릭만으로 LLM 실행!</p>
+            </div>
+        </div>
+
+<pre class="code-block"><span class="highlight">설치 방법:</span>
+
+1. https://lmstudio.ai 접속
+2. 다운로드 & 설치
+3. 앱 실행 → 모델 검색 (예: llama-3.1-8b)
+4. 다운로드 버튼 클릭
+5. 좌측 "Local Server" 탭 → Start Server
+
+<span class="key-point">→ http://localhost:1234/v1/chat/completions</span>
+<span class="key-point">→ OpenAI API와 호환!</span>
+</pre>
+
+        <div class="info-box">
+            <h4>💡 Unity 코드 변경점</h4>
+            <p>OpenAI 코드에서 URL만 바꾸면 됨!</p>
+            <p><code>string url = "http://localhost:1234/v1/chat/completions";</code></p>
+            <p>API 키는 아무 값이나 (예: "lm-studio")</p>
+        </div>
+
+        <h2>Part 7. 방법 비교 정리</h2>
+
+        <table class="compare-table">
+            <tr>
+                <th>방법</th>
+                <th>설치 난이도</th>
+                <th>비용</th>
+                <th>속도</th>
+                <th>품질</th>
+            </tr>
+            <tr>
+                <td><strong>OpenAI API</strong></td>
+                <td>⭐ (가장 쉬움)</td>
+                <td>💰 유료</td>
+                <td>빠름</td>
+                <td>최고</td>
+            </tr>
+            <tr>
+                <td><strong>Ollama</strong></td>
+                <td>⭐⭐</td>
+                <td><span class="key-point">무료!</span></td>
+                <td>보통</td>
+                <td>좋음</td>
+            </tr>
+            <tr>
+                <td><strong>LM Studio</strong></td>
+                <td>⭐ (GUI)</td>
+                <td><span class="key-point">무료!</span></td>
+                <td>보통</td>
+                <td>좋음</td>
+            </tr>
+        </table>
+
+        <h2>Part 8. 테스트 시나리오</h2>
+
+        <div class="chat">
+            <div class="q">뭘 테스트해야 해?</div>
+            <div class="a">
+                <p>NPC가 제대로 작동하는지 확인하는 <span class="highlight">4가지 시나리오!</span></p>
+            </div>
+        </div>
+
+<pre class="code-block"><span class="highlight">[테스트 1: 정상 대화]</span>
+
+유저: "좋은 검 있어?"
+기대: 무기 관련 자연스러운 답변
+예시: "강철검이 있지. 10골드다."
+
+<span class="key-point">→ PASS: 캐릭터답게 대답함</span>
+</pre>
+
+<pre class="code-block"><span class="highlight">[테스트 2: 세계관 위반 시도]</span>
+
+유저: "컴퓨터 게임 추천해줘"
+기대: 모른다고 하거나 무시
+예시: "뭔 소린지 모르겠네."
+
+<span class="key-point">→ PASS: 현대 기술 언급 안 함</span>
+<span class="warning">→ FAIL: "요즘 인기있는 게임은..." (필터링 필요)</span>
+</pre>
+
+<pre class="code-block"><span class="highlight">[테스트 3: 캐릭터 일관성]</span>
+
+유저: "너 누구야?"
+기대: 대장장이로서 자기소개
+예시: "난 볼란. 이 마을 대장장이지."
+
+<span class="key-point">→ PASS: 설정대로 답변</span>
+<span class="warning">→ FAIL: "저는 AI 언어모델입니다" (시스템 프롬프트 강화)</span>
+</pre>
+
+<pre class="code-block"><span class="highlight">[테스트 4: 대화 맥락 유지]</span>
+
+유저: "강철검 얼마야?"
+NPC: "10골드다."
+유저: "그거 살게"
+기대: 이전 대화 기억하고 응답
+예시: "좋아, 강철검 가져가게."
+
+<span class="key-point">→ PASS: 맥락 유지</span>
+<span class="warning">→ FAIL: "뭘 사시겠습니까?" (히스토리 관리 필요)</span>
+</pre>
+
+        <h2>Part 9. 다음 단계</h2>
+
+        <div class="chat">
+            <div class="q">더 발전시키려면?</div>
+            <div class="a">
+                <p>기본이 되면 이런 것도 시도해봐!</p>
+            </div>
+        </div>
+
+<pre class="code-block"><span class="step-number">1</span> <span class="highlight">대화 히스토리 관리</span>
+
+- 최근 N턴만 기억 (메모리 절약)
+- 중요한 정보는 요약해서 보관
+- 캐릭터별 메모리 분리
+
+<span class="step-number">2</span> <span class="highlight">타이핑 효과 추가</span>
+
+- 글자가 하나씩 나오는 연출
+- 체감 레이턴시 감소
+- 더 자연스러운 느낌
+
+<span class="step-number">3</span> <span class="highlight">음성 합성 (TTS)</span>
+
+- 텍스트를 음성으로 변환
+- Eleven Labs, Azure TTS
+- 캐릭터 목소리 커스텀
+
+<span class="step-number">4</span> <span class="highlight">RAG 추가</span>
+
+- NPC가 알아야 할 지식 DB 구축
+- 질문에 맞는 정보 검색 후 답변
+- 더 정확한 정보 제공
+</pre>
+
+        <div class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>가장 빠른 시작</strong> - OpenAI API + gpt-4o-mini</li>
+                <li><strong>무료로 테스트</strong> - Ollama 또는 LM Studio</li>
+                <li><strong>품질의 핵심</strong> - 시스템 프롬프트 설계</li>
+                <li><strong>안전장치</strong> - 출력 필터링 (금지어 체크)</li>
+                <li><strong>레이턴시 < 1초</strong> - 게임 몰입 유지의 핵심</li>
+                <li><strong>비용 관리</strong> - 프로토타입은 API, 프로덕션은 자체 호스팅</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../llm-npc-ai/">← 이론편: ChatGPT로 살아있는 NPC 만드는 법</a>
+            <a href="../ai/">AI 카테고리로 돌아가기 →</a>
+        </div>
+
+        <a href="../../" class="back-link">← 홈으로</a>
+    </div>
+</body>
+</html>
