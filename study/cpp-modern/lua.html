@@ -472,31 +472,54 @@
             </div>
 
             <div class="thinking-box">
-                <div class="t-label">상황을 생각해보자</div>
-                <p>기획자: "몬스터 HP 500에서 450으로 바꿔주세요"</p>
-                <p>프로그래머: "네... (C++ 수정 → 컴파일 5분 → 빌드 → 테스트 → 배포)"</p>
+                <div class="t-label">잠깐, 먼저 구분하자</div>
+                <p>"몬스터 HP 500에서 450으로 바꿔주세요" → 이건 <strong>CSV로 충분</strong>해.</p>
+                <p>Lua가 필요한 건 <strong>로직</strong>이 바뀔 때야.</p>
             </div>
 
-            <div class="answer-box">
-                <div class="a-label">문제점</div>
-                <p>C++은 <strong>컴파일 언어</strong>야. 한 줄 바꿔도 전체 빌드해야 해. 게임이 커지면 빌드만 10분, 20분...</p>
+            <div class="insight-box">
+                <h4>CSV vs Lua 결정적 차이</h4>
+                <p><strong>CSV</strong> = 값(데이터)만 바꿀 수 있음</p>
+                <p><strong>Lua</strong> = 조건문, 반복문, 함수 호출 = <strong>로직</strong>을 바꿀 수 있음</p>
             </div>
+
+<pre><code>-- CSV로 가능한 것
+monster_id, hp, attack
+goblin, 500, 30
+
+-- CSV로 불가능한 것 (Lua 필요)
+if target:HasDebuff("burn") then
+    damage = damage * 2  -- 화상이면 데미지 2배
+end
+
+if GetTimeOfDay() == "night" then
+    spawn_rate = spawn_rate * 1.5  -- 밤에 스폰 증가
+end</code></pre>
 
             <div class="question-box">
                 <div class="q-label">질문</div>
                 <div class="question">
-                    그럼 어떻게 해야 빠르게 바꿀 수 있어?
+                    그런 로직은 C++로 짜면 되지 않아?
                 </div>
             </div>
 
+            <div class="answer-box">
+                <div class="a-label">맞아, C++로 해도 돼. 하지만...</div>
+                <p>C++은 <strong>컴파일 언어</strong>야. 로직 한 줄 바꿔도 빌드해야 해.</p>
+            </div>
+
             <div class="thinking-box">
-                <div class="t-label">생각해보면...</div>
-                <p>자주 바뀌는 부분만 따로 빼서, 컴파일 없이 바로 적용하면?</p>
+                <div class="t-label">상황을 생각해보자</div>
+                <p>기획자: "보스가 HP 30% 이하일 때 광폭화하는데, 50%로 바꿔주세요"</p>
+                <p>프로그래머: "네... (C++ 수정 → 컴파일 5분 → 빌드 → 테스트)"</p>
+                <p>기획자: "역시 40%가 나을 것 같아요"</p>
+                <p>프로그래머: "..."</p>
             </div>
 
             <div class="answer-box">
-                <div class="a-label">그게 바로 스크립트 언어!</div>
-                <p>스크립트 언어는 <strong>인터프리터 언어</strong>야. 텍스트 파일 수정하면 바로 적용됨. 컴파일 필요 없음.</p>
+                <div class="a-label">Lua를 쓰면?</div>
+                <p>기획자가 <strong>직접</strong> 스크립트 파일 열어서 <code>0.3</code> → <code>0.5</code> 수정, 저장하면 끝.</p>
+                <p>컴파일 없음. 프로그래머 필요 없음. <strong>10초만에 테스트</strong>.</p>
             </div>
 
             <table>
@@ -516,21 +539,25 @@
                     <td>즉시 (Hot Reload)</td>
                 </tr>
                 <tr>
-                    <td>성능</td>
-                    <td>빠름</td>
-                    <td>느림 (10~100배)</td>
+                    <td>수정하는 사람</td>
+                    <td>프로그래머만</td>
+                    <td>기획자도 가능</td>
                 </tr>
                 <tr>
                     <td>용도</td>
                     <td>엔진, 렌더링, 물리</td>
-                    <td>게임 로직, UI, AI</td>
+                    <td>스킬 로직, AI, 퀘스트</td>
                 </tr>
             </table>
 
             <div class="insight-box green">
-                <h4>핵심 전략</h4>
-                <p><strong>성능이 중요한 곳</strong> = C++ (엔진, 렌더링)</p>
-                <p><strong>자주 바뀌는 곳</strong> = 스크립트 (스킬, 퀘스트, UI)</p>
+                <h4>핵심: Lua가 필요한 순간</h4>
+                <ul>
+                    <li><strong>로직</strong>이 자주 바뀔 때 (밸런싱, 신규 콘텐츠)</li>
+                    <li><strong>기획자</strong>가 직접 수정해야 할 때</li>
+                    <li><strong>모딩</strong>을 지원해야 할 때 (WoW 애드온)</li>
+                </ul>
+                <p>단순 데이터만 바뀌면? CSV로 충분해. Lua 필요 없어.</p>
             </div>
         </section>
 
@@ -804,9 +831,131 @@ print("Spawned enemy: " .. enemyID)</code></pre>
             </div>
         </section>
 
-        <!-- 5. Hot Reload -->
+        <!-- 5. Lua VM 동작 원리 -->
         <section class="section">
-            <h2><span class="step-number">5</span>Hot Reload - 게임 중 코드 수정</h2>
+            <h2><span class="step-number">5</span>Lua는 어떻게 실행돼? (VM 원리)</h2>
+
+            <div class="question-box">
+                <div class="q-label">질문</div>
+                <div class="question">
+                    Lua도 소스코드잖아. C++이 런타임에 호출하면, 컴파일 타임에 합쳐지는 거야?
+                </div>
+            </div>
+
+            <div class="answer-box">
+                <div class="a-label">아니, 런타임에 텍스트를 읽어서 실행해</div>
+                <p>Lua 코드는 C++에 합쳐지지 않아. <strong>Lua VM(가상 머신)</strong>이 실행 중에 텍스트를 해석해.</p>
+            </div>
+
+            <div class="insight-box blue">
+                <h4>C++ 컴파일 vs Lua 실행</h4>
+<pre><code>[ C++ ]
+소스코드 → 컴파일러 → 기계어 → CPU가 직접 실행
+  .cpp      (빌드)      .exe       (빠름)
+
+[ Lua ]
+소스코드 → Lua VM이 읽음 → 바이트코드 → VM이 해석하며 실행
+  .lua       (런타임)       (메모리)         (느림)</code></pre>
+            </div>
+
+            <div class="question-box">
+                <div class="q-label">질문</div>
+                <div class="question">
+                    그럼 구체적으로 어떤 순서로 동작해?
+                </div>
+            </div>
+
+<pre><code>┌─────────────────────────────────────────────────────────────┐
+│                     C++ 게임 실행파일                         │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              Lua VM (인터프리터)                      │   │
+│  │                                                     │   │
+│  │   1. "skill.lua" 텍스트 파일 읽음                    │   │
+│  │              ↓                                      │   │
+│  │   2. 바이트코드로 변환 (런타임에!)                    │   │
+│  │              ↓                                      │   │
+│  │   3. VM이 바이트코드를 한 줄씩 해석하며 실행          │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</code></pre>
+
+<pre><code>// C++ 코드에서 실제로 일어나는 일
+lua_State* L = luaL_newstate();  // 1. Lua VM 인스턴스 생성
+
+luaL_dofile(L, "skill.lua");     // 2. 텍스트 파일 읽기 → 바이트코드 변환
+                                 //    이 순간 skill.lua를 열어서 파싱함!
+
+lua_getglobal(L, "Fireball");    // 3. 함수 찾기
+lua_pcall(L, 0, 0, 0);           // 4. VM이 바이트코드 실행</code></pre>
+
+            <div class="answer-box">
+                <div class="a-label">핵심: Lua 코드는 기계어가 아니야</div>
+                <p>C++은 CPU가 직접 실행하는 기계어로 변환됨.</p>
+                <p>Lua는 <strong>Lua VM이라는 "통역사"</strong>가 중간에서 해석하며 실행.</p>
+                <p>그래서 느리지만, <strong>파일만 바꾸면 동작이 바뀌는 것</strong>.</p>
+            </div>
+
+            <div class="question-box">
+                <div class="q-label">질문</div>
+                <div class="question">
+                    아, 그래서 Hot Reload가 가능한 거구나?
+                </div>
+            </div>
+
+            <div class="answer-box">
+                <div class="a-label">정확해!</div>
+            </div>
+
+<pre><code>// Hot Reload가 가능한 이유
+if (FileChanged("skill.lua")) {
+    luaL_dofile(L, "skill.lua");  // 그냥 다시 읽으면 됨!
+                                   // 새 텍스트 → 새 바이트코드
+                                   // C++ 재컴파일 필요 없음
+}</code></pre>
+
+            <div class="insight-box purple">
+                <h4>양방향 호출 구조</h4>
+<pre><code>┌──────────────┐              ┌──────────────┐
+│     C++      │              │     Lua      │
+│              │              │              │
+│  게임 엔진    │ ──────────→ │  스킬 로직    │
+│              │   lua_pcall  │              │
+│  ApplyDamage │ ←────────── │  Fireball()  │
+│  PlayEffect  │   등록된     │              │
+│              │   C 함수     │              │
+└──────────────┘              └──────────────┘
+
+C++이 Lua 함수 호출 → Lua VM이 바이트코드 실행
+Lua가 C++ 함수 호출 → VM이 등록된 함수 포인터로 점프</code></pre>
+            </div>
+
+            <div class="insight-box">
+                <h4>성능 비용 정리</h4>
+                <table>
+                    <tr>
+                        <th>항목</th>
+                        <th>설명</th>
+                    </tr>
+                    <tr>
+                        <td>Lua 함수 호출</td>
+                        <td>스택에 값 복사, VM 컨텍스트 전환 오버헤드</td>
+                    </tr>
+                    <tr>
+                        <td>바이트코드 해석</td>
+                        <td>기계어 직접 실행보다 10~50배 느림</td>
+                    </tr>
+                    <tr>
+                        <td>LuaJIT 사용 시</td>
+                        <td>JIT 컴파일로 거의 C 수준 (2~5배 느림)</td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
+        <!-- 6. Hot Reload -->
+        <section class="section">
+            <h2><span class="step-number">6</span>Hot Reload - 게임 중 코드 수정</h2>
 
             <div class="question-box">
                 <div class="q-label">질문</div>
@@ -858,9 +1007,9 @@ void Update() {
             </div>
         </section>
 
-        <!-- 6. 모딩 시스템 -->
+        <!-- 7. 모딩 시스템 -->
         <section class="section">
-            <h2><span class="step-number">6</span>모딩 시스템 만들기</h2>
+            <h2><span class="step-number">7</span>모딩 시스템 만들기</h2>
 
             <div class="question-box">
                 <div class="q-label">질문</div>
@@ -925,9 +1074,9 @@ void CreateSandbox(lua_State* L) {
 }</code></pre>
         </section>
 
-        <!-- 7. 성능 고려사항 -->
+        <!-- 8. 성능 고려사항 -->
         <section class="section">
-            <h2><span class="step-number">7</span>성능: 어디까지 Lua로 할까?</h2>
+            <h2><span class="step-number">8</span>성능: 어디까지 Lua로 할까?</h2>
 
             <div class="question-box">
                 <div class="q-label">질문</div>
@@ -1000,9 +1149,9 @@ local pos = ffi.C.GetPlayerPosition()
 print(pos.x, pos.y, pos.z)  -- C++ 속도로 접근!</code></pre>
         </section>
 
-        <!-- 8. 장단점 정리 -->
+        <!-- 9. 장단점 정리 -->
         <section class="section">
-            <h2><span class="step-number">8</span>Lua 임베딩의 현실</h2>
+            <h2><span class="step-number">9</span>Lua 임베딩의 현실</h2>
 
             <div class="pros-cons">
                 <div class="pros">
@@ -1047,12 +1196,16 @@ print(pos.x, pos.y, pos.z)  -- C++ 속도로 접근!</code></pre>
                     <th>설명</th>
                 </tr>
                 <tr>
-                    <td>스크립트 언어</td>
-                    <td>컴파일 없이 바로 실행. 빠른 수정 가능.</td>
+                    <td>CSV vs Lua</td>
+                    <td>CSV는 값(데이터)만. Lua는 로직(조건, 흐름)까지.</td>
                 </tr>
                 <tr>
                     <td>왜 Lua?</td>
                     <td>작고, 빠르고, 붙이기 쉬움.</td>
+                </tr>
+                <tr>
+                    <td>Lua VM</td>
+                    <td>런타임에 텍스트를 읽어 바이트코드로 해석 실행.</td>
                 </tr>
                 <tr>
                     <td>테이블</td>
