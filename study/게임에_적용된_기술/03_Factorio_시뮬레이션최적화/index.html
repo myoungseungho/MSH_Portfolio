@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수만 개의 기계가 어떻게 60 FPS로 돌아갈까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .visual-section {
+            background: #f5f5f5;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .visual-section h4 {
+            font-size: 1rem;
+            color: #555;
+            margin-bottom: 12px;
+        }
+        .step-gif {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        .gif-caption {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        .diagram {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            text-align: center;
+            font-family: 'Consolas', monospace;
+            line-height: 1.4;
+        }
+        .diagram-caption {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 12px;
+            font-style: italic;
+            font-family: 'Pretendard', sans-serif;
+        }
+
+        .analogy-box {
+            background: #fff8e1;
+            border-left: 4px solid #ffa000;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 28px;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 16px;
+        }
+        .summary-box ul {
+            list-style: none;
+            padding: 0;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: rgba(255,255,255,0.7);
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .compare-table th {
+            background: #1a237e;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .compare-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .compare-table tr:last-child td {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">← 게임 기술 목록</a>
+
+        <header class="header">
+            <h1>수만 개의 기계가 어떻게 60 FPS로 돌아갈까?</h1>
+            <p>Factorio의 대규모 시뮬레이션 최적화 - 공장 자동화의 비밀</p>
+        </header>
+
+        <!-- Part 1: Factorio가 뭐야? -->
+        <div class="conversation">
+            <h2>Part 1. Factorio는 왜 최적화가 어려워?</h2>
+
+            <div class="chat">
+                <div class="q">Factorio가 어떤 게임이야?</div>
+                <div class="a">
+                    <p>공장 자동화 게임이야.</p>
+                    <p>광물 캐고 → 제련하고 → 조립하고 → 연구하고...</p>
+                    <p><span class="highlight">컨베이어 벨트, 로봇, 기계</span>가 수만 개 돌아가.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">수만 개면 얼마나 많은 거야?</div>
+                <div class="a">
+                    <p>대형 공장 기준:</p>
+                    <p>• 컨베이어 벨트 아이템: <span class="warning">10만+ 개</span></p>
+                    <p>• 조립 기계: <span class="warning">5,000+ 개</span></p>
+                    <p>• 삽입기(Inserter): <span class="warning">10,000+ 개</span></p>
+                    <p><br>이걸 <span class="key-point">매 프레임(60 FPS)</span> 업데이트해야 해.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">매 프레임 10만 개를 계산한다고?</div>
+                <div class="a">
+                    <p>60 FPS면 <span class="highlight">1프레임 = 16.6ms</span>.</p>
+                    <p>16ms 안에 10만 개 엔티티를 업데이트해야 해.</p>
+                    <p><br>엔티티 하나당 <span class="warning">0.00016ms</span>밖에 못 써.</p>
+                    <p>대충 계산해도 불가능해 보이지?</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🏭 비유: 거대한 공장 관리</strong><br><br>
+                • 공장에 기계가 10만 대 있어<br>
+                • 관리자가 1초에 60번씩 모든 기계를 점검해야 해<br>
+                • 불가능하지? <span class="key-point">그래서 "똑똑한 점검 방법"이 필요해</span>
+            </div>
+        </div>
+
+        <!-- Part 2: 청크 시스템 -->
+        <div class="conversation">
+            <h2>Part 2. 청크 시스템 - 필요한 곳만 업데이트</h2>
+
+            <div class="chat">
+                <div class="q">어떻게 10만 개를 다 처리해?</div>
+                <div class="a">
+                    <p>핵심: <span class="key-point">다 처리 안 해.</span></p>
+                    <p><br>맵을 <span class="highlight">32×32 타일 "청크"</span>로 나눠.</p>
+                    <p>플레이어가 없는 청크는 <span class="highlight">업데이트 빈도를 낮춰</span>.</p>
+                </div>
+            </div>
+
+            <div class="diagram">
+┌────┬────┬────┬────┐
+│ 💤 │ 💤 │ 💤 │ 💤 │  💤 = 비활성 (느리게)
+├────┼────┼────┼────┤
+│ 💤 │ ⚡ │ ⚡ │ 💤 │  ⚡ = 활성 (매 프레임)
+├────┼────┼────┼────┤
+│ 💤 │ ⚡ │ 👤 │ 💤 │  👤 = 플레이어 위치
+├────┼────┼────┼────┤
+│ 💤 │ 💤 │ 💤 │ 💤 │
+└────┴────┴────┴────┘
+                <p class="diagram-caption">플레이어 주변 청크만 매 프레임 업데이트, 나머지는 느리게</p>
+            </div>
+
+            <div class="chat">
+                <div class="q">비활성 청크는 완전히 멈추는 거야?</div>
+                <div class="a">
+                    <p><span class="warning">아니야.</span> 그러면 공장이 안 돌아가니까.</p>
+                    <p><br>비활성 청크는 <span class="highlight">"요약 업데이트"</span>를 해.</p>
+                    <p>• 매 프레임 대신 10프레임마다 한 번</p>
+                    <p>• 또는 "결과만 계산" (과정 생략)</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">"결과만 계산"이 뭐야?</div>
+                <div class="a">
+                    <p>예: 1초 동안 멀리 있었던 채굴기가 있어.</p>
+                    <p><br><span class="highlight">과정 시뮬레이션:</span></p>
+                    <p>→ 60프레임 × (광물 캐기 → 벨트에 놓기 → ...) = 느림</p>
+                    <p><br><span class="key-point">결과만 계산:</span></p>
+                    <p>→ "1초면 광물 10개 생산" → 바로 10개 추가 = 빠름</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>청크 상태</th>
+                    <th>업데이트 방식</th>
+                    <th>부하</th>
+                </tr>
+                <tr>
+                    <td>플레이어 주변 (활성)</td>
+                    <td>매 프레임 전체 시뮬레이션</td>
+                    <td>높음</td>
+                </tr>
+                <tr>
+                    <td>보이는 범위 (준활성)</td>
+                    <td>5프레임마다 업데이트</td>
+                    <td>중간</td>
+                </tr>
+                <tr>
+                    <td>멀리 떨어진 (비활성)</td>
+                    <td>결과만 계산, 20프레임마다</td>
+                    <td>낮음</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3: 벨트 최적화 -->
+        <div class="conversation">
+            <h2>Part 3. 컨베이어 벨트 - 가장 많은 엔티티</h2>
+
+            <div class="chat">
+                <div class="q">컨베이어 벨트가 왜 문제야?</div>
+                <div class="a">
+                    <p>Factorio에서 <span class="warning">가장 많은 엔티티</span>가 벨트 위 아이템이야.</p>
+                    <p>벨트 한 칸에 아이템 2개, 벨트가 수천 개면...</p>
+                    <p><span class="highlight">아이템만 수만 개</span>.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">아이템 하나하나를 물리 시뮬레이션 해?</div>
+                <div class="a">
+                    <p><span class="warning">그러면 터져.</span></p>
+                    <p><br>Factorio는 <span class="key-point">벨트를 "파이프라인"으로 취급</span>해.</p>
+                    <p>아이템이 물리적으로 이동하는 게 아니라,</p>
+                    <p><span class="highlight">벨트가 "흐름"을 갖고 있는 거야.</span></p>
+                </div>
+            </div>
+
+            <div class="diagram">
+❌ 나쁜 방법: 아이템마다 위치 계산
+[🔩]→[🔩]→[🔩]→[🔩]→[🔩]→...
+ ↑    ↑    ↑    ↑    ↑
+각각 position += speed  (10만 번 계산)
+
+✅ 좋은 방법: 벨트 단위로 "흐름" 계산
+[========벨트========]
+      흐름량: 45/s
+      → 입구에서 아이템 제거
+      → 출구에서 아이템 생성
+                <p class="diagram-caption">아이템을 개별 이동시키지 않고, 벨트의 "처리량"만 계산</p>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 아이템이 벨트 위에서 움직이는 건 어떻게 보여줘?</div>
+                <div class="a">
+                    <p><span class="highlight">렌더링만</span> 그렇게 보이게 해.</p>
+                    <p><br>실제 로직: 벨트A → 벨트B로 아이템 "전송"</p>
+                    <p>화면 표시: 아이템이 부드럽게 이동하는 것처럼 보간</p>
+                    <p><br><span class="key-point">로직과 렌더링을 분리</span>하는 거야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// 벨트 업데이트 (간소화)
+class Belt {
+    float flowRate;      // 초당 아이템 처리량
+    Queue inputQueue;    // 입구에 들어온 아이템
+    Queue outputQueue;   // 출구로 나갈 아이템
+
+    void Update(float deltaTime) {
+        // 복잡한 물리 계산 없이 "흐름"만 처리
+        float itemsToMove = flowRate * deltaTime;
+        MoveItems(inputQueue, outputQueue, itemsToMove);
+    }
+}</div>
+        </div>
+
+        <!-- Part 4: 삽입기 최적화 -->
+        <div class="conversation">
+            <h2>Part 4. 삽입기(Inserter) - 이벤트 기반 처리</h2>
+
+            <div class="chat">
+                <div class="q">삽입기는 뭐야?</div>
+                <div class="a">
+                    <p>벨트에서 아이템을 집어서 기계에 넣는 로봇 팔.</p>
+                    <p>Factorio 공장에서 <span class="highlight">가장 많이 쓰이는 엔티티</span> 중 하나.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">삽입기도 매 프레임 업데이트해?</div>
+                <div class="a">
+                    <p><span class="warning">안 해.</span> 그러면 너무 느려.</p>
+                    <p><br>삽입기는 <span class="highlight">이벤트 기반</span>으로 작동해.</p>
+                    <p>• 벨트에 아이템 도착 → "삽입기야, 아이템 왔어!"</p>
+                    <p>• 삽입기가 깨어나서 작업 시작</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>📱 비유: 폴링 vs 푸시 알림</strong><br><br>
+                <strong>폴링 (매 프레임 체크)</strong><br>
+                → 1초에 60번 "아이템 왔어?" 확인 = 비효율<br><br>
+                <strong>푸시 알림 (이벤트 기반)</strong><br>
+                → 아이템 오면 그때만 알림 = 효율적<br><br>
+                <span class="key-point">대부분의 시간 동안 삽입기는 "잠들어" 있음</span>
+            </div>
+
+            <div class="chat">
+                <div class="q">이벤트 기반이 얼마나 빨라?</div>
+                <div class="a">
+                    <p>삽입기 10,000개가 있다고 치자.</p>
+                    <p><br><span class="highlight">폴링 방식:</span> 매 프레임 10,000번 체크</p>
+                    <p><span class="key-point">이벤트 방식:</span> 아이템 도착한 삽입기만 (보통 100~500개)</p>
+                    <p><br>→ <span class="key-point">20~100배 빠름</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">// 이벤트 기반 삽입기
+class Inserter {
+    bool isSleeping = true;
+
+    void OnItemArrived(Item item) {  // 이벤트 발생 시만 호출
+        isSleeping = false;
+        StartPickup(item);
+    }
+
+    void Update() {
+        if (isSleeping) return;  // 대부분 여기서 종료
+
+        // 실제 작업 (집기/놓기 애니메이션)
+        DoWork();
+    }
+}</div>
+        </div>
+
+        <!-- Part 5: 멀티스레딩 -->
+        <div class="conversation">
+            <h2>Part 5. 멀티스레딩 - CPU 코어 전부 활용</h2>
+
+            <div class="chat">
+                <div class="q">요즘 CPU는 코어가 여러 개잖아. 다 쓸 수 있어?</div>
+                <div class="a">
+                    <p><span class="warning">쉽지 않아.</span></p>
+                    <p><br>게임 로직은 보통 <span class="highlight">순서가 중요</span>해.</p>
+                    <p>A가 B에 영향을 주고, B가 C에 영향을 주면...</p>
+                    <p>순서대로 해야 해서 병렬화가 어려워.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Factorio는 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="key-point">독립적인 작업을 찾아서 병렬화</span>해.</p>
+                    <p><br>예를 들어:</p>
+                    <p>• 서로 멀리 떨어진 청크들 → 동시에 업데이트 가능</p>
+                    <p>• 렌더링과 로직 → 별도 스레드</p>
+                    <p>• 경로 탐색 (로봇) → 백그라운드 스레드</p>
+                </div>
+            </div>
+
+            <div class="diagram">
+┌─────────────────────────────────────────┐
+│              메인 스레드                  │
+│  [게임 로직] → [동기화] → [렌더링 준비]   │
+└─────────────────────────────────────────┘
+         ↕ 작업 분배      ↕ 결과 수집
+┌──────────┐ ┌──────────┐ ┌──────────┐
+│ 워커 #1  │ │ 워커 #2  │ │ 워커 #3  │
+│ 청크 A,D │ │ 청크 B,E │ │ 청크 C,F │
+└──────────┘ └──────────┘ └──────────┘
+                <p class="diagram-caption">독립적인 청크들을 여러 워커 스레드가 동시에 처리</p>
+            </div>
+
+            <div class="chat">
+                <div class="q">연결된 벨트는 어떻게 해? 순서가 중요하잖아.</div>
+                <div class="a">
+                    <p><span class="highlight">벨트 네트워크</span> 단위로 묶어.</p>
+                    <p><br>연결된 벨트들 = 하나의 "네트워크"</p>
+                    <p>네트워크 내부는 순차 처리</p>
+                    <p>서로 다른 네트워크는 병렬 처리</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>시스템</th>
+                    <th>병렬화 가능?</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>독립된 청크</td>
+                    <td>✅ 가능</td>
+                    <td>서로 영향 없음</td>
+                </tr>
+                <tr>
+                    <td>연결된 벨트</td>
+                    <td>❌ 불가</td>
+                    <td>순서대로 흘러야 함</td>
+                </tr>
+                <tr>
+                    <td>경로 탐색</td>
+                    <td>✅ 가능</td>
+                    <td>읽기 전용, 결과만 적용</td>
+                </tr>
+                <tr>
+                    <td>전력망 계산</td>
+                    <td>✅ 가능</td>
+                    <td>독립된 전력망 단위</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 6: 데이터 지향 설계 -->
+        <div class="conversation">
+            <h2>Part 6. 데이터 지향 설계 - 캐시 친화적 구조</h2>
+
+            <div class="chat">
+                <div class="q">코드 구조도 성능에 영향을 줘?</div>
+                <div class="a">
+                    <p><span class="key-point">엄청나게 영향을 줘.</span></p>
+                    <p><br>CPU는 메모리에서 데이터를 가져올 때</p>
+                    <p><span class="highlight">캐시(Cache)</span>를 사용해.</p>
+                    <p>캐시 히트 = 빠름, 캐시 미스 = 느림.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">캐시 미스를 줄이려면?</div>
+                <div class="a">
+                    <p><span class="highlight">같이 쓰는 데이터를 메모리에 붙여놔.</span></p>
+                    <p><br>객체 지향 (OOP):</p>
+                    <p>→ 엔티티마다 데이터가 흩어져 있음</p>
+                    <p>→ 캐시 미스 많음</p>
+                    <p><br>데이터 지향 (DOD):</p>
+                    <p>→ 같은 종류 데이터를 배열로 모음</p>
+                    <p>→ 캐시 히트 많음</p>
+                </div>
+            </div>
+
+            <div class="code-block">// ❌ 객체 지향 (캐시 비효율)
+class Inserter {
+    Vector3 position;    // 메모리 위치 A
+    float rotation;
+    Item heldItem;
+    Machine target;
+    // ... 수십 개 필드
+}
+Inserter[] inserters;  // 각 객체가 멀리 떨어져 있음
+
+// ✅ 데이터 지향 (캐시 효율)
+struct InserterPositions {
+    Vector3[] positions;  // 위치만 연속 배열
+}
+struct InserterRotations {
+    float[] rotations;    // 회전만 연속 배열
+}
+// 위치 업데이트 시 positions 배열만 순회 → 캐시 히트!</div>
+
+            <div class="chat">
+                <div class="q">얼마나 차이 나?</div>
+                <div class="a">
+                    <p>같은 로직이라도 <span class="key-point">2~10배</span> 차이날 수 있어.</p>
+                    <p><br>Factorio는 이런 최적화를 극한까지 적용해서</p>
+                    <p>수십만 엔티티를 60 FPS로 돌릴 수 있는 거야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>청크 시스템</strong> - 플레이어 주변만 매 프레임, 나머지는 "결과만 계산"</li>
+                <li><strong>벨트 최적화</strong> - 아이템 개별 이동 X, 벨트의 "흐름량"만 계산</li>
+                <li><strong>이벤트 기반</strong> - 삽입기는 평소 "잠들어" 있다가 필요할 때만 깨어남</li>
+                <li><strong>멀티스레딩</strong> - 독립적인 청크/네트워크를 여러 코어에서 병렬 처리</li>
+                <li><strong>데이터 지향 설계</strong> - 캐시 친화적 메모리 배치로 2~10배 성능 향상</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
