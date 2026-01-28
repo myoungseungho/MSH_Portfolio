@@ -782,16 +782,265 @@ public partial struct EnemyMovementSystem : ISystem
             </div>
         </div>
 
+        <!-- Part 7: Archetype & Chunk -->
+        <div class="conversation">
+            <h2>Part 7. Archetype과 Chunk — ECS가 데이터를 저장하는 방법</h2>
+
+            <div class="chat">
+                <div class="q">ECS가 데이터를 어떻게 저장하길래 빨라?</div>
+                <div class="a">
+                    <p><span class="highlight">Archetype</span>이라는 구조로 저장해.</p>
+                    <p>같은 Component 조합을 가진 Entity들을 <span class="key-point">배열로 모아</span>놓는 거야.</p>
+                </div>
+            </div>
+
+<pre class="code-block">
+Archetype (Position, Rotation, Renderer를 가진 Entity들)
+┌─────────────────────────────────────────────────────┐
+│ Position[]   │ [pos0] [pos1] [pos2] [pos3] ...     │
+│ Rotation[]   │ [rot0] [rot1] [rot2] [rot3] ...     │
+│ Renderer[]   │ [ren0] [ren1] [ren2] [ren3] ...     │
+└─────────────────────────────────────────────────────┘
+       ↑          ↑       ↑       ↑       ↑
+   Entity =    E0      E1      E2      E3
+
+→ 세로 방향 같은 인덱스 = 하나의 Entity!
+</pre>
+
+            <div class="chat">
+                <div class="q">Chunk는 또 뭐야?</div>
+                <div class="a">
+                    <p>Archetype을 <span class="highlight">16KB 단위</span>로 쪼갠 거야.</p>
+                </div>
+            </div>
+
+<pre class="code-block">
+Archetype
+┌─────────┐    ┌─────────┐    ┌─────────┐
+│ Chunk 1 │ ←→ │ Chunk 2 │ ←→ │ Chunk 3 │  (연결 리스트)
+│  16KB   │    │  16KB   │    │  16KB   │
+└─────────┘    └─────────┘    └─────────┘
+  (배열)         (배열)         (배열)
+
+→ Chunk 내부는 배열 (빠름)
+→ Chunk 간은 연결 리스트 (삽입/삭제 비용 최소)
+</pre>
+
+            <div class="analogy-box">
+                <h4>주의사항</h4>
+                <p>Component를 추가/삭제하면 <span class="warning">다른 Archetype으로 이동</span>해야 함!</p>
+                <p>→ 메모리 이동 발생 → 성능 저하</p>
+                <p style="margin-top: 8px;"><strong>설계 원칙:</strong> "이 Entity에 이 Component가 정말 필요한가?" 항상 고민!</p>
+            </div>
+        </div>
+
+        <!-- Part 8: 실제 프로젝트 적용 결과 -->
+        <div class="conversation">
+            <h2>Part 8. 실제 프로젝트 적용 사례 (넥슨 모다스튜디오)</h2>
+
+            <div class="chat">
+                <div class="q">실제 상용 프로젝트에서 ECS 적용하면 어떤 결과가 나와?</div>
+                <div class="a">
+                    <p>넥슨 모다스튜디오에서 1600x1600 타일 기반 시뮬레이션 게임에 적용한 결과야:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>타일 수</th>
+                    <th>결과</th>
+                </tr>
+                <tr>
+                    <td>15,000개</td>
+                    <td>무난하게 60fps 이상</td>
+                </tr>
+                <tr>
+                    <td>55,000개</td>
+                    <td>프레임 저하 있지만 클래식보다 훨씬 양호</td>
+                </tr>
+                <tr>
+                    <td>62,000개</td>
+                    <td>5.38ms로 렌더링 처리</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">유닛 이동은 어때?</div>
+                <div class="a">
+                    <p><span class="warning">10,000 유닛</span> 기준으로 비교:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>방식</th>
+                    <th>10,000 유닛 결과</th>
+                </tr>
+                <tr>
+                    <td>클래식 (MonoBehaviour.Update)</td>
+                    <td><span class="fps-bad">약 8fps</span></td>
+                </tr>
+                <tr>
+                    <td>ECS + Job System</td>
+                    <td><span class="fps-good">60fps 이상 유지</span></td>
+                </tr>
+            </table>
+
+            <div class="info-box">
+                <h4>성과</h4>
+                <p><strong>8fps → 60fps 이상</strong> — Profiler에서 Worker Thread들이 활성화되어 멀티코어 활용 확인!</p>
+                <p style="margin-top: 8px;"><em>— 함동기, 넥슨 모다스튜디오 클라이언트 프로그래머 NDC 발표</em></p>
+            </div>
+        </div>
+
+        <!-- Part 9: Entity Debugger -->
+        <div class="conversation">
+            <h2>Part 9. Entity Debugger — ECS 디버깅 도구</h2>
+
+            <div class="chat">
+                <div class="q">ECS 쓰면 Hierarchy에서 안 보이는데, 디버깅은 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="highlight">Entity Debugger</span>라는 전용 도구를 써야 해.</p>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <h4>Entity Debugger 구성</h4>
+                <p><strong>왼쪽:</strong> System 리스트 (On/Off, 프레임당 수행시간)</p>
+                <p><strong>가운데:</strong> 쿼리 조건 (어떤 Component 조합 처리하는지)</p>
+                <p><strong>오른쪽:</strong> Chunk Info 히스토그램</p>
+                <p style="margin-top: 12px;">히스토그램 막대가 <span class="key-point">오른쪽에 가까울수록 좋아!</span> Chunk가 꽉 차있다는 뜻.</p>
+            </div>
+
+            <div class="analogy-box">
+                <h4>ECS 디버깅의 어려움</h4>
+                <p>기존처럼 에디터에서 눈으로 확인하기 어려움.</p>
+                <p>Entity Debugger가 <strong>유일한 확인 방법</strong>이야!</p>
+            </div>
+        </div>
+
+        <!-- Part 10: Hybrid ECS -->
+        <div class="conversation">
+            <h2>Part 10. Hybrid ECS — 기존 코드를 버리지 않고 전환하기</h2>
+
+            <div class="chat">
+                <div class="q">ECS 쓰려면 기존 코드 다 새로 짜야 해?</div>
+                <div class="a">
+                    <p><span class="key-point">아니! Hybrid 방식</span>으로 기존 것 대부분 재활용 가능해!</p>
+                </div>
+            </div>
+
+<pre class="code-block">
+// 기존 GameObject를 ECS Entity로 자동 변환!
+GameObjectConversionUtility.ConvertGameObjectHierarchy(
+    gameObject,           // 기존 GameObject
+    conversionSettings    // 설정
+);
+// 결과: ECS Entity 반환
+</pre>
+
+            <div class="chat">
+                <div class="q">Hybrid 방식으로 어떻게 개발해?</div>
+                <div class="a">
+                    <p>Proxy 패턴으로 에디터에서 값 설정 + ECS 변환을 함께:</p>
+                </div>
+            </div>
+
+<pre class="code-block">
+// 1. Component (데이터)
+public struct TroopMove : IComponentData
+{
+    public float speed;
+}
+
+// 2. Proxy (에디터에서 값 설정 가능)
+public class TroopMoveProxy : MonoBehaviour, IConvertGameObjectToEntity
+{
+    [SerializeField] float speed;
+
+    public void Convert(Entity entity, EntityManager manager, ...)
+    {
+        manager.AddComponentData(entity, new TroopMove { speed = speed });
+    }
+}
+
+// 3. System (로직) — ECS로 처리
+// 4. 기존 MonoBehaviour 스폰 로직 그대로 사용!
+</pre>
+
+            <div class="info-box">
+                <h4>Hybrid의 장점</h4>
+                <p>• 기존 프리팹/코드 재활용 가능!</p>
+                <p>• 점진적으로 ECS 적용할 수 있어!</p>
+            </div>
+        </div>
+
+        <!-- Part 11: 적용 가이드 -->
+        <div class="conversation">
+            <h2>Part 11. 언제 ECS를 써야 하고, 언제 쓰면 안 될까?</h2>
+
+            <div class="chat">
+                <div class="q">모든 걸 ECS로 바꿔야 해?</div>
+                <div class="a">
+                    <p>아니! ECS가 효과적인 <span class="highlight">조건</span>이 있어:</p>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <h4>ECS가 효과적인 경우</h4>
+                <p>1. <strong>같은 타입</strong>의 오브젝트가</p>
+                <p>2. <strong>엄청 많이</strong> (수만 단위)</p>
+                <p>3. <strong>매 프레임 업데이트</strong>되는 경우</p>
+                <p style="margin-top: 12px;"><strong>기계적 판단:</strong> <code style="background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 4px;">MonoBehaviour.Update()</code>가 있다면 → ECS System으로 대체 검토!</p>
+            </div>
+
+            <div class="chat">
+                <div class="q">ECS가 오히려 안 좋은 경우는?</div>
+                <div class="a">
+                    <p>이런 경우에는 기존 방식이 나아:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>ECS 효과</th>
+                </tr>
+                <tr>
+                    <td>오브젝트 수가 적음</td>
+                    <td>효과 없음</td>
+                </tr>
+                <tr>
+                    <td>서로 다른 타입이 많음</td>
+                    <td>Archetype이 많아져서 비효율</td>
+                </tr>
+                <tr>
+                    <td>Component 추가/삭제 빈번</td>
+                    <td>메모리 이동 비용</td>
+                </tr>
+            </table>
+
+            <div class="analogy-box">
+                <h4>ECS 단점</h4>
+                <p>• <strong>디버깅 어려움:</strong> Entity Debugger만 가능</p>
+                <p>• <strong>학습 곡선:</strong> DOD 패러다임이 익숙하지 않으면 어려움</p>
+                <p>• <strong>API 변경:</strong> 아직 프리뷰라 자주 바뀜</p>
+            </div>
+        </div>
+
         <!-- 전체 정리 -->
         <div class="summary-box">
             <h3>전체 정리: 왜 DOTS가 빠른가</h3>
             <ul>
                 <li><strong>기존 문제:</strong> MonoBehaviour는 class(힙 할당)라 메모리가 흩어짐 → 캐시 미스 (100ns) + vtable 오버헤드</li>
                 <li><strong>ECS:</strong> struct 기반 연속 배치 → 캐시 히트 (1ns) + 프리페칭 가능 + 함수 호출 1번</li>
+                <li><strong>Archetype & Chunk:</strong> 같은 Component 조합을 16KB 단위 배열로 저장 → 캐시 효율 극대화</li>
                 <li><strong>Jobs:</strong> 작업 분할 + Safety System → 레이스 컨디션 없이 8코어 병렬 처리</li>
                 <li><strong>Burst:</strong> LLVM AOT + SIMD 벡터화 → 루프당 8배 처리량</li>
                 <li><strong>시너지:</strong> 연속 데이터(ECS) × 병렬 처리(Jobs) × 네이티브 최적화(Burst)</li>
-                <li><strong>결과:</strong> 50,000개 기준 20fps → 250fps (<span class="fps-good">12배↑</span>)</li>
+                <li><strong>실전:</strong> 넥슨 모다스튜디오 타일맵 8fps → 60fps+, 50K 큐브 20fps → 250fps</li>
+                <li><strong>적용 기준:</strong> 같은 타입 + 대량 + 매 프레임 업데이트 = ECS 적합</li>
+                <li><strong>전환 전략:</strong> Hybrid ECS로 기존 코드 재활용하며 점진적 적용</li>
             </ul>
         </div>
 
