@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU 아키텍처: x86 vs ARM - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; font-weight: 600; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "\2192"; position: absolute; left: 0; color: #90caf9; }
+
+        .etymology-box {
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .etymology-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .etymology-box p { margin-bottom: 12px; opacity: 0.95; }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">&larr; CS 기초</a>
+
+        <div class="header">
+            <h1>CPU 아키텍처: x86 vs ARM</h1>
+            <p>PC, 서버, 모바일 &mdash; CPU가 다르면 왜 같은 코드가 다르게 동작할까?</p>
+        </div>
+
+        <!-- Etymology Box -->
+        <div class="etymology-box">
+            <h3>Architecture = 설계 구조</h3>
+            <p><strong>CPU</strong> = Central Processing Unit, 명령어를 실행하는 핵심 장치</p>
+            <p><strong>Architecture</strong> = 구조, 설계 방식 &mdash; CPU가 명령어를 어떤 방식으로 처리하는지</p>
+            <p><strong>ISA</strong> (Instruction Set Architecture) = CPU가 이해할 수 있는 명령어 세트의 규격</p>
+            <p style="margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.3); opacity: 0.9;">
+                같은 프로그램도 CPU 아키텍처가 다르면 기계어가 완전히 달라진다. x86용 exe는 ARM에서 실행할 수 없다.
+            </p>
+        </div>
+
+        <!-- Part 1 -->
+        <div class="conversation">
+            <h2>Part 1. CPU가 뭔데? &mdash; 명령어를 실행하는 기계</h2>
+
+            <div class="chat">
+                <div class="q">CPU가 뭔데?</div>
+                <div class="a">
+                    <p>CPU는 <span class="highlight">명령어(instruction)를 하나씩 가져와서 실행하는 장치</span>다. 모든 CPU는 기본적으로 같은 사이클을 반복한다.</p>
+                    <p><strong>Fetch</strong>(명령어 가져오기) &rarr; <strong>Decode</strong>(해석) &rarr; <strong>Execute</strong>(실행) &rarr; <strong>Write Back</strong>(결과 저장). 이 네 단계를 쉬지 않고 반복하는 것이 CPU의 본질이다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">CPU 실행 사이클 (Instruction Cycle)
+ ┌─────────────────────────────────────────────────────┐
+ │                                                     │
+ │   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌──────────┐
+ │   │  Fetch   │──▶│ Decode  │──▶│ Execute │──▶│Write Back│
+ │   │ 명령어   │   │  해석   │   │  실행   │   │결과 저장 │
+ │   └─────────┘   └─────────┘   └─────────┘   └──────────┘
+ │       ▲                                          │
+ │       └──────────────────────────────────────────┘
+ │                    반복 (Loop)
+ └─────────────────────────────────────────────────────┘
+
+ PC (Program Counter) 가 다음 명령어 주소를 가리킴
+ → 메모리에서 명령어를 가져오고 (Fetch)
+ → 어떤 연산인지 해석하고 (Decode)
+ → ALU 등에서 실행하고 (Execute)
+ → 결과를 레지스터/메모리에 저장 (Write Back)</div>
+
+            <div class="chat">
+                <div class="q">그럼 모든 CPU가 같은 명령어를 실행해?</div>
+                <div class="a">
+                    <p><span class="warning">아니다.</span> CPU마다 이해할 수 있는 <span class="highlight">명령어 세트(ISA)</span>가 다르다.</p>
+                    <p><strong>x86</strong>은 Intel이 설계한 명령어를 사용하고, <strong>ARM</strong>은 ARM Holdings가 설계한 명령어를 사용한다. 마치 영어와 일본어처럼, 같은 뜻이라도 표현 방식이 완전히 다르다.</p>
+                    <p>그래서 x86용으로 컴파일한 바이너리는 ARM CPU에서 실행할 수 없고, 그 반대도 마찬가지다.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2 -->
+        <div class="conversation">
+            <h2>Part 2. x86이 뭐야? &mdash; Intel/AMD, PC/서버의 표준</h2>
+
+            <div class="chat">
+                <div class="q">x86이 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">1978년 Intel 8086</span>에서 시작된 CPU 아키텍처다. <strong>CISC</strong>(Complex Instruction Set Computing) 방식으로, 하나의 명령어가 복잡한 작업을 수행할 수 있다.</p>
+                    <p>예를 들어 "메모리에서 값을 읽어서 더한 뒤 다시 메모리에 저장"하는 것을 <strong>한 줄의 명령어</strong>로 처리할 수 있다.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">왜 PC의 표준이 됐어?</div>
+                <div class="a">
+                    <p>1981년 <strong>IBM PC</strong>가 Intel 8088(8086의 파생)을 채택했고, 이후 <strong>Microsoft Windows</strong>가 x86 위에서 동작하면서 사실상 PC/서버의 표준이 됐다.</p>
+                    <p>Intel과 AMD가 경쟁하며 성능을 끌어올렸고, 서버 시장에서도 x86이 지배적인 위치를 차지했다. <span class="key-point">현재 대부분의 게임 서버는 x86(x64) 위에서 동작한다.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">; x86 어셈블리 예시 (Intel 문법)
+; 두 수를 더하는 간단한 연산
+
+mov eax, [num1]     ; 메모리에서 num1 값을 eax 레지스터로 로드
+add eax, [num2]     ; eax에 num2 값을 더함 (메모리 직접 참조 가능!)
+mov [result], eax   ; 결과를 메모리에 저장
+
+; CISC 특징: add 명령어가 메모리에서 직접 읽어서 더할 수 있음
+; → 하나의 명령어가 "메모리 읽기 + 연산"을 동시에 수행</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>x86 특징</th>
+                </tr>
+                <tr>
+                    <td>설계 방식</td>
+                    <td class="good">CISC (Complex Instruction Set Computing)</td>
+                </tr>
+                <tr>
+                    <td>명령어 길이</td>
+                    <td>가변 길이 (1~15 바이트)</td>
+                </tr>
+                <tr>
+                    <td>단일 스레드 성능</td>
+                    <td class="good">높음</td>
+                </tr>
+                <tr>
+                    <td>전력 소모</td>
+                    <td class="bad">높음 (65~350W TDP)</td>
+                </tr>
+                <tr>
+                    <td>메모리 접근</td>
+                    <td>명령어에서 직접 메모리 참조 가능</td>
+                </tr>
+                <tr>
+                    <td>대표 제조사</td>
+                    <td>Intel, AMD</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3 -->
+        <div class="conversation">
+            <h2>Part 3. x64는 x86이랑 다른 거야? &mdash; 32비트 &rarr; 64비트 확장</h2>
+
+            <div class="chat">
+                <div class="q">x64는 x86이랑 다른 거야?</div>
+                <div class="a">
+                    <p><span class="highlight">x64 = x86의 64비트 확장</span>이다. 원래 x86은 32비트 아키텍처였는데, <strong>AMD</strong>가 먼저 64비트로 확장해서 <strong>AMD64</strong>라고도 부른다.</p>
+                    <p>Intel은 나중에 이를 채택해서 <strong>Intel 64</strong> 또는 <strong>EM64T</strong>라고 불렀다. 결국 같은 것이다.</p>
+                    <p><span class="key-point">핵심: 하위 호환</span> &mdash; x64 CPU는 기존 32비트 x86 코드도 그대로 실행할 수 있다. 그래서 오래된 프로그램도 동작한다.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">32비트와 64비트 차이가 뭔데?</div>
+                <div class="a">
+                    <p>가장 큰 차이는 <span class="highlight">레지스터 크기</span>와 <span class="highlight">메모리 주소 공간</span>이다.</p>
+                    <p>32비트는 최대 4GB 메모리만 주소 지정 가능하지만, 64비트는 이론상 16EB(엑사바이트)까지 가능하다. 실제로는 OS와 하드웨어가 48비트 주소(256TB)를 사용한다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>32비트 (x86)</th>
+                    <th>64비트 (x64)</th>
+                </tr>
+                <tr>
+                    <td>레지스터 크기</td>
+                    <td>32비트 (EAX, EBX...)</td>
+                    <td class="good">64비트 (RAX, RBX...)</td>
+                </tr>
+                <tr>
+                    <td>범용 레지스터 수</td>
+                    <td>8개</td>
+                    <td class="good">16개 (R8~R15 추가)</td>
+                </tr>
+                <tr>
+                    <td>최대 메모리</td>
+                    <td class="bad">4GB</td>
+                    <td class="good">16EB (실제 256TB)</td>
+                </tr>
+                <tr>
+                    <td>포인터 크기</td>
+                    <td>4바이트</td>
+                    <td>8바이트</td>
+                </tr>
+                <tr>
+                    <td>함수 호출 규약</td>
+                    <td>cdecl, stdcall 등 다양</td>
+                    <td class="good">통일 (Windows: Microsoft x64, Linux: System V AMD64)</td>
+                </tr>
+                <tr>
+                    <td>하위 호환</td>
+                    <td>-</td>
+                    <td class="good">32비트 코드 실행 가능 (WoW64)</td>
+                </tr>
+            </table>
+
+            <div class="a" style="margin-top: 20px;">
+                <p><span class="key-point">참고:</span> 현재 "x86"이라고 하면 보통 <strong>x86-64(x64)를 포함하는 넓은 의미</strong>로 사용된다. 게임 서버는 거의 100% x64 빌드를 사용한다. 4GB 메모리 제한은 대규모 온라인 게임에서는 치명적이기 때문이다.</p>
+            </div>
+        </div>
+
+        <!-- Part 4 -->
+        <div class="conversation">
+            <h2>Part 4. ARM은 뭐가 달라? &mdash; RISC vs CISC</h2>
+
+            <div class="chat">
+                <div class="q">ARM은 뭐가 달라?</div>
+                <div class="a">
+                    <p>ARM은 <span class="highlight">RISC(Reduced Instruction Set Computing)</span> 방식이다. 명령어가 단순하고 <strong>고정 길이(4바이트)</strong>다.</p>
+                    <p>CISC(x86)가 "하나의 복잡한 명령어로 많은 일을 하자"라면, RISC(ARM)는 <strong>"단순한 명령어를 빠르게 많이 실행하자"</strong>는 철학이다.</p>
+                    <p>명령어가 단순하니 회로도 단순해지고, <span class="key-point">적은 전력으로 효율적</span>이다. 그래서 스마트폰, 태블릿 등 모바일 기기에서 압도적으로 사용된다.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">RISC랑 CISC의 차이가 뭔데?</div>
+                <div class="a">
+                    <p><strong>CISC(x86)</strong>: 하나의 복잡한 명령어가 여러 작업을 수행한다. "메모리에서 읽고 + 연산하고 + 저장"을 한 명령어로 가능.</p>
+                    <p><strong>RISC(ARM)</strong>: 단순한 명령어만 존재. "메모리에서 읽기", "연산하기", "저장하기"가 각각 별도 명령어. 하지만 각 명령어가 1 클록에 실행되는 것을 목표로 설계.</p>
+                </div>
+            </div>
+
+            <div class="code-block">; 같은 작업: "메모리의 두 값을 더해서 저장"
+
+; === CISC (x86) ===
+; 메모리 직접 참조 가능 → 적은 명령어
+add eax, [num2]        ; 메모리에서 읽기 + 더하기를 한 번에!
+mov [result], eax      ; 결과 저장
+
+; === RISC (ARM) ===
+; 메모리 접근은 Load/Store만 가능 → 명령어가 더 많음
+LDR  R0, [R2]         ; 메모리에서 R0으로 로드
+LDR  R1, [R3]         ; 메모리에서 R1으로 로드
+ADD  R0, R0, R1       ; R0 = R0 + R1 (레지스터끼리만 연산)
+STR  R0, [R4]         ; 결과를 메모리에 저장
+
+; RISC는 명령어 수가 더 많지만,
+; 각 명령어가 단순해서 파이프라인 효율이 높고
+; 클록당 처리량(IPC)을 높일 수 있다.</div>
+
+            <div class="chat">
+                <div class="q">요즘 ARM이 왜 뜨는 거야?</div>
+                <div class="a">
+                    <p>두 가지 큰 변화가 있었다:</p>
+                    <p><strong>1. Apple Silicon (M1~M4)</strong> &mdash; Apple이 Mac에 자체 ARM 칩을 탑재. 성능은 x86 최상위급인데 <span class="key-point">전력 효율이 압도적</span>. 팬 없이도 고성능을 낸다.</p>
+                    <p><strong>2. AWS Graviton</strong> &mdash; Amazon이 서버용 ARM CPU를 만들어서 AWS에 배치. 같은 비용 대비 <span class="key-point">최대 40% 더 나은 가성비</span>를 제공한다.</p>
+                    <p>게임 서버도 ARM 서버를 검토하는 곳이 늘고 있다. 특히 서버 비용이 큰 대규모 서비스에서 관심이 높다. 다만 기존 x86 전용 라이브러리나 인라인 어셈블리 호환성 문제가 걸림돌이 될 수 있다.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. 메모리 모델이 왜 다르지? &mdash; 강한 vs 약한 모델</h2>
+
+            <div class="chat">
+                <div class="q">CPU 아키텍처마다 메모리 모델이 다르다는 게 무슨 뜻이야?</div>
+                <div class="a">
+                    <p>멀티코어 CPU에서 각 코어가 <span class="highlight">메모리를 읽고 쓰는 순서를 얼마나 보장하느냐</span>가 아키텍처마다 다르다.</p>
+                    <p>우리가 코드에 쓴 순서대로 메모리에 반영된다고 생각하지만, 실제로 CPU와 컴파일러는 성능을 위해 순서를 바꿀 수 있다. 이걸 <strong>재배치(reordering)</strong>라고 한다.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">x86은 어떤 모델이야?</div>
+                <div class="a">
+                    <p>x86은 <span class="key-point">강한 순서 모델(TSO, Total Store Order)</span>이다.</p>
+                    <p><strong>Store-Store 순서가 보장</strong>된다. 즉, 코어가 A를 쓰고 B를 쓰면, 다른 코어에서도 A가 먼저 보이고 B가 나중에 보인다.</p>
+                    <p>그래서 x86에서는 <strong>메모리 배리어 없이도 많은 경우 정상 동작</strong>한다. 하지만 이건 "운이 좋은 것"이지 "올바른 코드"는 아니다.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">ARM은?</div>
+                <div class="a">
+                    <p>ARM은 <span class="warning">약한 순서 모델(Weak Memory Model)</span>이다.</p>
+                    <p>CPU가 성능을 위해 <strong>자유롭게 읽기/쓰기 순서를 바꿀 수 있다</strong>. Store-Store, Load-Load, Store-Load, Load-Store 모든 조합에서 재배치가 일어날 수 있다.</p>
+                    <p>따라서 ARM에서는 <span class="warning">반드시 명시적 메모리 배리어가 필요</span>하다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// x86에서 되는데 ARM에서 깨지는 예시: flag 패턴
+
+// 공유 변수
+int data = 0;
+int flag = 0;   // flag로 "data 준비됐음"을 알림
+
+// === Thread 1 (Writer) ===
+data = 42;       // (1) 데이터 쓰기
+flag = 1;        // (2) 플래그 쓰기
+
+// === Thread 2 (Reader) ===
+while (flag == 0) {}   // (3) 플래그 대기
+int r = data;          // (4) 데이터 읽기 → 42여야 함
+
+// x86 (TSO): Store-Store 순서 보장
+//   → (1)이 (2)보다 먼저 보임 → r == 42 ✅
+
+// ARM (Weak): Store-Store 재배치 가능!
+//   → (2)가 (1)보다 먼저 보일 수 있음 → r == 0 ❌ 버그!
+
+// === 올바른 코드 (아키텍처 독립적) ===
+std::atomic&lt;int&gt; data{0};
+std::atomic&lt;int&gt; flag{0};
+
+// Thread 1
+data.store(42, std::memory_order_relaxed);
+flag.store(1, std::memory_order_release);  // 배리어!
+
+// Thread 2
+while (flag.load(std::memory_order_acquire) == 0) {}  // 배리어!
+int r = data.load(std::memory_order_relaxed);
+// → 모든 아키텍처에서 r == 42 ✅</div>
+
+            <div class="a">
+                <p><span class="warning">주의:</span> x86에서 잘 돌아간다고 ARM에서도 된다는 보장이 없다. 메모리 모델이 더 약하기 때문에 x86에서 "우연히" 동작하던 코드가 ARM에서 깨질 수 있다.</p>
+                <p><a href="../memory-order/" style="color: #1a237e; font-weight: 600;">Memory Order 상세 설명 &rarr;</a></p>
+            </div>
+        </div>
+
+        <!-- Part 6 -->
+        <div class="conversation">
+            <h2>Part 6. 그래서 개발할 때 뭐가 달라?</h2>
+
+            <div class="chat">
+                <div class="q">같은 C++ 코드인데 CPU마다 다르게 동작할 수 있다고?</div>
+                <div class="a">
+                    <p><span class="highlight">맞다.</span> 컴파일러가 CPU에 맞는 기계어를 생성하는데, 최적화 방식도 다르고 메모리 모델도 다르다.</p>
+                    <p>C++을 작성하면 컴파일러가 타겟 아키텍처에 맞는 기계어로 변환한다. 이때 x86 컴파일러와 ARM 컴파일러가 생성하는 코드가 다르고, 최적화 전략도 다르다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>x86 / x64</th>
+                    <th>ARM / AArch64</th>
+                </tr>
+                <tr>
+                    <td>빌드 타겟</td>
+                    <td>x86, x86_64</td>
+                    <td>arm, aarch64</td>
+                </tr>
+                <tr>
+                    <td>메모리 배리어 필요성</td>
+                    <td>TSO로 일부 생략 가능 (비권장)</td>
+                    <td class="bad">반드시 명시적 배리어 필요</td>
+                </tr>
+                <tr>
+                    <td>인라인 어셈블리</td>
+                    <td>x86 전용 (호환 불가)</td>
+                    <td class="bad">ARM 전용 (호환 불가)</td>
+                </tr>
+                <tr>
+                    <td>SIMD 명령어</td>
+                    <td>SSE, AVX, AVX-512</td>
+                    <td>NEON, SVE</td>
+                </tr>
+                <tr>
+                    <td>바이트 오더</td>
+                    <td>Little-Endian</td>
+                    <td>Little-Endian (기본, Bi-Endian 지원)</td>
+                </tr>
+                <tr>
+                    <td>서버 점유율</td>
+                    <td class="good">90%+ (Intel Xeon, AMD EPYC)</td>
+                    <td>증가 중 (AWS Graviton, Ampere)</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">게임 서버 개발자가 알아야 할 핵심은?</div>
+                <div class="a">
+                    <p><strong>1.</strong> 현재 게임 서버는 <span class="highlight">x86(x64) 기반이 대부분</span>이지만, AWS Graviton 같은 ARM 서버도 빠르게 늘고 있다. 비용 절감이 확실하기 때문이다.</p>
+                    <p><strong>2.</strong> <span class="key-point">std::atomic + memory_order를 사용하면 아키텍처 독립적으로 안전</span>하다. x86에서 "되니까 괜찮겠지"가 아니라, 표준이 보장하는 방법을 써야 한다.</p>
+                    <p><strong>3.</strong> <span class="key-point">플랫폼 독립적 코드 작성</span>이 중요하다. 인라인 어셈블리 대신 컴파일러 intrinsic을, 플랫폼 전용 API 대신 크로스 플랫폼 라이브러리를 쓰는 습관을 들이자.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>CPU는 명령어를 실행하는 장치, 아키텍처마다 명령어 세트(ISA)가 다르다</li>
+                <li>x86 = CISC, Intel/AMD, PC/서버 표준. x64는 x86의 64비트 확장 (AMD64)</li>
+                <li>ARM = RISC, 고정 길이 명령어, 전력 효율 우수. Apple Silicon, AWS Graviton으로 확장 중</li>
+                <li>x86은 강한 메모리 모델(TSO), ARM은 약한 모델 &mdash; 같은 코드가 다르게 동작할 수 있다</li>
+                <li>std::atomic + memory_order를 사용하면 아키텍처에 관계없이 안전한 코드 작성 가능</li>
+                <li>게임 서버는 대부분 x64이지만, ARM 서버도 점차 채택 중</li>
+            </ul>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-links">
+            <a href="../category-cs/">&larr; CS 기초</a>
+            <a href="../../">메인으로 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>
