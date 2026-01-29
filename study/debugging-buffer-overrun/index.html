@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>버퍼 오버런 - 배열 범위 밖 접근 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #DC2626; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEF2F2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.9rem; color: #E2E8F0; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+        <div class="header">
+            <h1>버퍼 오버런</h1>
+            <p>배열 범위 밖 접근 &mdash; 보안 취약점의 시작</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 버퍼 오버런이란?</h2>
+            <div class="q">버퍼 오버런이 뭐야?</div>
+            <div class="a">
+                <p>배열(버퍼)의 <span class="warning">할당된 범위를 넘어서</span> 읽거나 쓰는 것.</p>
+                <p>인접한 메모리를 덮어써서 <strong>데이터 손상</strong>이나 <strong>크래시</strong>를 유발.</p>
+            </div>
+            <div class="code-block">char buffer[10];
+
+// 오버런 (쓰기)
+buffer[10] = 'X';  // 인덱스 0~9만 유효한데 10에 접근!
+
+// 문자열 오버런
+strcpy(buffer, "This is way too long");  // 10바이트 넘음</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 왜 위험해?</h2>
+            <div class="q">즉시 크래시 안 나는데?</div>
+            <div class="a">
+                <p>오버런은 <span class="warning">즉시 크래시하지 않을 수 있다</span>.</p>
+                <p>인접 메모리에 뭐가 있느냐에 따라 다르다:</p>
+            </div>
+            <div class="code-block">// 스택 오버런 예시
+void Vulnerable()
+{
+    char buffer[10];
+    int importantFlag = 1;  // buffer 바로 뒤에 있음
+
+    strcpy(buffer, "AAAAAAAAAAAAAA");  // buffer 넘침
+
+    // importantFlag가 'AAAA'로 덮어써짐!
+    // importantFlag = 0x41414141 (= "AAAA")
+
+    if (importantFlag)  // 예상과 다른 동작!
+    {
+        // ...
+    }
+}</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 탐지 방법</h2>
+            <div class="q">어떻게 찾아?</div>
+            <div class="a">
+                <p>1. <span class="key-point">AddressSanitizer (ASan)</span> - 가장 강력</p>
+                <p>2. <span class="key-point">Application Verifier</span> - Windows 전용</p>
+                <p>3. <span class="highlight">Debug Heap</span> - CRT 가드 바이트 (0xAB, 0xFD)</p>
+            </div>
+            <div class="code-block">// AddressSanitizer 사용
+// 프로젝트 속성 → C/C++ → General
+// Enable Address Sanitizer: Yes (/fsanitize=address)
+
+// 실행 시 오버런 즉시 감지:
+==ERROR: AddressSanitizer: stack-buffer-overflow
+WRITE of size 1 at 0x... thread T0
+    #0 main example.cpp:5</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 예방</h2>
+            <div class="q">어떻게 방지해?</div>
+            <div class="a">
+                <p>1. <span class="key-point">안전한 함수</span> 사용 (strcpy_s, strncpy)</p>
+                <p>2. <span class="key-point">std::string, std::vector</span> 사용</p>
+                <p>3. <strong>범위 검사</strong> 습관화</p>
+            </div>
+            <div class="code-block">// 위험한 코드
+char buf[10];
+strcpy(buf, input);           // 길이 체크 없음!
+buf[index] = value;           // 범위 체크 없음!
+
+// 안전한 코드
+char buf[10];
+strcpy_s(buf, sizeof(buf), input);  // 크기 제한
+if (index < 10) buf[index] = value; // 범위 체크
+
+// 더 좋은 코드 - STL 사용
+std::string str = input;            // 자동 관리
+std::vector<char> vec(10);
+vec.at(index) = value;              // 범위 체크 + 예외</div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>버퍼 오버런</strong> = 배열 범위 밖 접근</li>
+                <li><strong>즉시 크래시 안 날 수 있음</strong> (더 위험)</li>
+                <li><strong>ASan</strong>으로 탐지, <strong>안전한 함수</strong>로 예방</li>
+                <li>가능하면 <strong>std::string, std::vector</strong> 사용</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-heap-corruption/">힙 손상 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

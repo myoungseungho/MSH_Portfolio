@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application Verifier - 힙 손상 즉시 탐지 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #DC2626; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEF2F2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.9rem; color: #E2E8F0; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+        <div class="header">
+            <h1>Application Verifier</h1>
+            <p>힙 손상 즉시 탐지 &mdash; Windows SDK 도구</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. Application Verifier란?</h2>
+            <div class="q">힙 손상이 delete에서 터지는데 원인을 못 찾겠어</div>
+            <div class="a">
+                <p><span class="highlight">Application Verifier</span>는 Windows SDK에 포함된 런타임 검증 도구.</p>
+                <p>힙 손상, 락 문제 등을 <strong>발생 즉시</strong> 잡아준다.</p>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 설치 및 실행</h2>
+            <div class="q">어디서 실행해?</div>
+            <div class="a">
+                <p>Windows SDK 설치 시 포함됨.</p>
+                <p>시작 메뉴 → <span class="key-point">Application Verifier</span> 검색</p>
+            </div>
+            <div class="code-block">// 설정 방법
+
+1. Application Verifier 실행
+2. File → Add Application → exe 선택
+3. Tests 목록에서 체크:
+   ✅ Basics → Heaps (가장 중요!)
+   ✅ Basics → Handles
+   ✅ Basics → Locks
+4. Save → 앱 실행
+
+// exe와 같은 이름의 설정이 레지스트리에 저장됨
+// 해당 exe 실행 시 자동으로 검증 시작</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. PageHeap (Full)</h2>
+            <div class="q">Heaps 옵션이 뭘 해?</div>
+            <div class="a">
+                <p><span class="highlight">PageHeap</span>은 각 힙 할당을 별도 페이지에 배치한다.</p>
+                <p>오버런 즉시 <strong>Access Violation</strong> 발생!</p>
+            </div>
+            <div class="code-block">// 일반 힙 구조
+[Header][Data......][Header][Data......][Header]
+         ↑ 오버런해도 바로 옆에 있는 데이터를 덮어쓸 뿐
+           크래시 안 남 (나중에 delete에서 터짐)
+
+// PageHeap 구조
+[Data......][Guard Page ❌][Data......][Guard Page ❌]
+         ↑ 오버런하면 Guard Page 접근 → 즉시 크래시!
+
+// 오버런 발생 시점에 바로 멈춤!</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 디버거 연결</h2>
+            <div class="q">VS에서 어떻게 같이 쓰?</div>
+            <div class="a">
+                <p>1. Application Verifier 설정 완료</p>
+                <p>2. VS에서 Debug로 실행 (F5)</p>
+                <p>3. 오류 발생 시 VS에서 바로 멈춤</p>
+            </div>
+            <div class="code-block">// VS Output 창에 메시지 출력
+
+VERIFIER STOP 00000008: pid 0x1234:
+Corrupted heap block detected.
+
+This verifier stop is continuable.
+After debugging it use `go' to continue.
+
+// Call Stack에서 손상 발생 위치 바로 확인!</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 주의사항</h2>
+            <div class="q">단점은?</div>
+            <div class="a">
+                <p>1. <span class="warning">매우 느려짐</span> (10~100배)</p>
+                <p>2. <span class="warning">메모리 사용량 증가</span> (페이지 단위 할당)</p>
+                <p>3. 문제 재현 후 반드시 <strong>설정 해제</strong></p>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Application Verifier</strong> = Windows 런타임 검증 도구</li>
+                <li><strong>PageHeap</strong>으로 오버런 즉시 감지</li>
+                <li>힙 손상 <strong>발생 시점</strong>에서 멈춤</li>
+                <li><strong>느려지므로</strong> 문제 재현 후 해제</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-heap-corruption/">힙 손상 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

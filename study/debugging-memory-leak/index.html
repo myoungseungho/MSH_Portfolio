@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메모리가 계속 늘어나요 - 메모리 누수 찾기 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #DC2626;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #FEE2E2;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #FEF2F2;
+            border-left: 4px solid #DC2626;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+
+        .code-block {
+            background: #1E293B;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #E2E8F0;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #D1FAE5; font-weight: 600; }
+        .compare-table .bad { background: #FEE2E2; }
+
+        .summary-box {
+            background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+
+        .step-box {
+            background: #F8FAFC;
+            border: 2px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+        }
+        .step-box h4 {
+            color: #DC2626;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .step-box h4 .step-num {
+            background: #DC2626;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+
+        <div class="header">
+            <h1>메모리가 계속 늘어나요</h1>
+            <p>메모리 누수(Memory Leak) 찾기 &mdash; CRT 디버그 힙, 스냅샷 비교</p>
+        </div>
+
+        <!-- Part 1 -->
+        <div class="conversation">
+            <h2>Part 1. 메모리 누수가 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">서버가 오래 돌면 메모리가 계속 늘어나요</div>
+                <div class="a">
+                    <p><span class="highlight">메모리 누수(Memory Leak)</span>: <code>new</code>로 할당한 메모리를 <code>delete</code>하지 않아서 계속 쌓이는 현상</p>
+                    <p>게임 서버처럼 24시간 돌아가는 프로그램에서는 작은 누수도 큰 문제가 된다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// 누수 예시
+
+void ProcessPacket(Packet* pPacket)
+{
+    char* pBuffer = new char[1024];  // 할당
+
+    if (pPacket->IsInvalid())
+    {
+        return;  // 🚨 여기서 리턴하면 pBuffer가 해제 안 됨!
+    }
+
+    // ... 처리 ...
+
+    delete[] pBuffer;  // 여기까지 안 옴
+}</div>
+        </div>
+
+        <!-- Part 2 -->
+        <div class="conversation">
+            <h2>Part 2. CRT 디버그 힙으로 찾기</h2>
+
+            <div class="chat">
+                <div class="q">Visual Studio에서 누수를 찾으려면?</div>
+                <div class="a">
+                    <p><span class="key-point">CRT 디버그 힙</span>을 활성화하면 프로그램 종료 시 누수된 메모리를 출력해준다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// main.cpp 또는 stdafx.cpp 맨 위에 추가
+
+#define _CRTDBG_MAP_ALLOC
+#include &lt;stdlib.h&gt;
+#include &lt;crtdbg.h&gt;
+
+// main() 시작 부분에 추가
+int main()
+{
+    // 프로그램 종료 시 누수 리포트 출력
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+
+    // ... 프로그램 코드 ...
+
+    return 0;
+}</div>
+
+            <div class="chat">
+                <div class="q">어떻게 출력되는데?</div>
+            </div>
+
+            <div class="code-block">// 프로그램 종료 시 출력 창에:
+
+Detected memory leaks!
+Dumping objects -&gt;
+{18364} normal block at 0x00A23B40, 1024 bytes long.
+ Data: &lt;                &gt; CD CD CD CD CD CD CD CD
+{18363} normal block at 0x00A23700, 256 bytes long.
+ Data: &lt;Player          &gt; 50 6C 61 79 65 72 00 00
+
+// {18364} = 할당 번호 (중요!)
+// 1024 bytes = 크기
+// CD CD CD = 초기화 안 된 메모리 패턴</div>
+        </div>
+
+        <!-- Part 3 -->
+        <div class="conversation">
+            <h2>Part 3. 할당 번호로 범인 찾기</h2>
+
+            <div class="chat">
+                <div class="q">{18364}가 어디서 할당됐는지 어떻게 알아?</div>
+                <div class="a">
+                    <p>해당 할당 번호에서 <strong>자동으로 멈추게</strong> 설정할 수 있다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// main() 시작 부분에 추가
+
+_CrtSetBreakAlloc(18364);  // 18364번째 할당에서 중단점!
+
+// 또는 Watch 창에서 실행 중에 설정:
+{,,ucrtbased.dll}_crtBreakAlloc = 18364</div>
+
+            <div class="step-box">
+                <h4><span class="step-num">1</span> 누수 리포트에서 할당 번호 확인</h4>
+                <p>예: {18364}</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">2</span> _CrtSetBreakAlloc(18364) 추가</h4>
+                <p>main() 시작 부분에 넣고 재실행</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">3</span> 자동으로 멈춤</h4>
+                <p>18364번째 할당이 일어날 때 중단점 히트 → 콜스택 확인</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">4</span> 콜스택으로 누수 위치 파악</h4>
+                <p>어디서 할당했는지, 왜 해제가 안 됐는지 분석</p>
+            </div>
+        </div>
+
+        <!-- Part 4 -->
+        <div class="conversation">
+            <h2>Part 4. 메모리 스냅샷 비교</h2>
+
+            <div class="chat">
+                <div class="q">실행 중에 누수를 찾고 싶어 (종료 안 하고)</div>
+                <div class="a">
+                    <p><span class="key-point">메모리 스냅샷</span>을 찍어서 비교한다.</p>
+                    <p>Debug → Windows → <strong>Diagnostic Tools</strong> → Memory 탭</p>
+                </div>
+            </div>
+
+            <div class="code-block">// 코드로 스냅샷 비교하기
+
+_CrtMemState s1, s2, sDiff;
+
+// 스냅샷 1 (시작 시점)
+_CrtMemCheckpoint(&s1);
+
+// ... 테스트 코드 실행 ...
+
+// 스냅샷 2 (종료 시점)
+_CrtMemCheckpoint(&s2);
+
+// 차이 계산
+if (_CrtMemDifference(&sDiff, &s1, &s2))
+{
+    _CrtMemDumpStatistics(&sDiff);  // 증가한 메모리 출력
+}</div>
+
+            <div class="chat">
+                <div class="q">출력이 어떻게 나와?</div>
+            </div>
+
+            <div class="code-block">// 스냅샷 차이 출력 예:
+
+0 bytes in 0 Free Blocks.
+102400 bytes in 100 Normal Blocks.  ← 100개의 블록이 해제 안 됨!
+0 bytes in 0 CRT Blocks.
+0 bytes in 0 Ignore Blocks.
+0 bytes in 0 Client Blocks.
+Largest number used: 204800 bytes.
+Total allocations: 307200 bytes.</div>
+        </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. VS 진단 도구 사용</h2>
+
+            <div class="chat">
+                <div class="q">GUI로 편하게 보고 싶어</div>
+                <div class="a">
+                    <p>Debug → Windows → <strong>Diagnostic Tools</strong> (Ctrl+Alt+F2)</p>
+                    <p>Memory Usage 탭에서 <strong>Take Snapshot</strong> 버튼 클릭</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>기능</th>
+                    <th>설명</th>
+                </tr>
+                <tr>
+                    <td>Take Snapshot</td>
+                    <td>현재 힙 상태 캡처</td>
+                </tr>
+                <tr>
+                    <td>스냅샷 비교</td>
+                    <td class="good">두 스냅샷 간 차이 확인 (증가한 객체 타입별)</td>
+                </tr>
+                <tr>
+                    <td>Allocation Call Stack</td>
+                    <td>각 할당의 콜스택 보기</td>
+                </tr>
+                <tr>
+                    <td>Object Type</td>
+                    <td>타입별로 그룹핑해서 보기</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 6 -->
+        <div class="conversation">
+            <h2>Part 6. 일반적인 누수 패턴</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>패턴</th>
+                    <th>예시</th>
+                    <th>해결책</th>
+                </tr>
+                <tr>
+                    <td class="bad">조기 리턴</td>
+                    <td>예외 상황에서 delete 전에 return</td>
+                    <td>RAII, unique_ptr 사용</td>
+                </tr>
+                <tr>
+                    <td class="bad">예외 발생</td>
+                    <td>throw 전에 delete 안 함</td>
+                    <td>스마트 포인터</td>
+                </tr>
+                <tr>
+                    <td class="bad">컨테이너에 포인터</td>
+                    <td>vector&lt;T*&gt; 클리어 시 delete 누락</td>
+                    <td>vector&lt;unique_ptr&lt;T&gt;&gt;</td>
+                </tr>
+                <tr>
+                    <td class="bad">순환 참조</td>
+                    <td>shared_ptr끼리 서로 참조</td>
+                    <td>weak_ptr 사용</td>
+                </tr>
+            </table>
+
+            <div class="code-block">// 나쁜 코드 → 좋은 코드
+
+// ❌ 누수 위험
+void Process()
+{
+    char* pBuffer = new char[1024];
+    if (Error()) return;  // 누수!
+    delete[] pBuffer;
+}
+
+// ✅ 안전 (unique_ptr)
+void Process()
+{
+    auto pBuffer = std::make_unique&lt;char[]&gt;(1024);
+    if (Error()) return;  // 자동 해제!
+}
+
+// ✅ 안전 (RAII)
+void Process()
+{
+    std::vector&lt;char&gt; buffer(1024);
+    if (Error()) return;  // 자동 해제!
+}</div>
+        </div>
+
+        <!-- Summary -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>CRT 디버그 힙</strong>: _CRTDBG_LEAK_CHECK_DF로 종료 시 누수 리포트</li>
+                <li><strong>_CrtSetBreakAlloc</strong>: 특정 할당 번호에서 자동 중단</li>
+                <li><strong>메모리 스냅샷</strong>: 두 시점 간 메모리 차이 비교</li>
+                <li><strong>VS 진단 도구</strong>: GUI로 스냅샷 찍고 비교</li>
+                <li><strong>예방</strong>: unique_ptr, RAII 패턴 사용</li>
+            </ul>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-stack-overflow/">Stack Overflow &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

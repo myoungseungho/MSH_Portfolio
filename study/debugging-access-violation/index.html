@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>0xC0000005가 떠요 - Access Violation 크래시 분석 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #DC2626;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #FEE2E2;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #FEF2F2;
+            border-left: 4px solid #DC2626;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+
+        .code-block {
+            background: #1E293B;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #E2E8F0;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #D1FAE5; font-weight: 600; }
+        .compare-table .bad { background: #FEE2E2; }
+
+        .error-box {
+            background: linear-gradient(135deg, #7F1D1D 0%, #991B1B 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+            font-family: 'Consolas', monospace;
+        }
+        .error-box h3 { font-size: 1.2rem; margin-bottom: 20px; font-family: 'Pretendard', sans-serif; }
+        .error-box pre {
+            background: rgba(0,0,0,0.3);
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+
+        .step-box {
+            background: #F8FAFC;
+            border: 2px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+        }
+        .step-box h4 {
+            color: #DC2626;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .step-box h4 .step-num {
+            background: #DC2626;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+
+        <div class="header">
+            <h1>0xC0000005가 떠요</h1>
+            <p>Access Violation &mdash; 가장 흔한 크래시, 가장 중요한 디버깅 스킬</p>
+        </div>
+
+        <!-- Error Box -->
+        <div class="error-box">
+            <h3>이런 에러를 본 적 있다면</h3>
+            <pre>Unhandled exception at 0x00007FF6A1B23456 in GameServer.exe:
+0xC0000005: Access violation reading location 0x0000000000000010.
+
+또는
+
+Exception thrown: read access violation.
+pPlayer was nullptr.</pre>
+        </div>
+
+        <!-- Part 1 -->
+        <div class="conversation">
+            <h2>Part 1. Access Violation이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">0xC0000005가 뭔데?</div>
+                <div class="a">
+                    <p><span class="highlight">접근 위반(Access Violation)</span>의 Windows 에러 코드다. CPU가 <strong>접근 권한이 없는 메모리</strong>를 읽거나 쓰려고 할 때 발생한다.</p>
+                    <p>쉽게 말해: <span class="warning">"네가 가면 안 되는 곳에 갔다"</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">왜 발생해?</div>
+                <div class="a">
+                    <p>주요 원인 3가지:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>원인</th>
+                    <th>예시</th>
+                    <th>주소 패턴</th>
+                </tr>
+                <tr>
+                    <td class="bad">1. nullptr 역참조</td>
+                    <td><code>pPlayer->GetHP()</code> (pPlayer가 null)</td>
+                    <td>0x00000000 ~ 0x0000FFFF</td>
+                </tr>
+                <tr>
+                    <td class="bad">2. 해제된 메모리 접근</td>
+                    <td><code>delete pItem; pItem->Use()</code></td>
+                    <td>0xDDDDDDDD, 0xFEEEFEEE</td>
+                </tr>
+                <tr>
+                    <td class="bad">3. 버퍼 오버런</td>
+                    <td><code>arr[1000]</code> (크기가 100인 배열)</td>
+                    <td>예측 불가</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 2 -->
+        <div class="conversation">
+            <h2>Part 2. 에러 메시지 해석하기</h2>
+
+            <div class="code-block">0xC0000005: Access violation reading location 0x0000000000000010
+                         ^^^^^^^^                        ^^^^^^^^^^^^^^^^^^
+                         읽기 시도                       접근한 주소</div>
+
+            <div class="chat">
+                <div class="q">reading vs writing?</div>
+                <div class="a">
+                    <p><strong>reading</strong>: 메모리를 <span class="highlight">읽으려다</span> 실패 (예: 값 가져오기)</p>
+                    <p><strong>writing</strong>: 메모리에 <span class="highlight">쓰려다</span> 실패 (예: 값 저장하기)</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">주소가 0x10이면 무슨 뜻이야?</div>
+                <div class="a">
+                    <p><span class="key-point">낮은 주소(0x0 ~ 0xFFFF)</span>는 거의 100% <strong>nullptr + 오프셋</strong>이다.</p>
+                    <p>예: <code>pPlayer->m_nHP</code>에서 pPlayer가 null이고, m_nHP가 구조체에서 0x10 위치에 있으면 → 0x10 접근 시도</p>
+                </div>
+            </div>
+
+            <div class="code-block">// 구조체 예시
+struct Player {
+    int   m_nID;      // offset 0x00
+    int   m_nLevel;   // offset 0x04
+    int   m_nHP;      // offset 0x08
+    int   m_nMP;      // offset 0x0C
+    char* m_pName;    // offset 0x10  ← 여기!
+};
+
+Player* pPlayer = nullptr;
+pPlayer->m_pName;  // nullptr + 0x10 = 0x10 접근 시도 → 크래시!</div>
+        </div>
+
+        <!-- Part 3 -->
+        <div class="conversation">
+            <h2>Part 3. 크래시 분석 5단계</h2>
+
+            <div class="step-box">
+                <h4><span class="step-num">1</span> 콜스택 확인</h4>
+                <p>Debug → Windows → <strong>Call Stack</strong> (Ctrl+Alt+C)</p>
+                <p>→ 어떤 함수에서, 어떤 경로로 여기까지 왔는지 확인</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">2</span> 크래시 라인 확인</h4>
+                <p>콜스택 최상단의 함수를 더블클릭 → 정확히 어느 줄에서 터졌는지 확인</p>
+                <p>→ 노란 화살표가 가리키는 곳이 문제의 코드</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">3</span> 변수 값 확인</h4>
+                <p>Locals/Watch 창에서 관련 변수 값 확인</p>
+                <p>→ 어떤 포인터가 <span class="warning">nullptr</span>인지, 어떤 값이 <span class="warning">이상한지</span> 찾기</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">4</span> 원인 역추적</h4>
+                <p>콜스택을 따라 올라가며 "이 포인터가 왜 null이 됐지?" 추적</p>
+                <p>→ 값이 설정되는 곳, 해제되는 곳 찾기</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">5</span> 재현 및 수정</h4>
+                <p>원인을 찾았으면 재현 조건 파악 → 방어 코드 또는 로직 수정</p>
+            </div>
+        </div>
+
+        <!-- Part 4 -->
+        <div class="conversation">
+            <h2>Part 4. 실전 예시 &mdash; nullptr 크래시</h2>
+
+            <div class="code-block">void CGameManager::UpdatePlayer(int nPlayerID)
+{
+    CPlayer* pPlayer = FindPlayer(nPlayerID);
+
+    // 여기서 크래시!
+    int nHP = pPlayer->GetHP();  // pPlayer가 nullptr
+
+    // ...
+}
+
+// 콜스택:
+// → CGameManager::UpdatePlayer() ← 여기서 터짐
+// → CGameManager::OnTick()
+// → main()</div>
+
+            <div class="chat">
+                <div class="q">어떻게 고쳐?</div>
+                <div class="a">
+                    <p><strong>방법 1: 방어 코드</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">void CGameManager::UpdatePlayer(int nPlayerID)
+{
+    CPlayer* pPlayer = FindPlayer(nPlayerID);
+
+    // nullptr 체크 추가
+    if (pPlayer == nullptr)
+    {
+        // 로그 남기고 리턴
+        LOG_ERROR("Player not found: %d", nPlayerID);
+        return;
+    }
+
+    int nHP = pPlayer->GetHP();  // 안전
+}</div>
+
+            <div class="a">
+                <p><strong>방법 2: 근본 원인 해결</strong></p>
+                <p>"왜 FindPlayer가 nullptr을 반환하는가?"를 추적해서 해결</p>
+                <p>→ 플레이어가 이미 로그아웃했는데 ID가 남아있다? → ID 관리 로직 수정</p>
+            </div>
+        </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. 자주 보는 주소 패턴</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>주소</th>
+                    <th>의미</th>
+                    <th>원인</th>
+                </tr>
+                <tr>
+                    <td class="bad">0x00000000</td>
+                    <td>순수 nullptr</td>
+                    <td>포인터가 초기화 안 됨 or 명시적 nullptr</td>
+                </tr>
+                <tr>
+                    <td class="bad">0x00000001 ~ 0x0000FFFF</td>
+                    <td>nullptr + 작은 오프셋</td>
+                    <td>nullptr 객체의 멤버 접근</td>
+                </tr>
+                <tr>
+                    <td>0xCCCCCCCC</td>
+                    <td>초기화 안 된 스택 변수</td>
+                    <td>지역 변수 초기화 누락</td>
+                </tr>
+                <tr>
+                    <td>0xCDCDCDCD</td>
+                    <td>초기화 안 된 힙 메모리</td>
+                    <td>new 후 초기화 안 함</td>
+                </tr>
+                <tr>
+                    <td>0xDDDDDDDD</td>
+                    <td>해제된 힙 메모리</td>
+                    <td class="bad">delete 후 사용 (use-after-free)</td>
+                </tr>
+                <tr>
+                    <td>0xFEEEFEEE</td>
+                    <td>해제된 힙 (HeapFree)</td>
+                    <td class="bad">해제 후 접근</td>
+                </tr>
+                <tr>
+                    <td>0xABABABAB</td>
+                    <td>힙 가드 바이트</td>
+                    <td>버퍼 오버런 (경계 침범)</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 6 -->
+        <div class="conversation">
+            <h2>Part 6. 예외 설정으로 미리 잡기</h2>
+
+            <div class="chat">
+                <div class="q">크래시 나기 전에 미리 잡을 수 없어?</div>
+                <div class="a">
+                    <p>Debug → Windows → <strong>Exception Settings</strong> (Ctrl+Alt+E)</p>
+                    <p><strong>"Win32 Exceptions"</strong> → <strong>"0xC0000005 Access Violation"</strong> 체크</p>
+                    <p>→ 예외 발생 즉시 멈춤 (catch 전에 잡힘)</p>
+                </div>
+            </div>
+
+            <div class="code-block">// 예외 설정 후 동작 변화
+
+// 설정 전: try-catch가 예외를 먹어버려서 어디서 터졌는지 모름
+try {
+    pPlayer->DoSomething();  // 여기서 터지지만...
+} catch (...) {
+    // 여기로 와서 원인 파악 어려움
+}
+
+// 설정 후: 예외 발생 즉시 정확한 위치에서 멈춤
+pPlayer->DoSomething();  // ← 여기서 바로 멈춤!</div>
+        </div>
+
+        <!-- Summary -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>0xC0000005</strong> = Access Violation, 잘못된 메모리 접근</li>
+                <li><strong>낮은 주소</strong> (0x0~0xFFFF) = 거의 100% nullptr 역참조</li>
+                <li><strong>분석 순서</strong>: 콜스택 → 크래시 라인 → 변수 값 → 원인 역추적</li>
+                <li><strong>메모리 패턴</strong>: 0xCC(스택 미초기화), 0xDD(해제됨), 0xFE(HeapFree)</li>
+                <li><strong>Exception Settings</strong>: 예외 발생 즉시 잡기 설정 (Ctrl+Alt+E)</li>
+            </ul>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-nullptr/">nullptr 추적하기 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

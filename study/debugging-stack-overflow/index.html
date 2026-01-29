@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스택 오버플로우 - 재귀 호출과 큰 지역 변수 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #DC2626; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEF2F2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.9rem; color: #E2E8F0; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+        <div class="header">
+            <h1>스택 오버플로우</h1>
+            <p>재귀 호출과 큰 지역 변수 &mdash; 스택 공간 소진</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 증상</h2>
+            <div class="q">Stack overflow 예외가 발생했습니다</div>
+            <div class="a">
+                <p><span class="warning">스택 메모리가 바닥났다</span>는 뜻.</p>
+                <p>기본 스택 크기는 1MB (Windows).</p>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 원인 1: 무한 재귀</h2>
+            <div class="q">Call Stack에 같은 함수가 수천 개</div>
+            <div class="a">
+                <p><span class="highlight">재귀 종료 조건</span>이 없거나 도달하지 못한다.</p>
+            </div>
+            <div class="code-block">// 무한 재귀
+void ProcessNode(Node* pNode)
+{
+    DoSomething(pNode);
+    ProcessNode(pNode->next);  // 종료 조건 없음!
+}
+
+// 올바른 재귀
+void ProcessNode(Node* pNode)
+{
+    if (pNode == nullptr) return;  // 종료 조건!
+
+    DoSomething(pNode);
+    ProcessNode(pNode->next);
+}</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 원인 2: 큰 지역 변수</h2>
+            <div class="q">재귀 없는데도 스택 오버플로우?</div>
+            <div class="a">
+                <p>함수 안에 <span class="warning">큰 배열</span>을 선언하면 스택이 금방 찬다.</p>
+            </div>
+            <div class="code-block">// 스택에 1MB 배열 선언 → 즉시 오버플로우
+void BadFunction()
+{
+    char buffer[1024 * 1024];  // 1MB 지역 변수 ← 위험!
+}
+
+// 해결: 힙에 할당
+void GoodFunction()
+{
+    char* buffer = new char[1024 * 1024];  // 힙에 할당
+    // ... 사용 ...
+    delete[] buffer;
+}
+
+// 더 좋은 해결: vector 사용
+void BetterFunction()
+{
+    std::vector<char> buffer(1024 * 1024);
+}</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 디버깅 방법</h2>
+            <div class="q">어떻게 찾아?</div>
+            <div class="a">
+                <p>1. <span class="key-point">Call Stack</span>에서 반복되는 함수 확인</p>
+                <p>2. 해당 함수의 <strong>지역 변수 크기</strong> 확인</p>
+                <p>3. 재귀 깊이 제한 또는 반복문으로 변환</p>
+            </div>
+            <div class="code-block">// Call Stack 예시 (재귀 오버플로우)
+
+→ ProcessNode() Line 45
+  ProcessNode() Line 45
+  ProcessNode() Line 45
+  ... (수천 번 반복)
+  ProcessNode() Line 45
+  main() Line 10</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 스택 크기 늘리기</h2>
+            <div class="q">스택 크기 조절할 수 있어?</div>
+            <div class="a">
+                <p>프로젝트 속성 → Linker → System → <span class="highlight">Stack Reserve Size</span></p>
+                <p>하지만 이건 임시방편. 근본 원인을 해결하자.</p>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>무한 재귀</strong> = 종료 조건 확인</li>
+                <li><strong>큰 지역 변수</strong> = 힙 할당으로 변경</li>
+                <li><strong>Call Stack</strong>에서 반복 패턴 확인</li>
+                <li>스택 크기 늘리기는 <strong>임시방편</strong></li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-heap-corruption/">힙 손상 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

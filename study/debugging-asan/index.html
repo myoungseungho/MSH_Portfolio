@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AddressSanitizer - 컴파일 타임 메모리 검사 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #DC2626; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEF2F2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.9rem; color: #E2E8F0; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+        <div class="header">
+            <h1>AddressSanitizer (ASan)</h1>
+            <p>컴파일 타임 메모리 검사 &mdash; 가장 강력한 메모리 디버깅</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. ASan이란?</h2>
+            <div class="q">AddressSanitizer가 뭐야?</div>
+            <div class="a">
+                <p>Google이 개발한 <span class="highlight">메모리 오류 탐지 도구</span>.</p>
+                <p>컴파일 시 코드에 검사 로직이 삽입되어 런타임에 오류를 잡아낸다.</p>
+            </div>
+            <table class="compare-table">
+                <tr><th>탐지 가능한 버그</th><th>설명</th></tr>
+                <tr><td>Heap Buffer Overflow</td><td>힙 배열 범위 초과 접근</td></tr>
+                <tr><td>Stack Buffer Overflow</td><td>스택 배열 범위 초과 접근</td></tr>
+                <tr><td>Use-After-Free</td><td>해제된 메모리 접근</td></tr>
+                <tr><td>Double Free</td><td>같은 메모리 두 번 해제</td></tr>
+                <tr><td>Memory Leak</td><td>메모리 누수 (종료 시 리포트)</td></tr>
+            </table>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 설정 방법</h2>
+            <div class="q">VS에서 어떻게 켜?</div>
+            <div class="a">
+                <p>프로젝트 속성 → C/C++ → General</p>
+                <p><span class="key-point">Enable Address Sanitizer: Yes (/fsanitize=address)</span></p>
+            </div>
+            <div class="code-block">// VS 2019 16.9+ 또는 VS 2022 필요
+
+// 프로젝트 설정
+C/C++ → General → Enable Address Sanitizer: Yes
+
+// 또는 명령줄
+cl /fsanitize=address mycode.cpp
+
+// 주의: Debug 빌드에서 사용 권장
+// /RTC (런타임 체크)와 충돌할 수 있음</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 오류 리포트 읽기</h2>
+            <div class="q">오류가 나면 뭐가 출력돼?</div>
+            <div class="a">
+                <p>상세한 오류 리포트가 출력된다:</p>
+            </div>
+            <div class="code-block">==ERROR: AddressSanitizer: heap-buffer-overflow
+READ of size 1 at 0x602000000014 thread T0
+    #0 main example.cpp:8          ← 오류 발생 위치
+    #1 __scrt_common_main_seh
+
+0x602000000014 is located 0 bytes to the right of
+4-byte region [0x602000000010,0x602000000014)
+allocated by thread T0 here:
+    #0 operator new[]
+    #1 main example.cpp:5          ← 할당 위치
+
+// 해석:
+// - 힙 버퍼 오버플로우 발생
+// - example.cpp 8번 줄에서 읽기 시도
+// - 4바이트 할당했는데 바로 뒤(0 bytes to the right)를 읽음
+// - 할당은 example.cpp 5번 줄에서 함</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. App Verifier vs ASan</h2>
+            <div class="q">둘 다 비슷한 거 아니야?</div>
+            <div class="a">
+                <p>둘 다 메모리 오류를 잡지만 방식이 다르다:</p>
+            </div>
+            <table class="compare-table">
+                <tr><th>항목</th><th>App Verifier</th><th>ASan</th></tr>
+                <tr><td>적용 방식</td><td>외부 도구 (레지스트리)</td><td>컴파일 옵션</td></tr>
+                <tr><td>스택 오버런</td><td>❌ 못 잡음</td><td>✅ 잡음</td></tr>
+                <tr><td>오버헤드</td><td>10~100배</td><td>2~3배</td></tr>
+                <tr><td>리포트</td><td>간단</td><td>상세</td></tr>
+                <tr><td>재컴파일</td><td>불필요</td><td>필요</td></tr>
+            </table>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>/fsanitize=address</strong> 컴파일 옵션</li>
+                <li><strong>힙/스택 오버런, UAF, 누수</strong> 모두 탐지</li>
+                <li><strong>상세한 리포트</strong>로 원인 파악 쉬움</li>
+                <li>App Verifier보다 <strong>빠르고</strong> 더 많이 잡음</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-app-verifier/">App Verifier &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

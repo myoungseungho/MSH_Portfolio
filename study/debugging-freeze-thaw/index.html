@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>다른 스레드 멈춰놓고 디버깅 - Freeze/Thaw - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #DC2626; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEF2F2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.9rem; color: #E2E8F0; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+        <div class="header">
+            <h1>다른 스레드 멈춰놓고 디버깅</h1>
+            <p>Freeze/Thaw &mdash; 특정 스레드만 실행</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 문제 상황</h2>
+            <div class="q">F10 누르면 다른 스레드가 끼어들어서 헷갈려</div>
+            <div class="a">
+                <p>기본적으로 F5/F10/F11 누르면 <span class="warning">모든 스레드가 실행</span>된다.</p>
+                <p>타이밍 버그 재현이나 특정 스레드만 추적할 때 문제.</p>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. Freeze (얼리기)</h2>
+            <div class="q">특정 스레드를 멈출 수 있어?</div>
+            <div class="a">
+                <p>Threads 창에서 스레드 우클릭 → <span class="key-point">Freeze</span></p>
+                <p>얼린 스레드는 F5 눌러도 <strong>실행되지 않는다</strong>.</p>
+            </div>
+            <div class="code-block">// Threads 창 (Ctrl+Alt+H)
+
+ID    Name              Status
+-----------------------------------
+1234  Main Thread       Running
+5678  Worker Thread 1   Frozen  ❄️  ← 얼림
+9012  Worker Thread 2   Frozen  ❄️  ← 얼림
+3456  Network Thread    Running     ← 실행됨
+
+// F5 누르면 Main Thread와 Network Thread만 실행</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. Thaw (녹이기)</h2>
+            <div class="q">다시 실행시키려면?</div>
+            <div class="a">
+                <p>얼린 스레드 우클릭 → <span class="key-point">Thaw</span></p>
+                <p>다시 정상적으로 실행됨.</p>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 활용 예시</h2>
+            <div class="q">언제 쓰면 좋아?</div>
+            <div class="a">
+                <p>1. <strong>레이스 컨디션 재현</strong>: 한 스레드씩 순차 실행</p>
+                <p>2. <strong>특정 스레드 집중</strong>: 다른 스레드가 방해 안 하게</p>
+                <p>3. <strong>데드락 분석</strong>: 락 획득 순서를 제어</p>
+            </div>
+            <div class="code-block">// 레이스 컨디션 재현 시나리오
+
+// 상황: Thread A와 B가 동시에 counter 접근 시 버그
+
+1. Thread A, B 모두 중단점에서 멈춤
+2. Thread B를 Freeze
+3. Thread A만 F10으로 진행 (counter 읽기)
+4. Thread A를 Freeze, Thread B를 Thaw
+5. Thread B만 F10으로 진행 (counter 읽기)
+6. 둘 다 같은 값을 읽음! → 버그 재현</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 주의사항</h2>
+            <div class="q">조심할 점?</div>
+            <div class="a">
+                <p>1. <span class="warning">락을 들고 있는 스레드</span>를 얼리면 다른 스레드가 데드락</p>
+                <p>2. 디버깅 끝나면 <strong>모든 스레드 Thaw</strong>하기</p>
+                <p>3. 실제 동작과 <strong>다른 타이밍</strong>이 됨을 인지</p>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Freeze</strong> = 스레드 얼리기 (실행 안 됨)</li>
+                <li><strong>Thaw</strong> = 스레드 녹이기 (다시 실행)</li>
+                <li><strong>레이스 컨디션</strong> 재현에 유용</li>
+                <li>락 든 스레드 얼리면 <strong>데드락</strong> 주의</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-threads-window/">Threads 창 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

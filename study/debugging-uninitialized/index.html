@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>쓰레기 값이 들어있어요 - 미초기화 변수 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #DC2626; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEF2F2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.9rem; color: #E2E8F0; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+        <div class="header">
+            <h1>쓰레기 값이 들어있어요</h1>
+            <p>미초기화 변수 &mdash; Debug와 Release가 다른 이유</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 증상</h2>
+            <div class="q">변수에 이상한 값이 들어있어요</div>
+            <div class="a">
+                <p>변수를 <span class="warning">선언만 하고 초기화하지 않으면</span> 쓰레기 값이 들어있다.</p>
+                <p>C++는 자동 초기화를 해주지 않는다.</p>
+            </div>
+            <div class="code-block">void DoSomething()
+{
+    int nCount;      // 미초기화 → 쓰레기 값
+    int* pPlayer;    // 미초기화 → 쓰레기 주소
+
+    if (nCount > 0)  // 정의되지 않은 동작!
+    {
+        // ...
+    }
+}</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. Debug vs Release</h2>
+            <div class="q">Debug에서는 됐는데 Release에서 안 돼요</div>
+            <div class="a">
+                <p>Debug 빌드는 미초기화 메모리를 <span class="highlight">특정 패턴</span>으로 채운다.</p>
+                <p>Release는 <span class="warning">이전에 있던 쓰레기 값</span> 그대로.</p>
+            </div>
+            <div class="code-block">int bFlag;  // 미초기화
+
+// Debug 빌드
+// bFlag = 0xCCCCCCCC (≠ 0, 항상 true)
+
+// Release 빌드
+// bFlag = 이전 스택 내용
+// 0일 수도 있고, 1일 수도 있고, 뭐든 될 수 있음
+
+if (bFlag)  // Debug: 항상 true
+{           // Release: 불확정!
+    DoSomething();
+}</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 컴파일러 경고</h2>
+            <div class="q">미리 알 수 있는 방법?</div>
+            <div class="a">
+                <p>컴파일러가 <span class="key-point">경고</span>를 준다!</p>
+                <p>경고 레벨을 높이고, 경고를 에러로 처리하자.</p>
+            </div>
+            <div class="code-block">// 컴파일 경고 예시
+warning C4700: uninitialized local variable 'nCount' used
+
+// 프로젝트 설정
+// C/C++ → General → Warning Level: Level4 (/W4)
+// C/C++ → General → Treat Warnings As Errors: Yes (/WX)
+
+// 또는 특정 경고만 에러로
+#pragma warning(error: 4700)</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 예방</h2>
+            <div class="q">어떻게 방지해?</div>
+            <div class="a">
+                <p>1. <span class="key-point">선언과 동시에 초기화</span></p>
+                <p>2. 멤버 변수는 <strong>생성자 초기화 리스트</strong> 또는 <strong>기본값</strong></p>
+                <p>3. 컴파일러 경고 무시하지 않기</p>
+            </div>
+            <div class="code-block">// 지역 변수 - 선언과 동시에 초기화
+int nCount = 0;
+int* pPlayer = nullptr;
+
+// 멤버 변수 - C++11 기본값
+class CPlayer
+{
+    int m_nHP = 100;        // 기본값
+    int m_nMP = 50;
+    bool m_bDead = false;
+};
+
+// 또는 생성자 초기화 리스트
+CPlayer::CPlayer()
+    : m_nHP(100)
+    , m_nMP(50)
+    , m_bDead(false)
+{
+}</div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>C++는 <strong>자동 초기화 안 함</strong></li>
+                <li><strong>Debug: 0xCC</strong>, <strong>Release: 쓰레기</strong></li>
+                <li><strong>/W4 /WX</strong> 옵션으로 경고를 에러로</li>
+                <li><strong>선언과 동시에 초기화</strong> 습관화</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-memory-patterns/">메모리 패턴 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유저 PC에서 크래시 났는데 재현 안 돼요 - 덤프 파일 분석 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #DC2626;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #FEE2E2;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #FEF2F2;
+            border-left: 4px solid #DC2626;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+
+        .code-block {
+            background: #1E293B;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #E2E8F0;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #D1FAE5; font-weight: 600; }
+        .compare-table .bad { background: #FEE2E2; }
+
+        .summary-box {
+            background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+
+        .step-box {
+            background: #F8FAFC;
+            border: 2px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+        }
+        .step-box h4 {
+            color: #DC2626;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .step-box h4 .step-num {
+            background: #DC2626;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+
+        <div class="header">
+            <h1>유저 PC에서 크래시 났는데 재현 안 돼요</h1>
+            <p>덤프 파일 분석 &mdash; 현장을 증거로 남기고, 나중에 분석하기</p>
+        </div>
+
+        <!-- Part 1 -->
+        <div class="conversation">
+            <h2>Part 1. 덤프 파일이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">크래시가 났는데 재현이 안 돼요</div>
+                <div class="a">
+                    <p>재현이 안 되면 <span class="highlight">덤프 파일(Dump File)</span>이 필요하다.</p>
+                    <p>덤프 파일 = 크래시 순간의 <strong>메모리 스냅샷</strong></p>
+                    <p>프로세스가 죽기 직전의 상태를 그대로 저장해둔 것이다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>덤프 종류</th>
+                    <th>크기</th>
+                    <th>포함 내용</th>
+                </tr>
+                <tr>
+                    <td>Mini Dump</td>
+                    <td>수 MB</td>
+                    <td>스택, 스레드, 모듈 목록</td>
+                </tr>
+                <tr>
+                    <td>Mini + Heap</td>
+                    <td class="good">수십 MB</td>
+                    <td>+ 힙 메모리 (변수 값 확인 가능)</td>
+                </tr>
+                <tr>
+                    <td>Full Dump</td>
+                    <td class="bad">수 GB</td>
+                    <td>전체 메모리 (거의 안 씀)</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 2 -->
+        <div class="conversation">
+            <h2>Part 2. 덤프 파일 만들기</h2>
+
+            <div class="chat">
+                <div class="q">크래시 나면 자동으로 덤프를 남기게 하려면?</div>
+                <div class="a">
+                    <p>코드에서 <span class="key-point">MiniDumpWriteDump</span> API를 사용한다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// 크래시 덤프 생성 코드
+
+#include &lt;DbgHelp.h&gt;
+#pragma comment(lib, "DbgHelp.lib")
+
+LONG WINAPI MyUnhandledExceptionFilter(EXCEPTION_POINTERS* pExceptionInfo)
+{
+    // 덤프 파일 생성
+    HANDLE hFile = CreateFile(
+        L"crash.dmp",
+        GENERIC_WRITE,
+        0, NULL,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL);
+
+    if (hFile != INVALID_HANDLE_VALUE)
+    {
+        MINIDUMP_EXCEPTION_INFORMATION mei;
+        mei.ThreadId = GetCurrentThreadId();
+        mei.ExceptionPointers = pExceptionInfo;
+        mei.ClientPointers = FALSE;
+
+        MiniDumpWriteDump(
+            GetCurrentProcess(),
+            GetCurrentProcessId(),
+            hFile,
+            MiniDumpWithDataSegs,  // 또는 MiniDumpWithFullMemory
+            &mei,
+            NULL, NULL);
+
+        CloseHandle(hFile);
+    }
+
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+// main() 시작 시 등록
+SetUnhandledExceptionFilter(MyUnhandledExceptionFilter);</div>
+        </div>
+
+        <!-- Part 3 -->
+        <div class="conversation">
+            <h2>Part 3. VS에서 덤프 열기</h2>
+
+            <div class="step-box">
+                <h4><span class="step-num">1</span> 덤프 파일 열기</h4>
+                <p>File → Open → File → .dmp 파일 선택</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">2</span> 심볼 경로 설정</h4>
+                <p>Tools → Options → Debugging → Symbols</p>
+                <p>→ .pdb 파일이 있는 폴더 추가 (빌드 폴더)</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">3</span> 디버깅 시작</h4>
+                <p>덤프 요약 페이지에서 <strong>"Debug with Native Only"</strong> 클릭</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">4</span> 크래시 위치 확인</h4>
+                <p>자동으로 크래시 위치로 이동 → 콜스택, 변수 값 확인</p>
+            </div>
+
+            <div class="chat">
+                <div class="q">심볼 로드가 안 되면?</div>
+                <div class="a">
+                    <p><span class="warning">심볼(.pdb)과 바이너리(.exe/.dll) 버전이 정확히 일치</span>해야 한다.</p>
+                    <p>빌드할 때마다 .pdb 파일을 버전별로 보관해두자.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4 -->
+        <div class="conversation">
+            <h2>Part 4. 덤프 분석 실전</h2>
+
+            <div class="code-block">// 덤프 열었을 때 보이는 정보
+
+[요약 페이지]
+Exception Code: 0xC0000005 (Access Violation)
+Exception Address: 0x00007FF6A1B23456
+Process Name: GameServer.exe
+
+[Debug with Native Only 클릭 후]
+
+// 콜스택 예시:
+→ CPlayer::TakeDamage() Line 234
+  CMonster::Attack() Line 567
+  CGameManager::ProcessCombat() Line 890
+  ...
+
+// 크래시 라인:
+int nHP = m_pTarget->GetHP();  // m_pTarget이 nullptr!</div>
+
+            <div class="chat">
+                <div class="q">변수 값을 보려면?</div>
+                <div class="a">
+                    <p>덤프 종류에 따라 다르다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>덤프 종류</th>
+                    <th>지역 변수</th>
+                    <th>힙 객체</th>
+                    <th>전역 변수</th>
+                </tr>
+                <tr>
+                    <td>Mini Dump</td>
+                    <td class="good">O (스택에 있으면)</td>
+                    <td class="bad">X</td>
+                    <td class="bad">X</td>
+                </tr>
+                <tr>
+                    <td>Mini + Heap</td>
+                    <td class="good">O</td>
+                    <td class="good">O</td>
+                    <td class="good">O</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. WinDbg 기초 (고급)</h2>
+
+            <div class="chat">
+                <div class="q">VS로 안 열리는 덤프도 있어?</div>
+                <div class="a">
+                    <p>커널 덤프나 복잡한 경우 <span class="highlight">WinDbg</span>를 쓴다.</p>
+                    <p>Windows SDK에 포함되어 있고, Microsoft Store에서도 설치 가능.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// WinDbg 기본 명령어
+
+!analyze -v      // 자동 분석 (크래시 원인 요약)
+k                // 콜스택 보기
+~*k              // 모든 스레드 콜스택
+.ecxr            // 예외 컨텍스트로 전환
+r                // 레지스터 값
+dv               // 지역 변수
+dt pPlayer       // 구조체 내용 보기
+!heap -s         // 힙 요약
+
+// 심볼 경로 설정
+.sympath+ C:\Symbols
+.reload</div>
+        </div>
+
+        <!-- Part 6 -->
+        <div class="conversation">
+            <h2>Part 6. 덤프 운영 팁</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>권장사항</th>
+                </tr>
+                <tr>
+                    <td>덤프 종류</td>
+                    <td class="good">MiniDumpWithDataSegs (힙 포함, 적당한 크기)</td>
+                </tr>
+                <tr>
+                    <td>PDB 보관</td>
+                    <td>빌드할 때마다 버전별로 보관 (심볼 서버 권장)</td>
+                </tr>
+                <tr>
+                    <td>파일명</td>
+                    <td>날짜_시간_버전.dmp (예: 20240115_143052_v1.2.3.dmp)</td>
+                </tr>
+                <tr>
+                    <td>수집</td>
+                    <td>크래시 리포터로 서버에 자동 업로드</td>
+                </tr>
+                <tr>
+                    <td>분석 우선순위</td>
+                    <td>동일 콜스택 그룹핑 → 빈도 높은 것부터</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Summary -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>덤프 파일</strong> = 크래시 순간의 메모리 스냅샷</li>
+                <li><strong>MiniDumpWriteDump</strong>: 코드에서 덤프 생성</li>
+                <li><strong>VS에서 열기</strong>: File → Open → Debug with Native Only</li>
+                <li><strong>심볼 필수</strong>: .pdb 파일이 있어야 콜스택/변수 확인 가능</li>
+                <li><strong>운영</strong>: 버전별 PDB 보관 + 크래시 리포터 구축</li>
+            </ul>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-profiler/">성능 프로파일러 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

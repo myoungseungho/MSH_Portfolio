@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>힙 손상 - delete에서 크래시 나요 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #DC2626; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEF2F2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.9rem; color: #E2E8F0; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+        <div class="header">
+            <h1>힙 손상</h1>
+            <p>delete에서 크래시 나요 &mdash; 원인은 다른 곳에 있다</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 증상</h2>
+            <div class="q">delete 또는 free에서 크래시가 납니다</div>
+            <div class="a">
+                <p><span class="warning">delete 자체가 문제가 아니다.</span></p>
+                <p>이전에 <strong>힙 메타데이터가 손상</strong>되었고, delete할 때 발견된 것.</p>
+            </div>
+            <div class="code-block">// 크래시 발생 위치
+delete pPlayer;  // ← 여기서 터짐
+
+// 하지만 진짜 원인은 이전에 발생
+// 버퍼 오버런, Double Free, Use-After-Free 등</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 주요 원인들</h2>
+            <div class="q">힙 손상의 원인은?</div>
+            <div class="a">
+                <p>1. <span class="warning">버퍼 오버런</span>: 할당된 크기를 넘어서 씀</p>
+                <p>2. <span class="warning">Double Free</span>: 같은 메모리를 두 번 해제</p>
+                <p>3. <span class="warning">Use-After-Free</span>: 해제 후 다시 사용</p>
+                <p>4. <span class="warning">잘못된 delete</span>: new[]는 delete[]로</p>
+            </div>
+            <div class="code-block">// 1. 버퍼 오버런
+char* buf = new char[10];
+strcpy(buf, "This is too long");  // 10바이트 넘음!
+
+// 2. Double Free
+delete pPlayer;
+delete pPlayer;  // 두 번째 delete에서 크래시
+
+// 3. Use-After-Free
+delete pPlayer;
+pPlayer->DoSomething();  // 해제된 메모리 접근
+
+// 4. 잘못된 delete
+int* arr = new int[100];
+delete arr;  // delete[]가 아님!</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 디버깅 도구</h2>
+            <div class="q">어떻게 찾아?</div>
+            <div class="a">
+                <p>힙 손상은 <span class="key-point">발생 시점 ≠ 발견 시점</span>이라 찾기 어렵다.</p>
+                <p>전용 도구를 써야 한다:</p>
+            </div>
+            <div class="code-block">// 1. Application Verifier (Windows)
+// 힙 작업마다 검증 → 손상 즉시 감지
+
+// 2. AddressSanitizer (ASan)
+// 컴파일 옵션: /fsanitize=address
+// 모든 메모리 접근 검사
+
+// 3. Debug Heap (CRT)
+// _CrtSetDbgFlag(_CRTDBG_CHECK_ALWAYS_DF)
+// 모든 힙 작업 시 검사 (매우 느림)
+
+// 4. PageHeap (gflags)
+// 각 할당을 별도 페이지에 배치
+// 오버런 즉시 Access Violation</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 즉시 감지 설정</h2>
+            <div class="q">코드에서 바로 검사하려면?</div>
+            <div class="a">
+                <p>CRT Debug Heap의 즉시 검사 모드를 켜면 된다.</p>
+            </div>
+            <div class="code-block">// 프로그램 시작 시 추가
+#ifdef _DEBUG
+    int flag = _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG);
+    flag |= _CRTDBG_CHECK_ALWAYS_DF;  // 매번 검사
+    _CrtSetDbgFlag(flag);
+#endif
+
+// 주의: 매우 느려짐!
+// 문제가 재현되면 범위를 좁혀서 사용</div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>delete에서 크래시</strong> = 이전에 힙 손상됨</li>
+                <li>원인: <strong>오버런, Double Free, UAF, 잘못된 delete</strong></li>
+                <li><strong>Application Verifier</strong> 또는 <strong>ASan</strong> 사용</li>
+                <li><strong>발견 시점 ≠ 발생 시점</strong> 주의</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-buffer-overrun/">버퍼 오버런 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>릴리즈에서만 터지는 크래시 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #DC2626; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEF2F2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.9rem; color: #E2E8F0; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+        <div class="header">
+            <h1>릴리즈에서만 터지는 크래시</h1>
+            <p>Debug에서 재현 안 될 때 &mdash; Release 디버깅 전략</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 왜 Release에서만 터지나?</h2>
+            <div class="q">Debug에서는 문제없는데?</div>
+            <div class="a">
+                <p>Debug와 Release는 <span class="warning">완전히 다른 코드</span>다.</p>
+                <p>최적화, 메모리 레이아웃, 타이밍이 모두 다르다.</p>
+            </div>
+            <div class="code-block">// Release에서만 터지는 주요 원인
+
+1. 미초기화 변수
+   - Debug: 0xCCCCCCCC (항상 같은 값)
+   - Release: 이전 스택 쓰레기 (예측 불가)
+
+2. 타이밍 차이
+   - Debug: 느려서 레이스 컨디션 안 남
+   - Release: 빨라서 레이스 컨디션 발생
+
+3. 인라인/최적화
+   - Debug: 함수 호출 순서 보장
+   - Release: 인라인 + 재배치로 순서 변경
+
+4. assert 제거
+   - Debug: assert()에서 멈춤
+   - Release: assert() 코드 자체가 없음</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. Release 빌드에 PDB 생성</h2>
+            <div class="q">Release에서도 디버깅하려면?</div>
+            <div class="a">
+                <p>Release 빌드에도 <span class="key-point">PDB 파일을 생성</span>하면 디버깅 가능.</p>
+            </div>
+            <div class="code-block">// Release 설정에서
+
+C/C++ → General → Debug Information Format: /Zi
+Linker → Debugging → Generate Debug Info: /DEBUG
+
+// 최적화는 유지 (/O2)
+// PDB만 생성하면 됨
+
+// 주의: PDB는 exe와 함께 보관!</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 부분 최적화 끄기</h2>
+            <div class="q">특정 함수만 최적화를 끄고 싶어</div>
+            <div class="a">
+                <p><span class="highlight">#pragma optimize</span>로 함수 단위 제어 가능.</p>
+            </div>
+            <div class="code-block">// 문제 함수만 최적화 끄기
+
+#pragma optimize("", off)
+void ProblematicFunction()
+{
+    // 이 함수는 최적화 안 됨
+    // 변수가 레지스터로 사라지지 않음
+    // 디버거에서 값 확인 가능
+}
+#pragma optimize("", on)  // 다시 켜기
+
+// 또는 전체 파일 최적화 끄기
+// 프로젝트 속성 → 파일 선택 → C/C++ → Optimization: Disabled</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 크래시 덤프 활용</h2>
+            <div class="q">현장에서 덤프를 받았어</div>
+            <div class="a">
+                <p>1. <span class="key-point">덤프 파일</span>과 <span class="key-point">PDB 파일</span> 준비</p>
+                <p>2. VS에서 덤프 열기 (File → Open → File)</p>
+                <p>3. "Debug with Native Only" 클릭</p>
+                <p>4. Call Stack에서 크래시 위치 확인</p>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 로깅 추가</h2>
+            <div class="q">디버거 붙이기 어려운 환경이면?</div>
+            <div class="a">
+                <p>Release용 로깅을 추가:</p>
+            </div>
+            <div class="code-block">// OutputDebugString (DebugView로 확인)
+OutputDebugString(L"[DEBUG] HP = %d\n", nHP);
+
+// 파일 로깅
+FILE* fp = fopen("debug.log", "a");
+fprintf(fp, "[%s:%d] value = %d\n", __FILE__, __LINE__, value);
+fclose(fp);
+
+// ETW (Windows Event Tracing) - 가장 효율적
+TraceLoggingWrite(g_hProvider, "MyEvent",
+    TraceLoggingInt32(value, "Value"));</div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>미초기화 변수</strong>가 가장 흔한 원인</li>
+                <li><strong>Release에도 PDB 생성</strong> (/Zi /DEBUG)</li>
+                <li><strong>#pragma optimize</strong>로 부분 최적화 끄기</li>
+                <li><strong>덤프 + PDB</strong>로 사후 분석</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-debug-vs-release/">Debug vs Release &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>printf 디버깅은 그만 - Tracepoint - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #DC2626; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEF2F2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.9rem; color: #E2E8F0; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+        <div class="header">
+            <h1>printf 디버깅은 그만</h1>
+            <p>Tracepoint &mdash; 코드 수정 없이 로그 찍기</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 문제 상황</h2>
+            <div class="q">로그 찍으려면 코드 수정하고 다시 빌드해야 해</div>
+            <div class="a">
+                <p>printf나 로그 코드를 추가하면:</p>
+                <p>1. 코드 수정 → 빌드 → 실행 → 테스트</p>
+                <p>2. 다시 지우고 → 빌드</p>
+                <p>→ <span class="warning">시간 낭비!</span></p>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. Tracepoint 설정</h2>
+            <div class="q">Tracepoint가 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">멈추지 않고 메시지만 출력</span>하는 중단점이다.</p>
+                <p>중단점 우클릭 → Actions → <span class="key-point">"Log a message"</span></p>
+            </div>
+            <div class="code-block">// 설정 방법
+
+1. 중단점 설정 (F9)
+2. 중단점 우클릭 → Actions
+3. "Log a message to Output Window" 체크
+4. 메시지 입력
+5. ✅ "Continue execution" 체크 (멈추지 않음)
+
+// 중단점 모양이 ◇ (다이아몬드)로 바뀜</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 메시지 형식</h2>
+            <div class="q">변수 값도 출력할 수 있어?</div>
+            <div class="a">
+                <p><span class="key-point">{변수명}</span> 형식으로 변수 값을 출력할 수 있다.</p>
+                <p>특수 키워드도 사용 가능.</p>
+            </div>
+            <div class="code-block">// 메시지 예시
+
+// 변수 출력
+"Player HP = {m_nHP}, MP = {m_nMP}"
+
+// 특수 키워드
+$FUNCTION   - 현재 함수 이름
+$CALLER     - 호출한 함수 이름
+$CALLSTACK  - 전체 콜스택
+$TID        - 스레드 ID
+$PID        - 프로세스 ID
+$TICK       - 밀리초 타임스탬프
+
+// 실전 예시
+"[$TID] $FUNCTION: pPlayer={pPlayer}, HP={pPlayer->m_nHP}"</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 출력 확인</h2>
+            <div class="q">어디서 볼 수 있어?</div>
+            <div class="a">
+                <p><span class="highlight">Output 창</span> (Ctrl+Alt+O)에서 확인.</p>
+                <p>"Show output from" 드롭다운에서 <strong>"Debug"</strong> 선택.</p>
+            </div>
+            <div class="code-block">// Output 창 예시
+
+[1234] CPlayer::TakeDamage: pPlayer=0x12345678, HP=100
+[1234] CPlayer::TakeDamage: pPlayer=0x12345678, HP=90
+[1234] CPlayer::TakeDamage: pPlayer=0x12345678, HP=80
+[5678] CMonster::Attack: damage=10, target=0x12345678</div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Tracepoint</strong> = 멈추지 않는 중단점</li>
+                <li><strong>{변수명}</strong>으로 값 출력</li>
+                <li><strong>$FUNCTION, $TID</strong> 등 특수 키워드</li>
+                <li>Output 창 (<strong>Ctrl+Alt+O</strong>)에서 확인</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-breakpoint/">중단점 활용 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

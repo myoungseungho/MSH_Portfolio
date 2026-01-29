@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>0xCDCDCDCD가 뭐예요? - 메모리 패턴 읽기 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #DC2626;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #FEE2E2;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #FEF2F2;
+            border-left: 4px solid #DC2626;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .pattern-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .pattern-table th, .pattern-table td { padding: 16px; border: 1px solid #e0e0e0; text-align: left; }
+        .pattern-table th { background: #1E293B; color: white; font-weight: 600; }
+        .pattern-table .pattern { font-family: 'Consolas', monospace; font-weight: 700; font-size: 1.1rem; }
+        .pattern-table .stack { background: #DBEAFE; }
+        .pattern-table .heap { background: #D1FAE5; }
+        .pattern-table .freed { background: #FEE2E2; }
+        .pattern-table .guard { background: #FEF3C7; }
+
+        .code-block {
+            background: #1E293B;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #E2E8F0;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+
+        <div class="header">
+            <h1>0xCDCDCDCD가 뭐예요?</h1>
+            <p>메모리 패턴 읽기 &mdash; Debug 빌드가 남기는 힌트들</p>
+        </div>
+
+        <!-- Part 1 -->
+        <div class="conversation">
+            <h2>Part 1. 왜 이상한 값이 들어있어?</h2>
+
+            <div class="chat">
+                <div class="q">변수 값이 0xCCCCCCCC인데 이게 뭐야?</div>
+                <div class="a">
+                    <p>Debug 빌드에서 Visual Studio는 <span class="key-point">메모리 상태를 알려주는 특수 패턴</span>을 채워넣는다.</p>
+                    <p>이 패턴을 보면 "이 메모리가 어떤 상태인지" 바로 알 수 있다.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2 -->
+        <div class="conversation">
+            <h2>Part 2. 메모리 패턴 총정리</h2>
+
+            <table class="pattern-table">
+                <tr>
+                    <th>패턴</th>
+                    <th>의미</th>
+                    <th>언제?</th>
+                </tr>
+                <tr class="stack">
+                    <td class="pattern">0xCCCCCCCC</td>
+                    <td><strong>초기화 안 된 스택 변수</strong></td>
+                    <td>지역 변수 선언만 하고 초기화 안 함</td>
+                </tr>
+                <tr class="heap">
+                    <td class="pattern">0xCDCDCDCD</td>
+                    <td><strong>초기화 안 된 힙 메모리</strong></td>
+                    <td>new/malloc 후 값을 안 넣음</td>
+                </tr>
+                <tr class="freed">
+                    <td class="pattern">0xDDDDDDDD</td>
+                    <td><strong>해제된 힙 메모리</strong></td>
+                    <td>delete/free 후 접근 (use-after-free)</td>
+                </tr>
+                <tr class="freed">
+                    <td class="pattern">0xFEEEFEEE</td>
+                    <td><strong>해제된 힙 (HeapFree)</strong></td>
+                    <td>Windows 힙에서 해제된 메모리</td>
+                </tr>
+                <tr class="guard">
+                    <td class="pattern">0xABABABAB</td>
+                    <td><strong>힙 가드 바이트 (뒤쪽)</strong></td>
+                    <td>버퍼 오버런 감지용 경계</td>
+                </tr>
+                <tr class="guard">
+                    <td class="pattern">0xBAADF00D</td>
+                    <td><strong>LocalAlloc 미초기화</strong></td>
+                    <td>LocalAlloc(LMEM_FIXED) 후</td>
+                </tr>
+                <tr class="freed">
+                    <td class="pattern">0xFDFDFDFD</td>
+                    <td><strong>힙 가드 바이트 (앞쪽)</strong></td>
+                    <td>힙 블록 앞의 노맨스 랜드</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3 -->
+        <div class="conversation">
+            <h2>Part 3. 실전 활용</h2>
+
+            <div class="chat">
+                <div class="q">크래시 났는데 값이 0xCCCCCCCC야</div>
+                <div class="a">
+                    <p><span class="warning">지역 변수를 초기화 안 하고 사용</span>했다!</p>
+                </div>
+            </div>
+
+            <div class="code-block">// 문제 코드
+void DoSomething()
+{
+    int* pValue;  // 초기화 안 함 → 0xCCCCCCCC
+    *pValue = 10; // 크래시! 0xCCCCCCCC 주소에 쓰려고 함
+}
+
+// 해결
+void DoSomething()
+{
+    int* pValue = nullptr;  // 초기화!
+    // 또는
+    int* pValue = GetValue();
+}</div>
+
+            <div class="chat">
+                <div class="q">값이 0xDDDDDDDD야</div>
+                <div class="a">
+                    <p><span class="warning">이미 해제된 메모리를 사용</span>하고 있다! (Use-After-Free)</p>
+                </div>
+            </div>
+
+            <div class="code-block">// 문제 코드
+CPlayer* pPlayer = new CPlayer();
+delete pPlayer;
+pPlayer->DoSomething();  // 0xDDDDDDDD 접근 → 크래시
+
+// 해결
+delete pPlayer;
+pPlayer = nullptr;  // 해제 후 nullptr로!
+if (pPlayer) pPlayer->DoSomething();  // nullptr 체크</div>
+
+            <div class="chat">
+                <div class="q">값이 0xFEEEFEEE야</div>
+                <div class="a">
+                    <p>마찬가지로 <span class="warning">해제된 메모리</span>다. Windows 힙 매니저가 남긴 패턴.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">값이 0xABABABAB야</div>
+                <div class="a">
+                    <p><span class="warning">버퍼 오버런</span>이 의심된다. 배열 경계를 넘어서 썼을 가능성.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// 문제 코드
+char buffer[10];
+strcpy(buffer, "This is too long!");  // 10바이트 넘음
+
+// 버퍼 뒤쪽의 가드 바이트(0xABABABAB)가 덮어써짐
+// → 힙 손상 감지됨</div>
+        </div>
+
+        <!-- Part 4 -->
+        <div class="conversation">
+            <h2>Part 4. 암기법</h2>
+
+            <div class="code-block">CC = "Clean" 스택 (아직 안 씀)
+CD = "Clean" 힙 (new 했지만 안 씀)
+DD = "Dead" 힙 (죽은 메모리 = 해제됨)
+FE = "FrEEd" (해제됨)
+AB = "ABuse" 감지용 (경계 침범 감지)
+FD = "FenDer" 앞쪽 (앞 경계)</div>
+        </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. Release에서는?</h2>
+
+            <div class="chat">
+                <div class="q">Release 빌드에서도 이 패턴이 보여?</div>
+                <div class="a">
+                    <p><span class="warning">아니다.</span> 이 패턴은 <strong>Debug 빌드 전용</strong>이다.</p>
+                    <p>Release에서는 이전에 있던 쓰레기 값(garbage)이 그대로 들어있다.</p>
+                    <p>그래서 Debug에서 잘 되다가 Release에서 크래시 나는 경우가 있다!</p>
+                </div>
+            </div>
+
+            <div class="code-block">// Debug에서는 우연히 동작하는 코드
+
+int* pValue;  // Debug: 0xCCCCCCCC (명확히 잘못된 값)
+              // Release: 0x00000000일 수도 있음 (우연히 동작!)
+
+if (pValue)   // Debug: false (0xCC...는 0이 아님)
+              // Release: 때에 따라 다름
+
+// → Debug에서 발견 못 한 버그가 Release에서 터짐</div>
+        </div>
+
+        <!-- Summary -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>0xCC</strong> = 스택 미초기화 (지역 변수 초기화 안 함)</li>
+                <li><strong>0xCD</strong> = 힙 미초기화 (new 후 값 안 넣음)</li>
+                <li><strong>0xDD</strong> = 해제된 힙 (use-after-free)</li>
+                <li><strong>0xFE</strong> = 해제된 힙 (Windows 힙)</li>
+                <li><strong>0xAB/0xFD</strong> = 힙 가드 (버퍼 오버런 감지)</li>
+                <li><strong>Release에서는</strong> 이 패턴 없음 → 다른 버그로 나타남</li>
+            </ul>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-format-specifiers/">포맷 지정자 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

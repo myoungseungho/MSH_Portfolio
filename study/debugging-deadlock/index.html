@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU 0%인데 프로그램이 안 움직여요 - Deadlock 분석 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #DC2626;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #FEE2E2;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #FEF2F2;
+            border-left: 4px solid #DC2626;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #DBEAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1D4ED8; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+
+        .code-block {
+            background: #1E293B;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #E2E8F0;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #D1FAE5; font-weight: 600; }
+        .compare-table .bad { background: #FEE2E2; }
+
+        .summary-box {
+            background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #FCA5A5; }
+
+        .step-box {
+            background: #F8FAFC;
+            border: 2px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+        }
+        .step-box h4 {
+            color: #DC2626;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .step-box h4 .step-num {
+            background: #DC2626;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+
+        <div class="header">
+            <h1>CPU 0%인데 프로그램이 안 움직여요</h1>
+            <p>Deadlock 분석 &mdash; 서로 기다리며 영원히 멈춘 스레드들</p>
+        </div>
+
+        <!-- Part 1 -->
+        <div class="conversation">
+            <h2>Part 1. Deadlock이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">프로그램이 멈췄는데 CPU 사용량이 0%야</div>
+                <div class="a">
+                    <p>무한 루프면 CPU 100%가 된다. 0%면 <span class="highlight">Deadlock(교착 상태)</span>일 가능성이 높다.</p>
+                    <p>Deadlock = 두 개 이상의 스레드가 <strong>서로 상대방이 가진 락을 기다리며 영원히 멈춘 상태</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">// 클래식 Deadlock 예시
+
+// Thread A                      // Thread B
+LockA.Lock();                    LockB.Lock();
+  // A를 획득                       // B를 획득
+  LockB.Lock();  // B 대기...       LockA.Lock();  // A 대기...
+    // 영원히 안 옴                   // 영원히 안 옴
+
+// Thread A: "B 내놔!" → Thread B가 들고 있음
+// Thread B: "A 내놔!" → Thread A가 들고 있음
+// → 서로 기다리며 영원히 멈춤</div>
+        </div>
+
+        <!-- Part 2 -->
+        <div class="conversation">
+            <h2>Part 2. Deadlock 진단하기</h2>
+
+            <div class="step-box">
+                <h4><span class="step-num">1</span> Debug → Break All (Ctrl+Alt+Break)</h4>
+                <p>멈춘 프로그램을 강제로 중단</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">2</span> Threads 창 열기 (Ctrl+Alt+H)</h4>
+                <p>각 스레드가 <strong>어디서 멈춰있는지</strong> 확인</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">3</span> Location 컬럼 확인</h4>
+                <p>여러 스레드가 <code>EnterCriticalSection</code>, <code>WaitForSingleObject</code> 등에서 멈춰있다면 의심</p>
+            </div>
+
+            <div class="step-box">
+                <h4><span class="step-num">4</span> 각 스레드 콜스택 확인</h4>
+                <p>어떤 락을 기다리는지, 어떤 락을 이미 들고 있는지 추적</p>
+            </div>
+
+            <div class="code-block">// Threads 창 예시 (Deadlock 상황)
+
+ID      Location
+──────────────────────────────────────────
+1234    ntdll!NtWaitForSingleObject  ← 락 대기 중
+5678    ntdll!NtWaitForSingleObject  ← 락 대기 중
+9012    ntdll!NtWaitForSingleObject  ← 락 대기 중
+
+// 모든 스레드가 뭔가를 기다리고 있다 = Deadlock!</div>
+        </div>
+
+        <!-- Part 3 -->
+        <div class="conversation">
+            <h2>Part 3. Parallel Stacks로 한눈에 보기</h2>
+
+            <div class="chat">
+                <div class="q">스레드가 많은데 일일이 확인하기 힘들어</div>
+                <div class="a">
+                    <p><span class="key-point">Parallel Stacks</span> 창을 쓴다. Debug → Windows → Parallel Stacks (Ctrl+Shift+D, S)</p>
+                    <p>모든 스레드의 콜스택을 <strong>그래프로 시각화</strong>해서 보여준다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// Parallel Stacks 시각화 예시
+
+                    ┌─ Thread 1234: WaitForCriticalSection(g_csA)
+                    │
+    main() ─────────┼─ Thread 5678: WaitForCriticalSection(g_csB)
+                    │
+                    └─ Thread 9012: WaitForCriticalSection(g_csA)
+
+// 같은 락을 기다리는 스레드들이 그룹핑됨
+// → Deadlock 관계를 한눈에 파악 가능</div>
+        </div>
+
+        <!-- Part 4 -->
+        <div class="conversation">
+            <h2>Part 4. 락 소유자 찾기</h2>
+
+            <div class="chat">
+                <div class="q">누가 락을 들고 있는지 어떻게 알아?</div>
+                <div class="a">
+                    <p>CRITICAL_SECTION 구조체를 직접 확인한다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// Watch 창에서 CRITICAL_SECTION 내용 확인
+
+g_csPlayer
+├─ LockCount: -2        // 락 상태 (-1이면 unlock, -2 이하면 lock)
+├─ RecursionCount: 1    // 재귀 횟수
+├─ OwningThread: 0x1234 // ← 락을 소유한 스레드 ID!
+└─ LockSemaphore: ...
+
+// OwningThread를 Threads 창에서 찾으면 → 락 소유자 확인</div>
+
+            <div class="chat">
+                <div class="q">Deadlock 구조를 파악했으면?</div>
+                <div class="a">
+                    <p>순환 대기 관계를 그려본다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">// Deadlock 순환 구조
+
+Thread 1234:
+  - 소유: g_csPlayer
+  - 대기: g_csWorld        ←──────┐
+                                  │
+Thread 5678:                      │
+  - 소유: g_csWorld               │
+  - 대기: g_csPlayer        ──────┘
+
+// 1234 → g_csWorld 대기 → 5678이 소유
+// 5678 → g_csPlayer 대기 → 1234가 소유
+// → 순환! = Deadlock</div>
+        </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. Deadlock 예방 패턴</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>패턴</th>
+                    <th>설명</th>
+                    <th>예시</th>
+                </tr>
+                <tr>
+                    <td class="good">락 순서 통일</td>
+                    <td>항상 같은 순서로 락 획득</td>
+                    <td>A→B→C 순서 고정</td>
+                </tr>
+                <tr>
+                    <td class="good">TryLock 사용</td>
+                    <td>락 획득 실패 시 이미 가진 락도 해제</td>
+                    <td>TryEnterCriticalSection</td>
+                </tr>
+                <tr>
+                    <td class="good">타임아웃</td>
+                    <td>일정 시간 대기 후 포기</td>
+                    <td>WaitForSingleObject + timeout</td>
+                </tr>
+                <tr>
+                    <td class="good">락 계층화</td>
+                    <td>레벨 낮은 락만 추가 획득 가능</td>
+                    <td>Level 1 → Level 2 만 허용</td>
+                </tr>
+            </table>
+
+            <div class="code-block">// 락 순서 통일 예시
+
+// ❌ 나쁜 코드 (순서가 제각각)
+void ThreadA() {
+    LockA(); LockB(); ...  // A → B
+}
+void ThreadB() {
+    LockB(); LockA(); ...  // B → A  ← 순서 다름!
+}
+
+// ✅ 좋은 코드 (순서 통일)
+void ThreadA() {
+    LockA(); LockB(); ...  // A → B
+}
+void ThreadB() {
+    LockA(); LockB(); ...  // A → B  ← 순서 같음!</div>
+        </div>
+
+        <!-- Part 6 -->
+        <div class="conversation">
+            <h2>Part 6. Deadlock vs 다른 멈춤 현상</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>현상</th>
+                    <th>CPU 사용량</th>
+                    <th>원인</th>
+                </tr>
+                <tr>
+                    <td class="bad">Deadlock</td>
+                    <td>0%</td>
+                    <td>서로 락 대기</td>
+                </tr>
+                <tr>
+                    <td class="bad">무한 루프</td>
+                    <td>100%</td>
+                    <td>조건이 안 바뀜</td>
+                </tr>
+                <tr>
+                    <td>정상 대기</td>
+                    <td>0%</td>
+                    <td>I/O, Sleep 등</td>
+                </tr>
+                <tr>
+                    <td class="bad">Livelock</td>
+                    <td>높음</td>
+                    <td>락 포기→재시도 반복</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Summary -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Deadlock</strong> = 서로 상대방 락을 기다리며 영원히 멈춤</li>
+                <li><strong>증상</strong>: CPU 0%, 프로그램 무응답</li>
+                <li><strong>진단</strong>: Break All → Threads 창 → 락 대기 스레드 확인</li>
+                <li><strong>Parallel Stacks</strong>: 모든 스레드 상태를 그래프로 시각화</li>
+                <li><strong>예방</strong>: 락 순서 통일, TryLock, 타임아웃</li>
+            </ul>
+        </div>
+
+        <!-- Navigation -->
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../debugging-dump-analysis/">덤프 분석 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>
