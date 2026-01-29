@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>비동기 로딩 - 게임은 계속 - 에셋 관리 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
+        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #0891B2; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../asset-management/" class="back-link">&larr; 에셋 관리</a>
+
+        <div class="header">
+            <h1>비동기 로딩 - 게임은 계속</h1>
+            <p>백그라운드 스레드 로딩</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 비동기 로딩이란?</h2>
+            <div class="q">비동기가 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">로딩을 요청하고 게임은 계속 진행</span></p>
+                <p>백그라운드 스레드에서 로딩</p>
+                <p>완료되면 콜백으로 알려줌</p>
+            </div>
+            <div class="code-block">// 비동기 로딩
+void Update()
+{
+    if (NeedNewTexture() && !isLoading)
+    {
+        isLoading = true;
+
+        // 요청만 하고 바로 리턴
+        LoadTextureAsync("big.dds", OnTextureLoaded);
+
+        // 게임은 계속 돌아감!
+    }
+}
+
+void OnTextureLoaded(Texture* tex)
+{
+    isLoading = false;
+    UseTexture(tex);
+}</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 원리</h2>
+            <div class="q">어떻게 동시에 되지?</div>
+            <div class="a">
+                <p>메인 스레드: 게임 로직 실행</p>
+                <p>로딩 스레드: 파일 읽기</p>
+                <p>완료 시 메인 스레드에 통보</p>
+            </div>
+            <div class="diagram">스레드 구조:
+
+메인 스레드 (게임 로직)
+│ Update │ Update │ Update │ Update │ Update │
+    ↓ 요청
+    ├──────────────────────────────────────┐
+    │                                      │
+로딩 스레드                                 │
+│░░░░░│████████ 파일 읽기 ████████│░░░░░│  │
+                                  ↓ 완료   │
+                            콜백 호출 ◀────┘
+
+→ 게임은 안 멈추고 로딩 진행!</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 주의점</h2>
+            <div class="q">어려운 점은?</div>
+            <div class="a">
+                <p>1. <span class="warning">로딩 완료 전에 사용하면 안 됨</span></p>
+                <p>2. <span class="warning">스레드 안전성</span> 고려</p>
+                <p>3. <span class="warning">콜백 지옥</span> 주의</p>
+            </div>
+            <div class="code-block">// 잘못된 코드
+LoadTextureAsync("tex.dds", callback);
+UseTexture(tex);  // ❌ 아직 안 됐는데!
+
+// 올바른 코드
+LoadTextureAsync("tex.dds", [](Texture* tex) {
+    UseTexture(tex);  // ✅ 완료 후 사용
+});</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 로딩 상태</h2>
+            <div class="q">로딩 중인지 어떻게 알아?</div>
+            <div class="a">
+                <p>로딩 핸들로 상태 체크</p>
+                <p>또는 플레이스홀더 사용</p>
+            </div>
+            <div class="code-block">// 핸들 방식
+LoadHandle handle = LoadAsync("tex.dds");
+
+void Update()
+{
+    if (handle.IsComplete())
+    {
+        tex = handle.GetResult();
+    }
+    else
+    {
+        // 로딩 중 - 플레이스홀더 표시
+        DrawPlaceholder();
+    }
+}</div>
+        </div>
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>비동기 = <strong>요청 후 게임 계속</strong></li>
+                <li><strong>백그라운드 스레드</strong>에서 로딩</li>
+                <li>완료 시 <strong>콜백</strong>으로 알림</li>
+                <li><strong>완료 전 사용 금지</strong>!</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../asset-sync-loading/">&larr; 동기 로딩 - 멈추고 기다려</a>
+            <a href="../asset-loading-screen/">로딩 스크린 200% 활용법 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

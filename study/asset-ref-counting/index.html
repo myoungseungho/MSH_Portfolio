@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reference Counting - 에셋 관리 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
+        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #0891B2; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../asset-management/" class="back-link">&larr; 에셋 관리</a>
+
+        <div class="header">
+            <h1>Reference Counting</h1>
+            <p>아무도 안 쓰면 해제</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. Reference Counting이란?</h2>
+            <div class="q">레퍼런스 카운팅이 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">리소스를 몇 군데서 사용하는지</span> 세는 것</p>
+                <p>카운트가 0이 되면 → 메모리 해제</p>
+            </div>
+            <div class="code-block">// 텍스처를 여러 오브젝트가 공유
+Texture* tex = LoadTexture("shared.dds");
+// refCount = 1
+
+obj1->SetTexture(tex);  // refCount = 2
+obj2->SetTexture(tex);  // refCount = 3
+
+delete obj1;            // refCount = 2
+delete obj2;            // refCount = 1
+delete obj3;            // refCount = 0 → 텍스처 해제!</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 동작 원리</h2>
+            <div class="q">어떻게 세?</div>
+            <div class="a">
+                <p>참조할 때 <span class="key-point">AddRef()</span> → 카운트 +1</p>
+                <p>해제할 때 <span class="key-point">Release()</span> → 카운트 -1</p>
+                <p>0이 되면 실제 삭제</p>
+            </div>
+            <div class="diagram">Reference Counting 흐름:
+
+LoadTexture()
+    ↓
+┌─────────────┐
+│ refCount: 1 │ ← 생성
+└─────────────┘
+    ↓ AddRef()
+┌─────────────┐
+│ refCount: 2 │ ← 참조 추가
+└─────────────┘
+    ↓ Release()
+┌─────────────┐
+│ refCount: 1 │ ← 참조 해제
+└─────────────┘
+    ↓ Release()
+┌─────────────┐
+│ refCount: 0 │ → DELETE!
+└─────────────┘</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 스마트 포인터</h2>
+            <div class="q">C++에서는?</div>
+            <div class="a">
+                <p><span class="highlight">std::shared_ptr</span>이 자동으로 해줌</p>
+                <p>수동으로 AddRef/Release 안 해도 됨</p>
+            </div>
+            <div class="code-block">// shared_ptr 사용
+auto tex = std::make_shared<Texture>();
+// refCount = 1
+
+{
+    auto copy = tex;  // refCount = 2
+}  // 스코프 끝 → refCount = 1
+
+tex = nullptr;  // refCount = 0 → 자동 삭제!</div>
+        </div>
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>사용 횟수를 <strong>카운트</strong></li>
+                <li>카운트 0 → <strong>메모리 해제</strong></li>
+                <li><strong>shared_ptr</strong>이 자동 관리</li>
+                <li>여러 오브젝트가 <strong>리소스 공유</strong> 가능</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../asset-priority-queue/">&larr; 로딩 우선순위 큐</a>
+            <a href="../asset-lru-cache/">LRU 캐시 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

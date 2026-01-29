@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로딩 우선순위 큐 - 에셋 관리 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
+        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
+        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #0891B2; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../asset-management/" class="back-link">&larr; 에셋 관리</a>
+
+        <div class="header">
+            <h1>로딩 우선순위 큐</h1>
+            <p>뭘 먼저 로딩할까?</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 우선순위가 왜 필요해?</h2>
+            <div class="q">순서대로 로딩하면 안 돼?</div>
+            <div class="a">
+                <p><span class="warning">플레이어가 보는 것</span>이 먼저!</p>
+                <p>안 보이는 건 나중에 로딩해도 됨</p>
+            </div>
+            <div class="diagram">순서대로 로딩 (잘못됨):
+1. 멀리 있는 산 텍스처 (4K) ← 3초
+2. 하늘 텍스처 (4K) ← 3초
+3. 플레이어 캐릭터 ← 1초  ❌ 늦게 나타남!
+
+우선순위 로딩 (올바름):
+1. 플레이어 캐릭터 ← 1초 ✅ 바로 보임!
+2. 주변 지형 ← 2초
+3. 멀리 있는 것들 ← 나중에</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 우선순위 기준</h2>
+            <div class="q">뭘 먼저 로딩해?</div>
+            <div class="a">
+                <p>1. <span class="key-point">플레이어 캐릭터</span></p>
+                <p>2. <span class="key-point">플레이어 주변</span> 오브젝트</p>
+                <p>3. <span class="key-point">카메라가 보는</span> 방향</p>
+                <p>4. 나머지</p>
+            </div>
+            <div class="code-block">enum LoadPriority
+{
+    CRITICAL = 0,   // 플레이어, 필수 UI
+    HIGH = 1,       // 주변 5m 이내
+    MEDIUM = 2,     // 시야 내 오브젝트
+    LOW = 3,        // 시야 밖
+    BACKGROUND = 4  // 나중에 갈 지역
+};</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 거리 기반 우선순위</h2>
+            <div class="q">거리로 어떻게 정해?</div>
+            <div class="a">
+                <p>플레이어와의 거리로 우선순위 계산</p>
+                <p>가까울수록 높은 우선순위</p>
+            </div>
+            <div class="diagram">거리 기반 우선순위:
+
+                    [카메라 시야]
+                         /\
+                        /  \
+                       /    \
+              ┌──────/──────\──────┐
+              │     ●        HIGH   │
+              │   Player            │
+              │     ↓               │
+              │  CRITICAL           │
+              └─────────────────────┘
+                  ↑ 5m 반경
+
+     LOW ←────── 20m ──────→ LOW
+
+→ 가까운 것부터!</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 동적 우선순위</h2>
+            <div class="q">우선순위가 바뀌어?</div>
+            <div class="a">
+                <p>플레이어가 움직이면 우선순위도 변함</p>
+                <p>로딩 큐를 <span class="highlight">실시간 재정렬</span></p>
+            </div>
+            <div class="code-block">void UpdatePriorities()
+{
+    for (auto& request : loadQueue)
+    {
+        float dist = Distance(player, request.position);
+        request.priority = CalculatePriority(dist);
+    }
+
+    // 우선순위 순으로 재정렬
+    SortByPriority(loadQueue);
+}</div>
+        </div>
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>플레이어가 보는 것</strong> 먼저</li>
+                <li>거리 기반 <strong>우선순위 계산</strong></li>
+                <li>플레이어 이동 시 <strong>실시간 재정렬</strong></li>
+                <li>CRITICAL > HIGH > MEDIUM > LOW</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../asset-progress-bar/">&larr; 프로그레스 바의 거짓말</a>
+            <a href="../asset-ref-counting/">Reference Counting &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>
