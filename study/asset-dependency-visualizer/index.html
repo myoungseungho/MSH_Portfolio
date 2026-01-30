@@ -3,88 +3,1458 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>의존성 시각화 도구 - 에셋 관리 - MSH Portfolio</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
-        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
-        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
-        .a p { margin-bottom: 12px; }
-        .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
-        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
-        .summary-box ul { list-style: none; }
-        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
-        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
-        .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
-    </style>
+    <title>의존성 시각화 도구 - 에셋 관리 심층 분석</title>
+    <link rel="stylesheet" href="../common/styles.css">
 </head>
 <body>
     <div class="container">
-        <a href="../asset-management/" class="back-link">&larr; 에셋 관리</a>
+        <a href="../asset-management/" class="back-link">← 에셋 관리</a>
 
         <div class="header">
             <h1>의존성 시각화 도구</h1>
-            <p>AssetGraph, Reference Viewer</p>
+            <p>AssetGraph, Reference Viewer, 커스텀 시각화 구현</p>
         </div>
 
+        <!-- Part 1 -->
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">의존성 시각화 도구이(가) 뭐야?</div>
+            <h2>Part 1. 개념: 의존성 시각화란?</h2>
+
+            <div class="q">의존성 시각화가 왜 필요해?</div>
             <div class="a">
-                <p><span class="highlight">AssetGraph, Reference Viewer</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p><span class="highlight">에셋 의존성</span>은 코드처럼 눈에 보이지 않습니다. Material이 어떤 Texture를 참조하는지, Prefab이 어떤 Script를 포함하는지 일일이 열어봐야 합니다.</p>
+
+                <p>프로젝트가 커지면 이런 문제가 생깁니다:</p>
+
+                <div class="diagram-box"><pre>
+문제 1: "이 텍스처 삭제해도 돼?"
+         → 어디서 쓰이는지 모름 → 무서워서 남겨둠 → 불필요한 용량 증가
+
+문제 2: "왜 이 씬이 500MB나 되지?"
+         → 어떤 에셋이 포함되는지 파악 불가 → 최적화 불가능
+
+문제 3: "번들 A가 왜 번들 B, C, D를 같이 로드하지?"
+         → 숨겨진 의존성 → 메모리 폭증
+
+문제 4: "이 에셋 수정하면 어디까지 영향 받아?"
+         → 역참조 파악 불가 → 사이드 이펙트 위험
+</pre></div>
+
+                <p><span class="key-point">시각화 도구</span>가 이 모든 문제를 해결합니다.</p>
+            </div>
+
+            <div class="q">시각화 도구의 핵심 기능은?</div>
+            <div class="a">
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                    의존성 시각화 도구 핵심 기능                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. 정방향 탐색 (Forward)         2. 역방향 탐색 (Reverse)        │
+│  ┌─────────────────────┐        ┌─────────────────────┐        │
+│  │  선택한 에셋이        │        │  선택한 에셋을        │        │
+│  │  참조하는 것들        │        │  참조하는 것들        │        │
+│  │                     │        │                     │        │
+│  │   Player ──→ ?     │        │   ? ──→ EnemyTex    │        │
+│  │     ├──→ Mesh      │        │   Enemy ──┤         │        │
+│  │     ├──→ Material  │        │   Boss ───┤         │        │
+│  │     └──→ Animation │        │   UI ─────┘         │        │
+│  └─────────────────────┘        └─────────────────────┘        │
+│                                                                 │
+│  3. 크기 분석                    4. 중복 탐지                     │
+│  ┌─────────────────────┐        ┌─────────────────────┐        │
+│  │  계층별 용량 집계      │        │  동일 에셋 다중 포함   │        │
+│  │                     │        │                     │        │
+│  │  Scene: 150MB       │        │  SharedTex.png      │        │
+│  │   ├─ Textures: 80MB │        │   ├─ BundleA ✓     │        │
+│  │   ├─ Meshes: 50MB   │        │   ├─ BundleB ✓     │        │
+│  │   └─ Audio: 20MB    │        │   └─ BundleC ✓     │        │
+│  └─────────────────────┘        └─────────────────────┘        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">어떤 형태로 시각화하는 게 좋아?</div>
+            <div class="a">
+                <p>의존성 데이터의 특성에 따라 다른 시각화가 적합합니다:</p>
+
+                <div class="diagram-box"><pre>
+시각화 형태별 적합한 용도:
+
+1. 그래프 (Node-Link)
+   ┌───┐     ┌───┐
+   │ A │────→│ B │     ✓ 참조 관계 직관적
+   └───┘     └───┘     ✓ 순환 참조 탐지
+     │         │       ✗ 노드 많으면 복잡
+     ▼         ▼
+   ┌───┐     ┌───┐
+   │ C │────→│ D │
+   └───┘     └───┘
+
+2. 트리맵 (Treemap)
+   ┌────────────────────────────┐
+   │ Textures (80MB)           │     ✓ 크기 비교 직관적
+   │ ┌──────────┬─────┬───┐   │     ✓ 계층 구조 표현
+   │ │ Env(50MB)│Char │UI │   │     ✗ 참조 관계 표현 어려움
+   │ │          │(20) │(10)│   │
+   │ └──────────┴─────┴───┘   │
+   └────────────────────────────┘
+
+3. 선버스트 (Sunburst)
+         ╱─────╲
+       ╱ Meshes ╲              ✓ 계층 깊이 표현
+     ╱───────────╲             ✓ 비율 직관적
+   ╱   Textures    ╲           ✗ 참조 관계 표현 불가
+   ╲    Audio     ╱
+     ╲───────────╱
+       ╲ Scripts╱
+         ╲─────╱
+
+4. 매트릭스 (Adjacency Matrix)
+        A  B  C  D
+      ┌──┬──┬──┬──┐
+    A │  │ ● │ ● │  │     ✓ 대규모 데이터 처리
+    B │  │  │  │ ● │     ✓ 패턴 발견 용이
+    C │  │  │  │ ● │     ✗ 직관성 떨어짐
+    D │  │  │  │  │
+      └──┴──┴──┴──┘
+</pre></div>
             </div>
         </div>
 
+        <!-- Part 2 -->
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. Unity 내장 도구</h2>
+
+            <div class="q">Unity에서 기본 제공하는 의존성 분석 기능은?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>Unity는 여러 내장 기능을 제공합니다:</p>
+
+                <div class="diagram-box"><pre>
+Unity 내장 의존성 분석 기능:
+
+1. Select Dependencies (Ctrl+Shift+D 또는 메뉴)
+   ┌─────────────────────────────────────────────┐
+   │  Edit → Select Dependencies                 │
+   │                                             │
+   │  선택한 에셋이 참조하는 모든 에셋을           │
+   │  Project 창에서 자동 선택                    │
+   │                                             │
+   │  Hero.prefab 선택 후 실행 →                 │
+   │    HeroMesh.fbx ✓                          │
+   │    HeroMaterial.mat ✓                      │
+   │    HeroTexture.png ✓                       │
+   │    HeroAnimator.controller ✓               │
+   └─────────────────────────────────────────────┘
+
+2. Find References In Scene
+   ┌─────────────────────────────────────────────┐
+   │  에셋 우클릭 → Find References In Scene     │
+   │                                             │
+   │  현재 열린 씬에서 해당 에셋을                 │
+   │  사용하는 오브젝트를 Hierarchy에서 선택       │
+   │                                             │
+   │  ⚠️ 제한: 현재 씬만 검색                     │
+   │  ⚠️ 제한: Prefab 내부 참조 미포함            │
+   └─────────────────────────────────────────────┘
+
+3. AssetDatabase API
+   ┌─────────────────────────────────────────────┐
+   │  코드로 의존성 분석                          │
+   │                                             │
+   │  // 정방향: 이 에셋이 참조하는 것들           │
+   │  AssetDatabase.GetDependencies(path)        │
+   │                                             │
+   │  // 역방향: 이 에셋을 참조하는 것들 (직접구현) │
+   │  → 전체 에셋 스캔 필요                       │
+   └─────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">Unity에서 역참조(이 에셋을 누가 쓰나)는 어떻게 찾아?</div>
+            <div class="a">
+                <p>Unity는 역참조를 기본 제공하지 않습니다. 직접 구현해야 합니다:</p>
+
+                <div class="code-block"><span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEditor;
+<span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> System.Linq;
+
+<span class="keyword">public class</span> <span class="type">ReverseReferencesFinder</span> : EditorWindow
+{
+    <span class="keyword">private</span> Object targetAsset;
+    <span class="keyword">private</span> List&lt;<span class="type">string</span>&gt; referencingAssets = <span class="keyword">new</span> List&lt;<span class="type">string</span>&gt;();
+    <span class="keyword">private</span> Vector2 scrollPos;
+    <span class="keyword">private</span> <span class="keyword">bool</span> isSearching;
+
+    <span class="comment">// 역참조 인덱스 (한 번 빌드 후 재사용)</span>
+    <span class="keyword">private static</span> Dictionary&lt;<span class="type">string</span>, HashSet&lt;<span class="type">string</span>&gt;&gt; reverseIndex;
+
+    [MenuItem(<span class="string">"Tools/Find Asset References"</span>)]
+    <span class="keyword">static void</span> <span class="function">ShowWindow</span>()
+    {
+        GetWindow&lt;<span class="type">ReverseReferencesFinder</span>&gt;(<span class="string">"Reference Finder"</span>);
+    }
+
+    <span class="keyword">void</span> <span class="function">OnGUI</span>()
+    {
+        EditorGUILayout.LabelField(<span class="string">"Find References To Asset"</span>, EditorStyles.boldLabel);
+
+        targetAsset = EditorGUILayout.ObjectField(
+            <span class="string">"Target Asset"</span>, targetAsset, <span class="keyword">typeof</span>(Object), <span class="keyword">false</span>);
+
+        EditorGUILayout.BeginHorizontal();
+
+        <span class="keyword">if</span> (GUILayout.Button(<span class="string">"Build Index"</span>) && !isSearching)
+        {
+            <span class="function">BuildReverseIndex</span>();
+        }
+
+        <span class="keyword">if</span> (GUILayout.Button(<span class="string">"Find References"</span>) && targetAsset != <span class="keyword">null</span>)
+        {
+            <span class="function">FindReferences</span>();
+        }
+
+        EditorGUILayout.EndHorizontal();
+
+        <span class="keyword">if</span> (reverseIndex != <span class="keyword">null</span>)
+        {
+            EditorGUILayout.HelpBox(
+                $<span class="string">"Index ready: {reverseIndex.Count} assets indexed"</span>,
+                MessageType.Info);
+        }
+
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField($<span class="string">"Found {referencingAssets.Count} references:"</span>);
+
+        scrollPos = EditorGUILayout.BeginScrollView(scrollPos);
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> assetPath <span class="keyword">in</span> referencingAssets)
+        {
+            EditorGUILayout.BeginHorizontal();
+
+            <span class="keyword">var</span> asset = AssetDatabase.LoadAssetAtPath&lt;Object&gt;(assetPath);
+            EditorGUILayout.ObjectField(asset, <span class="keyword">typeof</span>(Object), <span class="keyword">false</span>);
+
+            <span class="keyword">if</span> (GUILayout.Button(<span class="string">"Select"</span>, GUILayout.Width(<span class="number">60</span>)))
+            {
+                Selection.activeObject = asset;
+                EditorGUIUtility.PingObject(asset);
+            }
+
+            EditorGUILayout.EndHorizontal();
+        }
+
+        EditorGUILayout.EndScrollView();
+    }
+
+    <span class="keyword">void</span> <span class="function">BuildReverseIndex</span>()
+    {
+        isSearching = <span class="keyword">true</span>;
+        reverseIndex = <span class="keyword">new</span> Dictionary&lt;<span class="type">string</span>, HashSet&lt;<span class="type">string</span>&gt;&gt;();
+
+        <span class="keyword">var</span> allAssets = AssetDatabase.GetAllAssetPaths()
+            .Where(p =&gt; p.StartsWith(<span class="string">"Assets/"</span>))
+            .ToArray();
+
+        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; allAssets.Length; i++)
+        {
+            <span class="keyword">var</span> assetPath = allAssets[i];
+
+            <span class="keyword">if</span> (EditorUtility.DisplayCancelableProgressBar(
+                <span class="string">"Building Index"</span>,
+                $<span class="string">"Processing {assetPath}"</span>,
+                (<span class="keyword">float</span>)i / allAssets.Length))
+            {
+                <span class="keyword">break</span>;
+            }
+
+            <span class="comment">// 이 에셋이 참조하는 것들</span>
+            <span class="keyword">var</span> dependencies = AssetDatabase.GetDependencies(assetPath, <span class="keyword">false</span>);
+
+            <span class="keyword">foreach</span> (<span class="keyword">var</span> dep <span class="keyword">in</span> dependencies)
+            {
+                <span class="keyword">if</span> (dep == assetPath) <span class="keyword">continue</span>;
+
+                <span class="keyword">if</span> (!reverseIndex.ContainsKey(dep))
+                {
+                    reverseIndex[dep] = <span class="keyword">new</span> HashSet&lt;<span class="type">string</span>&gt;();
+                }
+
+                <span class="comment">// dep를 참조하는 assetPath 기록</span>
+                reverseIndex[dep].Add(assetPath);
+            }
+        }
+
+        EditorUtility.ClearProgressBar();
+        isSearching = <span class="keyword">false</span>;
+    }
+
+    <span class="keyword">void</span> <span class="function">FindReferences</span>()
+    {
+        referencingAssets.Clear();
+
+        <span class="keyword">var</span> targetPath = AssetDatabase.GetAssetPath(targetAsset);
+
+        <span class="keyword">if</span> (reverseIndex != <span class="keyword">null</span> && reverseIndex.ContainsKey(targetPath))
+        {
+            <span class="comment">// 인덱스가 있으면 즉시 조회 (O(1))</span>
+            referencingAssets = reverseIndex[targetPath].ToList();
+        }
+        <span class="keyword">else</span>
+        {
+            <span class="comment">// 인덱스 없으면 전체 스캔 (느림)</span>
+            <span class="function">FindReferencesWithoutIndex</span>(targetPath);
+        }
+
+        referencingAssets.Sort();
+    }
+
+    <span class="keyword">void</span> <span class="function">FindReferencesWithoutIndex</span>(<span class="type">string</span> targetPath)
+    {
+        <span class="keyword">var</span> allAssets = AssetDatabase.GetAllAssetPaths()
+            .Where(p =&gt; p.StartsWith(<span class="string">"Assets/"</span>));
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> assetPath <span class="keyword">in</span> allAssets)
+        {
+            <span class="keyword">var</span> deps = AssetDatabase.GetDependencies(assetPath, <span class="keyword">false</span>);
+            <span class="keyword">if</span> (deps.Contains(targetPath))
+            {
+                referencingAssets.Add(assetPath);
+            }
+        }
+    }
+}</pre></div>
+            </div>
+
+            <div class="q">Unity의 Addressables Analyze 도구는 어떻게 사용해?</div>
+            <div class="a">
+                <p>Addressables는 강력한 분석 도구를 내장하고 있습니다:</p>
+
+                <div class="diagram-box"><pre>
+Addressables Analyze 도구 (Window → Asset Management → Addressables → Analyze):
+
+┌─────────────────────────────────────────────────────────────────┐
+│  Analyze Rules                                                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ☑ Check Duplicate Bundle Dependencies                         │
+│    └─ 여러 번들에 중복 포함된 에셋 탐지                           │
+│       ┌─────────────────────────────────────────────────────┐  │
+│       │ SharedTexture.png                                   │  │
+│       │   ├─ Included in: Characters (explicit)             │  │
+│       │   ├─ Included in: Enemies (implicit) ⚠️            │  │
+│       │   └─ Included in: NPCs (implicit) ⚠️               │  │
+│       │                                                     │  │
+│       │ 💡 Fix: SharedTexture를 별도 그룹으로 분리           │  │
+│       └─────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ☑ Check Resources to Addressable Duplicate Dependencies       │
+│    └─ Resources 폴더와 Addressables 간 중복                     │
+│                                                                 │
+│  ☑ Check Scene to Addressable Duplicate Dependencies           │
+│    └─ 빌드에 포함된 씬과 Addressables 간 중복                    │
+│                                                                 │
+│  ☑ Bundle Layout Preview                                       │
+│    └─ 최종 번들 구성 미리보기                                    │
+│       ┌─────────────────────────────────────────────────────┐  │
+│       │ characters_assets_all.bundle (45.2 MB)              │  │
+│       │   ├─ Hero.prefab                                    │  │
+│       │   ├─ HeroMesh.fbx (12.5 MB)                         │  │
+│       │   ├─ HeroTextures/ (28.3 MB)                        │  │
+│       │   └─ HeroAnimations/ (4.4 MB)                       │  │
+│       └─────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  [Analyze Selected Rules]  [Fix Selected Rules]  [Clear]       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+
+                <div class="code-block"><span class="comment">// Addressables Analyze를 코드로 실행</span>
+<span class="keyword">using</span> UnityEditor.AddressableAssets.Build;
+<span class="keyword">using</span> UnityEditor.AddressableAssets.Build.AnalyzeRules;
+
+<span class="keyword">public class</span> <span class="type">AddressablesAnalyzer</span>
+{
+    [MenuItem(<span class="string">"Tools/Run Addressables Analysis"</span>)]
+    <span class="keyword">public static void</span> <span class="function">RunAnalysis</span>()
+    {
+        <span class="comment">// 중복 의존성 체크</span>
+        <span class="keyword">var</span> duplicateRule = <span class="keyword">new</span> CheckBundleDupeDependencies();
+        <span class="keyword">var</span> results = duplicateRule.RefreshAnalysis(
+            AddressableAssetSettingsDefaultObject.Settings);
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> result <span class="keyword">in</span> results)
+        {
+            <span class="keyword">if</span> (result.severity == MessageType.Warning ||
+                result.severity == MessageType.Error)
+            {
+                Debug.LogWarning($<span class="string">"[Addressables] {result.resultName}"</span>);
+            }
+        }
+
+        <span class="comment">// 문제 자동 수정 (공유 그룹 생성)</span>
+        duplicateRule.FixIssues(AddressableAssetSettingsDefaultObject.Settings);
+    }
+}</pre></div>
             </div>
         </div>
 
+        <!-- Part 3 -->
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. Unreal Reference Viewer</h2>
+
+            <div class="q">Unreal의 Reference Viewer는 어떻게 사용해?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p>Unreal은 강력한 내장 의존성 시각화 도구를 제공합니다:</p>
+
+                <div class="diagram-box"><pre>
+Reference Viewer 접근 방법:
+  1. Content Browser에서 에셋 우클릭
+  2. "Reference Viewer" 선택
+
+┌─────────────────────────────────────────────────────────────────┐
+│  Reference Viewer - BP_Enemy                                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│              ┌─────────────┐                                    │
+│              │ SK_Enemy    │←── Referencers (이걸 참조하는 것)   │
+│              │ (Skeleton)  │    "누가 나를 쓰나"                 │
+│              └──────┬──────┘                                    │
+│                     │                                           │
+│   ┌─────────────────┼─────────────────┐                        │
+│   │                 │                 │                        │
+│   ▼                 ▼                 ▼                        │
+│ ┌────────┐    ┌──────────┐    ┌────────────┐                   │
+│ │BP_Enemy│    │SM_Enemy  │    │M_EnemySkin │                   │
+│ │(선택됨) │    │(Mesh)    │    │(Material)  │                   │
+│ └───┬────┘    └──────────┘    └─────┬──────┘                   │
+│     │                               │                          │
+│     │         Dependencies          │                          │
+│     │         (내가 참조하는 것)      │                          │
+│     │         "내가 뭘 쓰나"         │                          │
+│     ▼                               ▼                          │
+│ ┌────────────┐              ┌────────────┐                     │
+│ │ABP_Enemy   │              │T_EnemyBase │                     │
+│ │(AnimBP)    │              │(Texture)   │                     │
+│ └────────────┘              └────────────┘                     │
+│                                                                 │
+│  [Search Depth: 3 ▼] [Show Referencers ☑] [Show Dependencies ☑]│
+│  [Compact Mode ☐]   [Show Soft Refs ☑]   [Show Hard Refs ☑]   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+
+                <p>Reference Viewer의 주요 옵션:</p>
+
+                <div class="diagram-box"><pre>
+Reference Viewer 옵션 설명:
+
+Search Depth (검색 깊이)
+  ├─ 1: 직접 참조만
+  ├─ 2: 2단계까지 (참조의 참조)
+  └─ 3+: 더 깊은 관계 (복잡해질 수 있음)
+
+Search Breadth Limit (검색 너비)
+  └─ 각 노드에서 표시할 최대 참조 수
+
+Show/Hide 옵션:
+  ├─ Referencers: 역참조 (이걸 쓰는 것들)
+  ├─ Dependencies: 의존성 (이게 쓰는 것들)
+  ├─ Soft References: 약한 참조 (TSoftObjectPtr)
+  ├─ Hard References: 강한 참조 (직접 참조)
+  ├─ Management References: 에디터 전용 참조
+  └─ Searchable Names: 문자열 기반 참조
+
+색상 코드:
+  ├─ 파란색 선: Hard Reference
+  ├─ 초록색 선: Soft Reference
+  └─ 빨간색 선: Circular Reference (순환)
+</pre></div>
+            </div>
+
+            <div class="q">Unreal의 Size Map은 어떻게 사용해?</div>
+            <div class="a">
+                <p>Size Map은 에셋 크기를 시각화합니다:</p>
+
+                <div class="diagram-box"><pre>
+Size Map 접근:
+  에셋 우클릭 → Size Map
+
+┌─────────────────────────────────────────────────────────────────┐
+│  Size Map - MainLevel                                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌────────────────────────────────────────────────────────────┐│
+│  │                                                            ││
+│  │  ┌──────────────────────────────┬─────────────────────┐   ││
+│  │  │                              │                     │   ││
+│  │  │     Textures (156 MB)        │    Meshes (82 MB)   │   ││
+│  │  │                              │                     │   ││
+│  │  │  ┌────────────┬────────┐    │  ┌─────────────────┐│   ││
+│  │  │  │Environment │ Chars  │    │  │   Buildings     ││   ││
+│  │  │  │  (98 MB)   │(58 MB) │    │  │    (52 MB)      ││   ││
+│  │  │  └────────────┴────────┘    │  ├─────────────────┤│   ││
+│  │  │                              │  │ Props (30 MB)  ││   ││
+│  │  │                              │  └─────────────────┘│   ││
+│  │  └──────────────────────────────┴─────────────────────┘   ││
+│  │  ┌───────────────────┬──────────────────┐                 ││
+│  │  │   Audio (24 MB)   │ Blueprints (8 MB)│                 ││
+│  │  └───────────────────┴──────────────────┘                 ││
+│  │                                                            ││
+│  └────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│  Memory: 270 MB  |  Disk: 185 MB (Compressed)                  │
+│                                                                 │
+│  [Show by Type ▼]  [Memory/Disk ▼]  [Exclude Editor Only ☑]   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+활용 예시:
+  1. 레벨에서 가장 큰 에셋 식별
+  2. 불필요하게 큰 텍스처 발견
+  3. 번들 크기 예측
+  4. LOD 적용 우선순위 결정
+</pre></div>
+            </div>
+
+            <div class="q">Asset Audit 도구는 어떻게 활용해?</div>
+            <div class="a">
+                <p>Asset Audit은 에셋 속성을 일괄 분석합니다:</p>
+
+                <div class="diagram-box"><pre>
+Asset Audit (Window → Developer Tools → Asset Audit):
+
+┌─────────────────────────────────────────────────────────────────┐
+│  Asset Audit                                                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Columns: [Name] [Type] [Size] [LODs] [Triangles] [Materials]  │
+│                                                                 │
+│  Filter: Textures larger than 2048                             │
+│  ┌────────────────────────────────────────────────────────────┐│
+│  │ Name              │ Size   │ Format │ Resolution │ MipMaps ││
+│  ├───────────────────┼────────┼────────┼────────────┼─────────┤│
+│  │ T_Ground_Diffuse  │ 21 MB  │ RGBA32 │ 4096x4096  │ Yes    ││
+│  │ T_Sky_HDR         │ 48 MB  │ RGBA16F│ 8192x4096  │ No ⚠️  ││
+│  │ T_Character_Atlas │ 16 MB  │ DXT5   │ 4096x4096  │ Yes    ││
+│  │ T_UI_Background   │ 8 MB   │ RGBA32 │ 2048x2048  │ No     ││
+│  └────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│  Summary:                                                       │
+│    Total Textures: 1,247                                       │
+│    Total Size: 3.2 GB                                          │
+│    Over 4K: 89 (28% of size)                                   │
+│    Missing MipMaps: 23 ⚠️                                      │
+│    Uncompressed: 156 ⚠️                                        │
+│                                                                 │
+│  [Export CSV]  [Apply Bulk Changes]  [Generate Report]         │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+커스텀 필터 예시:
+  - "All textures > 2048 without streaming"
+  - "All meshes > 50k triangles without LOD"
+  - "All materials with > 100 instructions"
+  - "All sounds > 10 seconds uncompressed"
+</pre></div>
             </div>
         </div>
+
+        <!-- Part 4 -->
+        <div class="conversation">
+            <h2>Part 4. 커스텀 시각화 도구 구현</h2>
+
+            <div class="q">웹 기반 시각화 도구는 어떻게 만들어?</div>
+            <div class="a">
+                <p>D3.js나 vis.js로 인터랙티브한 의존성 그래프를 만들 수 있습니다:</p>
+
+                <div class="code-block"><span class="comment">// Unity에서 의존성 데이터를 JSON으로 내보내기</span>
+<span class="keyword">public class</span> <span class="type">DependencyExporter</span>
+{
+    [MenuItem(<span class="string">"Tools/Export Dependencies to JSON"</span>)]
+    <span class="keyword">public static void</span> <span class="function">Export</span>()
+    {
+        <span class="keyword">var</span> graph = <span class="keyword">new</span> DependencyGraphData();
+
+        <span class="keyword">var</span> allAssets = AssetDatabase.GetAllAssetPaths()
+            .Where(p =&gt; p.StartsWith(<span class="string">"Assets/"</span>))
+            .Where(p =&gt; !p.EndsWith(<span class="string">".cs"</span>)) <span class="comment">// 스크립트 제외</span>
+            .ToArray();
+
+        <span class="comment">// 노드 생성</span>
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> assetPath <span class="keyword">in</span> allAssets)
+        {
+            <span class="keyword">var</span> node = <span class="keyword">new</span> NodeData
+            {
+                id = assetPath,
+                label = Path.GetFileName(assetPath),
+                type = <span class="function">GetAssetType</span>(assetPath),
+                size = <span class="function">GetAssetSize</span>(assetPath)
+            };
+            graph.nodes.Add(node);
+        }
+
+        <span class="comment">// 엣지 생성</span>
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> assetPath <span class="keyword">in</span> allAssets)
+        {
+            <span class="keyword">var</span> deps = AssetDatabase.GetDependencies(assetPath, <span class="keyword">false</span>);
+
+            <span class="keyword">foreach</span> (<span class="keyword">var</span> dep <span class="keyword">in</span> deps)
+            {
+                <span class="keyword">if</span> (dep != assetPath && allAssets.Contains(dep))
+                {
+                    graph.edges.Add(<span class="keyword">new</span> EdgeData
+                    {
+                        source = assetPath,
+                        target = dep
+                    });
+                }
+            }
+        }
+
+        <span class="keyword">var</span> json = JsonUtility.ToJson(graph, <span class="keyword">true</span>);
+        File.WriteAllText(<span class="string">"Assets/dependencies.json"</span>, json);
+
+        Debug.Log($<span class="string">"Exported {graph.nodes.Count} nodes, {graph.edges.Count} edges"</span>);
+    }
+
+    <span class="keyword">static string</span> <span class="function">GetAssetType</span>(<span class="type">string</span> path)
+    {
+        <span class="keyword">var</span> ext = Path.GetExtension(path).ToLower();
+        <span class="keyword">return</span> ext <span class="keyword">switch</span>
+        {
+            <span class="string">".prefab"</span> =&gt; <span class="string">"prefab"</span>,
+            <span class="string">".mat"</span> =&gt; <span class="string">"material"</span>,
+            <span class="string">".png"</span> or <span class="string">".jpg"</span> or <span class="string">".tga"</span> =&gt; <span class="string">"texture"</span>,
+            <span class="string">".fbx"</span> or <span class="string">".obj"</span> =&gt; <span class="string">"mesh"</span>,
+            <span class="string">".anim"</span> =&gt; <span class="string">"animation"</span>,
+            <span class="string">".controller"</span> =&gt; <span class="string">"animator"</span>,
+            <span class="string">".unity"</span> =&gt; <span class="string">"scene"</span>,
+            <span class="string">".asset"</span> =&gt; <span class="string">"scriptable"</span>,
+            _ =&gt; <span class="string">"other"</span>
+        };
+    }
+
+    <span class="keyword">static long</span> <span class="function">GetAssetSize</span>(<span class="type">string</span> path)
+    {
+        <span class="keyword">var</span> fullPath = Path.GetFullPath(path);
+        <span class="keyword">return</span> File.Exists(fullPath) ? <span class="keyword">new</span> FileInfo(fullPath).Length : <span class="number">0</span>;
+    }
+}
+
+[System.Serializable]
+<span class="keyword">public class</span> <span class="type">DependencyGraphData</span>
+{
+    <span class="keyword">public</span> List&lt;NodeData&gt; nodes = <span class="keyword">new</span>();
+    <span class="keyword">public</span> List&lt;EdgeData&gt; edges = <span class="keyword">new</span>();
+}
+
+[System.Serializable]
+<span class="keyword">public class</span> <span class="type">NodeData</span>
+{
+    <span class="keyword">public string</span> id;
+    <span class="keyword">public string</span> label;
+    <span class="keyword">public string</span> type;
+    <span class="keyword">public long</span> size;
+}
+
+[System.Serializable]
+<span class="keyword">public class</span> <span class="type">EdgeData</span>
+{
+    <span class="keyword">public string</span> source;
+    <span class="keyword">public string</span> target;
+}</pre></div>
+
+                <div class="code-block"><span class="comment">&lt;!-- D3.js Force-Directed Graph --&gt;</span>
+<span class="keyword">&lt;!DOCTYPE html&gt;</span>
+<span class="keyword">&lt;html&gt;</span>
+<span class="keyword">&lt;head&gt;</span>
+    <span class="keyword">&lt;script</span> src=<span class="string">"https://d3js.org/d3.v7.min.js"</span><span class="keyword">&gt;&lt;/script&gt;</span>
+    <span class="keyword">&lt;style&gt;</span>
+        .node { cursor: pointer; }
+        .node circle { stroke: #fff; stroke-width: 2px; }
+        .link { stroke: #999; stroke-opacity: 0.6; }
+        .tooltip { position: absolute; background: #333; color: #fff;
+                   padding: 8px; border-radius: 4px; font-size: 12px; }
+
+        <span class="comment">/* 노드 타입별 색상 */</span>
+        .node-prefab { fill: #4CAF50; }
+        .node-material { fill: #2196F3; }
+        .node-texture { fill: #FF9800; }
+        .node-mesh { fill: #9C27B0; }
+        .node-scene { fill: #F44336; }
+    <span class="keyword">&lt;/style&gt;</span>
+<span class="keyword">&lt;/head&gt;</span>
+<span class="keyword">&lt;body&gt;</span>
+    <span class="keyword">&lt;svg</span> id=<span class="string">"graph"</span> width=<span class="string">"1200"</span> height=<span class="string">"800"</span><span class="keyword">&gt;&lt;/svg&gt;</span>
+
+    <span class="keyword">&lt;script&gt;</span>
+        <span class="comment">// 데이터 로드</span>
+        d3.json(<span class="string">'dependencies.json'</span>).then(data =&gt; {
+            <span class="keyword">const</span> svg = d3.select(<span class="string">'#graph'</span>);
+            <span class="keyword">const</span> width = +svg.attr(<span class="string">'width'</span>);
+            <span class="keyword">const</span> height = +svg.attr(<span class="string">'height'</span>);
+
+            <span class="comment">// Force Simulation 설정</span>
+            <span class="keyword">const</span> simulation = d3.forceSimulation(data.nodes)
+                .force(<span class="string">'link'</span>, d3.forceLink(data.edges)
+                    .id(d =&gt; d.id)
+                    .distance(<span class="number">100</span>))
+                .force(<span class="string">'charge'</span>, d3.forceManyBody().strength(-<span class="number">300</span>))
+                .force(<span class="string">'center'</span>, d3.forceCenter(width / <span class="number">2</span>, height / <span class="number">2</span>))
+                .force(<span class="string">'collision'</span>, d3.forceCollide().radius(<span class="number">30</span>));
+
+            <span class="comment">// 줌/패닝</span>
+            <span class="keyword">const</span> g = svg.append(<span class="string">'g'</span>);
+            svg.call(d3.zoom().on(<span class="string">'zoom'</span>, e =&gt; {
+                g.attr(<span class="string">'transform'</span>, e.transform);
+            }));
+
+            <span class="comment">// 엣지 그리기</span>
+            <span class="keyword">const</span> link = g.append(<span class="string">'g'</span>)
+                .selectAll(<span class="string">'line'</span>)
+                .data(data.edges)
+                .enter().append(<span class="string">'line'</span>)
+                .attr(<span class="string">'class'</span>, <span class="string">'link'</span>)
+                .attr(<span class="string">'marker-end'</span>, <span class="string">'url(#arrow)'</span>);
+
+            <span class="comment">// 화살표 마커</span>
+            svg.append(<span class="string">'defs'</span>).append(<span class="string">'marker'</span>)
+                .attr(<span class="string">'id'</span>, <span class="string">'arrow'</span>)
+                .attr(<span class="string">'viewBox'</span>, <span class="string">'0 -5 10 10'</span>)
+                .attr(<span class="string">'refX'</span>, <span class="number">20</span>)
+                .attr(<span class="string">'markerWidth'</span>, <span class="number">6</span>)
+                .attr(<span class="string">'markerHeight'</span>, <span class="number">6</span>)
+                .attr(<span class="string">'orient'</span>, <span class="string">'auto'</span>)
+                .append(<span class="string">'path'</span>)
+                .attr(<span class="string">'d'</span>, <span class="string">'M0,-5L10,0L0,5'</span>)
+                .attr(<span class="string">'fill'</span>, <span class="string">'#999'</span>);
+
+            <span class="comment">// 노드 그리기</span>
+            <span class="keyword">const</span> node = g.append(<span class="string">'g'</span>)
+                .selectAll(<span class="string">'.node'</span>)
+                .data(data.nodes)
+                .enter().append(<span class="string">'g'</span>)
+                .attr(<span class="string">'class'</span>, <span class="string">'node'</span>)
+                .call(d3.drag()
+                    .on(<span class="string">'start'</span>, dragstarted)
+                    .on(<span class="string">'drag'</span>, dragged)
+                    .on(<span class="string">'end'</span>, dragended));
+
+            <span class="comment">// 노드 원 (크기는 에셋 용량에 비례)</span>
+            node.append(<span class="string">'circle'</span>)
+                .attr(<span class="string">'r'</span>, d =&gt; Math.max(<span class="number">5</span>, Math.sqrt(d.size / <span class="number">10000</span>)))
+                .attr(<span class="string">'class'</span>, d =&gt; <span class="string">`node-${d.type}`</span>);
+
+            <span class="comment">// 노드 레이블</span>
+            node.append(<span class="string">'text'</span>)
+                .attr(<span class="string">'dx'</span>, <span class="number">12</span>)
+                .attr(<span class="string">'dy'</span>, <span class="number">4</span>)
+                .text(d =&gt; d.label)
+                .style(<span class="string">'font-size'</span>, <span class="string">'10px'</span>);
+
+            <span class="comment">// 시뮬레이션 업데이트</span>
+            simulation.on(<span class="string">'tick'</span>, () =&gt; {
+                link.attr(<span class="string">'x1'</span>, d =&gt; d.source.x)
+                    .attr(<span class="string">'y1'</span>, d =&gt; d.source.y)
+                    .attr(<span class="string">'x2'</span>, d =&gt; d.target.x)
+                    .attr(<span class="string">'y2'</span>, d =&gt; d.target.y);
+
+                node.attr(<span class="string">'transform'</span>, d =&gt; <span class="string">`translate(${d.x},${d.y})`</span>);
+            });
+
+            <span class="comment">// 드래그 함수들</span>
+            <span class="keyword">function</span> <span class="function">dragstarted</span>(event, d) {
+                <span class="keyword">if</span> (!event.active) simulation.alphaTarget(<span class="number">0.3</span>).restart();
+                d.fx = d.x; d.fy = d.y;
+            }
+            <span class="keyword">function</span> <span class="function">dragged</span>(event, d) {
+                d.fx = event.x; d.fy = event.y;
+            }
+            <span class="keyword">function</span> <span class="function">dragended</span>(event, d) {
+                <span class="keyword">if</span> (!event.active) simulation.alphaTarget(<span class="number">0</span>);
+                d.fx = <span class="keyword">null</span>; d.fy = <span class="keyword">null</span>;
+            }
+        });
+    <span class="keyword">&lt;/script&gt;</span>
+<span class="keyword">&lt;/body&gt;</span>
+<span class="keyword">&lt;/html&gt;</span></pre></div>
+            </div>
+
+            <div class="q">대규모 그래프를 효율적으로 렌더링하는 방법은?</div>
+            <div class="a">
+                <p>수천 개의 노드가 있을 때 최적화 전략:</p>
+
+                <div class="diagram-box"><pre>
+대규모 그래프 렌더링 최적화:
+
+1. Level of Detail (LOD) 전략
+   ┌─────────────────────────────────────────────────────────────┐
+   │  줌 레벨에 따른 표시 정보 조절                                │
+   │                                                             │
+   │  Far (전체 보기)     Medium (그룹 보기)    Near (상세 보기)  │
+   │  ┌───────────┐      ┌───────────┐        ┌───────────┐    │
+   │  │ • • • • • │      │ ┌───┐     │        │ HeroMesh  │    │
+   │  │ • • • • • │  →   │ │Tex│ ○   │   →    │  ├─ LOD0  │    │
+   │  │ • • • • • │      │ └───┘     │        │  ├─ LOD1  │    │
+   │  │ • • • • • │      │    ┌───┐  │        │  └─ LOD2  │    │
+   │  │ • • • • • │      │    │Mat│  │        │           │    │
+   │  └───────────┘      └───────────┘        └───────────┘    │
+   │   점만 표시          그룹 + 연결선         전체 레이블       │
+   └─────────────────────────────────────────────────────────────┘
+
+2. 클러스터링 (노드 그룹화)
+   ┌─────────────────────────────────────────────────────────────┐
+   │  Before: 5000 nodes         After: 50 clusters              │
+   │                                                             │
+   │  • • • • • • • •            ┌─────────┐                    │
+   │  • • • • • • • •     →      │Textures │──→ ┌────────┐      │
+   │  • • • • • • • •            │  (120)  │    │Materials│      │
+   │  • • • • • • • •            └─────────┘    │  (45)  │      │
+   │                                           └────────┘      │
+   │                             폴더/타입별 그룹으로 축소         │
+   └─────────────────────────────────────────────────────────────┘
+
+3. 가상화 (Viewport Culling)
+   ┌─────────────────────────────────────────────────────────────┐
+   │  전체 그래프                  화면에 보이는 것만 렌더링        │
+   │                                                             │
+   │  ┌─────────────────────┐    ┌─────────────────────┐        │
+   │  │ ╔═════════════╗     │    │                     │        │
+   │  │ ║ ○ ○ ○ ○ ○ ║ ○ ○ │    │   ○ ○ ○ ○ ○         │        │
+   │  │ ║ ○ ○ ○ ○ ○ ║ ○ ○ │    │   ○ ○ ○ ○ ○         │        │
+   │  │ ║ ○ ○ ○ ○ ○ ║ ○ ○ │ →  │   ○ ○ ○ ○ ○         │        │
+   │  │ ╚═════════════╝     │    │   ○ ○ ○ ○ ○         │        │
+   │  │ ○ ○ ○ ○ ○ ○ ○ ○ ○ │    │                     │        │
+   │  └─────────────────────┘    └─────────────────────┘        │
+   │       Viewport               보이는 영역만 DOM 생성         │
+   └─────────────────────────────────────────────────────────────┘
+
+4. WebGL 렌더링 (Canvas 대신)
+   - D3.js + WebGL: regl, deck.gl
+   - 10만 노드 이상도 60fps 가능
+</pre></div>
+
+                <div class="code-block"><span class="comment">// 클러스터링 구현 예시</span>
+<span class="keyword">public class</span> <span class="type">GraphClusterer</span>
+{
+    <span class="keyword">public</span> ClusteredGraph <span class="function">CreateClusters</span>(DependencyGraphData graph)
+    {
+        <span class="keyword">var</span> clustered = <span class="keyword">new</span> ClusteredGraph();
+
+        <span class="comment">// 폴더별 클러스터링</span>
+        <span class="keyword">var</span> folderGroups = graph.nodes
+            .GroupBy(n =&gt; <span class="function">GetFolder</span>(n.id))
+            .Where(g =&gt; g.Count() &gt; <span class="number">1</span>);
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> group <span class="keyword">in</span> folderGroups)
+        {
+            <span class="keyword">var</span> cluster = <span class="keyword">new</span> ClusterNode
+            {
+                id = $<span class="string">"cluster_{group.Key}"</span>,
+                label = group.Key,
+                children = group.Select(n =&gt; n.id).ToList(),
+                totalSize = group.Sum(n =&gt; n.size)
+            };
+
+            clustered.clusters.Add(cluster);
+        }
+
+        <span class="comment">// 클러스터 간 엣지 생성</span>
+        <span class="keyword">var</span> nodeToCluster = clustered.clusters
+            .SelectMany(c =&gt; c.children.Select(child =&gt; (child, c.id)))
+            .ToDictionary(x =&gt; x.child, x =&gt; x.id);
+
+        <span class="keyword">var</span> clusterEdges = <span class="keyword">new</span> HashSet&lt;(<span class="type">string</span>, <span class="type">string</span>)&gt;();
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> edge <span class="keyword">in</span> graph.edges)
+        {
+            <span class="keyword">if</span> (nodeToCluster.TryGetValue(edge.source, <span class="keyword">out</span> <span class="keyword">var</span> srcCluster) &&
+                nodeToCluster.TryGetValue(edge.target, <span class="keyword">out</span> <span class="keyword">var</span> tgtCluster))
+            {
+                <span class="keyword">if</span> (srcCluster != tgtCluster)
+                {
+                    clusterEdges.Add((srcCluster, tgtCluster));
+                }
+            }
+        }
+
+        clustered.edges = clusterEdges
+            .Select(e =&gt; <span class="keyword">new</span> EdgeData { source = e.Item1, target = e.Item2 })
+            .ToList();
+
+        <span class="keyword">return</span> clustered;
+    }
+
+    <span class="keyword">string</span> <span class="function">GetFolder</span>(<span class="type">string</span> path)
+    {
+        <span class="keyword">var</span> dir = Path.GetDirectoryName(path);
+        <span class="keyword">return string</span>.IsNullOrEmpty(dir) ? <span class="string">"Root"</span> : dir;
+    }
+}</pre></div>
+            </div>
+        </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. 인터랙티브 탐색 기능</h2>
+
+            <div class="q">의존성 시각화에서 어떤 인터랙션이 유용해?</div>
+            <div class="a">
+                <div class="diagram-box"><pre>
+필수 인터랙션 기능:
+
+1. 검색 & 필터
+   ┌─────────────────────────────────────────────────────────────┐
+   │  [🔍 Hero________________] [Type: All ▼] [Size: > 1MB ▼]   │
+   │                                                             │
+   │  Results:                                                   │
+   │    ○ Hero.prefab (2.3 MB)  [Focus] [Isolate]               │
+   │    ○ HeroMaterial.mat (0.1 MB)  [Focus] [Isolate]          │
+   │    ○ HeroTexture.png (8.5 MB)  [Focus] [Isolate]           │
+   └─────────────────────────────────────────────────────────────┘
+
+2. 노드 선택 시 상세 정보
+   ┌─────────────────────────────────────────────────────────────┐
+   │  ┌──────────────────────┐                                  │
+   │  │ HeroMaterial.mat     │                                  │
+   │  │ ──────────────────── │                                  │
+   │  │ Type: Material       │                                  │
+   │  │ Size: 0.1 MB         │                                  │
+   │  │ Path: Assets/Chars/  │                                  │
+   │  │ ──────────────────── │                                  │
+   │  │ References (3):      │                                  │
+   │  │   → HeroTexture.png  │                                  │
+   │  │   → NormalMap.png    │                                  │
+   │  │   → HeroShader       │                                  │
+   │  │ ──────────────────── │                                  │
+   │  │ Referenced by (2):   │                                  │
+   │  │   ← Hero.prefab      │                                  │
+   │  │   ← HeroVariant.prefab│                                 │
+   │  │ ──────────────────── │                                  │
+   │  │ [Open] [Delete Refs] │                                  │
+   │  └──────────────────────┘                                  │
+   └─────────────────────────────────────────────────────────────┘
+
+3. 경로 하이라이트
+   ┌─────────────────────────────────────────────────────────────┐
+   │  "Hero.prefab에서 SharedTexture.png까지 경로 표시"          │
+   │                                                             │
+   │      ○ ─ ─ ─ ─ ─ ○         일반 노드 (희미하게)             │
+   │     ╱               ╲                                       │
+   │   ●═══════●═══════●      경로상 노드 (강조)                │
+   │  Hero    Material   Texture                                 │
+   │                                                             │
+   │  경로: Hero.prefab → HeroMaterial.mat → SharedTexture.png  │
+   │  깊이: 2단계                                                 │
+   └─────────────────────────────────────────────────────────────┘
+
+4. 영향 범위 시각화
+   ┌─────────────────────────────────────────────────────────────┐
+   │  "SharedTexture.png 수정 시 영향 받는 에셋"                  │
+   │                                                             │
+   │           ┌────────────┐                                    │
+   │           │SharedTexture│ ← 수정 대상 (빨간색)               │
+   │           └──────┬─────┘                                    │
+   │        ┌─────────┼─────────┐                                │
+   │        ▼         ▼         ▼                                │
+   │    ┌──────┐  ┌──────┐  ┌──────┐                            │
+   │    │Mat_A │  │Mat_B │  │Mat_C │  ← 직접 영향 (주황색)       │
+   │    └──┬───┘  └──┬───┘  └──┬───┘                            │
+   │       ▼         ▼         ▼                                 │
+   │   ┌──────┐  ┌──────┐  ┌──────┐                             │
+   │   │Prefab│  │Prefab│  │Prefab│  ← 간접 영향 (노란색)        │
+   │   └──────┘  └──────┘  └──────┘                             │
+   │                                                             │
+   │  Total Impact: 6 assets, 45 MB                              │
+   └─────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">실시간 의존성 추적은 어떻게 구현해?</div>
+            <div class="a">
+                <p>에디터에서 에셋 변경 시 자동으로 그래프를 업데이트합니다:</p>
+
+                <div class="code-block"><span class="comment">// Unity 실시간 의존성 모니터링</span>
+<span class="keyword">public class</span> <span class="type">RealTimeDependencyMonitor</span> : AssetPostprocessor
+{
+    <span class="keyword">public static event</span> Action&lt;DependencyChange&gt; OnDependencyChanged;
+
+    <span class="comment">// 에셋 임포트 완료 시</span>
+    <span class="keyword">static void</span> <span class="function">OnPostprocessAllAssets</span>(
+        <span class="type">string</span>[] imported,
+        <span class="type">string</span>[] deleted,
+        <span class="type">string</span>[] moved,
+        <span class="type">string</span>[] movedFrom)
+    {
+        <span class="keyword">var</span> changes = <span class="keyword">new</span> List&lt;DependencyChange&gt;();
+
+        <span class="comment">// 새로 임포트된 에셋</span>
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> path <span class="keyword">in</span> imported)
+        {
+            <span class="keyword">var</span> deps = AssetDatabase.GetDependencies(path, <span class="keyword">false</span>);
+            changes.Add(<span class="keyword">new</span> DependencyChange
+            {
+                type = ChangeType.Added,
+                assetPath = path,
+                newDependencies = deps.ToList()
+            });
+        }
+
+        <span class="comment">// 삭제된 에셋</span>
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> path <span class="keyword">in</span> deleted)
+        {
+            changes.Add(<span class="keyword">new</span> DependencyChange
+            {
+                type = ChangeType.Removed,
+                assetPath = path
+            });
+        }
+
+        <span class="comment">// 이동된 에셋</span>
+        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; moved.Length; i++)
+        {
+            changes.Add(<span class="keyword">new</span> DependencyChange
+            {
+                type = ChangeType.Moved,
+                assetPath = moved[i],
+                oldPath = movedFrom[i]
+            });
+        }
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> change <span class="keyword">in</span> changes)
+        {
+            OnDependencyChanged?.Invoke(change);
+        }
+    }
+}
+
+<span class="keyword">public class</span> <span class="type">DependencyChange</span>
+{
+    <span class="keyword">public</span> ChangeType type;
+    <span class="keyword">public string</span> assetPath;
+    <span class="keyword">public string</span> oldPath;
+    <span class="keyword">public</span> List&lt;<span class="type">string</span>&gt; oldDependencies;
+    <span class="keyword">public</span> List&lt;<span class="type">string</span>&gt; newDependencies;
+}
+
+<span class="keyword">public enum</span> <span class="type">ChangeType</span> { Added, Removed, Modified, Moved }
+
+<span class="comment">// 시각화 도구에서 구독</span>
+<span class="keyword">public class</span> <span class="type">DependencyGraphWindow</span> : EditorWindow
+{
+    <span class="keyword">void</span> <span class="function">OnEnable</span>()
+    {
+        RealTimeDependencyMonitor.OnDependencyChanged += <span class="function">HandleChange</span>;
+    }
+
+    <span class="keyword">void</span> <span class="function">OnDisable</span>()
+    {
+        RealTimeDependencyMonitor.OnDependencyChanged -= <span class="function">HandleChange</span>;
+    }
+
+    <span class="keyword">void</span> <span class="function">HandleChange</span>(DependencyChange change)
+    {
+        <span class="keyword">switch</span> (change.type)
+        {
+            <span class="keyword">case</span> ChangeType.Added:
+                <span class="function">AddNodeToGraph</span>(change.assetPath, change.newDependencies);
+                <span class="function">HighlightNode</span>(change.assetPath, Color.green);
+                <span class="keyword">break</span>;
+
+            <span class="keyword">case</span> ChangeType.Removed:
+                <span class="function">RemoveNodeFromGraph</span>(change.assetPath);
+                <span class="keyword">break</span>;
+
+            <span class="keyword">case</span> ChangeType.Modified:
+                <span class="function">UpdateNodeDependencies</span>(change.assetPath,
+                    change.oldDependencies, change.newDependencies);
+                <span class="function">HighlightNode</span>(change.assetPath, Color.yellow);
+                <span class="keyword">break</span>;
+        }
+
+        Repaint();
+    }
+}</pre></div>
+            </div>
+        </div>
+
+        <!-- Part 6 -->
+        <div class="conversation">
+            <h2>Part 6. 빌드 파이프라인 통합</h2>
+
+            <div class="q">CI/CD에서 의존성 분석을 자동화하려면?</div>
+            <div class="a">
+                <div class="diagram-box"><pre>
+의존성 분석 CI/CD 파이프라인:
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    Git Push / PR                                │
+│                         │                                       │
+│                         ▼                                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │              1. Dependency Snapshot                     │   │
+│  │                                                         │   │
+│  │  • 전체 에셋 의존성 그래프 생성                           │   │
+│  │  • 이전 빌드와 비교 (diff)                               │   │
+│  │  • JSON 아티팩트 저장                                    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                         │                                       │
+│                         ▼                                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │              2. Validation Rules                        │   │
+│  │                                                         │   │
+│  │  ✓ No circular dependencies                             │   │
+│  │  ✓ No orphan assets (used but not tracked)              │   │
+│  │  ✓ Bundle size limits respected                         │   │
+│  │  ✓ No cross-layer violations                            │   │
+│  │  ⚠️ New shared dependencies require review              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                         │                                       │
+│               ┌─────────┴─────────┐                            │
+│               ▼                   ▼                            │
+│         [Pass]               [Fail]                            │
+│            │                    │                              │
+│            ▼                    ▼                              │
+│  ┌─────────────────┐   ┌───────────────────┐                  │
+│  │  Build & Deploy │   │  Block + Report   │                  │
+│  └─────────────────┘   │  • Slack 알림     │                  │
+│                        │  • PR 코멘트       │                  │
+│                        │  • 시각화 링크     │                  │
+│                        └───────────────────┘                  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+
+                <div class="code-block"><span class="comment">// Unity 빌드 전 의존성 검증</span>
+<span class="keyword">public class</span> <span class="type">DependencyValidator</span> : IPreprocessBuildWithReport
+{
+    <span class="keyword">public int</span> callbackOrder =&gt; <span class="number">0</span>;
+
+    <span class="keyword">public void</span> <span class="function">OnPreprocessBuild</span>(BuildReport report)
+    {
+        <span class="keyword">var</span> issues = <span class="keyword">new</span> List&lt;ValidationIssue&gt;();
+
+        <span class="comment">// 1. 순환 참조 체크</span>
+        <span class="keyword">var</span> cycles = <span class="function">FindCyclicDependencies</span>();
+        <span class="keyword">if</span> (cycles.Any())
+        {
+            issues.Add(<span class="keyword">new</span> ValidationIssue
+            {
+                severity = Severity.Error,
+                message = $<span class="string">"Found {cycles.Count} circular dependencies"</span>,
+                details = cycles
+            });
+        }
+
+        <span class="comment">// 2. 번들 크기 체크</span>
+        <span class="keyword">var</span> oversizedBundles = <span class="function">FindOversizedBundles</span>(maxSizeMB: <span class="number">50</span>);
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> bundle <span class="keyword">in</span> oversizedBundles)
+        {
+            issues.Add(<span class="keyword">new</span> ValidationIssue
+            {
+                severity = Severity.Warning,
+                message = $<span class="string">"Bundle '{bundle.name}' exceeds 50MB ({bundle.sizeMB}MB)"</span>
+            });
+        }
+
+        <span class="comment">// 3. 중복 에셋 체크</span>
+        <span class="keyword">var</span> duplicates = <span class="function">FindDuplicateAssets</span>();
+        <span class="keyword">if</span> (duplicates.Count &gt; <span class="number">0</span>)
+        {
+            <span class="keyword">var</span> wastedMB = duplicates.Sum(d =&gt; d.wastedSize) / (<span class="number">1024</span> * <span class="number">1024</span>);
+            issues.Add(<span class="keyword">new</span> ValidationIssue
+            {
+                severity = Severity.Warning,
+                message = $<span class="string">"{duplicates.Count} duplicated assets wasting {wastedMB}MB"</span>
+            });
+        }
+
+        <span class="comment">// 4. 레이어 위반 체크 (UI가 Game을 참조하면 안됨 등)</span>
+        <span class="keyword">var</span> violations = <span class="function">CheckLayerViolations</span>();
+        issues.AddRange(violations);
+
+        <span class="comment">// 결과 리포트</span>
+        <span class="function">GenerateReport</span>(issues);
+
+        <span class="comment">// Error가 있으면 빌드 중단</span>
+        <span class="keyword">if</span> (issues.Any(i =&gt; i.severity == Severity.Error))
+        {
+            <span class="keyword">throw new</span> BuildFailedException(
+                <span class="string">"Dependency validation failed. Check the report."</span>);
+        }
+    }
+
+    List&lt;List&lt;<span class="type">string</span>&gt;&gt; <span class="function">FindCyclicDependencies</span>()
+    {
+        <span class="comment">// Tarjan's SCC 알고리즘으로 사이클 탐지</span>
+        <span class="keyword">var</span> graph = <span class="function">BuildDependencyGraph</span>();
+        <span class="keyword">return</span> graph.FindStronglyConnectedComponents()
+            .Where(scc =&gt; scc.Count &gt; <span class="number">1</span>)
+            .ToList();
+    }
+}
+
+<span class="comment">// CI에서 실행하는 배치 모드</span>
+<span class="keyword">public class</span> <span class="type">CIDependencyCheck</span>
+{
+    <span class="keyword">public static void</span> <span class="function">Run</span>()
+    {
+        <span class="keyword">var</span> validator = <span class="keyword">new</span> DependencyValidator();
+        <span class="keyword">var</span> report = validator.ValidateAll();
+
+        <span class="comment">// JSON 리포트 저장</span>
+        <span class="keyword">var</span> json = JsonUtility.ToJson(report, <span class="keyword">true</span>);
+        File.WriteAllText(<span class="string">"dependency-report.json"</span>, json);
+
+        <span class="comment">// 시각화용 그래프 데이터 저장</span>
+        <span class="keyword">var</span> graphJson = <span class="function">ExportGraphForVisualization</span>();
+        File.WriteAllText(<span class="string">"dependency-graph.json"</span>, graphJson);
+
+        <span class="comment">// 종료 코드</span>
+        EditorApplication.Exit(report.hasErrors ? <span class="number">1</span> : <span class="number">0</span>);
+    }
+}</pre></div>
+            </div>
+
+            <div class="q">PR에서 변경된 의존성을 자동으로 보여주려면?</div>
+            <div class="a">
+                <div class="code-block"><span class="comment"># GitHub Actions 워크플로우</span>
+name: Dependency Analysis
+
+on:
+  pull_request:
+    paths:
+      - <span class="string">'Assets/**'</span>
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: <span class="number">0</span>  <span class="comment"># 전체 히스토리 (diff용)</span>
+
+      - name: Setup Unity
+        uses: game-ci/unity-builder@v2
+
+      - name: Generate dependency snapshot
+        run: |
+          unity -batchmode -executeMethod CIDependencyCheck.Run
+
+      - name: Compare with base branch
+        id: diff
+        run: |
+          git checkout ${{ github.base_ref }}
+          unity -batchmode -executeMethod CIDependencyCheck.Run
+          mv dependency-graph.json base-graph.json
+
+          git checkout ${{ github.head_ref }}
+          python scripts/diff_dependencies.py base-graph.json dependency-graph.json > diff.md
+
+      - name: Post PR comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            <span class="keyword">const</span> fs = require(<span class="string">'fs'</span>);
+            <span class="keyword">const</span> diff = fs.readFileSync(<span class="string">'diff.md'</span>, <span class="string">'utf8'</span>);
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: <span class="string">`## 🔗 Dependency Changes\n\n${diff}`</span>
+            });</pre></div>
+
+                <div class="diagram-box"><pre>
+PR 코멘트 예시:
+
+┌─────────────────────────────────────────────────────────────────┐
+│  ## 🔗 Dependency Changes                                       │
+│                                                                 │
+│  ### ➕ Added Dependencies (3)                                  │
+│  | Asset | New Dependency | Type |                              │
+│  |-------|----------------|------|                              │
+│  | Hero.prefab | NewTexture.png | Texture |                     │
+│  | Enemy.prefab | SharedMaterial.mat | Material |               │
+│  | UI_HUD.prefab | NewFont.ttf | Font |                         │
+│                                                                 │
+│  ### ➖ Removed Dependencies (1)                                │
+│  | Asset | Removed Dependency |                                 │
+│  |-------|-------------------|                                  │
+│  | Hero.prefab | OldTexture.png |                               │
+│                                                                 │
+│  ### ⚠️ Warnings                                                │
+│  - `SharedMaterial.mat` is now referenced by **15 prefabs**     │
+│    Consider moving to a shared bundle.                          │
+│                                                                 │
+│  ### 📊 Bundle Impact                                           │
+│  | Bundle | Before | After | Delta |                            │
+│  |--------|--------|-------|-------|                            │
+│  | characters | 45.2 MB | 48.7 MB | +3.5 MB |                   │
+│  | shared | 12.1 MB | 14.3 MB | +2.2 MB |                       │
+│                                                                 │
+│  [View Interactive Graph](https://ci.example.com/graph/123)     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+        </div>
+
+        <!-- Part 7 -->
+        <div class="conversation">
+            <h2>Part 7. 실전 문제 해결</h2>
+
+            <div class="q">실무에서 자주 겪는 의존성 문제와 해결법은?</div>
+            <div class="a">
+                <div class="diagram-box"><pre>
+문제 1: "삭제해도 되는 에셋인지 모르겠어요"
+
+해결: 역참조 분석
+┌─────────────────────────────────────────────────────────────────┐
+│  1. 역참조 인덱스 빌드 (전체 프로젝트 1회 스캔)                    │
+│  2. 대상 에셋의 역참조 조회                                       │
+│  3. 결과에 따라 판단:                                            │
+│     - 0개: 안전하게 삭제 가능 ✓                                  │
+│     - N개: 참조하는 에셋 목록 확인 후 판단                        │
+│                                                                 │
+│  ⚠️ 주의: 코드에서 문자열로 로드하는 경우 탐지 불가              │
+│          예: Resources.Load("path/to/asset")                    │
+│          → Grep으로 추가 검색 필요                               │
+└─────────────────────────────────────────────────────────────────┘
+
+문제 2: "번들 빌드하면 같은 텍스처가 여러 번 들어가요"
+
+해결: 중복 에셋 공유 그룹 분리
+┌─────────────────────────────────────────────────────────────────┐
+│  Before (문제):                                                 │
+│  ┌────────────────┐   ┌────────────────┐                       │
+│  │ Bundle_A       │   │ Bundle_B       │                       │
+│  │ ├─ Prefab_A    │   │ ├─ Prefab_B    │                       │
+│  │ └─ Shared.png ⚠│   │ └─ Shared.png ⚠│  ← 중복!             │
+│  └────────────────┘   └────────────────┘                       │
+│                                                                 │
+│  After (해결):                                                  │
+│  ┌────────────────┐   ┌────────────────┐   ┌──────────────┐   │
+│  │ Bundle_A       │   │ Bundle_B       │   │ Bundle_Shared│   │
+│  │ └─ Prefab_A ───┼───┤─ Prefab_B ─────┼──→│ Shared.png  │   │
+│  └────────────────┘   └────────────────┘   └──────────────┘   │
+│                                                                 │
+│  자동화: Addressables Analyze → Fix Duplicates                  │
+└─────────────────────────────────────────────────────────────────┘
+
+문제 3: "씬 로드가 왜 이렇게 오래 걸리지?"
+
+해결: 의존성 체인 분석
+┌─────────────────────────────────────────────────────────────────┐
+│  깊이별 의존성 시각화:                                           │
+│                                                                 │
+│  Level 0: MainScene.unity (1개)                                 │
+│      │                                                          │
+│  Level 1: ├─ Player.prefab                                      │
+│           ├─ Enemy.prefab (x50) ⚠️                             │
+│           ├─ Environment.prefab                                 │
+│           └─ UI.prefab                                          │
+│      │                                                          │
+│  Level 2: └─ 각 Enemy가 같은 Material 50번 참조 ⚠️              │
+│      │                                                          │
+│  Level 3: └─ Material이 4K 텍스처 10장 참조 ⚠️                  │
+│                                                                 │
+│  문제: Enemy 50개가 각각 같은 텍스처 로드 시도                    │
+│  해결: 텍스처 스트리밍 활성화 + Shared Material 사용              │
+└─────────────────────────────────────────────────────────────────┘
+
+문제 4: "특정 에셋 수정하면 빌드가 30분 걸려요"
+
+해결: 허브 노드 식별 및 분리
+┌─────────────────────────────────────────────────────────────────┐
+│  허브 노드 분석:                                                 │
+│                                                                 │
+│  SharedAtlas.png - 역참조 247개 ⚠️                             │
+│    ├─ UI 전체가 참조                                            │
+│    ├─ 일부 캐릭터가 참조                                         │
+│    └─ 이펙트 일부가 참조                                         │
+│                                                                 │
+│  해결:                                                          │
+│  1. 도메인별 Atlas 분리                                         │
+│     - UI_Atlas.png (UI 전용)                                    │
+│     - Char_Atlas.png (캐릭터 전용)                              │
+│     - FX_Atlas.png (이펙트 전용)                                │
+│                                                                 │
+│  2. 결과: Atlas 수정 시 해당 도메인만 리빌드                     │
+│     빌드 시간 30분 → 5분                                        │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">의존성 시각화 도구 구축 시 권장 사항은?</div>
+            <div class="a">
+                <div class="highlight-box">
+                    <h4>✅ 권장 사항</h4>
+                    <ul>
+                        <li><strong>인덱스 캐싱</strong>: 역참조 인덱스는 한 번 빌드 후 변경분만 업데이트</li>
+                        <li><strong>증분 분석</strong>: 변경된 에셋만 재분석 (파일 해시 비교)</li>
+                        <li><strong>비동기 처리</strong>: 대규모 분석은 백그라운드에서</li>
+                        <li><strong>LOD 렌더링</strong>: 줌 레벨에 따라 표시 정보 조절</li>
+                        <li><strong>검색 기능</strong>: 대규모 그래프에서 특정 에셋 빠르게 찾기</li>
+                    </ul>
+                </div>
+
+                <div class="warning-box">
+                    <h4>⚠️ 주의 사항</h4>
+                    <ul>
+                        <li><strong>문자열 참조 감지 불가</strong>: Resources.Load("path") 같은 동적 로드</li>
+                        <li><strong>리플렉션 참조 감지 불가</strong>: Type.GetType() 등</li>
+                        <li><strong>빌드 타임 참조</strong>: 에디터 전용 참조가 런타임에는 없을 수 있음</li>
+                        <li><strong>플랫폼 차이</strong>: iOS/Android 간 의존성이 다를 수 있음</li>
+                    </ul>
+                </div>
+
+                <div class="diagram-box"><pre>
+의존성 시각화 도구 선택 가이드:
+
+┌────────────────────────────────────────────────────────────────┐
+│ 프로젝트 규모     │ 권장 도구                                   │
+├───────────────────┼────────────────────────────────────────────┤
+│ 소규모 (&lt;1000)    │ Unity 내장 도구 + Select Dependencies      │
+│ 중규모 (1000-5000)│ Addressables Analyze + 커스텀 에디터 툴    │
+│ 대규모 (&gt;5000)    │ 웹 기반 시각화 + CI 통합 + 클러스터링      │
+└────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│ 목적              │ 권장 시각화                                 │
+├───────────────────┼────────────────────────────────────────────┤
+│ 참조 관계 탐색    │ Force-Directed Graph (D3.js)               │
+│ 크기 분석         │ Treemap, Sunburst                          │
+│ 번들 구성 확인    │ Sankey Diagram                             │
+│ 변경 영향 분석    │ Hierarchical Edge Bundling                 │
+│ CI/CD 리포트      │ 테이블 + 하이라이트                         │
+└────────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>의존성 시각화 도구</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>정방향/역방향 탐색</strong> - "이게 뭘 쓰나" + "이걸 누가 쓰나"</li>
+                <li><strong>Unity 내장</strong> - Select Dependencies, Addressables Analyze</li>
+                <li><strong>Unreal 내장</strong> - Reference Viewer, Size Map, Asset Audit</li>
+                <li><strong>커스텀 시각화</strong> - D3.js/vis.js + JSON 내보내기</li>
+                <li><strong>대규모 최적화</strong> - 클러스터링, LOD, 가상화, WebGL</li>
+                <li><strong>인터랙션</strong> - 검색, 필터, 경로 하이라이트, 영향 범위</li>
+                <li><strong>CI 통합</strong> - 빌드 전 검증, PR 코멘트, 변경 diff</li>
+                <li><strong>실전 활용</strong> - 삭제 안전성, 중복 제거, 허브 노드 분리</li>
             </ul>
         </div>
 
         <div class="nav-links">
-            <a href="../asset-soft-hard-reference/">&larr; Soft vs Hard Reference</a>
-            <a href="../asset-bundle-dependency/">번들 간 의존성 관리 &rarr;</a>
+            <a href="../asset-dependency-graph/">← 의존성 그래프 모델링</a>
+            <a href="../asset-bundle-dependency/">번들 간 의존성 관리 →</a>
         </div>
     </div>
+
+    <script src="../common/script.js"></script>
 </body>
 </html>
