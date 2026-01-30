@@ -4,37 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>번들 간 의존성 관리 - 에셋 관리 - MSH Portfolio</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
-        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
-        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
-        .a p { margin-bottom: 12px; }
-        .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
-        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
-        .summary-box ul { list-style: none; }
-        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
-        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
-        .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
-    </style>
+    <link rel="stylesheet" href="../common/styles.css">
 </head>
 <body>
     <div class="container">
@@ -42,49 +12,1167 @@
 
         <div class="header">
             <h1>번들 간 의존성 관리</h1>
-            <p>공통 에셋 분리</p>
+            <p>에셋 번들의 복잡한 참조 관계를 이해하고 효율적으로 관리하기</p>
         </div>
 
+        <!-- Part 1: 개념 -->
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">번들 간 의존성 관리이(가) 뭐야?</div>
+            <h2>Part 1. 에셋 번들 의존성이란?</h2>
+
+            <div class="q">에셋 번들 간에 의존성이 있다는 게 무슨 말이야?</div>
             <div class="a">
-                <p><span class="highlight">공통 에셋 분리</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p><span class="highlight">의존성(Dependency)</span>은 한 에셋이 다른 에셋을 참조할 때 발생합니다. 번들 간 의존성은 이 참조가 다른 번들에 있는 에셋을 가리킬 때 생깁니다.</p>
+
+                <div class="diagram-box"><pre>
+간단한 예시:
+
+캐릭터 프리팹 (character_hero.bundle)
+┌─────────────────────────────────────────────────────────┐
+│ HeroPrefab                                              │
+│ ├── MeshRenderer                                        │
+│ │   └── Material: HeroMaterial ──────────────┐         │
+│ │                                             │         │
+│ └── AudioSource                               │         │
+│     └── Clip: HeroVoice ─────────────────────┼────┐    │
+└───────────────────────────────────────────────┼────┼────┘
+                                                │    │
+                                                ↓    ↓
+공유 머티리얼 번들 (shared_materials.bundle)    │    │
+┌─────────────────────────────────────────┐    │    │
+│ HeroMaterial ←───────────────────────────┘    │    │
+│ └── Texture: HeroTexture ────────────────────┼────┘
+└──────────────────────────────────────────────┼────────┘
+                                               │
+공유 오디오 번들 (shared_audio.bundle)          │
+┌──────────────────────────────────────────────┴────────┐
+│ HeroVoice ←───────────────────────────────────────────┘
+└───────────────────────────────────────────────────────┘
+
+의존성 그래프:
+character_hero.bundle
+    ├──→ shared_materials.bundle
+    └──→ shared_audio.bundle
+</pre></div>
+
+                <p>이 예시에서 <code>character_hero.bundle</code>은 <code>shared_materials.bundle</code>과 <code>shared_audio.bundle</code>에 <span class="key-point">의존</span>합니다. 캐릭터를 로드하려면 먼저 이 두 번들이 로드되어 있어야 합니다.</p>
+            </div>
+
+            <div class="q">직접 의존성과 간접 의존성의 차이가 뭐야?</div>
+            <div class="a">
+                <p>의존성에는 두 가지 유형이 있습니다:</p>
+
+                <div class="diagram-box"><pre>
+직접 의존성 (Direct Dependency):
+─────────────────────────────────
+번들 A가 번들 B의 에셋을 직접 참조
+
+A.bundle ────→ B.bundle
+  (A가 B에 직접 의존)
+
+
+간접 의존성 (Transitive/Indirect Dependency):
+─────────────────────────────────────────────
+번들 A → B → C 순서로 의존
+
+A.bundle ────→ B.bundle ────→ C.bundle
+  ↑             ↑               ↑
+  A는 B에       B는 C에
+  직접 의존     직접 의존
+
+  A는 C에 간접 의존!
+
+
+실제 예시:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  level_forest.bundle                                            │
+│      │                                                          │
+│      ├──→ characters_npc.bundle (직접 의존)                     │
+│      │        │                                                 │
+│      │        └──→ shared_animations.bundle (간접 의존)         │
+│      │                                                          │
+│      └──→ environment_trees.bundle (직접 의존)                  │
+│               │                                                 │
+│               └──→ shared_materials.bundle (간접 의존)          │
+│                                                                 │
+│  level_forest의 모든 의존성:                                     │
+│  - 직접: characters_npc, environment_trees                      │
+│  - 간접: shared_animations, shared_materials                    │
+│  - 전체: 4개 번들                                                │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+
+                <div class="warning-box">
+                    <h4>주의: 간접 의존성도 로드해야 함!</h4>
+                    <p>A 번들을 로드할 때 B만 로드하면 안 됩니다. C까지 모두 로드해야 A의 에셋이 정상 작동합니다.</p>
+                </div>
+            </div>
+
+            <div class="q">의존성은 어떻게 자동으로 생기는 거야?</div>
+            <div class="a">
+                <p>Unity에서 에셋 번들을 빌드할 때, 엔진이 자동으로 의존성을 분석합니다:</p>
+
+                <div class="diagram-box"><pre>
+에셋 번들 빌드 시 의존성 분석 과정:
+
+1단계: 에셋 참조 수집
+┌─────────────────────────────────────────────────────────────┐
+│ HeroPrefab 분석:                                             │
+│                                                             │
+│ - HeroPrefab (포함)                                          │
+│   └── MeshRenderer                                          │
+│       └── Material: "Assets/Materials/HeroMaterial.mat"     │
+│           └── Texture: "Assets/Textures/HeroTex.png"        │
+│   └── Animator                                              │
+│       └── Controller: "Assets/Anim/HeroController.controller"│
+│           └── Clip: "Assets/Anim/HeroIdle.anim"             │
+└─────────────────────────────────────────────────────────────┘
+
+2단계: 번들 할당 확인
+┌─────────────────────────────────────────────────────────────┐
+│ 각 에셋이 어느 번들에 속하는지 확인:                         │
+│                                                             │
+│ HeroPrefab           → character_hero (현재 빌드 대상)       │
+│ HeroMaterial.mat     → shared_materials                     │
+│ HeroTex.png          → shared_textures                      │
+│ HeroController       → character_hero (같은 번들)           │
+│ HeroIdle.anim        → character_hero (같은 번들)           │
+└─────────────────────────────────────────────────────────────┘
+
+3단계: 의존성 기록
+┌─────────────────────────────────────────────────────────────┐
+│ character_hero.bundle.manifest:                              │
+│                                                             │
+│ Dependencies:                                                │
+│   - shared_materials                                         │
+│   - shared_textures                                          │
+└─────────────────────────────────────────────────────────────┘
+</pre></div>
+
+                <div class="highlight-box">
+                    <h4>핵심 규칙</h4>
+                    <p>참조하는 에셋이 <strong>다른 번들</strong>에 있으면 → 의존성 발생</p>
+                    <p>참조하는 에셋이 <strong>같은 번들</strong>에 있으면 → 의존성 없음 (포함됨)</p>
+                    <p>참조하는 에셋이 <strong>어떤 번들에도 없으면</strong> → 복사되어 포함 (중복!)</p>
+                </div>
             </div>
         </div>
 
+        <!-- Part 2: 왜 필요해? -->
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. 의존성 관리가 왜 중요한가?</h2>
+
+            <div class="q">의존성을 관리하지 않으면 어떤 문제가 생겨?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>의존성 관리 실패는 세 가지 심각한 문제를 일으킵니다:</p>
+
+                <div class="diagram-box"><pre>
+문제 1: 에셋 중복 (Duplication)
+═══════════════════════════════════════════════════════════════
+
+공유 텍스처가 번들에 미할당된 경우:
+HeroTexture.png (번들 미지정)
+
+┌─────────────────────┐     ┌─────────────────────┐
+│ character_hero      │     │ character_villain   │
+│ ├── HeroPrefab      │     │ ├── VillainPrefab   │
+│ │   └── Material    │     │ │   └── Material    │
+│ │       └── Tex ────┼──┐  │ │       └── Tex ────┼──┐
+│ │                   │  │  │ │                   │  │
+│ │  [HeroTexture 복사]│←─┘  │ │  [HeroTexture 복사]│←─┘
+│ │  (10MB 중복!)     │     │ │  (10MB 중복!)     │
+│ └───────────────────┘     │ └───────────────────┘
+└─────────────────────┘     └─────────────────────┘
+
+결과: 10MB 텍스처가 두 번들에 각각 복사됨 → 20MB 사용
+100개 번들이 같은 텍스처 참조 → 1GB 낭비!
+</pre></div>
+
+                <div class="diagram-box"><pre>
+문제 2: 로딩 실패 (Missing Reference)
+═══════════════════════════════════════════════════════════════
+
+의존 번들을 로드하지 않고 메인 번들만 로드:
+
+정상 케이스:
+1. shared_materials.bundle 로드 ✓
+2. character_hero.bundle 로드 ✓
+3. HeroPrefab 로드 → Material 참조 해결 ✓
+
+오류 케이스:
+1. character_hero.bundle만 로드
+2. HeroPrefab 로드 → Material 참조... 어디있지?
+
+결과:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│    [경고] Missing Reference: HeroMaterial                   │
+│                                                             │
+│    ┌─────────────────┐                                      │
+│    │   핑크색 캐릭터  │  ← 머티리얼 없음!                    │
+│    │    (Missing)    │                                      │
+│    └─────────────────┘                                      │
+│                                                             │
+│    또는 NullReferenceException 발생                         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+</pre></div>
+
+                <div class="diagram-box"><pre>
+문제 3: 메모리 낭비 및 언로드 불가
+═══════════════════════════════════════════════════════════════
+
+참조 카운팅 없이 언로드 시도:
+
+시나리오: 두 캐릭터가 같은 shared_materials 사용
+
+초기 상태:
+┌─────────────────┐          ┌─────────────────────┐
+│ character_hero  │─────────→│ shared_materials    │
+└─────────────────┘          │ (refcount: 2)       │
+                             └──────────┬──────────┘
+┌─────────────────┐                     │
+│ character_enemy │─────────────────────┘
+└─────────────────┘
+
+hero 퇴장 → shared_materials 언로드하면?
+┌─────────────────┐          ┌─────────────────────┐
+│ character_hero  │ ✗ 언로드 │ shared_materials    │ ✗ 언로드
+└─────────────────┘          └─────────────────────┘
+                                       ↑
+┌─────────────────┐                    │
+│ character_enemy │────────────────────┘ 참조 끊김!
+└─────────────────┘
+     ↓
+  핑크색 적 캐릭터!
+
+올바른 처리: 참조 카운트가 0이 될 때만 언로드
+</pre></div>
+            </div>
+
+            <div class="q">중복 문제가 정말 그렇게 심각해?</div>
+            <div class="a">
+                <p>실제 프로젝트에서 에셋 중복은 가장 흔한 최적화 실수입니다:</p>
+
+                <div class="diagram-box"><pre>
+실제 프로젝트 중복 사례:
+
+프로젝트 분석 결과 (의존성 관리 전):
+┌─────────────────────────────────────────────────────────────┐
+│ 총 번들 수: 150개                                            │
+│ 총 번들 크기: 3.2GB                                          │
+│                                                             │
+│ 중복 발견:                                                   │
+│ ├── CommonAtlas.png (5MB) × 87개 번들 = 435MB 중복           │
+│ ├── UIFont.ttf (2MB) × 45개 번들 = 90MB 중복                 │
+│ ├── DefaultShader (1MB) × 120개 번들 = 120MB 중복            │
+│ └── 기타 소규모 중복 = 155MB                                 │
+│                                                             │
+│ 총 중복: 800MB (전체의 25%!)                                 │
+└─────────────────────────────────────────────────────────────┘
+
+의존성 정리 후:
+┌─────────────────────────────────────────────────────────────┐
+│ 총 번들 크기: 2.4GB                                          │
+│ 절감: 800MB (25% 감소)                                       │
+│                                                             │
+│ 추가 효과:                                                   │
+│ - 다운로드 트래픽 25% 감소                                   │
+│ - 빌드 시간 20% 단축                                         │
+│ - 패치 크기 감소 (공유 에셋 변경 시 1개 번들만 업데이트)     │
+└─────────────────────────────────────────────────────────────┘
+</pre></div>
             </div>
         </div>
 
+        <!-- Part 3: 의존성 추적 -->
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 의존성 추적 방법</h2>
+
+            <div class="q">번들의 의존성을 어떻게 확인해?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p>Unity에서는 여러 가지 방법으로 의존성을 확인할 수 있습니다:</p>
+
+                <div class="code-block"><span class="code-comment">// 방법 1: 매니페스트에서 직접 의존성 확인</span>
+<span class="code-keyword">public void</span> CheckDirectDependencies(<span class="code-keyword">string</span> bundleName)
+{
+    <span class="code-comment">// 마스터 매니페스트 로드</span>
+    <span class="code-keyword">var</span> manifestBundle = <span class="code-type">AssetBundle</span>.LoadFromFile(
+        <span class="code-type">Path</span>.Combine(bundlePath, <span class="code-string">"AssetBundles"</span>)
+    );
+    <span class="code-keyword">var</span> manifest = manifestBundle.LoadAsset&lt;<span class="code-type">AssetBundleManifest</span>&gt;(
+        <span class="code-string">"AssetBundleManifest"</span>
+    );
+
+    <span class="code-comment">// 직접 의존성 (1단계)</span>
+    <span class="code-keyword">string</span>[] directDeps = manifest.GetDirectDependencies(bundleName);
+    <span class="code-type">Debug</span>.Log(<span class="code-string">$"Direct dependencies of {bundleName}:"</span>);
+    <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> dep <span class="code-keyword">in</span> directDeps)
+    {
+        <span class="code-type">Debug</span>.Log(<span class="code-string">$"  - {dep}"</span>);
+    }
+}
+
+<span class="code-comment">// 방법 2: 모든 의존성 확인 (간접 포함)</span>
+<span class="code-keyword">public void</span> CheckAllDependencies(<span class="code-keyword">string</span> bundleName)
+{
+    <span class="code-comment">// GetAllDependencies는 재귀적으로 모든 의존성을 반환</span>
+    <span class="code-keyword">string</span>[] allDeps = manifest.GetAllDependencies(bundleName);
+
+    <span class="code-type">Debug</span>.Log(<span class="code-string">$"All dependencies of {bundleName} ({allDeps.Length}):"</span>);
+    <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> dep <span class="code-keyword">in</span> allDeps)
+    {
+        <span class="code-type">Debug</span>.Log(<span class="code-string">$"  - {dep}"</span>);
+    }
+}</pre></div>
+
+                <div class="diagram-box"><pre>
+GetDirectDependencies vs GetAllDependencies:
+
+의존성 구조:
+A ─→ B ─→ D
+    ↓
+    C
+
+GetDirectDependencies("A"):
+결과: [B, C]  (1단계만)
+
+GetAllDependencies("A"):
+결과: [B, C, D]  (전체 재귀)
+</pre></div>
+            </div>
+
+            <div class="q">.manifest 파일 내용은 어떻게 생겼어?</div>
+            <div class="a">
+                <p>각 번들과 함께 생성되는 .manifest 파일은 YAML 형식입니다:</p>
+
+                <div class="code-block"><span class="code-comment"># character_hero.manifest 파일 내용</span>
+
+ManifestFileVersion: 0
+CRC: 3847592834
+Hashes:
+  AssetFileHash:
+    serializedVersion: 2
+    Hash: a1b2c3d4e5f6...
+  TypeTreeHash:
+    serializedVersion: 2
+    Hash: f6e5d4c3b2a1...
+HashAppended: 0
+ClassTypes:
+- Class: 1    <span class="code-comment"># GameObject</span>
+- Class: 4    <span class="code-comment"># Transform</span>
+- Class: 23   <span class="code-comment"># MeshRenderer</span>
+- Class: 33   <span class="code-comment"># MeshFilter</span>
+- Class: 137  <span class="code-comment"># SkinnedMeshRenderer</span>
+SerializeReferenceClassIdentifiers: []
+Assets:
+- Assets/Characters/Hero/HeroPrefab.prefab
+- Assets/Characters/Hero/HeroAnimator.controller
+- Assets/Characters/Hero/HeroIdle.anim
+<span class="code-keyword">Dependencies:</span>
+<span class="code-keyword">- shared_materials</span>
+<span class="code-keyword">- shared_textures</span>
+<span class="code-keyword">- shared_animations</span></pre></div>
+
+                <p><span class="highlight">Dependencies</span> 섹션에 이 번들이 의존하는 다른 번들 목록이 있습니다.</p>
+            </div>
+
+            <div class="q">에디터에서 빌드 전에 의존성을 미리 확인할 수 있어?</div>
+            <div class="a">
+                <p>AssetDatabase API를 사용하여 빌드 전에 의존성을 분석할 수 있습니다:</p>
+
+                <div class="code-block"><span class="code-comment">// 에디터 전용: 빌드 전 의존성 분석</span>
+<span class="code-keyword">using</span> UnityEditor;
+
+<span class="code-keyword">public class</span> <span class="code-type">DependencyAnalyzer</span>
+{
+    [<span class="code-type">MenuItem</span>(<span class="code-string">"Tools/Analyze Bundle Dependencies"</span>)]
+    <span class="code-keyword">public static void</span> AnalyzeDependencies()
+    {
+        <span class="code-comment">// 모든 번들 이름 가져오기</span>
+        <span class="code-keyword">string</span>[] allBundles = <span class="code-type">AssetDatabase</span>.GetAllAssetBundleNames();
+
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> bundleName <span class="code-keyword">in</span> allBundles)
+        {
+            <span class="code-comment">// 이 번들에 포함된 에셋 경로들</span>
+            <span class="code-keyword">string</span>[] assetPaths = <span class="code-type">AssetDatabase</span>.GetAssetPathsFromAssetBundle(bundleName);
+
+            <span class="code-type">HashSet</span>&lt;<span class="code-keyword">string</span>&gt; dependentBundles = <span class="code-keyword">new</span>();
+
+            <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> assetPath <span class="code-keyword">in</span> assetPaths)
+            {
+                <span class="code-comment">// 이 에셋의 모든 의존성 경로</span>
+                <span class="code-keyword">string</span>[] deps = <span class="code-type">AssetDatabase</span>.GetDependencies(assetPath, <span class="code-keyword">true</span>);
+
+                <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> depPath <span class="code-keyword">in</span> deps)
+                {
+                    <span class="code-comment">// 의존 에셋의 번들 이름</span>
+                    <span class="code-keyword">string</span> depBundle = <span class="code-type">AssetImporter</span>.GetAtPath(depPath)?.assetBundleName;
+
+                    <span class="code-keyword">if</span> (!<span class="code-keyword">string</span>.IsNullOrEmpty(depBundle) && depBundle != bundleName)
+                    {
+                        dependentBundles.Add(depBundle);
+                    }
+                }
+            }
+
+            <span class="code-type">Debug</span>.Log(<span class="code-string">$"{bundleName} depends on: {string.Join(", ", dependentBundles)}"</span>);
+        }
+    }
+
+    <span class="code-comment">// 중복 에셋 찾기 (번들에 할당되지 않은 공유 에셋)</span>
+    [<span class="code-type">MenuItem</span>(<span class="code-string">"Tools/Find Duplicate Assets"</span>)]
+    <span class="code-keyword">public static void</span> FindDuplicates()
+    {
+        <span class="code-type">Dictionary</span>&lt;<span class="code-keyword">string</span>, <span class="code-type">List</span>&lt;<span class="code-keyword">string</span>&gt;&gt; assetUsage = <span class="code-keyword">new</span>();
+
+        <span class="code-keyword">string</span>[] allBundles = <span class="code-type">AssetDatabase</span>.GetAllAssetBundleNames();
+
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> bundleName <span class="code-keyword">in</span> allBundles)
+        {
+            <span class="code-keyword">string</span>[] assetPaths = <span class="code-type">AssetDatabase</span>.GetAssetPathsFromAssetBundle(bundleName);
+
+            <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> assetPath <span class="code-keyword">in</span> assetPaths)
+            {
+                <span class="code-keyword">string</span>[] deps = <span class="code-type">AssetDatabase</span>.GetDependencies(assetPath, <span class="code-keyword">true</span>);
+
+                <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> depPath <span class="code-keyword">in</span> deps)
+                {
+                    <span class="code-comment">// 번들에 할당되지 않은 에셋</span>
+                    <span class="code-keyword">var</span> importer = <span class="code-type">AssetImporter</span>.GetAtPath(depPath);
+                    <span class="code-keyword">if</span> (importer != <span class="code-keyword">null</span> && <span class="code-keyword">string</span>.IsNullOrEmpty(importer.assetBundleName))
+                    {
+                        <span class="code-keyword">if</span> (!assetUsage.ContainsKey(depPath))
+                            assetUsage[depPath] = <span class="code-keyword">new</span> <span class="code-type">List</span>&lt;<span class="code-keyword">string</span>&gt;();
+
+                        assetUsage[depPath].Add(bundleName);
+                    }
+                }
+            }
+        }
+
+        <span class="code-comment">// 2개 이상 번들에서 사용되는 미할당 에셋 = 중복!</span>
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> kvp <span class="code-keyword">in</span> assetUsage)
+        {
+            <span class="code-keyword">if</span> (kvp.Value.Count >= <span class="code-number">2</span>)
+            {
+                <span class="code-type">Debug</span>.LogWarning(
+                    <span class="code-string">$"DUPLICATE: {kvp.Key} used by {kvp.Value.Count} bundles"</span>
+                );
+            }
+        }
+    }
+}</pre></div>
             </div>
         </div>
+
+        <!-- Part 4: 의존성 로딩 전략 -->
+        <div class="conversation">
+            <h2>Part 4. 의존성 로딩 전략</h2>
+
+            <div class="q">의존성이 있는 번들은 어떤 순서로 로드해야 해?</div>
+            <div class="a">
+                <p>핵심 규칙: <span class="highlight">의존 번들을 먼저 로드</span>해야 합니다.</p>
+
+                <div class="diagram-box"><pre>
+올바른 로딩 순서:
+
+의존성 그래프:
+character_hero ─→ shared_materials ─→ shared_textures
+      │
+      └─→ shared_animations
+
+로딩 순서 (역방향):
+┌─────────────────────────────────────────────────────────────┐
+│ 1. shared_textures.bundle    (의존성 없음)                  │
+│    ↓                                                        │
+│ 2. shared_materials.bundle   (textures에 의존)              │
+│    ↓                                                        │
+│ 3. shared_animations.bundle  (의존성 없음)                  │
+│    ↓                                                        │
+│ 4. character_hero.bundle     (materials, animations에 의존) │
+│    ↓                                                        │
+│ 5. HeroPrefab 로드 가능!     (모든 참조 해결됨)             │
+└─────────────────────────────────────────────────────────────┘
+</pre></div>
+
+                <div class="code-block"><span class="code-comment">// 의존성을 포함한 번들 로드 (올바른 방법)</span>
+<span class="code-keyword">public</span> IEnumerator LoadBundleWithDependencies(<span class="code-keyword">string</span> bundleName)
+{
+    <span class="code-comment">// 1. 매니페스트에서 모든 의존성 가져오기</span>
+    <span class="code-keyword">string</span>[] dependencies = m_Manifest.GetAllDependencies(bundleName);
+
+    <span class="code-comment">// 2. 의존 번들들 먼저 로드</span>
+    <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> dep <span class="code-keyword">in</span> dependencies)
+    {
+        <span class="code-keyword">if</span> (!IsLoaded(dep))
+        {
+            <span class="code-keyword">yield return</span> LoadSingleBundle(dep);
+        }
+    }
+
+    <span class="code-comment">// 3. 요청한 번들 로드</span>
+    <span class="code-keyword">yield return</span> LoadSingleBundle(bundleName);
+}
+
+<span class="code-keyword">private</span> IEnumerator LoadSingleBundle(<span class="code-keyword">string</span> bundleName)
+{
+    <span class="code-keyword">string</span> path = <span class="code-type">Path</span>.Combine(m_BundlePath, bundleName);
+    <span class="code-keyword">var</span> request = <span class="code-type">AssetBundle</span>.LoadFromFileAsync(path);
+    <span class="code-keyword">yield return</span> request;
+
+    <span class="code-keyword">if</span> (request.assetBundle != <span class="code-keyword">null</span>)
+    {
+        m_LoadedBundles[bundleName] = request.assetBundle;
+    }
+}</pre></div>
+            </div>
+
+            <div class="q">병렬로 로드하면 더 빠르지 않아?</div>
+            <div class="a">
+                <p>독립적인 번들은 병렬 로드가 가능합니다. 하지만 의존 순서는 지켜야 합니다:</p>
+
+                <div class="diagram-box"><pre>
+병렬 로드 가능한 경우:
+
+의존성 그래프:
+character_hero
+    ├──→ shared_materials ─→ shared_textures
+    └──→ shared_animations
+
+병렬화:
+┌─────────────────────────────────────────────────────────────┐
+│ 단계 1: 리프 노드 병렬 로드                                  │
+│ ┌─────────────────┐  ┌─────────────────┐                    │
+│ │ shared_textures │  │ shared_animations│   동시 로드 가능! │
+│ └────────┬────────┘  └────────┬────────┘                    │
+│          ↓                    ↓                             │
+│ 단계 2: 중간 노드                                            │
+│ ┌─────────────────┐                                         │
+│ │ shared_materials│  (textures 완료 대기 후 로드)           │
+│ └────────┬────────┘                                         │
+│          ↓                                                   │
+│ 단계 3: 루트 노드                                            │
+│ ┌─────────────────┐                                         │
+│ │ character_hero  │  (모든 의존성 완료 후 로드)             │
+│ └─────────────────┘                                         │
+└─────────────────────────────────────────────────────────────┘
+
+시간 비교:
+순차 로드: ████████████████████████████  (28초)
+병렬 로드: ████████████████               (16초)
+</pre></div>
+
+                <div class="code-block"><span class="code-comment">// 위상 정렬 기반 병렬 로드</span>
+<span class="code-keyword">public class</span> <span class="code-type">ParallelBundleLoader</span>
+{
+    <span class="code-keyword">public</span> IEnumerator LoadWithParallelDependencies(<span class="code-keyword">string</span> bundleName)
+    {
+        <span class="code-comment">// 모든 의존성 수집</span>
+        <span class="code-keyword">var</span> allDeps = <span class="code-keyword">new</span> <span class="code-type">HashSet</span>&lt;<span class="code-keyword">string</span>&gt;(m_Manifest.GetAllDependencies(bundleName));
+        allDeps.Add(bundleName);
+
+        <span class="code-comment">// 의존성 레벨별로 분류 (위상 정렬)</span>
+        <span class="code-keyword">var</span> levels = TopologicalSort(allDeps);
+
+        <span class="code-comment">// 레벨별로 병렬 로드</span>
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> level <span class="code-keyword">in</span> levels)
+        {
+            <span class="code-comment">// 같은 레벨은 병렬 로드</span>
+            <span class="code-keyword">var</span> loadOperations = <span class="code-keyword">new</span> <span class="code-type">List</span>&lt;<span class="code-type">AssetBundleCreateRequest</span>&gt;();
+
+            <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> bundle <span class="code-keyword">in</span> level)
+            {
+                <span class="code-keyword">if</span> (!IsLoaded(bundle))
+                {
+                    <span class="code-keyword">var</span> op = <span class="code-type">AssetBundle</span>.LoadFromFileAsync(GetPath(bundle));
+                    loadOperations.Add(op);
+                }
+            }
+
+            <span class="code-comment">// 이 레벨의 모든 로드 완료 대기</span>
+            <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> op <span class="code-keyword">in</span> loadOperations)
+            {
+                <span class="code-keyword">yield return</span> op;
+                CacheBundle(op.assetBundle);
+            }
+
+            <span class="code-comment">// 다음 레벨로 (의존성 해결됨)</span>
+        }
+    }
+
+    <span class="code-keyword">private</span> <span class="code-type">List</span>&lt;<span class="code-type">List</span>&lt;<span class="code-keyword">string</span>&gt;&gt; TopologicalSort(<span class="code-type">HashSet</span>&lt;<span class="code-keyword">string</span>&gt; bundles)
+    {
+        <span class="code-keyword">var</span> inDegree = <span class="code-keyword">new</span> <span class="code-type">Dictionary</span>&lt;<span class="code-keyword">string</span>, <span class="code-keyword">int</span>&gt;();
+        <span class="code-keyword">var</span> levels = <span class="code-keyword">new</span> <span class="code-type">List</span>&lt;<span class="code-type">List</span>&lt;<span class="code-keyword">string</span>&gt;&gt;();
+
+        <span class="code-comment">// 진입 차수 계산</span>
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> bundle <span class="code-keyword">in</span> bundles)
+        {
+            <span class="code-keyword">var</span> deps = m_Manifest.GetDirectDependencies(bundle);
+            inDegree[bundle] = deps.Count(d =&gt; bundles.Contains(d));
+        }
+
+        <span class="code-comment">// 레벨별 분류</span>
+        <span class="code-keyword">while</span> (inDegree.Count &gt; <span class="code-number">0</span>)
+        {
+            <span class="code-keyword">var</span> currentLevel = inDegree
+                .Where(kv =&gt; kv.Value == <span class="code-number">0</span>)
+                .Select(kv =&gt; kv.Key)
+                .ToList();
+
+            levels.Add(currentLevel);
+
+            <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> bundle <span class="code-keyword">in</span> currentLevel)
+            {
+                inDegree.Remove(bundle);
+                <span class="code-comment">// 이 번들에 의존하는 다른 번들의 차수 감소</span>
+                <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> other <span class="code-keyword">in</span> inDegree.Keys.ToList())
+                {
+                    <span class="code-keyword">if</span> (m_Manifest.GetDirectDependencies(other).Contains(bundle))
+                        inDegree[other]--;
+                }
+            }
+        }
+
+        <span class="code-keyword">return</span> levels;
+    }
+}</pre></div>
+            </div>
+        </div>
+
+        <!-- Part 5: 공통 에셋 분리 -->
+        <div class="conversation">
+            <h2>Part 5. 공통 에셋 분리 전략</h2>
+
+            <div class="q">공통으로 쓰이는 에셋은 어떻게 관리해?</div>
+            <div class="a">
+                <p>공통 에셋은 <span class="highlight">Shared 번들</span>로 분리하는 것이 표준 패턴입니다:</p>
+
+                <div class="diagram-box"><pre>
+Shared 번들 패턴:
+
+❌ 나쁜 구조 (공통 에셋 미분리):
+┌─────────────────────────────────────────────────────────────┐
+│ character_hero.bundle                                        │
+│ ├── HeroPrefab                                               │
+│ ├── HeroMaterial          ←┐                                 │
+│ ├── CommonTexture (10MB)  ←┼── 중복!                        │
+│ └── CommonShader          ←┘                                 │
+│                                                             │
+│ character_enemy.bundle                                       │
+│ ├── EnemyPrefab                                              │
+│ ├── EnemyMaterial         ←┐                                 │
+│ ├── CommonTexture (10MB)  ←┼── 중복!                        │
+│ └── CommonShader          ←┘                                 │
+│                                                             │
+│ 총 크기: 중복으로 인해 +20MB                                 │
+└─────────────────────────────────────────────────────────────┘
+
+✓ 좋은 구조 (Shared 번들 분리):
+┌─────────────────────────────────────────────────────────────┐
+│ shared_common.bundle (한 번만 존재)                          │
+│ ├── CommonTexture (10MB)                                     │
+│ └── CommonShader                                             │
+│                                                             │
+│ character_hero.bundle ──→ shared_common                      │
+│ ├── HeroPrefab                                               │
+│ └── HeroMaterial (CommonTexture 참조)                        │
+│                                                             │
+│ character_enemy.bundle ──→ shared_common                     │
+│ ├── EnemyPrefab                                              │
+│ └── EnemyMaterial (CommonTexture 참조)                       │
+│                                                             │
+│ 총 크기: 중복 제거, 10MB 절약                                │
+└─────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">Shared 번들을 어떻게 설계해야 해?</div>
+            <div class="a">
+                <p>Shared 번들 설계에는 몇 가지 전략이 있습니다:</p>
+
+                <div class="diagram-box"><pre>
+전략 1: 타입별 분리
+┌─────────────────────────────────────────────────────────────┐
+│ shared_textures.bundle   - 모든 공용 텍스처                  │
+│ shared_materials.bundle  - 모든 공용 머티리얼                │
+│ shared_shaders.bundle    - 모든 공용 셰이더                  │
+│ shared_audio.bundle      - 모든 공용 사운드                  │
+│ shared_fonts.bundle      - 모든 폰트                         │
+│                                                             │
+│ 장점: 에셋 타입별 관리 용이, 업데이트 단위 명확              │
+│ 단점: 작은 에셋도 별도 번들 필요                             │
+└─────────────────────────────────────────────────────────────┘
+
+전략 2: 용도별 분리
+┌─────────────────────────────────────────────────────────────┐
+│ shared_ui.bundle         - UI 관련 모든 공용 에셋           │
+│ shared_characters.bundle - 캐릭터 공용 에셋                  │
+│ shared_environment.bundle- 환경 공용 에셋                    │
+│ shared_effects.bundle    - 이펙트 공용 에셋                  │
+│                                                             │
+│ 장점: 사용 컨텍스트별 로드 가능                              │
+│ 단점: 경계가 모호할 수 있음                                  │
+└─────────────────────────────────────────────────────────────┘
+
+전략 3: 계층별 분리 (권장)
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│         shared_core.bundle (항상 로드)                       │
+│         ├── 기본 셰이더                                      │
+│         ├── 에러 텍스처                                      │
+│         └── 필수 폰트                                        │
+│                   ↑                                          │
+│    ┌──────────────┼──────────────┐                          │
+│    ↓              ↓              ↓                          │
+│ shared_ui    shared_char    shared_env                      │
+│    ↑              ↑              ↑                          │
+│    │              │              │                          │
+│ ui_main      character_*    level_*                         │
+│                                                             │
+│ 장점: 공통성 높은 에셋은 core로, 도메인별 에셋은 분리        │
+│      메모리 효율과 관리 용이성 모두 확보                     │
+└─────────────────────────────────────────────────────────────┘
+</pre></div>
+
+                <div class="code-block"><span class="code-comment">// 에디터 스크립트: 공용 에셋 자동 번들 할당</span>
+<span class="code-keyword">public class</span> <span class="code-type">SharedBundleAssigner</span>
+{
+    [<span class="code-type">MenuItem</span>(<span class="code-string">"Tools/Assign Shared Bundles"</span>)]
+    <span class="code-keyword">public static void</span> AssignSharedBundles()
+    {
+        <span class="code-comment">// 사용 횟수 분석</span>
+        <span class="code-keyword">var</span> usageCount = AnalyzeAssetUsage();
+
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> kvp <span class="code-keyword">in</span> usageCount)
+        {
+            <span class="code-keyword">string</span> assetPath = kvp.Key;
+            <span class="code-keyword">int</span> useCount = kvp.Value;
+
+            <span class="code-keyword">var</span> importer = <span class="code-type">AssetImporter</span>.GetAtPath(assetPath);
+            <span class="code-keyword">if</span> (importer == <span class="code-keyword">null</span> || !<span class="code-keyword">string</span>.IsNullOrEmpty(importer.assetBundleName))
+                <span class="code-keyword">continue</span>;  <span class="code-comment">// 이미 할당됨</span>
+
+            <span class="code-comment">// 2개 이상 번들에서 사용되면 shared로</span>
+            <span class="code-keyword">if</span> (useCount >= <span class="code-number">2</span>)
+            {
+                <span class="code-keyword">string</span> sharedBundle = DetermineSharedBundle(assetPath);
+                importer.assetBundleName = sharedBundle;
+                importer.SaveAndReimport();
+
+                <span class="code-type">Debug</span>.Log(<span class="code-string">$"Assigned {assetPath} to {sharedBundle}"</span>);
+            }
+        }
+    }
+
+    <span class="code-keyword">private static string</span> DetermineSharedBundle(<span class="code-keyword">string</span> assetPath)
+    {
+        <span class="code-comment">// 에셋 타입에 따라 적절한 shared 번들 결정</span>
+        <span class="code-keyword">if</span> (assetPath.EndsWith(<span class="code-string">".png"</span>) || assetPath.EndsWith(<span class="code-string">".tga"</span>))
+            <span class="code-keyword">return</span> <span class="code-string">"shared_textures"</span>;
+        <span class="code-keyword">if</span> (assetPath.EndsWith(<span class="code-string">".mat"</span>))
+            <span class="code-keyword">return</span> <span class="code-string">"shared_materials"</span>;
+        <span class="code-keyword">if</span> (assetPath.EndsWith(<span class="code-string">".shader"</span>))
+            <span class="code-keyword">return</span> <span class="code-string">"shared_shaders"</span>;
+        <span class="code-keyword">if</span> (assetPath.EndsWith(<span class="code-string">".wav"</span>) || assetPath.EndsWith(<span class="code-string">".ogg"</span>))
+            <span class="code-keyword">return</span> <span class="code-string">"shared_audio"</span>;
+
+        <span class="code-keyword">return</span> <span class="code-string">"shared_misc"</span>;
+    }
+}</pre></div>
+            </div>
+        </div>
+
+        <!-- Part 6: 순환 의존성 -->
+        <div class="conversation">
+            <h2>Part 6. 순환 의존성 문제</h2>
+
+            <div class="q">순환 의존성이 뭐고 왜 문제야?</div>
+            <div class="a">
+                <p><span class="highlight">순환 의존성</span>은 A가 B에 의존하고, B가 다시 A에 의존하는 상황입니다:</p>
+
+                <div class="diagram-box"><pre>
+순환 의존성 예시:
+
+직접 순환:
+┌─────────────┐      ┌─────────────┐
+│ bundle_a    │─────→│ bundle_b    │
+│             │←─────│             │
+└─────────────┘      └─────────────┘
+   A → B → A → B → ...  (무한 루프!)
+
+간접 순환:
+┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+│ bundle_a    │─────→│ bundle_b    │─────→│ bundle_c    │
+│             │                           │             │
+└─────────────┘                           └──────┬──────┘
+      ↑                                          │
+      └──────────────────────────────────────────┘
+   A → B → C → A → B → C → ...
+</pre></div>
+
+                <div class="warning-box">
+                    <h4>순환 의존성의 문제점</h4>
+                    <ul>
+                        <li><strong>무한 로드 루프</strong>: A 로드 → B 필요 → B 로드 → A 필요 → ...</li>
+                        <li><strong>언로드 불가</strong>: A가 B를 참조하고 B가 A를 참조하면 둘 다 해제 불가</li>
+                        <li><strong>빌드 경고/에러</strong>: Unity는 순환 의존성을 경고함</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="q">순환 의존성은 어떻게 발생해?</div>
+            <div class="a">
+                <p>흔한 순환 의존성 발생 시나리오:</p>
+
+                <div class="diagram-box"><pre>
+시나리오 1: 양방향 참조
+┌─────────────────────────────────────────────────────────────┐
+│ 캐릭터 번들:                                                 │
+│ - HeroPrefab                                                │
+│   └── WeaponSlot (빈 Transform)                             │
+│       └── DefaultWeapon 참조 ──┐                            │
+│                                │                            │
+│ 무기 번들:                      │                            │
+│ - SwordPrefab ←────────────────┘                            │
+│   └── OwnerCharacter 참조 ────→ HeroPrefab                  │
+│                                                             │
+│ 결과: 캐릭터 ↔ 무기 순환!                                    │
+└─────────────────────────────────────────────────────────────┘
+
+시나리오 2: 공유 매니저
+┌─────────────────────────────────────────────────────────────┐
+│ 게임 매니저 번들:                                            │
+│ - GameManager.prefab                                         │
+│   └── PlayerReference ──→ PlayerPrefab                      │
+│   └── EnemyReference ──→ EnemyPrefab                        │
+│                                                             │
+│ 플레이어 번들:                                               │
+│ - PlayerPrefab                                               │
+│   └── GameManagerRef ──→ GameManager.prefab                 │
+│                                                             │
+│ 결과: 매니저 ↔ 플레이어 순환!                                │
+└─────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">순환 의존성을 어떻게 해결해?</div>
+            <div class="a">
+                <p>여러 가지 해결 패턴이 있습니다:</p>
+
+                <div class="diagram-box"><pre>
+해결책 1: 인터페이스/이벤트 기반 분리
+═══════════════════════════════════════════════════════════════
+
+Before (순환):
+Character ←→ Weapon
+
+After (이벤트 기반):
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  Character                      Weapon                      │
+│  ├── WeaponSlot (Transform)     ├── IWeapon 구현            │
+│  └── OnWeaponEquipped 이벤트    └── OnEquipped 리스너       │
+│                                                             │
+│  런타임에 동적으로 연결 (참조 없이 이벤트로 통신)           │
+│  → 번들 간 의존성 제거                                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+</pre></div>
+
+                <div class="diagram-box"><pre>
+해결책 2: 중간 번들 도입
+═══════════════════════════════════════════════════════════════
+
+Before (순환):
+bundle_a ←→ bundle_b
+
+After (공통 분리):
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│              shared_interfaces.bundle                       │
+│              ├── ICharacter                                 │
+│              ├── IWeapon                                    │
+│              └── SharedData                                 │
+│                    ↑       ↑                                │
+│                    │       │                                │
+│  character.bundle ─┘       └─ weapon.bundle                 │
+│  (ICharacter 구현)           (IWeapon 구현)                  │
+│                                                             │
+│  양쪽 모두 shared에 의존 → 서로 간 직접 의존 제거           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+</pre></div>
+
+                <div class="code-block"><span class="code-comment">// 해결책 3: ScriptableObject 기반 간접 참조</span>
+
+<span class="code-comment">// shared_references.bundle에 포함</span>
+[<span class="code-type">CreateAssetMenu</span>]
+<span class="code-keyword">public class</span> <span class="code-type">CharacterReference</span> : <span class="code-type">ScriptableObject</span>
+{
+    <span class="code-comment">// 실제 프리팹 참조는 런타임에 설정</span>
+    [<span class="code-type">NonSerialized</span>]
+    <span class="code-keyword">public</span> <span class="code-type">GameObject</span> CharacterPrefab;
+
+    <span class="code-keyword">public string</span> CharacterId;  <span class="code-comment">// 직렬화된 ID만 저장</span>
+}
+
+<span class="code-comment">// weapon.bundle의 무기가 참조</span>
+<span class="code-keyword">public class</span> <span class="code-type">Weapon</span> : <span class="code-type">MonoBehaviour</span>
+{
+    <span class="code-comment">// 캐릭터 프리팹 직접 참조 대신 Reference 사용</span>
+    <span class="code-keyword">public</span> <span class="code-type">CharacterReference</span> OwnerRef;
+
+    <span class="code-keyword">public</span> <span class="code-type">GameObject</span> GetOwnerPrefab()
+    {
+        <span class="code-comment">// 런타임에 실제 프리팹 획득</span>
+        <span class="code-keyword">return</span> OwnerRef.CharacterPrefab;
+    }
+}
+
+<span class="code-comment">// 게임 시작 시 Reference 연결</span>
+<span class="code-keyword">public class</span> <span class="code-type">ReferenceResolver</span>
+{
+    <span class="code-keyword">public void</span> ResolveReferences()
+    {
+        <span class="code-comment">// character.bundle 로드 후</span>
+        <span class="code-keyword">var</span> heroRef = Resources.Load&lt;<span class="code-type">CharacterReference</span>&gt;(<span class="code-string">"HeroRef"</span>);
+        <span class="code-keyword">var</span> heroPrefab = m_CharacterBundle.LoadAsset&lt;<span class="code-type">GameObject</span>&gt;(<span class="code-string">"Hero"</span>);
+
+        heroRef.CharacterPrefab = heroPrefab;  <span class="code-comment">// 런타임 연결</span>
+    }
+}</pre></div>
+            </div>
+
+            <div class="q">순환 의존성을 자동으로 감지할 수 있어?</div>
+            <div class="a">
+                <div class="code-block"><span class="code-comment">// 순환 의존성 감지기</span>
+<span class="code-keyword">public class</span> <span class="code-type">CircularDependencyDetector</span>
+{
+    [<span class="code-type">MenuItem</span>(<span class="code-string">"Tools/Detect Circular Dependencies"</span>)]
+    <span class="code-keyword">public static void</span> DetectCircular()
+    {
+        <span class="code-keyword">var</span> bundles = <span class="code-type">AssetDatabase</span>.GetAllAssetBundleNames();
+        <span class="code-keyword">var</span> dependencies = <span class="code-keyword">new</span> <span class="code-type">Dictionary</span>&lt;<span class="code-keyword">string</span>, <span class="code-type">HashSet</span>&lt;<span class="code-keyword">string</span>&gt;&gt;();
+
+        <span class="code-comment">// 의존성 그래프 구축</span>
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> bundle <span class="code-keyword">in</span> bundles)
+        {
+            dependencies[bundle] = GetBundleDependencies(bundle);
+        }
+
+        <span class="code-comment">// DFS로 순환 탐지</span>
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> bundle <span class="code-keyword">in</span> bundles)
+        {
+            <span class="code-keyword">var</span> visited = <span class="code-keyword">new</span> <span class="code-type">HashSet</span>&lt;<span class="code-keyword">string</span>&gt;();
+            <span class="code-keyword">var</span> path = <span class="code-keyword">new</span> <span class="code-type">List</span>&lt;<span class="code-keyword">string</span>&gt;();
+
+            <span class="code-keyword">if</span> (HasCycle(bundle, dependencies, visited, path))
+            {
+                <span class="code-keyword">string</span> cycle = <span class="code-keyword">string</span>.Join(<span class="code-string">" → "</span>, path);
+                <span class="code-type">Debug</span>.LogError(<span class="code-string">$"Circular dependency detected: {cycle}"</span>);
+            }
+        }
+    }
+
+    <span class="code-keyword">private static bool</span> HasCycle(
+        <span class="code-keyword">string</span> bundle,
+        <span class="code-type">Dictionary</span>&lt;<span class="code-keyword">string</span>, <span class="code-type">HashSet</span>&lt;<span class="code-keyword">string</span>&gt;&gt; deps,
+        <span class="code-type">HashSet</span>&lt;<span class="code-keyword">string</span>&gt; visited,
+        <span class="code-type">List</span>&lt;<span class="code-keyword">string</span>&gt; path)
+    {
+        <span class="code-keyword">if</span> (path.Contains(bundle))
+        {
+            path.Add(bundle);  <span class="code-comment">// 순환 경로 완성</span>
+            <span class="code-keyword">return true</span>;
+        }
+
+        <span class="code-keyword">if</span> (visited.Contains(bundle))
+            <span class="code-keyword">return false</span>;
+
+        visited.Add(bundle);
+        path.Add(bundle);
+
+        <span class="code-keyword">if</span> (deps.TryGetValue(bundle, <span class="code-keyword">out var</span> bundleDeps))
+        {
+            <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> dep <span class="code-keyword">in</span> bundleDeps)
+            {
+                <span class="code-keyword">if</span> (HasCycle(dep, deps, visited, path))
+                    <span class="code-keyword">return true</span>;
+            }
+        }
+
+        path.RemoveAt(path.Count - <span class="code-number">1</span>);
+        <span class="code-keyword">return false</span>;
+    }
+}</pre></div>
+            </div>
+        </div>
+
+        <!-- Part 7: 실전 패턴 -->
+        <div class="conversation">
+            <h2>Part 7. 실전 의존성 관리 패턴</h2>
+
+            <div class="q">대규모 프로젝트에서 의존성을 어떻게 체계적으로 관리해?</div>
+            <div class="a">
+                <p>계층화된 번들 아키텍처를 권장합니다:</p>
+
+                <div class="diagram-box"><pre>
+계층화된 번들 아키텍처:
+
+Layer 0: Core (항상 로드, 절대 언로드하지 않음)
+┌─────────────────────────────────────────────────────────────┐
+│ core_essential.bundle                                        │
+│ ├── 기본 셰이더 (Standard, UI, Particles)                    │
+│ ├── 에러 텍스처 (핑크 대신 보여줄 대체 텍스처)               │
+│ ├── 기본 폰트                                                │
+│ └── 공통 ScriptableObject                                    │
+└─────────────────────────────────────────────────────────────┘
+                           ↑
+Layer 1: Shared (도메인별 공유 에셋)
+┌─────────────────────────────────────────────────────────────┐
+│ shared_ui.bundle      - UI 공통 (아틀라스, 위젯)            │
+│ shared_chars.bundle   - 캐릭터 공통 (본, 애니메이션)        │
+│ shared_env.bundle     - 환경 공통 (머티리얼, 텍스처)        │
+│ shared_fx.bundle      - 이펙트 공통 (파티클, 셰이더)        │
+│ shared_audio.bundle   - 오디오 공통 (BGM, 공통 SFX)         │
+└─────────────────────────────────────────────────────────────┘
+                           ↑
+Layer 2: Feature (기능별 에셋)
+┌─────────────────────────────────────────────────────────────┐
+│ feature_combat.bundle   - 전투 시스템                        │
+│ feature_inventory.bundle - 인벤토리 시스템                   │
+│ feature_quest.bundle    - 퀘스트 시스템                      │
+└─────────────────────────────────────────────────────────────┘
+                           ↑
+Layer 3: Content (콘텐츠 단위)
+┌─────────────────────────────────────────────────────────────┐
+│ content_char_hero.bundle     - 영웅 캐릭터                   │
+│ content_char_enemy_01.bundle - 적 캐릭터 1                   │
+│ content_level_forest.bundle  - 숲 맵                         │
+│ content_level_dungeon.bundle - 던전 맵                       │
+└─────────────────────────────────────────────────────────────┘
+
+규칙:
+- 상위 계층은 하위 계층을 참조하지 않음
+- 같은 계층 간 참조 최소화
+- 의존성은 항상 아래 → 위 방향
+</pre></div>
+            </div>
+
+            <div class="q">의존성 로딩을 자동화할 수 있어?</div>
+            <div class="a">
+                <div class="code-block"><span class="code-comment">// 완전한 번들 매니저 (의존성 자동 처리)</span>
+<span class="code-keyword">public class</span> <span class="code-type">BundleManager</span> : <span class="code-type">MonoBehaviour</span>
+{
+    <span class="code-keyword">private static</span> <span class="code-type">BundleManager</span> s_Instance;
+    <span class="code-keyword">private</span> <span class="code-type">AssetBundleManifest</span> m_Manifest;
+    <span class="code-keyword">private</span> <span class="code-type">Dictionary</span>&lt;<span class="code-keyword">string</span>, <span class="code-type">LoadedBundle</span>&gt; m_LoadedBundles = <span class="code-keyword">new</span>();
+
+    <span class="code-keyword">private class</span> <span class="code-type">LoadedBundle</span>
+    {
+        <span class="code-keyword">public</span> <span class="code-type">AssetBundle</span> Bundle;
+        <span class="code-keyword">public int</span> RefCount;
+        <span class="code-keyword">public</span> <span class="code-type">HashSet</span>&lt;<span class="code-keyword">string</span>&gt; Dependencies;
+    }
+
+    <span class="code-comment">// 번들 로드 (의존성 자동 처리)</span>
+    <span class="code-keyword">public</span> IEnumerator LoadBundleAsync(<span class="code-keyword">string</span> bundleName, <span class="code-type">Action</span>&lt;<span class="code-type">AssetBundle</span>&gt; onComplete)
+    {
+        <span class="code-comment">// 이미 로드됨?</span>
+        <span class="code-keyword">if</span> (m_LoadedBundles.TryGetValue(bundleName, <span class="code-keyword">out var</span> existing))
+        {
+            existing.RefCount++;
+            onComplete?.Invoke(existing.Bundle);
+            <span class="code-keyword">yield break</span>;
+        }
+
+        <span class="code-comment">// 의존성 먼저 로드</span>
+        <span class="code-keyword">var</span> dependencies = m_Manifest.GetAllDependencies(bundleName);
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> dep <span class="code-keyword">in</span> dependencies)
+        {
+            <span class="code-keyword">if</span> (!m_LoadedBundles.ContainsKey(dep))
+            {
+                <span class="code-keyword">yield return</span> LoadSingleBundleAsync(dep);
+            }
+            <span class="code-keyword">else</span>
+            {
+                m_LoadedBundles[dep].RefCount++;  <span class="code-comment">// 참조 증가</span>
+            }
+        }
+
+        <span class="code-comment">// 메인 번들 로드</span>
+        <span class="code-keyword">yield return</span> LoadSingleBundleAsync(bundleName);
+
+        <span class="code-comment">// 의존성 기록</span>
+        m_LoadedBundles[bundleName].Dependencies = <span class="code-keyword">new</span> <span class="code-type">HashSet</span>&lt;<span class="code-keyword">string</span>&gt;(dependencies);
+
+        onComplete?.Invoke(m_LoadedBundles[bundleName].Bundle);
+    }
+
+    <span class="code-comment">// 번들 언로드 (의존성 자동 처리)</span>
+    <span class="code-keyword">public void</span> UnloadBundle(<span class="code-keyword">string</span> bundleName, <span class="code-keyword">bool</span> unloadAllLoadedObjects = <span class="code-keyword">true</span>)
+    {
+        <span class="code-keyword">if</span> (!m_LoadedBundles.TryGetValue(bundleName, <span class="code-keyword">out var</span> loaded))
+            <span class="code-keyword">return</span>;
+
+        loaded.RefCount--;
+
+        <span class="code-keyword">if</span> (loaded.RefCount &gt; <span class="code-number">0</span>)
+            <span class="code-keyword">return</span>;  <span class="code-comment">// 아직 다른 곳에서 사용 중</span>
+
+        <span class="code-comment">// 의존성의 참조 카운트도 감소</span>
+        <span class="code-keyword">if</span> (loaded.Dependencies != <span class="code-keyword">null</span>)
+        {
+            <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> dep <span class="code-keyword">in</span> loaded.Dependencies)
+            {
+                UnloadBundle(dep, unloadAllLoadedObjects);  <span class="code-comment">// 재귀</span>
+            }
+        }
+
+        <span class="code-comment">// 번들 실제 언로드</span>
+        loaded.Bundle.Unload(unloadAllLoadedObjects);
+        m_LoadedBundles.Remove(bundleName);
+    }
+
+    <span class="code-keyword">private</span> IEnumerator LoadSingleBundleAsync(<span class="code-keyword">string</span> bundleName)
+    {
+        <span class="code-keyword">string</span> path = GetBundlePath(bundleName);
+        <span class="code-keyword">var</span> request = <span class="code-type">AssetBundle</span>.LoadFromFileAsync(path);
+        <span class="code-keyword">yield return</span> request;
+
+        m_LoadedBundles[bundleName] = <span class="code-keyword">new</span> <span class="code-type">LoadedBundle</span>
+        {
+            Bundle = request.assetBundle,
+            RefCount = <span class="code-number">1</span>
+        };
+    }
+}</pre></div>
+            </div>
+        </div>
+
+        <!-- Summary -->
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>번들 간 의존성 관리</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>의존성이란?</strong> 번들 A의 에셋이 번들 B의 에셋을 참조할 때 발생하는 관계</li>
+                <li><strong>직접 vs 간접</strong>: GetDirectDependencies(1단계), GetAllDependencies(재귀)</li>
+                <li><strong>중복 문제</strong>: 공유 에셋이 번들에 미할당되면 중복 복사됨 → Shared 번들 필수</li>
+                <li><strong>로딩 순서</strong>: 의존 번들을 먼저 로드, 병렬화 시에도 순서 유지</li>
+                <li><strong>참조 카운팅</strong>: 언로드 시 다른 번들의 참조 확인 필수</li>
+                <li><strong>순환 의존성</strong>: 인터페이스 분리, 중간 번들 도입, 런타임 연결로 해결</li>
+                <li><strong>계층 아키텍처</strong>: Core → Shared → Feature → Content 순서로 계층화</li>
             </ul>
         </div>
 
         <div class="nav-links">
-            <a href="../asset-dependency-visualizer/">&larr; 의존성 시각화 도구</a>
-            <a href="../asset-texture-compression/">텍스처 압축 포맷 전쟁 &rarr;</a>
+            <a href="../asset-bundle-basics/">&larr; 에셋 번들이란?</a>
+            <a href="../asset-bundle-design/">번들 설계 전략 &rarr;</a>
         </div>
     </div>
+
+    <script src="../common/script.js"></script>
 </body>
 </html>
