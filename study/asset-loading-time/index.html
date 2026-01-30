@@ -4,37 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>게임 시작에 5분 걸리는 이유 - 에셋 관리 - MSH Portfolio</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
-        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
-        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
-        .a p { margin-bottom: 12px; }
-        .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
-        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
-        .summary-box ul { list-style: none; }
-        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
-        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
-        .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
-    </style>
+    <link rel="stylesheet" href="../common/styles.css">
 </head>
 <body>
     <div class="container">
@@ -42,82 +12,879 @@
 
         <div class="header">
             <h1>게임 시작에 5분 걸리는 이유</h1>
-            <p>모든 리소스 시작 시 로딩</p>
+            <p>시작 시 모든 리소스 로딩의 문제점과 로딩 시간 분석 - 왜 이렇게 오래 걸리고 어떻게 줄일 수 있나</p>
         </div>
 
+        <!-- Part 1 -->
         <div class="conversation">
-            <h2>Part 1. 문제 상황</h2>
-            <div class="q">게임 켜면 왜 이렇게 오래 걸려?</div>
-            <div class="a">
-                <p>가장 단순한 방법: <span class="highlight">게임 시작할 때 모든 리소스를 메모리에 올린다</span></p>
-                <p>텍스처, 모델, 사운드, 애니메이션... 전부 다!</p>
-            </div>
-            <div class="code-block">// 가장 무식한 로딩 방식
-void GameStart()
-{
-    LoadAllTextures();      // 2GB → 30초
-    LoadAllMeshes();        // 1GB → 20초
-    LoadAllSounds();        // 500MB → 10초
-    LoadAllAnimations();    // 300MB → 5초
+            <h2>Part 1. 가장 단순한 로딩 방식</h2>
 
-    StartGame();            // 총 65초 후 시작!
-}</div>
+            <div class="q">게임 시작할 때 왜 이렇게 오래 기다려야 해?</div>
+            <div class="a">
+                <p>가장 단순한 에셋 로딩 방식은 <span class="highlight">게임 시작 시 모든 리소스를 한 번에 로딩</span>하는 것이야.</p>
+                <p>이 방식은 구현이 쉽지만, 현대 게임에서는 <span class="warning">치명적인 문제</span>가 돼.</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// 가장 단순하고 무식한 로딩 방식</span>
+<span class="keyword">void</span> <span class="function">GameStart</span>() {
+    <span class="function">ShowLoadingScreen</span>();
+
+    <span class="comment">// 모든 것을 한 번에 로딩</span>
+    <span class="function">LoadAllTextures</span>();      <span class="comment">// 4GB → 60초</span>
+    <span class="function">LoadAllMeshes</span>();         <span class="comment">// 2GB → 30초</span>
+    <span class="function">LoadAllAnimations</span>();     <span class="comment">// 1GB → 15초</span>
+    <span class="function">LoadAllSounds</span>();         <span class="comment">// 1GB → 15초</span>
+    <span class="function">LoadAllShaders</span>();        <span class="comment">// 컴파일 → 20초</span>
+    <span class="function">LoadAllScripts</span>();        <span class="comment">// 초기화 → 10초</span>
+    <span class="function">InitializeWorld</span>();       <span class="comment">// 레벨 생성 → 30초</span>
+
+    <span class="function">HideLoadingScreen</span>();
+    <span class="function">StartGame</span>();              <span class="comment">// 총 3분 후 시작!</span>
+}
+
+<span class="comment">// 장점: 한 번 로딩하면 플레이 중 끊김 없음</span>
+<span class="comment">// 단점: 플레이어가 3분 동안 멍하니 기다려야 함</span></pre></div>
+
+            <div class="q">왜 이렇게 단순한 방식을 쓰는 거야?</div>
+            <div class="a">
+                <p>이 방식에는 분명한 <span class="highlight">장점</span>이 있어:</p>
+                <p>- <span class="key-point">구현이 매우 단순</span>: 복잡한 스트리밍 로직 불필요</p>
+                <p>- <span class="key-point">메모리 관리 쉬움</span>: 해제 타이밍 고민 안 해도 됨</p>
+                <p>- <span class="key-point">플레이 중 로딩 없음</span>: 한 번 시작하면 끊김 없이 플레이</p>
+                <p>- <span class="key-point">디버깅 쉬움</span>: 모든 에셋이 항상 메모리에 있음</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+시작 시 전체 로딩 방식:
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                         게임 실행                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  [게임 시작] ─────────────────────────────────────────▶ [플레이]    │
+│       │                                                    │        │
+│       ▼                                                    │        │
+│  ┌─────────────────────────────────────────────────────┐   │        │
+│  │              긴~~ 로딩 화면                          │   │        │
+│  │                                                     │   │        │
+│  │  텍스처 로딩... ████████████████████████████████    │   │        │
+│  │  메시 로딩...   ████████████████████               │   │        │
+│  │  사운드 로딩... █████████████                       │   │        │
+│  │  셰이더 컴파일... ████████████                      │   │        │
+│  │                                                     │   │        │
+│  │  [=========================================] 180초   │   │        │
+│  └─────────────────────────────────────────────────────┘   │        │
+│                                                            │        │
+│                                              끊김 없는 플레이 ───────┘
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+※ 옛날 게임: 로딩 10~30초, 용량 100MB~1GB
+※ 현대 게임: 로딩 3~10분, 용량 50~150GB
+</pre></div>
         </div>
 
+        <!-- Part 2 -->
         <div class="conversation">
-            <h2>Part 2. 왜 이렇게 했을까?</h2>
-            <div class="q">비효율적인데 왜 써?</div>
+            <h2>Part 2. 로딩 시간의 구성 요소</h2>
+
+            <div class="q">로딩 시간은 정확히 어디서 소비되는 거야?</div>
             <div class="a">
-                <p><span class="key-point">구현이 단순하다</span> - 한 번 다 올리면 끝</p>
-                <p><span class="key-point">게임 중 로딩 없음</span> - 플레이가 안 끊김</p>
-                <p>옛날 게임들은 용량이 작아서 가능했다</p>
+                <p>로딩 시간 = <span class="highlight">디스크 읽기</span> + <span class="highlight">압축 해제</span> + <span class="highlight">GPU 업로드</span> + <span class="highlight">초기화</span></p>
+                <p>각 단계가 병목이 될 수 있어!</p>
             </div>
-            <div class="diagram">┌─────────────────────────────────────────────────────┐
-│                  로딩 타임라인                        │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  [시작] ─▶ ████████████░░░░░░░░░░░░░ 텍스처 30초   │
-│            ░░░░░░░░████████░░░░░░░░░ 메시 20초     │
-│            ░░░░░░░░░░░░░░████░░░░░░░ 사운드 10초   │
-│            ░░░░░░░░░░░░░░░░░░███░░░░ 애니 5초      │
-│                                    ▼               │
-│                              [게임 시작]            │
-│                                                     │
-│  ◀──────── 총 65초 대기 ────────▶                  │
-└─────────────────────────────────────────────────────┘</div>
+
+            <div class="diagram-box"><pre>
+로딩 파이프라인 단계별 소요 시간:
+
+┌──────────────────────────────────────────────────────────────────────┐
+│   1. 디스크 읽기 (I/O Bound)                                         │
+│   ─────────────────────────────────────────────────────────────────  │
+│   HDD: 100~200 MB/s  → 10GB 읽기 = 50~100초                         │
+│   SATA SSD: 500 MB/s → 10GB 읽기 = 20초                             │
+│   NVMe SSD: 3500 MB/s → 10GB 읽기 = 3초                             │
+│   PS5 SSD: 5500 MB/s → 10GB 읽기 = 2초                              │
+└──────────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│   2. 압축 해제 (CPU Bound)                                           │
+│   ─────────────────────────────────────────────────────────────────  │
+│   LZ4: 4~5 GB/s (빠름, 압축률 낮음)                                  │
+│   Zstd: 1~2 GB/s (밸런스)                                            │
+│   LZMA: 100~300 MB/s (느림, 압축률 높음)                             │
+│   Oodle Kraken: 2~4 GB/s (게임 최적화)                               │
+└──────────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│   3. 데이터 가공 (CPU Bound)                                         │
+│   ─────────────────────────────────────────────────────────────────  │
+│   - 텍스처 포맷 변환 (DDS → GPU 포맷)                                │
+│   - 메시 버텍스 버퍼 생성                                            │
+│   - 애니메이션 커브 평가                                             │
+│   - 셰이더 컴파일/링킹                                               │
+└──────────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│   4. GPU 업로드 (Transfer Bound)                                     │
+│   ─────────────────────────────────────────────────────────────────  │
+│   PCIe 3.0 x16: 15 GB/s                                              │
+│   PCIe 4.0 x16: 32 GB/s                                              │
+│   실제 유효 대역폭: 이론치의 50~70%                                   │
+│   → 4GB 텍스처 업로드 = 0.3~0.5초                                   │
+└──────────────────────────────────────────────────────────────────────┘
+</pre></div>
+
+            <div class="q">어느 단계가 제일 느린 거야?</div>
+            <div class="a">
+                <p>보통 <span class="warning">디스크 읽기</span>가 가장 큰 병목이야. 특히 HDD에서!</p>
+                <p>NVMe SSD가 보급되면서 이제는 <span class="highlight">압축 해제</span>와 <span class="highlight">초기화</span>가 병목이 되기도 해.</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// 로딩 시간 프로파일링</span>
+<span class="keyword">struct</span> <span class="type">LoadingProfile</span> {
+    <span class="type">double</span> diskReadTime;       <span class="comment">// 디스크에서 읽기</span>
+    <span class="type">double</span> decompressionTime;  <span class="comment">// 압축 해제</span>
+    <span class="type">double</span> processingTime;     <span class="comment">// 데이터 가공</span>
+    <span class="type">double</span> gpuUploadTime;      <span class="comment">// GPU로 전송</span>
+    <span class="type">double</span> initializationTime; <span class="comment">// 객체 초기화</span>
+};
+
+<span class="comment">// 실제 측정 예시 (10GB 게임 데이터)</span>
+<span class="type">LoadingProfile</span> hddProfile = {
+    .diskReadTime = <span class="number">60.0</span>,       <span class="comment">// 100 MB/s HDD</span>
+    .decompressionTime = <span class="number">5.0</span>,   <span class="comment">// Zstd 2 GB/s</span>
+    .processingTime = <span class="number">10.0</span>,     <span class="comment">// 포맷 변환 등</span>
+    .gpuUploadTime = <span class="number">2.0</span>,       <span class="comment">// PCIe 전송</span>
+    .initializationTime = <span class="number">8.0</span>,  <span class="comment">// 월드 빌드 등</span>
+    <span class="comment">// 총: 85초 → 디스크가 70% 차지!</span>
+};
+
+<span class="type">LoadingProfile</span> nvmeProfile = {
+    .diskReadTime = <span class="number">3.0</span>,        <span class="comment">// 3500 MB/s NVMe</span>
+    .decompressionTime = <span class="number">5.0</span>,   <span class="comment">// Zstd 2 GB/s</span>
+    .processingTime = <span class="number">10.0</span>,     <span class="comment">// 포맷 변환 등</span>
+    .gpuUploadTime = <span class="number">2.0</span>,       <span class="comment">// PCIe 전송</span>
+    .initializationTime = <span class="number">8.0</span>,  <span class="comment">// 월드 빌드 등</span>
+    <span class="comment">// 총: 28초 → 이제 처리 시간이 병목!</span>
+};</pre></div>
         </div>
 
+        <!-- Part 3 -->
         <div class="conversation">
-            <h2>Part 3. 현대에는 불가능</h2>
-            <div class="q">지금은 왜 안 돼?</div>
+            <h2>Part 3. 디스크 I/O 병목 이해하기</h2>
+
+            <div class="q">HDD와 SSD는 뭐가 그렇게 다른 거야?</div>
             <div class="a">
-                <p>1. <span class="warning">게임 용량 100GB+</span></p>
-                <p>2. <span class="warning">RAM은 16~32GB</span></p>
-                <p>3. 플레이어 인내심 한계 (3초 법칙)</p>
+                <p><span class="highlight">HDD</span>는 물리적인 디스크와 헤드가 움직여야 해서 <span class="warning">탐색 시간(Seek Time)</span>이 발생해.</p>
+                <p><span class="highlight">SSD</span>는 전자적으로 접근해서 탐색 시간이 거의 없어!</p>
             </div>
-            <div class="diagram">용량 vs 메모리:
 
-게임   ████████████████████████████████ 150GB
-RAM    ████████ 32GB
+            <div class="diagram-box"><pre>
+HDD vs SSD 접근 패턴:
 
-→ 전부 올리는 건 물리적으로 불가능!</div>
+┌─────────────────────────────────────────────────────────────────────┐
+│  HDD (Hard Disk Drive) - 기계식 저장장치                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│       [=====] ← 헤드가 물리적으로 이동                              │
+│    ╭──────────╮                                                     │
+│   │  ○ ○ ○ ○  │  ← 플래터(원판)가 회전                              │
+│   │  ○ ○ ○ ○  │     7200 RPM = 초당 120회                          │
+│    ╰──────────╯                                                     │
+│                                                                     │
+│   탐색 시간: 5~15ms (헤드 이동)                                     │
+│   회전 지연: 평균 4ms (7200 RPM)                                    │
+│   순차 읽기: 100~200 MB/s                                           │
+│   랜덤 읽기: 0.5~2 MB/s ← ⚠️ 100배 느림!                            │
+│                                                                     │
+│   작은 파일 1000개 읽기:                                            │
+│   1000 × (10ms 탐색 + 4ms 회전) = 14초!                            │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  SSD (Solid State Drive) - 전자식 저장장치                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   ┌─────────────────────────────────────────┐                       │
+│   │ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ │ ← NAND 플래시 칩      │
+│   │ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ │   물리적 이동 없음    │
+│   └─────────────────────────────────────────┘                       │
+│                                                                     │
+│   SATA SSD:                                                         │
+│   - 탐색 시간: 0.1ms                                                │
+│   - 순차 읽기: 500~550 MB/s (SATA 한계)                            │
+│   - 랜덤 읽기: 50~100 MB/s                                          │
+│                                                                     │
+│   NVMe SSD:                                                         │
+│   - 탐색 시간: 0.02ms                                               │
+│   - 순차 읽기: 3000~7000 MB/s                                       │
+│   - 랜덤 읽기: 500~1000 MB/s                                        │
+│                                                                     │
+│   작은 파일 1000개 읽기:                                            │
+│   NVMe: 1000 × 0.02ms = 0.02초 (HDD의 1/700)                       │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+</pre></div>
+
+            <div class="q">그럼 파일 구조가 로딩 속도에 영향을 미쳐?</div>
+            <div class="a">
+                <p>맞아! <span class="highlight">작은 파일 많음</span> vs <span class="highlight">큰 파일 적음</span>은 로딩 속도에 큰 차이를 만들어.</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// 파일 구조가 로딩 속도에 미치는 영향</span>
+
+<span class="comment">// 방식 1: 개별 파일 (나쁜 예)</span>
+<span class="comment">// textures/</span>
+<span class="comment">//   hero_diffuse.dds    (4MB)</span>
+<span class="comment">//   hero_normal.dds     (4MB)</span>
+<span class="comment">//   enemy_diffuse.dds   (2MB)</span>
+<span class="comment">//   ... 5000개 파일</span>
+<span class="comment">// HDD에서 5000개 파일 열기:</span>
+<span class="comment">// 5000 × 10ms = 50초 (탐색만으로!)</span>
+
+<span class="comment">// 방식 2: 패킹된 아카이브 (좋은 예)</span>
+<span class="comment">// data/</span>
+<span class="comment">//   textures.pak        (10GB, 단일 파일)</span>
+<span class="comment">// 1개 파일 열기 + 순차 읽기:</span>
+<span class="comment">// 0.01초 + 100초(HDD 순차) = 100초</span>
+
+<span class="keyword">class</span> <span class="type">AssetArchive</span> {
+<span class="keyword">public</span>:
+    <span class="comment">// 아카이브 파일 구조</span>
+    <span class="comment">// [헤더][목차(TOC)][데이터1][데이터2]...[데이터N]</span>
+
+    <span class="keyword">struct</span> <span class="type">ArchiveHeader</span> {
+        <span class="type">uint32_t</span> magic;        <span class="comment">// 'PAK1'</span>
+        <span class="type">uint32_t</span> version;
+        <span class="type">uint32_t</span> entryCount;
+        <span class="type">uint64_t</span> tocOffset;    <span class="comment">// 목차 위치</span>
+    };
+
+    <span class="keyword">struct</span> <span class="type">TOCEntry</span> {
+        <span class="type">uint64_t</span> nameHash;     <span class="comment">// 파일명 해시</span>
+        <span class="type">uint64_t</span> offset;       <span class="comment">// 데이터 시작 위치</span>
+        <span class="type">uint64_t</span> compressedSize;
+        <span class="type">uint64_t</span> uncompressedSize;
+    };
+
+    <span class="comment">// 단일 파일 열기 → 목차 읽기 → 필요한 오프셋으로 점프</span>
+    <span class="comment">// 랜덤 접근 최소화!</span>
+};</pre></div>
         </div>
 
+        <!-- Part 4 -->
         <div class="conversation">
-            <h2>Part 4. 해결책</h2>
-            <div class="q">그럼 어떻게?</div>
+            <h2>Part 4. 압축과 해제의 트레이드오프</h2>
+
+            <div class="q">파일을 압축하면 더 빨라져?</div>
             <div class="a">
-                <p><span class="key-point">필요한 것만, 필요할 때, 필요한 만큼</span></p>
-                <p>이것이 <span class="highlight">리소스 스트리밍</span>의 시작!</p>
+                <p>상황에 따라 달라! <span class="highlight">디스크 속도 < CPU 해제 속도</span>면 압축이 유리해.</p>
             </div>
+
+            <div class="diagram-box"><pre>
+압축의 트레이드오프:
+
+HDD (100 MB/s)에서 10GB 로딩:
+┌──────────────────────────────────────────────────────────────────────┐
+│  무압축:                                                             │
+│  - 디스크 읽기: 10GB ÷ 100 MB/s = 100초                             │
+│  - 해제: 0초                                                         │
+│  - 총: 100초                                                         │
+│                                                                      │
+│  Zstd 압축 (50% 압축률, 2 GB/s 해제):                               │
+│  - 디스크 읽기: 5GB ÷ 100 MB/s = 50초                               │
+│  - 해제: 10GB ÷ 2 GB/s = 5초                                        │
+│  - 총: 55초 ✓ (45초 절약!)                                          │
+│                                                                      │
+│  LZMA 압축 (30% 압축률, 200 MB/s 해제):                             │
+│  - 디스크 읽기: 3GB ÷ 100 MB/s = 30초                               │
+│  - 해제: 10GB ÷ 200 MB/s = 50초                                     │
+│  - 총: 80초 (압축률 좋지만 해제가 느림)                              │
+└──────────────────────────────────────────────────────────────────────┘
+
+NVMe SSD (3500 MB/s)에서 10GB 로딩:
+┌──────────────────────────────────────────────────────────────────────┐
+│  무압축:                                                             │
+│  - 디스크 읽기: 10GB ÷ 3500 MB/s = 2.9초                            │
+│  - 해제: 0초                                                         │
+│  - 총: 2.9초 ✓                                                       │
+│                                                                      │
+│  Zstd 압축 (50% 압축률, 2 GB/s 해제):                               │
+│  - 디스크 읽기: 5GB ÷ 3500 MB/s = 1.4초                             │
+│  - 해제: 10GB ÷ 2 GB/s = 5초                                        │
+│  - 총: 6.4초 (오히려 느림!)                                          │
+│                                                                      │
+│  LZ4 압축 (60% 압축률, 5 GB/s 해제):                                │
+│  - 디스크 읽기: 6GB ÷ 3500 MB/s = 1.7초                             │
+│  - 해제: 10GB ÷ 5 GB/s = 2초                                        │
+│  - 총: 3.7초 (비슷하지만 용량 절약)                                  │
+└──────────────────────────────────────────────────────────────────────┘
+
+결론:
+- HDD → 높은 압축률 선호 (Zstd, Oodle)
+- NVMe SSD → 빠른 해제 선호 (LZ4) 또는 무압축
+- 설치 용량이 중요하면 → 압축 필수
+</pre></div>
+
+            <div class="q">압축 알고리즘마다 뭐가 다른 거야?</div>
+            <div class="a">
+                <p>각 알고리즘은 <span class="highlight">압축률</span>과 <span class="highlight">속도</span> 사이에서 다른 선택을 해.</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// 게임에서 자주 쓰는 압축 알고리즘 비교</span>
+
+<span class="keyword">enum class</span> <span class="type">CompressionType</span> {
+    LZ4,           <span class="comment">// 가장 빠른 해제, 낮은 압축률</span>
+    LZ4_HC,        <span class="comment">// LZ4보다 느린 압축, 비슷한 해제, 더 나은 압축률</span>
+    ZSTD,          <span class="comment">// 밸런스형, 레벨 조절 가능</span>
+    LZMA,          <span class="comment">// 최고 압축률, 느린 해제 (7-Zip)</span>
+    OODLE_KRAKEN,  <span class="comment">// 게임 최적화, 빠른 해제 + 좋은 압축률</span>
+    OODLE_LEVIATHAN,<span class="comment">// Kraken보다 높은 압축률</span>
+};
+
+<span class="comment">// 벤치마크 (Silesia 코퍼스 기준)</span>
+<span class="keyword">struct</span> <span class="type">CompressionBenchmark</span> {
+    <span class="keyword">const</span> <span class="type">char</span>* name;
+    <span class="type">float</span> compressionRatio;    <span class="comment">// 원본 대비 %</span>
+    <span class="type">float</span> compressSpeed;       <span class="comment">// MB/s</span>
+    <span class="type">float</span> decompressSpeed;     <span class="comment">// MB/s</span>
+};
+
+<span class="type">CompressionBenchmark</span> benchmarks[] = {
+    { <span class="string">"LZ4"</span>,             <span class="number">47.6</span>, <span class="number">780</span>,  <span class="number">4970</span> },  <span class="comment">// 초고속 해제</span>
+    { <span class="string">"LZ4 HC"</span>,          <span class="number">40.5</span>, <span class="number">110</span>,  <span class="number">4970</span> },  <span class="comment">// 더 나은 압축</span>
+    { <span class="string">"Zstd (level 1)"</span>,  <span class="number">42.2</span>, <span class="number">515</span>,  <span class="number">1850</span> },  <span class="comment">// 빠른 모드</span>
+    { <span class="string">"Zstd (level 9)"</span>,  <span class="number">36.4</span>, <span class="number">85</span>,   <span class="number">1600</span> },  <span class="comment">// 밸런스</span>
+    { <span class="string">"Zstd (level 19)"</span>, <span class="number">32.7</span>, <span class="number">5</span>,    <span class="number">1400</span> },  <span class="comment">// 최대 압축</span>
+    { <span class="string">"LZMA"</span>,            <span class="number">30.0</span>, <span class="number">2</span>,    <span class="number">270</span> },   <span class="comment">// 최고 압축, 느림</span>
+    { <span class="string">"Oodle Kraken"</span>,   <span class="number">35.1</span>, <span class="number">45</span>,   <span class="number">3200</span> },  <span class="comment">// 게임 최적!</span>
+    { <span class="string">"Oodle Leviathan"</span>,<span class="number">33.5</span>, <span class="number">25</span>,   <span class="number">2900</span> },  <span class="comment">// 더 높은 압축</span>
+};
+
+<span class="comment">// PS5, Xbox Series X|S는 하드웨어 Kraken 해제 지원</span>
+<span class="comment">// → CPU 부담 없이 초고속 해제 가능!</span></pre></div>
         </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. 셰이더 컴파일 지옥</h2>
+
+            <div class="q">셰이더 컴파일이 왜 그렇게 오래 걸려?</div>
+            <div class="a">
+                <p>현대 게임은 수천 개의 <span class="highlight">셰이더 변형(Variant)</span>이 있어. 각각 컴파일해야 해!</p>
+                <p>이게 바로 <span class="warning">"최초 실행 시 셰이더 컴파일"</span> 화면의 정체야.</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+셰이더 변형 폭발 문제:
+
+기본 PBR 셰이더의 옵션들:
+┌────────────────────────────────────────────────────────────────────┐
+│  □ 노말맵 사용            (ON/OFF)  → 2가지                       │
+│  □ 스페큘러맵 사용        (ON/OFF)  → 2가지                       │
+│  □ 이미션맵 사용          (ON/OFF)  → 2가지                       │
+│  □ AO맵 사용              (ON/OFF)  → 2가지                       │
+│  □ 버텍스 컬러 사용       (ON/OFF)  → 2가지                       │
+│  □ 스키닝 (본 수)         (0/4/8)   → 3가지                       │
+│  □ 인스턴싱               (ON/OFF)  → 2가지                       │
+│  □ 그림자 품질            (LOW/MED/HIGH/OFF) → 4가지              │
+│  □ 포그 타입              (LINEAR/EXP/EXP2/NONE) → 4가지          │
+│  □ 라이트 수              (1/2/4/8) → 4가지                       │
+└────────────────────────────────────────────────────────────────────┘
+
+총 변형 수: 2×2×2×2×2×3×2×4×4×4 = 12,288개!
+
+각 변형을 컴파일하는 시간:
+- DX11 HLSL → DXBC: 0.1초/개 × 12,288 = 20분
+- DX12 HLSL → DXIL: 0.05초/개 × 12,288 = 10분
+- Vulkan SPIR-V: 0.05초/개 × 12,288 = 10분
+
+※ 이래서 게임 첫 실행 시 "셰이더 컴파일 중..." 표시가 나옴
+※ 컴파일된 결과는 캐시에 저장 → 다음 실행부터 빠름
+</pre></div>
+
+            <div class="q">셰이더 컴파일을 빨리 할 방법은 없어?</div>
+            <div class="a">
+                <p>여러 최적화 전략이 있어:</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// 셰이더 컴파일 최적화 전략들</span>
+
+<span class="comment">// 1. 사전 컴파일 (PSO 캐시)</span>
+<span class="comment">// 설치 시 또는 업데이트 시 미리 컴파일</span>
+<span class="keyword">void</span> <span class="function">PrecompileShaders</span>() {
+    <span class="keyword">auto</span> targetGPU = <span class="function">DetectGPU</span>();
+    <span class="keyword">auto</span> cacheFile = <span class="function">GetPSOCachePath</span>(targetGPU);
+
+    <span class="keyword">if</span> (!<span class="function">FileExists</span>(cacheFile)) {
+        <span class="function">ShowProgress</span>(<span class="string">"Compiling shaders for your GPU..."</span>);
+        <span class="function">CompileAllVariants</span>(cacheFile);  <span class="comment">// 오래 걸림</span>
+    }
+}
+
+<span class="comment">// 2. 지연 컴파일 (Lazy Compilation)</span>
+<span class="comment">// 실제로 필요할 때만 컴파일</span>
+<span class="keyword">class</span> <span class="type">ShaderCache</span> {
+    <span class="type">std::unordered_map</span>&lt;<span class="type">ShaderKey</span>, <span class="type">CompiledShader</span>*&gt; m_cache;
+
+    <span class="type">CompiledShader</span>* <span class="function">GetShader</span>(<span class="keyword">const</span> <span class="type">ShaderKey</span>& key) {
+        <span class="keyword">auto</span> it = m_cache.find(key);
+        <span class="keyword">if</span> (it != m_cache.end()) {
+            <span class="keyword">return</span> it->second;
+        }
+        <span class="comment">// 없으면 즉시 컴파일 (첫 사용 시 히칭 발생 가능)</span>
+        <span class="keyword">auto</span> shader = <span class="function">CompileShader</span>(key);
+        m_cache[key] = shader;
+        <span class="keyword">return</span> shader;
+    }
+};
+
+<span class="comment">// 3. 백그라운드 컴파일</span>
+<span class="comment">// 로딩 중 또는 게임 중에 백그라운드 스레드에서 컴파일</span>
+<span class="keyword">void</span> <span class="function">BackgroundShaderCompilation</span>() {
+    <span class="keyword">while</span> (m_running) {
+        <span class="type">ShaderKey</span> key;
+        <span class="keyword">if</span> (m_compileQueue.<span class="function">TryPop</span>(key)) {
+            <span class="keyword">auto</span> shader = <span class="function">CompileShader</span>(key);
+            m_cache.<span class="function">Insert</span>(key, shader);
+        }
+        <span class="type">std::this_thread</span>::<span class="function">sleep_for</span>(<span class="number">1</span>ms);
+    }
+}
+
+<span class="comment">// 4. 변형 수 줄이기</span>
+<span class="comment">// Uber 셰이더: 모든 기능을 하나에 넣고 런타임에 분기</span>
+<span class="comment">// if/else 대신 곱셈으로 기능 끄기</span>
+<span class="comment">// color *= hasNormalMap ? normalMapColor : 1.0;</span></pre></div>
+        </div>
+
+        <!-- Part 6 -->
+        <div class="conversation">
+            <h2>Part 6. 메모리 한계와 로딩</h2>
+
+            <div class="q">메모리가 로딩 시간에 어떻게 영향을 미쳐?</div>
+            <div class="a">
+                <p>메모리가 부족하면 <span class="warning">스왑(Swap)</span>이 발생해서 엄청 느려져!</p>
+                <p>그래서 "모든 것을 로딩"하려면 충분한 메모리가 필수야.</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+메모리 부족 시 발생하는 일:
+
+게임이 로딩하려는 양: 20GB
+사용 가능한 RAM: 16GB
+
+┌──────────────────────────────────────────────────────────────────────┐
+│  정상 로딩 (메모리 충분)                                             │
+│                                                                      │
+│  [디스크] ──읽기──▶ [RAM] ──▶ [사용]                                │
+│           100MB/s                                                    │
+│                                                                      │
+│  20GB ÷ 100 MB/s = 200초                                            │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│  스왑 발생 (메모리 부족)                                             │
+│                                                                      │
+│  1. 16GB 로딩                                                        │
+│  2. 메모리 부족! OS가 일부를 디스크로 내보냄 (스왑)                  │
+│  3. 새 데이터 로딩                                                   │
+│  4. 또 부족! 또 스왑...                                              │
+│                                                                      │
+│  [디스크] ←────────────────────────────────────▶ [RAM]               │
+│          읽기도 하고, 스왑 쓰기도 하고, 스왑 읽기도 하고...          │
+│                                                                      │
+│  결과: 디스크 I/O 3배 이상 증가, 실제 로딩 시간 10배 이상 증가      │
+│                                                                      │
+│  200초 예상 → 실제 30분+ (스래싱 발생 시)                           │
+└──────────────────────────────────────────────────────────────────────┘
+
+※ 스래싱(Thrashing): 스왑이 너무 잦아서 실제 작업보다
+   스왑 I/O가 더 많은 상태 → 시스템 거의 멈춤
+</pre></div>
+
+            <div class="q">그럼 16GB RAM으로 100GB 게임을 어떻게 돌려?</div>
+            <div class="a">
+                <p>바로 <span class="highlight">모든 것을 로딩하지 않는 것</span>이 답이야!</p>
+                <p>이것이 <span class="key-point">스트리밍</span>과 <span class="key-point">온디맨드 로딩</span>이 필요한 이유야.</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// 메모리 효율적인 로딩 전략</span>
+
+<span class="keyword">class</span> <span class="type">SmartLoader</span> {
+<span class="keyword">private</span>:
+    <span class="keyword">const</span> <span class="type">size_t</span> m_memoryBudget;  <span class="comment">// 사용 가능한 메모리</span>
+    <span class="type">size_t</span> m_currentUsage = <span class="number">0</span>;
+
+<span class="keyword">public</span>:
+    <span class="type">SmartLoader</span>(<span class="type">size_t</span> budget) : m_memoryBudget(budget) {}
+
+    <span class="keyword">void</span> <span class="function">LoadLevel</span>(<span class="keyword">const</span> <span class="type">Level</span>& level) {
+        <span class="comment">// 1. 필수 에셋만 먼저 로딩</span>
+        <span class="function">LoadEssentialAssets</span>(level);  <span class="comment">// 플레이어, UI, 코어 셰이더</span>
+
+        <span class="comment">// 2. 시작 지점 주변만 로딩</span>
+        <span class="keyword">auto</span> spawnPos = level.<span class="function">GetSpawnPosition</span>();
+        <span class="function">LoadAreaAssets</span>(spawnPos, <span class="number">100.0f</span>);  <span class="comment">// 반경 100m</span>
+
+        <span class="comment">// 3. 나머지는 백그라운드 스트리밍</span>
+        m_streamingQueue.<span class="function">EnqueueSurroundingAreas</span>(spawnPos);
+
+        <span class="comment">// 플레이 시작 가능! 나머지는 플레이 중 로딩</span>
+    }
+
+    <span class="keyword">void</span> <span class="function">LoadAsset</span>(<span class="keyword">const</span> <span class="type">Asset</span>& asset) {
+        <span class="comment">// 메모리 한도 체크</span>
+        <span class="keyword">if</span> (m_currentUsage + asset.size > m_memoryBudget) {
+            <span class="comment">// 오래된 에셋 해제</span>
+            <span class="function">EvictLeastRecentlyUsed</span>(asset.size);
+        }
+
+        <span class="comment">// 이제 로딩 가능</span>
+        <span class="function">DoLoadAsset</span>(asset);
+        m_currentUsage += asset.size;
+    }
+};</pre></div>
+        </div>
+
+        <!-- Part 7 -->
+        <div class="conversation">
+            <h2>Part 7. 실제 게임 사례 분석</h2>
+
+            <div class="q">실제 게임들은 로딩이 얼마나 걸려?</div>
+            <div class="a">
+                <p>저장 장치와 게임 최적화에 따라 크게 달라져!</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+실제 게임 로딩 시간 비교 (초기 로딩):
+
+┌────────────────────────────────────────────────────────────────────┐
+│  게임                    │   HDD      │  SATA SSD  │  NVMe SSD   │
+├────────────────────────────────────────────────────────────────────┤
+│  GTA V (2015)           │  120초     │   45초     │   25초      │
+│  레드 데드 리뎀션 2     │  180초     │   70초     │   40초      │
+│  사이버펑크 2077        │  90초      │   35초     │   15초      │
+│  엘든 링                │  50초      │   20초     │   10초      │
+│  파이널 판타지 XV       │  70초      │   30초     │   15초      │
+│  포트나이트             │  60초      │   20초     │   8초       │
+└────────────────────────────────────────────────────────────────────┘
+
+※ PS5 (독점 최적화 게임): 2~5초 내 로딩 가능
+※ Steam Deck (NVMe + 최적화): 10~20초
+
+로딩 시간 단축 역사:
+┌────────────────────────────────────────────────────────────────────┐
+│  연대      │   일반적인 로딩 시간  │   주요 변화                  │
+├────────────────────────────────────────────────────────────────────┤
+│  90년대    │  10~30초             │  CD-ROM 도입                 │
+│  2000년대  │  30~60초             │  DVD, 게임 용량 증가         │
+│  2010년대  │  60~180초            │  HDD + 대용량 게임          │
+│  2020년대  │  5~30초              │  NVMe SSD + DirectStorage   │
+│  차세대    │  1~5초 (목표)        │  하드웨어 압축 해제          │
+└────────────────────────────────────────────────────────────────────┘
+</pre></div>
+
+            <div class="q">PS5가 로딩이 엄청 빠른 이유는?</div>
+            <div class="a">
+                <p>PS5는 <span class="highlight">통합 설계</span>로 모든 병목을 제거했어:</p>
+                <p>- 5.5GB/s SSD + 하드웨어 압축 해제</p>
+                <p>- CPU/GPU로 직접 스트리밍 (메모리 카피 최소화)</p>
+                <p>- I/O 코프로세서가 별도 처리</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+PS5 I/O 아키텍처:
+
+기존 PC/콘솔:
+┌───────────┐    ┌───────────┐    ┌───────────┐    ┌───────────┐
+│    SSD    │───▶│  RAM에    │───▶│  CPU가    │───▶│  VRAM에   │
+│  (읽기)   │    │  복사     │    │  압축해제 │    │  복사     │
+└───────────┘    └───────────┘    └───────────┘    └───────────┘
+    500MB/s     ↑ 병목        ↑ 병목         ↑ 병목
+              메모리 대역폭  CPU 점유      PCIe 전송
+
+PS5:
+┌───────────┐    ┌───────────┐    ┌───────────────────────────────┐
+│  커스텀   │───▶│ 하드웨어  │───▶│  GPU/CPU 메모리에 직접 전송   │
+│  SSD      │    │ 압축해제  │    │  (Coherent Memory)            │
+└───────────┘    └───────────┘    └───────────────────────────────┘
+    5.5GB/s     22GB/s 출력      병목 제거!
+
+→ 이론상 2GB 데이터를 0.27초에 로딩 가능
+→ 실제 게임: 복도, 엘리베이터 없이 즉시 맵 전환
+</pre></div>
+        </div>
+
+        <!-- Part 8 -->
+        <div class="conversation">
+            <h2>Part 8. DirectStorage와 미래</h2>
+
+            <div class="q">PC에서도 PS5처럼 빨라질 수 있어?</div>
+            <div class="a">
+                <p><span class="highlight">DirectStorage</span>가 그 해답이야! GPU가 직접 SSD에서 읽고 압축 해제해.</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// DirectStorage 개념</span>
+
+<span class="comment">// 기존 방식: CPU가 모든 것을 중개</span>
+<span class="comment">// SSD → CPU(압축해제) → RAM → CPU(복사) → VRAM</span>
+
+<span class="comment">// DirectStorage 방식: GPU가 직접 처리</span>
+<span class="comment">// SSD → GPU(압축해제) → VRAM</span>
+<span class="comment">// CPU 개입 최소화!</span>
+
+<span class="keyword">class</span> <span class="type">DirectStorageLoader</span> {
+<span class="keyword">public</span>:
+    <span class="keyword">void</span> <span class="function">LoadTextureGPUDirect</span>(<span class="keyword">const</span> <span class="type">char</span>* path, <span class="type">GPUTexture</span>* dest) {
+        <span class="comment">// 1. GPU 메모리에 목적지 할당</span>
+        <span class="type">ID3D12Resource</span>* gpuBuffer = <span class="function">AllocateGPUMemory</span>(dest->size);
+
+        <span class="comment">// 2. DirectStorage 요청 생성</span>
+        <span class="type">DSTORAGE_REQUEST</span> request = {};
+        request.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_GDEFLATE;
+        request.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
+        request.Source.File.Source = m_file;
+        request.Source.File.Offset = fileOffset;
+        request.Source.File.Size = compressedSize;
+        request.Destination.Buffer.Resource = gpuBuffer;
+        request.Destination.Buffer.Size = uncompressedSize;
+
+        <span class="comment">// 3. 큐에 제출 (비동기)</span>
+        m_queue-><span class="function">EnqueueRequest</span>(&request);
+        m_queue-><span class="function">Submit</span>();
+
+        <span class="comment">// 4. GPU가 알아서 처리</span>
+        <span class="comment">//    - SSD에서 직접 읽기</span>
+        <span class="comment">//    - GPU에서 GDeflate 압축 해제</span>
+        <span class="comment">//    - VRAM에 바로 쓰기</span>
+        <span class="comment">//    - CPU는 거의 개입하지 않음!</span>
+    }
+};</pre></div>
+
+            <div class="diagram-box"><pre>
+DirectStorage 성능 향상:
+
+┌────────────────────────────────────────────────────────────────────┐
+│  로딩 시나리오: 4K 텍스처 100장 (4GB, 압축 시 1GB)                 │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  기존 방식 (Win32 API):                                            │
+│  ├── SSD 읽기: 1GB ÷ 3.5GB/s = 0.29초                             │
+│  ├── CPU 압축 해제: 4GB ÷ 2GB/s = 2초                             │
+│  ├── RAM → VRAM 복사: 4GB ÷ 10GB/s = 0.4초                        │
+│  └── 총: 약 2.7초                                                  │
+│                                                                    │
+│  DirectStorage + GPU 압축 해제:                                    │
+│  ├── SSD → GPU 직접: 1GB ÷ 7GB/s* = 0.14초                        │
+│  ├── GPU 압축 해제: 4GB ÷ 24GB/s = 0.17초                         │
+│  ├── 메모리 복사: 없음 (직접 VRAM에 쓰기)                          │
+│  └── 총: 약 0.3초                                                  │
+│                                                                    │
+│  * NVMe SSD + PCIe 4.0 기준                                        │
+│                                                                    │
+│  성능 향상: 2.7초 → 0.3초 (9배 빠름!)                              │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+
+요구 사항:
+- Windows 11
+- NVMe SSD
+- DirectX 12 호환 GPU
+- 게임이 DirectStorage API 사용
+</pre></div>
+        </div>
+
+        <!-- Part 9 -->
+        <div class="conversation">
+            <h2>Part 9. 로딩 시간 최적화 전략</h2>
+
+            <div class="q">개발자가 로딩 시간을 줄이려면 어떻게 해야 해?</div>
+            <div class="a">
+                <p>여러 전략을 <span class="highlight">조합</span>해서 사용해야 해!</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+로딩 시간 최적화 전략 체크리스트:
+
+📁 파일 구조 최적화
+  □ 작은 파일들을 아카이브로 패킹
+  □ 자주 함께 로딩되는 에셋 근접 배치
+  □ 에셋 종속성 그래프 분석하여 로딩 순서 최적화
+
+🗜️ 압축 최적화
+  □ 디스크 속도에 맞는 압축 알고리즘 선택
+  □ HDD: Zstd/Oodle (높은 압축률)
+  □ NVMe: LZ4 (빠른 해제) 또는 무압축
+  □ 텍스처: GPU 압축 포맷 (BC7, ASTC)
+
+⚡ 병렬 로딩
+  □ 멀티스레드 파일 읽기
+  □ 멀티스레드 압축 해제
+  □ 비동기 GPU 업로드
+  □ 파이프라인화 (읽는 동안 이전 거 처리)
+
+🎯 선택적 로딩
+  □ 필수 에셋만 시작 시 로딩
+  □ 나머지는 온디맨드 스트리밍
+  □ LOD 시스템 (저품질 먼저, 고품질 나중)
+  □ 예측 로딩 (플레이어 이동 방향)
+
+💾 캐싱
+  □ 셰이더 PSO 캐시
+  □ 텍스처 밉맵 캐시
+  □ 레벨별 에셋 캐시
+  □ 자주 쓰는 에셋 메모리 상주
+
+📊 프로파일링
+  □ 로딩 단계별 시간 측정
+  □ 병목 구간 식별
+  □ 다양한 하드웨어에서 테스트
+  □ 로딩 타임라인 시각화
+</pre></div>
+
+            <div class="code-block"><span class="comment">// 병렬 로딩 파이프라인</span>
+<span class="keyword">class</span> <span class="type">ParallelLoadingPipeline</span> {
+<span class="keyword">private</span>:
+    <span class="type">ThreadSafeQueue</span>&lt;<span class="type">FileReadJob</span>&gt; m_readQueue;
+    <span class="type">ThreadSafeQueue</span>&lt;<span class="type">DecompressJob</span>&gt; m_decompressQueue;
+    <span class="type">ThreadSafeQueue</span>&lt;<span class="type">ProcessJob</span>&gt; m_processQueue;
+    <span class="type">ThreadSafeQueue</span>&lt;<span class="type">UploadJob</span>&gt; m_uploadQueue;
+
+    <span class="comment">// 각 단계를 별도 스레드(들)가 처리</span>
+    <span class="type">std::vector</span>&lt;<span class="type">std::thread</span>&gt; m_ioThreads;      <span class="comment">// 파일 읽기</span>
+    <span class="type">std::vector</span>&lt;<span class="type">std::thread</span>&gt; m_decompressThreads; <span class="comment">// 압축 해제</span>
+    <span class="type">std::vector</span>&lt;<span class="type">std::thread</span>&gt; m_processThreads;  <span class="comment">// 데이터 가공</span>
+    <span class="type">std::thread</span> m_uploadThread;                  <span class="comment">// GPU 업로드</span>
+
+<span class="keyword">public</span>:
+    <span class="keyword">void</span> <span class="function">Initialize</span>() {
+        <span class="comment">// I/O 스레드: 보통 1~2개 (디스크 수)</span>
+        <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i < <span class="number">2</span>; i++) {
+            m_ioThreads.<span class="function">emplace_back</span>([<span class="keyword">this</span>]() { <span class="function">IOThreadFunc</span>(); });
+        }
+
+        <span class="comment">// 압축 해제: CPU 코어 수에 비례</span>
+        <span class="keyword">int</span> decompressThreads = <span class="type">std</span>::<span class="function">thread</span>::<span class="function">hardware_concurrency</span>() - <span class="number">2</span>;
+        <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i < decompressThreads; i++) {
+            m_decompressThreads.<span class="function">emplace_back</span>([<span class="keyword">this</span>]() {
+                <span class="function">DecompressThreadFunc</span>();
+            });
+        }
+
+        <span class="comment">// 처리 스레드: 남은 코어</span>
+        m_processThreads.<span class="function">emplace_back</span>([<span class="keyword">this</span>]() { <span class="function">ProcessThreadFunc</span>(); });
+
+        <span class="comment">// GPU 업로드: 단일 스레드 (GPU 명령 직렬화)</span>
+        m_uploadThread = <span class="type">std::thread</span>([<span class="keyword">this</span>]() { <span class="function">UploadThreadFunc</span>(); });
+    }
+
+    <span class="comment">// 결과: 모든 단계가 동시에 진행!</span>
+    <span class="comment">// 파일 A 읽는 동안, 파일 B 압축 해제, 파일 C 처리, 파일 D 업로드</span>
+};</pre></div>
+        </div>
+
+        <!-- Part 10 -->
+        <div class="conversation">
+            <h2>Part 10. 로딩 화면 UX</h2>
+
+            <div class="q">로딩이 긴 건 어쩔 수 없을 때, UX는 어떻게 개선해?</div>
+            <div class="a">
+                <p>로딩 시간을 <span class="highlight">체감 시간</span>과 <span class="highlight">실제 시간</span>으로 나눠서 생각해야 해!</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+로딩 화면 UX 개선 전략:
+
+1. 진행 상황 표시 (Progress Feedback)
+   ┌────────────────────────────────────────────────┐
+   │                                                │
+   │      텍스처 로딩 중... (127/500)               │
+   │      [████████████░░░░░░░░░░░░░░] 25%          │
+   │                                                │
+   │      예상 남은 시간: 45초                       │
+   │                                                │
+   └────────────────────────────────────────────────┘
+
+   □ 전체 진행률 표시
+   □ 현재 로딩 중인 항목 표시
+   □ 예상 시간 표시 (정확해야 함!)
+
+2. 흥미로운 콘텐츠 제공
+   □ 게임 팁 / 조작법 표시
+   □ 스토리 배경 / 로어 설명
+   □ 아트워크 / 컨셉아트 슬라이드쇼
+   □ 플레이어 통계 / 업적
+
+3. 인터랙션 제공
+   □ 미니게임 (남코 특허 만료!)
+   □ 캐릭터 커스터마이징 미리보기
+   □ 인벤토리/스킬 정리
+   □ 배경 탐색 가능한 3D 씬
+
+4. 로딩 시간 숨기기
+   □ 복도/엘리베이터 (God of War)
+   □ 느린 문 열기 애니메이션
+   □ 강제 컷신 (스킵 불가)
+   □ 대화/이벤트 중 백그라운드 로딩
+
+5. 체감 시간 줄이기
+   □ 첫 프레임 빨리 보여주기 (저품질이라도)
+   □ 프로그레스바 속도 조절 (처음 빠르게)
+   □ 애니메이션 있는 로딩 아이콘 (멈춰있으면 느려 보임)
+</pre></div>
+
+            <div class="code-block"><span class="comment">// 체감 로딩 시간 최적화</span>
+<span class="keyword">class</span> <span class="type">PerceivedLoadingOptimizer</span> {
+<span class="keyword">public</span>:
+    <span class="comment">// 1. 점진적 로딩 (Progressive Loading)</span>
+    <span class="comment">// 저품질 먼저 → 고품질 나중</span>
+    <span class="keyword">void</span> <span class="function">LoadTextureProgressive</span>(<span class="keyword">const</span> <span class="type">char</span>* path) {
+        <span class="comment">// 64x64 썸네일 먼저 (0.01초)</span>
+        <span class="function">LoadAndDisplay</span>(path, MIP_LEVEL_6);  <span class="comment">// 즉시 뭔가 보임!</span>
+
+        <span class="comment">// 256x256 로딩 (0.1초)</span>
+        <span class="function">LoadAndUpgrade</span>(path, MIP_LEVEL_4);
+
+        <span class="comment">// 1024x1024 로딩 (0.5초)</span>
+        <span class="function">LoadAndUpgrade</span>(path, MIP_LEVEL_2);
+
+        <span class="comment">// 전체 4K 로딩 (2초)</span>
+        <span class="function">LoadAndUpgrade</span>(path, MIP_LEVEL_0);
+    }
+
+    <span class="comment">// 2. 프로그레스바 트릭</span>
+    <span class="type">float</span> <span class="function">AdjustProgressForPerception</span>(<span class="type">float</span> actualProgress) {
+        <span class="comment">// 처음 50% → 화면에 80% 표시 (빠르게 느껴짐)</span>
+        <span class="comment">// 마지막 50% → 화면에 20% 표시</span>
+        <span class="comment">// 실제로는 일정하게 로딩되지만, 체감상 빨라 보임</span>
+        <span class="keyword">if</span> (actualProgress < <span class="number">0.5f</span>) {
+            <span class="keyword">return</span> actualProgress * <span class="number">1.6f</span>;  <span class="comment">// 0~0.5 → 0~0.8</span>
+        } <span class="keyword">else</span> {
+            <span class="keyword">return</span> <span class="number">0.8f</span> + (actualProgress - <span class="number">0.5f</span>) * <span class="number">0.4f</span>;  <span class="comment">// 0.5~1 → 0.8~1</span>
+        }
+    }
+};</pre></div>
+        </div>
+
+        <!-- Summary -->
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li>모든 리소스 시작 로딩은 <strong>가장 단순한 방법</strong></li>
-                <li>현대 게임은 용량이 너무 커서 <strong>불가능</strong></li>
-                <li><strong>필요한 것만 필요할 때</strong> 로딩해야 함</li>
-                <li>이것이 <strong>스트리밍</strong>의 핵심</li>
+                <li>로딩 시간 = <strong>디스크 읽기 + 압축 해제 + 처리 + GPU 업로드</strong></li>
+                <li>HDD는 <strong>탐색 시간</strong>이 병목, NVMe는 <strong>처리</strong>가 병목</li>
+                <li>파일 패킹으로 <strong>랜덤 접근 최소화</strong> (HDD에서 중요)</li>
+                <li>압축은 <strong>디스크 < CPU</strong>일 때만 이득</li>
+                <li>셰이더 컴파일은 <strong>PSO 캐시</strong>로 최적화</li>
+                <li>메모리 부족 → <strong>스왑 → 10배 느림</strong></li>
+                <li><strong>DirectStorage</strong>: GPU가 직접 SSD에서 읽고 압축 해제</li>
+                <li>병렬 파이프라인으로 <strong>모든 단계 동시 진행</strong></li>
+                <li>체감 시간 줄이기: <strong>점진적 로딩, 진행 피드백, 흥미 콘텐츠</strong></li>
+                <li>궁극의 해결책: <strong>필요한 것만 필요할 때 로딩</strong> (스트리밍)</li>
             </ul>
         </div>
 
@@ -126,5 +893,7 @@ RAM    ████████ 32GB
             <a href="../asset-memory-limit/">32GB RAM도 부족한 게임 &rarr;</a>
         </div>
     </div>
+
+    <script src="../common/script.js"></script>
 </body>
 </html>
