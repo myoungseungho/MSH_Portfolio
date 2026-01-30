@@ -4,37 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>중복 에셋의 함정 - 에셋 관리 - MSH Portfolio</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
-        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
-        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
-        .a p { margin-bottom: 12px; }
-        .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
-        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
-        .summary-box ul { list-style: none; }
-        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
-        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
-        .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
-    </style>
+    <link rel="stylesheet" href="../common/styles.css">
 </head>
 <body>
     <div class="container">
@@ -42,42 +12,1165 @@
 
         <div class="header">
             <h1>중복 에셋의 함정</h1>
-            <p>같은 텍스처가 여러 번들에</p>
+            <p>같은 텍스처가 여러 번들에 포함되어 빌드 크기와 메모리를 낭비하는 현상</p>
         </div>
 
+        <!-- Part 1 -->
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">중복 에셋의 함정이(가) 뭐야?</div>
+            <h2>Part 1. 개념: 에셋 중복이란 무엇인가</h2>
+
+            <div class="q">에셋 중복(Asset Duplication)이 뭐야?</div>
             <div class="a">
-                <p><span class="highlight">같은 텍스처가 여러 번들에</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p><span class="highlight">동일한 에셋이 여러 번들에 각각 복사되어 포함되는 현상</span>이야. 번들 A와 번들 B가 같은 텍스처를 참조할 때, 이 텍스처가 공유되지 않고 각 번들에 중복 저장되면 빌드 크기가 2배가 되는 거지.</p>
+            </div>
+
+            <div class="q">왜 이런 일이 발생해?</div>
+            <div class="a">
+                <p>번들 시스템의 <span class="highlight">암묵적 의존성(Implicit Dependency)</span> 처리 방식 때문이야:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[에셋 중복 발생 시나리오]
+
+Bundle_A.bundle                    Bundle_B.bundle
+┌────────────────────┐            ┌────────────────────┐
+│  CharacterA.prefab │            │  CharacterB.prefab │
+│        │           │            │        │           │
+│        ▼           │            │        ▼           │
+│  ┌──────────────┐  │            │  ┌──────────────┐  │
+│  │SharedMat.mat │  │            │  │SharedMat.mat │  │ ← 같은 머티리얼!
+│  │      │       │  │            │  │      │       │  │
+│  │      ▼       │  │            │  │      ▼       │  │
+│  │ HeroTex.png  │  │            │  │ HeroTex.png  │  │ ← 같은 텍스처!
+│  │   (4MB)      │  │            │  │   (4MB)      │  │
+│  └──────────────┘  │            │  └──────────────┘  │
+└────────────────────┘            └────────────────────┘
+
+결과: HeroTex.png가 8MB 차지 (원래 4MB면 충분)
+
+[원인 분석]
+SharedMat.mat이 어떤 번들에도 명시적으로 할당되지 않음
+→ 각 번들이 빌드될 때 의존성을 "내부에 포함"시킴
+→ 결과적으로 같은 에셋이 여러 번들에 복사됨</pre>
+                </div>
+
+                <p>핵심 원인은 <span class="key-point">명시적 할당(Explicit Assignment) 누락</span>이야. 공유 에셋을 특정 번들에 명시적으로 할당하지 않으면, 각 번들이 독립적으로 해당 에셋을 포함시켜.</p>
+            </div>
+
+            <div class="q">명시적 의존성과 암묵적 의존성의 차이가 뭐야?</div>
+            <div class="a">
+                <div class="diagram-box">
+                    <pre>
+[명시적 vs 암묵적 의존성]
+
+◆ 명시적 의존성 (Explicit Dependency)
+  - 에셋이 Addressables Group이나 AssetBundle에 직접 할당됨
+  - 빌드 시스템이 "이 에셋은 이 번들에서 로드한다"고 인식
+  - 다른 번들은 참조만 하고, 실제 에셋은 공유
+
+◆ 암묵적 의존성 (Implicit Dependency)
+  - 에셋이 어떤 번들에도 직접 할당되지 않음
+  - 그러나 번들 내 에셋이 이 에셋을 참조함
+  - 빌드 시스템: "참조하니까 번들에 포함시켜야지"
+  - 여러 번들이 참조하면 → 여러 번 복사됨
+
+[예시: Character.prefab → SharedMaterial.mat → BaseTexture.png]
+
+Case 1: SharedMaterial이 번들에 미할당
+┌─────────────────┐     ┌─────────────────┐
+│   Bundle_Char   │     │   Bundle_Env    │
+│ ┌─────────────┐ │     │ ┌─────────────┐ │
+│ │Character.pfb│ │     │ │  Tree.prefab│ │
+│ │      ↓      │ │     │ │      ↓      │ │
+│ │ SharedMat ◀─┼─┼─────┼─┼▶ SharedMat  │ │  ← 2개 복사본!
+│ │      ↓      │ │     │ │      ↓      │ │
+│ │ BaseTexture │ │     │ │ BaseTexture │ │  ← 2개 복사본!
+│ └─────────────┘ │     │ └─────────────┘ │
+└─────────────────┘     └─────────────────┘
+총 크기: 원본의 2배
+
+Case 2: SharedMaterial을 Shared 번들에 할당
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Bundle_Char   │     │  Bundle_Shared  │     │   Bundle_Env    │
+│ ┌─────────────┐ │     │ ┌─────────────┐ │     │ ┌─────────────┐ │
+│ │Character.pfb│─┼─────┼▶│ SharedMat   │◀┼─────┼─│ Tree.prefab │ │
+│ └─────────────┘ │     │ │      ↓      │ │     │ └─────────────┘ │
+└─────────────────┘     │ │ BaseTexture │ │     └─────────────────┘
+                        │ └─────────────┘ │
+                        └─────────────────┘
+총 크기: 원본 크기만 사용 (중복 없음)</pre>
+                </div>
+            </div>
+
+            <div class="q">Unity와 Unreal에서 중복 처리 방식이 다르니?</div>
+            <div class="a">
+                <p>기본 철학은 비슷하지만 구현 세부사항이 달라:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[엔진별 중복 처리 비교]
+
+┌────────────────────────────────────────────────────────────┐
+│                    Unity Addressables                       │
+├────────────────────────────────────────────────────────────┤
+│ ◆ 기본 동작: 미할당 에셋은 참조하는 모든 그룹에 복사       │
+│ ◆ 해결책: "Check Duplicate Bundle Dependencies" 분석 실행  │
+│ ◆ 공유 그룹: 수동으로 Shared Group 생성하여 이동           │
+│ ◆ 자동화: Build Script에서 중복 자동 분리 가능             │
+└────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────┐
+│                    Unreal Engine                            │
+├────────────────────────────────────────────────────────────┤
+│ ◆ 기본 동작: Primary Asset이 아닌 에셋은 청크에 복사됨    │
+│ ◆ Asset Manager: PrimaryAssetId 시스템으로 명시적 관리     │
+│ ◆ 해결책: Asset Audit에서 "Assets in Multiple Chunks" 확인 │
+│ ◆ 자동화: Chunk Assignment Rules로 자동 분류               │
+└────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────┐
+│                    공통 원칙                                │
+├────────────────────────────────────────────────────────────┤
+│ 1. 공유될 에셋은 명시적으로 공유 번들/청크에 할당          │
+│ 2. 빌드 전에 중복 분석 도구 실행                           │
+│ 3. CI/CD에서 중복 임계값 초과 시 빌드 실패 처리            │
+└────────────────────────────────────────────────────────────┘</pre>
+                </div>
             </div>
         </div>
 
+        <!-- Part 2 -->
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. 왜 필요해: 중복의 실제 비용</h2>
+
+            <div class="q">에셋 중복이 실제로 얼마나 문제가 돼?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>실제 프로젝트에서 <span class="warning">빌드 크기의 20~40%가 중복</span>인 경우가 흔해. 특히 텍스처처럼 큰 에셋이 중복되면 영향이 막대해:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[실제 중복 비용 분석 - 중규모 모바일 게임 사례]
+
+원본 에셋 현황:
+├── 텍스처: 800MB (평균 2MB × 400개)
+├── 머티리얼: 50MB
+├── 프리팹: 100MB
+├── 사운드: 200MB
+└── 기타: 50MB
+    총합: 1.2GB
+
+번들 구성 (잘못된 설계):
+├── Bundle_Character (150MB)
+│   └── 50MB가 공유 텍스처 (다른 번들과 중복)
+├── Bundle_Environment (200MB)
+│   └── 80MB가 공유 텍스처 (다른 번들과 중복)
+├── Bundle_UI (100MB)
+│   └── 30MB가 공유 아틀라스 (다른 번들과 중복)
+├── Bundle_Effects (120MB)
+│   └── 40MB가 공유 텍스처 (다른 번들과 중복)
+└── ... (20개 번들)
+
+중복 분석 결과:
+┌─────────────────────────────────────────────┐
+│  카테고리          │ 중복량  │ 중복률      │
+├─────────────────────────────────────────────┤
+│  텍스처            │ 320MB  │ 40%         │
+│  머티리얼          │ 15MB   │ 30%         │
+│  셰이더            │ 8MB    │ 25%         │
+│  폰트              │ 12MB   │ 60%         │
+├─────────────────────────────────────────────┤
+│  총 중복           │ 355MB  │ 29.5%       │
+└─────────────────────────────────────────────┘
+
+영향:
+├── 다운로드 크기: 1.2GB → 1.55GB (+29%)
+├── 설치 용량: 1.5GB → 1.95GB (+30%)
+├── 패치 크기 증가: 중복 에셋 변경 시 여러 번들 갱신 필요
+└── CDN 비용: 월 $500 → $650 (+$150)</pre>
+                </div>
+            </div>
+
+            <div class="q">메모리에도 영향을 줘?</div>
+            <div class="a">
+                <p><span class="warning">중복 에셋이 메모리에도 중복 로드될 수 있어</span>. 번들 A와 번들 B를 동시에 로드하면, 같은 텍스처가 2번 메모리에 올라가:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[메모리 중복 로드 시나리오]
+
+시나리오: 캐릭터 선택 화면에서 3개 캐릭터 프리뷰
+
+각 캐릭터가 별도 번들, 공통 UI 텍스처가 중복된 경우:
+
+┌─────────────────────────────────────────────────────────────┐
+│                      GPU Memory                              │
+├─────────────────────────────────────────────────────────────┤
+│  Bundle_CharA 로드                                          │
+│  ├── CharA_Tex.png ........... 8MB                          │
+│  └── CommonUI_Tex.png ........ 4MB  ◀── 복사본 1           │
+│                                                              │
+│  Bundle_CharB 로드                                          │
+│  ├── CharB_Tex.png ........... 8MB                          │
+│  └── CommonUI_Tex.png ........ 4MB  ◀── 복사본 2 (중복!)   │
+│                                                              │
+│  Bundle_CharC 로드                                          │
+│  ├── CharC_Tex.png ........... 8MB                          │
+│  └── CommonUI_Tex.png ........ 4MB  ◀── 복사본 3 (중복!)   │
+├─────────────────────────────────────────────────────────────┤
+│  실제 사용: 24MB + 4MB = 28MB                               │
+│  실제 점유: 24MB + 12MB = 36MB  (+8MB 낭비)                │
+└─────────────────────────────────────────────────────────────┘
+
+※ 엔진이 같은 GUID를 인식하면 공유하지만,
+   번들에 물리적으로 복사되면 다른 에셋으로 취급될 수 있음</pre>
+                </div>
+
+                <div class="highlight-box">
+                    <strong>💡 핵심 포인트:</strong> Unity Addressables는 같은 주소(Address)로 로드하면 캐싱되지만, 번들에 물리적으로 중복 포함된 에셋은 각 번들 로드 시 별도 메모리를 사용할 수 있어. 특히 비동기 로드 시 타이밍에 따라 중복 인스턴스가 생길 수 있지.
+                </div>
+            </div>
+
+            <div class="q">패치/업데이트에도 영향이 있어?</div>
+            <div class="a">
+                <p><span class="key-point">중복은 패치 효율성을 크게 저하</span>시켜:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[패치 크기 영향 분석]
+
+시나리오: CommonUI_Tex.png 수정 (버튼 색상 변경)
+
+◆ 중복 없는 구조 (이상적)
+  Bundle_Shared에만 CommonUI_Tex.png 존재
+
+  변경되는 번들: Bundle_Shared (1개)
+  패치 크기: ~5MB
+
+◆ 중복 있는 구조 (문제)
+  Bundle_CharA, CharB, CharC, UI, Menu 모두에 복사됨
+
+  변경되는 번들: 5개
+  패치 크기: ~25MB (5배!)
+
+[연쇄 영향]
+┌──────────────────────────────────────────────────────────┐
+│ 1. 유저 불만: "왜 이렇게 업데이트가 커?"                 │
+│ 2. 이탈률 증가: 모바일에서 100MB 이상 패치는 Wi-Fi 필요 │
+│ 3. CDN 비용: 패치 크기 × 유저 수 = 전송량               │
+│ 4. 스토어 심사: 일부 스토어는 OTA 크기 제한 있음        │
+└──────────────────────────────────────────────────────────┘</pre>
+                </div>
             </div>
         </div>
 
+        <!-- Part 3 -->
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 실전 적용: 중복 탐지 도구</h2>
+
+            <div class="q">Unity에서 중복을 어떻게 찾아?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p><span class="highlight">Addressables Analyze</span> 창의 "Check Duplicate Bundle Dependencies" 규칙을 사용해:</p>
+
+                <div class="code-block"><span class="comment">// Unity Editor에서 중복 분석 실행</span>
+<span class="comment">// Window > Asset Management > Addressables > Analyze</span>
+
+<span class="keyword">using</span> UnityEditor;
+<span class="keyword">using</span> UnityEditor.AddressableAssets;
+<span class="keyword">using</span> UnityEditor.AddressableAssets.Build.AnalyzeRules;
+<span class="keyword">using</span> System.Collections.Generic;
+
+<span class="keyword">public static class</span> <span class="type">DuplicateAnalyzer</span>
+{
+    [<span class="type">MenuItem</span>(<span class="string">"Tools/Addressables/Analyze Duplicates"</span>)]
+    <span class="keyword">public static void</span> <span class="function">AnalyzeDuplicates</span>()
+    {
+        <span class="keyword">var</span> settings = AddressableAssetSettingsDefaultObject.Settings;
+        <span class="keyword">if</span> (settings == <span class="keyword">null</span>)
+        {
+            Debug.LogError(<span class="string">"Addressables Settings not found"</span>);
+            <span class="keyword">return</span>;
+        }
+
+        <span class="comment">// Check Duplicate Bundle Dependencies 규칙 실행</span>
+        <span class="keyword">var</span> rule = <span class="keyword">new</span> <span class="type">CheckBundleDupeDependencies</span>();
+        <span class="keyword">var</span> results = rule.RefreshAnalysis(settings);
+
+        <span class="comment">// 결과 분석</span>
+        <span class="keyword">var</span> duplicates = <span class="keyword">new</span> <span class="type">Dictionary</span>&lt;<span class="keyword">string</span>, <span class="type">List</span>&lt;<span class="keyword">string</span>&gt;&gt;();
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> result <span class="keyword">in</span> results)
+        {
+            <span class="keyword">if</span> (result.severity == <span class="type">MessageType</span>.Warning ||
+                result.severity == <span class="type">MessageType</span>.Error)
+            {
+                <span class="comment">// result.resultName: 중복 에셋 경로</span>
+                <span class="comment">// result.data: 포함된 번들 목록</span>
+                Debug.LogWarning(
+                    $<span class="string">"중복 발견: {result.resultName}\n"</span> +
+                    $<span class="string">"  포함된 번들: {string.Join(", ", result.data)}"</span>
+                );
+            }
+        }
+
+        Debug.Log($<span class="string">"분석 완료: {results.Count}개 항목 검사됨"</span>);
+    }
+}</div>
+
+                <div class="diagram-box">
+                    <pre>
+[Analyze 창 결과 해석]
+
+┌─────────────────────────────────────────────────────────────┐
+│ Addressables Analyze                                         │
+├─────────────────────────────────────────────────────────────┤
+│ ▼ Check Duplicate Bundle Dependencies                        │
+│   ├── ⚠️ Assets/Textures/Common/UI_Atlas.png                │
+│   │       Included in: [Bundle_UI, Bundle_Menu, Bundle_HUD] │
+│   │       Size: 4.2 MB × 3 = 12.6 MB (8.4 MB wasted)       │
+│   │                                                          │
+│   ├── ⚠️ Assets/Materials/Shared/StandardLit.mat            │
+│   │       Included in: [Bundle_Char, Bundle_Env]            │
+│   │       Size: 0.5 MB × 2 = 1 MB (0.5 MB wasted)          │
+│   │                                                          │
+│   └── ⚠️ Assets/Fonts/NotoSans-Regular.ttf                  │
+│           Included in: [Bundle_UI, Bundle_Menu, Bundle_Shop]│
+│           Size: 2.1 MB × 3 = 6.3 MB (4.2 MB wasted)        │
+│                                                              │
+│ Summary: 13.1 MB of duplicate assets detected                │
+│ [Fix Selected] [Create Shared Group]                         │
+└─────────────────────────────────────────────────────────────┘</pre>
+                </div>
+            </div>
+
+            <div class="q">중복을 자동으로 수정할 수 있어?</div>
+            <div class="a">
+                <p>Addressables는 <span class="highlight">"Fix Selected" 버튼</span>으로 중복 에셋을 새 Shared 그룹으로 이동시켜줘. 하지만 커스텀 로직으로 더 세밀하게 제어할 수도 있어:</p>
+
+                <div class="code-block"><span class="keyword">using</span> UnityEditor;
+<span class="keyword">using</span> UnityEditor.AddressableAssets;
+<span class="keyword">using</span> UnityEditor.AddressableAssets.Settings;
+<span class="keyword">using</span> UnityEditor.AddressableAssets.Settings.GroupSchemas;
+<span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> System.Linq;
+
+<span class="keyword">public class</span> <span class="type">AutoDuplicateFixer</span>
+{
+    [<span class="type">MenuItem</span>(<span class="string">"Tools/Addressables/Auto Fix Duplicates"</span>)]
+    <span class="keyword">public static void</span> <span class="function">AutoFixDuplicates</span>()
+    {
+        <span class="keyword">var</span> settings = AddressableAssetSettingsDefaultObject.Settings;
+
+        <span class="comment">// 1. 중복 분석 실행</span>
+        <span class="keyword">var</span> duplicates = FindDuplicateAssets(settings);
+
+        <span class="keyword">if</span> (duplicates.Count == <span class="number">0</span>)
+        {
+            Debug.Log(<span class="string">"중복 에셋이 없습니다."</span>);
+            <span class="keyword">return</span>;
+        }
+
+        <span class="comment">// 2. 카테고리별로 Shared 그룹 생성 또는 가져오기</span>
+        <span class="keyword">var</span> sharedGroups = <span class="keyword">new</span> <span class="type">Dictionary</span>&lt;<span class="keyword">string</span>, <span class="type">AddressableAssetGroup</span>&gt;
+        {
+            [<span class="string">"Texture"</span>] = GetOrCreateSharedGroup(settings, <span class="string">"Shared_Textures"</span>),
+            [<span class="string">"Material"</span>] = GetOrCreateSharedGroup(settings, <span class="string">"Shared_Materials"</span>),
+            [<span class="string">"Font"</span>] = GetOrCreateSharedGroup(settings, <span class="string">"Shared_Fonts"</span>),
+            [<span class="string">"Default"</span>] = GetOrCreateSharedGroup(settings, <span class="string">"Shared_Common"</span>)
+        };
+
+        <span class="comment">// 3. 중복 에셋을 적절한 Shared 그룹으로 이동</span>
+        <span class="keyword">int</span> movedCount = <span class="number">0</span>;
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> duplicate <span class="keyword">in</span> duplicates)
+        {
+            <span class="keyword">string</span> assetPath = duplicate.Key;
+            <span class="keyword">var</span> category = GetAssetCategory(assetPath);
+            <span class="keyword">var</span> targetGroup = sharedGroups.ContainsKey(category)
+                ? sharedGroups[category]
+                : sharedGroups[<span class="string">"Default"</span>];
+
+            <span class="comment">// 현재 엔트리 찾기</span>
+            <span class="keyword">var</span> guid = AssetDatabase.AssetPathToGUID(assetPath);
+            <span class="keyword">var</span> entry = settings.FindAssetEntry(guid);
+
+            <span class="keyword">if</span> (entry != <span class="keyword">null</span>)
+            {
+                <span class="comment">// 기존 그룹에서 제거하고 Shared 그룹으로 이동</span>
+                settings.MoveEntry(entry, targetGroup, <span class="keyword">false</span>, <span class="keyword">false</span>);
+                movedCount++;
+            }
+            <span class="keyword">else</span>
+            {
+                <span class="comment">// 엔트리가 없으면 (암묵적 의존성) 새로 생성</span>
+                entry = settings.CreateOrMoveEntry(guid, targetGroup, <span class="keyword">false</span>, <span class="keyword">false</span>);
+                entry.address = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+                movedCount++;
+            }
+        }
+
+        settings.SetDirty(<span class="type">AddressableAssetSettings</span>.ModificationEvent.EntryMoved,
+                          <span class="keyword">null</span>, <span class="keyword">true</span>);
+        AssetDatabase.SaveAssets();
+
+        Debug.Log($<span class="string">"완료: {movedCount}개 에셋을 Shared 그룹으로 이동"</span>);
+    }
+
+    <span class="keyword">private static</span> <span class="type">Dictionary</span>&lt;<span class="keyword">string</span>, <span class="type">List</span>&lt;<span class="keyword">string</span>&gt;&gt; <span class="function">FindDuplicateAssets</span>(
+        <span class="type">AddressableAssetSettings</span> settings)
+    {
+        <span class="keyword">var</span> assetToBundles = <span class="keyword">new</span> <span class="type">Dictionary</span>&lt;<span class="keyword">string</span>, <span class="type">List</span>&lt;<span class="keyword">string</span>&gt;&gt;();
+
+        <span class="comment">// 각 그룹의 의존성 수집</span>
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> group <span class="keyword">in</span> settings.groups)
+        {
+            <span class="keyword">if</span> (group == <span class="keyword">null</span>) <span class="keyword">continue</span>;
+
+            <span class="keyword">foreach</span> (<span class="keyword">var</span> entry <span class="keyword">in</span> group.entries)
+            {
+                <span class="keyword">var</span> dependencies = AssetDatabase.GetDependencies(entry.AssetPath, <span class="keyword">true</span>);
+
+                <span class="keyword">foreach</span> (<span class="keyword">var</span> dep <span class="keyword">in</span> dependencies)
+                {
+                    <span class="comment">// 스크립트 제외</span>
+                    <span class="keyword">if</span> (dep.EndsWith(<span class="string">".cs"</span>)) <span class="keyword">continue</span>;
+
+                    <span class="keyword">if</span> (!assetToBundles.ContainsKey(dep))
+                        assetToBundles[dep] = <span class="keyword">new</span> <span class="type">List</span>&lt;<span class="keyword">string</span>&gt;();
+
+                    <span class="keyword">if</span> (!assetToBundles[dep].Contains(group.Name))
+                        assetToBundles[dep].Add(group.Name);
+                }
+            }
+        }
+
+        <span class="comment">// 2개 이상 그룹에 포함된 에셋만 반환</span>
+        <span class="keyword">return</span> assetToBundles
+            .Where(kvp => kvp.Value.Count > <span class="number">1</span>)
+            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+    }
+
+    <span class="keyword">private static</span> <span class="type">AddressableAssetGroup</span> <span class="function">GetOrCreateSharedGroup</span>(
+        <span class="type">AddressableAssetSettings</span> settings, <span class="keyword">string</span> groupName)
+    {
+        <span class="keyword">var</span> group = settings.FindGroup(groupName);
+
+        <span class="keyword">if</span> (group == <span class="keyword">null</span>)
+        {
+            group = settings.CreateGroup(groupName, <span class="keyword">false</span>, <span class="keyword">false</span>, <span class="keyword">false</span>, <span class="keyword">null</span>,
+                <span class="keyword">typeof</span>(<span class="type">BundledAssetGroupSchema</span>),
+                <span class="keyword">typeof</span>(<span class="type">ContentUpdateGroupSchema</span>));
+
+            <span class="comment">// Shared 그룹 설정: Pack Together로 하나의 번들에</span>
+            <span class="keyword">var</span> schema = group.GetSchema&lt;<span class="type">BundledAssetGroupSchema</span>&gt;();
+            schema.BundleMode = <span class="type">BundledAssetGroupSchema</span>.BundlePackingMode.PackTogether;
+        }
+
+        <span class="keyword">return</span> group;
+    }
+
+    <span class="keyword">private static string</span> <span class="function">GetAssetCategory</span>(<span class="keyword">string</span> assetPath)
+    {
+        <span class="keyword">var</span> extension = System.IO.Path.GetExtension(assetPath).ToLower();
+
+        <span class="keyword">return</span> extension <span class="keyword">switch</span>
+        {
+            <span class="string">".png"</span> <span class="keyword">or</span> <span class="string">".jpg"</span> <span class="keyword">or</span> <span class="string">".tga"</span> <span class="keyword">or</span> <span class="string">".psd"</span> => <span class="string">"Texture"</span>,
+            <span class="string">".mat"</span> => <span class="string">"Material"</span>,
+            <span class="string">".ttf"</span> <span class="keyword">or</span> <span class="string">".otf"</span> => <span class="string">"Font"</span>,
+            _ => <span class="string">"Default"</span>
+        };
+    }
+}</div>
+            </div>
+
+            <div class="q">Unreal에서는 어떻게 해?</div>
+            <div class="a">
+                <p>Unreal에서는 <span class="highlight">Asset Audit</span>과 <span class="highlight">Size Map</span>을 사용해:</p>
+
+                <div class="code-block"><span class="comment">// C++ - 청크 중복 분석 Commandlet</span>
+<span class="comment">// 프로젝트명Commandlets.cpp</span>
+
+<span class="directive">#include</span> <span class="string">"AssetRegistry/AssetRegistryModule.h"</span>
+<span class="directive">#include</span> <span class="string">"Engine/AssetManager.h"</span>
+
+<span class="keyword">void</span> <span class="type">UChunkDuplicateAnalyzer</span>::<span class="function">AnalyzeChunkDuplicates</span>()
+{
+    <span class="type">IAssetRegistry</span>& AssetRegistry =
+        <span class="type">FModuleManager</span>::LoadModuleChecked&lt;<span class="type">FAssetRegistryModule</span>&gt;(
+            <span class="string">"AssetRegistry"</span>).Get();
+
+    <span class="comment">// 청크별 에셋 수집</span>
+    <span class="type">TMap</span>&lt;<span class="type">FName</span>, <span class="type">TArray</span>&lt;<span class="keyword">int32</span>&gt;&gt; AssetToChunks;
+
+    <span class="type">TArray</span>&lt;<span class="type">FAssetData</span>&gt; AllAssets;
+    AssetRegistry.GetAllAssets(AllAssets);
+
+    <span class="keyword">for</span> (<span class="keyword">const</span> <span class="type">FAssetData</span>& Asset : AllAssets)
+    {
+        <span class="type">TArray</span>&lt;<span class="keyword">int32</span>&gt; ChunkIDs;
+
+        <span class="comment">// Primary Asset이면 할당된 청크 가져오기</span>
+        <span class="type">FPrimaryAssetId</span> PrimaryId = <span class="type">UAssetManager</span>::Get()
+            .GetPrimaryAssetIdForPath(Asset.ObjectPath);
+
+        <span class="keyword">if</span> (PrimaryId.IsValid())
+        {
+            <span class="type">UAssetManager</span>::Get().GetPrimaryAssetIdChunkIds(PrimaryId, ChunkIDs);
+        }
+        <span class="keyword">else</span>
+        {
+            <span class="comment">// Secondary Asset - 참조하는 모든 Primary의 청크 수집</span>
+            ChunkIDs = GetChunksContainingAsset(Asset.ObjectPath);
+        }
+
+        <span class="keyword">if</span> (ChunkIDs.Num() > <span class="number">1</span>)
+        {
+            AssetToChunks.Add(Asset.AssetName, ChunkIDs);
+
+            UE_LOG(LogTemp, Warning,
+                TEXT(<span class="string">"중복 발견: %s - 청크 [%s]에 포함"</span>),
+                *Asset.AssetName.ToString(),
+                *<span class="type">FString</span>::JoinBy(ChunkIDs, TEXT(<span class="string">", "</span>),
+                    [](<span class="keyword">int32</span> Id) { <span class="keyword">return</span> <span class="type">FString</span>::FromInt(Id); }));
+        }
+    }
+
+    <span class="comment">// 중복 크기 계산</span>
+    <span class="keyword">int64</span> TotalWaste = <span class="number">0</span>;
+    <span class="keyword">for</span> (<span class="keyword">const</span> <span class="keyword">auto</span>& Pair : AssetToChunks)
+    {
+        <span class="keyword">int64</span> AssetSize = GetAssetDiskSize(Pair.Key);
+        <span class="keyword">int32</span> DuplicateCount = Pair.Value.Num() - <span class="number">1</span>; <span class="comment">// 원본 제외</span>
+        TotalWaste += AssetSize * DuplicateCount;
+    }
+
+    UE_LOG(LogTemp, Warning,
+        TEXT(<span class="string">"총 중복 낭비: %.2f MB"</span>),
+        TotalWaste / (<span class="number">1024.0</span> * <span class="number">1024.0</span>));
+}</div>
+
+                <div class="diagram-box">
+                    <pre>
+[Unreal Asset Audit 활용법]
+
+1. 에디터에서 Asset Audit 열기
+   Window > Developer Tools > Asset Audit
+
+2. "Chunks" 뷰 선택
+   - 각 청크에 포함된 에셋 목록 확인
+   - "In Multiple Chunks" 필터로 중복 에셋만 표시
+
+3. Size Map으로 시각화
+   Window > Developer Tools > Size Map
+   - 청크별 에셋 크기 트리맵
+   - 빨간색: 중복 에셋
+   - 클릭 시 상세 정보
+
+┌─────────────────────────────────────────────────────────┐
+│ Asset Audit - Chunks View                                │
+├─────────────────────────────────────────────────────────┤
+│ Filter: [✓] In Multiple Chunks                          │
+├───────────────────┬─────────┬─────────┬────────────────┤
+│ Asset             │ Size    │ Chunks  │ Type           │
+├───────────────────┼─────────┼─────────┼────────────────┤
+│ T_UI_Common       │ 4.2 MB  │ 0,1,2   │ Texture2D      │
+│ M_Character_Base  │ 0.3 MB  │ 1,2,3   │ Material       │
+│ BP_DamageNumber   │ 0.1 MB  │ 0,1,2,3 │ Blueprint      │
+└───────────────────┴─────────┴─────────┴────────────────┘</pre>
+                </div>
             </div>
         </div>
+
+        <!-- Part 4 -->
+        <div class="conversation">
+            <h2>Part 4. 심화 개념: 중복 방지 아키텍처</h2>
+
+            <div class="q">처음부터 중복이 발생하지 않게 설계하려면?</div>
+            <div class="a">
+                <p><span class="highlight">계층적 번들 구조(Hierarchical Bundle Structure)</span>를 설계해:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[중복 방지 번들 아키텍처]
+
+Layer 0: Core (항상 로드됨, 변경 거의 없음)
+┌────────────────────────────────────────────────────────┐
+│ Bundle_Core                                            │
+│ ├── 공통 셰이더 (Standard, UI, Particle)              │
+│ ├── 기본 머티리얼 (Default, Error, Loading)           │
+│ ├── 시스템 텍스처 (Noise, Gradient, LUT)              │
+│ └── 공통 폰트                                          │
+└────────────────────────────────────────────────────────┘
+        ▲ 의존 (위 레이어만 참조)
+        │
+Layer 1: Shared (자주 공유되는 에셋)
+┌────────────────────────────────────────────────────────┐
+│ Bundle_Shared_UI        Bundle_Shared_VFX              │
+│ ├── UI 아틀라스        ├── 파티클 텍스처              │
+│ ├── 아이콘             ├── 공통 이펙트 프리팹         │
+│ └── 공통 위젯          └── 디졸브/히트 머티리얼       │
+└────────────────────────────────────────────────────────┘
+        ▲ 의존
+        │
+Layer 2: Domain (기능 도메인별)
+┌────────────────────────────────────────────────────────┐
+│ Bundle_Characters    Bundle_Environment   Bundle_Items │
+│ ├── 캐릭터 메시     ├── 지형 텍스처     ├── 무기 메시 │
+│ ├── 애니메이션      ├── 건물 프리팹     ├── 아이템 FX │
+│ └── 고유 머티리얼   └── 환경 사운드     └── 아이콘    │
+└────────────────────────────────────────────────────────┘
+        ▲ 의존
+        │
+Layer 3: Content (개별 컨텐츠, 가장 자주 업데이트)
+┌────────────────────────────────────────────────────────┐
+│ Bundle_Stage_01   Bundle_Stage_02   Bundle_Event_2024  │
+│ ├── 스테이지 레벨├── 스테이지 레벨 ├── 이벤트 UI     │
+│ ├── 고유 적 설정 ├── 고유 적 설정  ├── 이벤트 캐릭터 │
+│ └── 배경음악     └── 배경음악      └── 한정 아이템   │
+└────────────────────────────────────────────────────────┘
+
+[핵심 규칙]
+1. 하위 레이어 → 상위 레이어만 참조 가능
+2. 같은 레이어 간 참조는 공유 레이어를 통해서만
+3. 새 에셋 추가 시, 2개 이상 번들에서 필요하면 상위로 승격</pre>
+                </div>
+            </div>
+
+            <div class="q">이 구조를 자동으로 유지하려면?</div>
+            <div class="a">
+                <p><span class="highlight">빌드 전 검증 스크립트</span>로 계층 규칙 위반을 잡아:</p>
+
+                <div class="code-block"><span class="keyword">using</span> UnityEditor;
+<span class="keyword">using</span> UnityEditor.AddressableAssets;
+<span class="keyword">using</span> UnityEditor.AddressableAssets.Settings;
+<span class="keyword">using</span> UnityEditor.Build;
+<span class="keyword">using</span> UnityEditor.Build.Reporting;
+<span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> System.Linq;
+
+<span class="keyword">public class</span> <span class="type">BundleHierarchyValidator</span> : <span class="type">IPreprocessBuildWithReport</span>
+{
+    <span class="keyword">public int</span> callbackOrder => <span class="number">0</span>;
+
+    <span class="comment">// 레이어 정의 (낮을수록 기반 레이어)</span>
+    <span class="keyword">private static readonly</span> <span class="type">Dictionary</span>&lt;<span class="keyword">string</span>, <span class="keyword">int</span>&gt; LayerDefinitions = <span class="keyword">new</span>()
+    {
+        [<span class="string">"Bundle_Core"</span>] = <span class="number">0</span>,
+        [<span class="string">"Shared_"</span>] = <span class="number">1</span>,          <span class="comment">// prefix 매칭</span>
+        [<span class="string">"Bundle_Characters"</span>] = <span class="number">2</span>,
+        [<span class="string">"Bundle_Environment"</span>] = <span class="number">2</span>,
+        [<span class="string">"Bundle_Items"</span>] = <span class="number">2</span>,
+        [<span class="string">"Bundle_Stage_"</span>] = <span class="number">3</span>,
+        [<span class="string">"Bundle_Event_"</span>] = <span class="number">3</span>,
+    };
+
+    <span class="keyword">public void</span> <span class="function">OnPreprocessBuild</span>(<span class="type">BuildReport</span> report)
+    {
+        <span class="keyword">var</span> violations = ValidateBundleHierarchy();
+
+        <span class="keyword">if</span> (violations.Count > <span class="number">0</span>)
+        {
+            <span class="keyword">var</span> message = <span class="string">"번들 계층 위반 발견:\n"</span> +
+                          <span class="keyword">string</span>.Join(<span class="string">"\n"</span>, violations);
+
+            <span class="keyword">throw new</span> <span class="type">BuildFailedException</span>(message);
+        }
+    }
+
+    <span class="keyword">public static</span> <span class="type">List</span>&lt;<span class="keyword">string</span>&gt; <span class="function">ValidateBundleHierarchy</span>()
+    {
+        <span class="keyword">var</span> violations = <span class="keyword">new</span> <span class="type">List</span>&lt;<span class="keyword">string</span>&gt;();
+        <span class="keyword">var</span> settings = AddressableAssetSettingsDefaultObject.Settings;
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> group <span class="keyword">in</span> settings.groups)
+        {
+            <span class="keyword">if</span> (group == <span class="keyword">null</span>) <span class="keyword">continue</span>;
+
+            <span class="keyword">int</span> groupLayer = GetGroupLayer(group.Name);
+
+            <span class="keyword">foreach</span> (<span class="keyword">var</span> entry <span class="keyword">in</span> group.entries)
+            {
+                <span class="keyword">var</span> dependencies = AssetDatabase.GetDependencies(
+                    entry.AssetPath, <span class="keyword">true</span>);
+
+                <span class="keyword">foreach</span> (<span class="keyword">var</span> depPath <span class="keyword">in</span> dependencies)
+                {
+                    <span class="keyword">if</span> (depPath == entry.AssetPath) <span class="keyword">continue</span>;
+                    <span class="keyword">if</span> (depPath.EndsWith(<span class="string">".cs"</span>)) <span class="keyword">continue</span>;
+
+                    <span class="comment">// 의존 에셋이 어떤 그룹에 있는지 확인</span>
+                    <span class="keyword">var</span> depGuid = AssetDatabase.AssetPathToGUID(depPath);
+                    <span class="keyword">var</span> depEntry = settings.FindAssetEntry(depGuid);
+
+                    <span class="keyword">if</span> (depEntry != <span class="keyword">null</span>)
+                    {
+                        <span class="keyword">int</span> depLayer = GetGroupLayer(depEntry.parentGroup.Name);
+
+                        <span class="comment">// 상위 레이어(낮은 숫자)를 참조해야 함</span>
+                        <span class="keyword">if</span> (depLayer > groupLayer)
+                        {
+                            violations.Add(
+                                $<span class="string">"[위반] {group.Name}(L{groupLayer}) → "</span> +
+                                $<span class="string">"{depEntry.parentGroup.Name}(L{depLayer})\n"</span> +
+                                $<span class="string">"  에셋: {entry.AssetPath}\n"</span> +
+                                $<span class="string">"  참조: {depPath}"</span>);
+                        }
+                    }
+                }
+            }
+        }
+
+        <span class="keyword">return</span> violations;
+    }
+
+    <span class="keyword">private static int</span> <span class="function">GetGroupLayer</span>(<span class="keyword">string</span> groupName)
+    {
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> kvp <span class="keyword">in</span> LayerDefinitions.OrderByDescending(x => x.Key.Length))
+        {
+            <span class="keyword">if</span> (groupName.StartsWith(kvp.Key) || groupName == kvp.Key)
+                <span class="keyword">return</span> kvp.Value;
+        }
+        <span class="keyword">return int</span>.MaxValue; <span class="comment">// 정의되지 않은 그룹은 최하위</span>
+    }
+}</div>
+            </div>
+
+            <div class="q">런타임에서 중복 로드를 막으려면?</div>
+            <div class="a">
+                <p>번들 빌드 시 중복을 제거해도, <span class="warning">런타임 로드 순서에 따라 문제가 생길 수 있어</span>. 의존 번들을 먼저 로드하는 것이 핵심이야:</p>
+
+                <div class="code-block"><span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> System.Threading.Tasks;
+<span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.AddressableAssets;
+<span class="keyword">using</span> UnityEngine.ResourceManagement.AsyncOperations;
+
+<span class="keyword">public class</span> <span class="type">HierarchicalBundleLoader</span>
+{
+    <span class="comment">// 번들 의존성 정의 (상위 레이어가 먼저)</span>
+    <span class="keyword">private static readonly</span> <span class="type">Dictionary</span>&lt;<span class="keyword">string</span>, <span class="keyword">string</span>[]&gt; BundleDependencies = <span class="keyword">new</span>()
+    {
+        [<span class="string">"Bundle_Core"</span>] = <span class="keyword">new</span> <span class="keyword">string</span>[<span class="number">0</span>],
+        [<span class="string">"Shared_UI"</span>] = <span class="keyword">new</span>[] { <span class="string">"Bundle_Core"</span> },
+        [<span class="string">"Shared_VFX"</span>] = <span class="keyword">new</span>[] { <span class="string">"Bundle_Core"</span> },
+        [<span class="string">"Bundle_Characters"</span>] = <span class="keyword">new</span>[] { <span class="string">"Bundle_Core"</span>, <span class="string">"Shared_VFX"</span> },
+        [<span class="string">"Bundle_Stage_01"</span>] = <span class="keyword">new</span>[] { <span class="string">"Bundle_Core"</span>, <span class="string">"Shared_UI"</span>, <span class="string">"Bundle_Characters"</span> },
+    };
+
+    <span class="keyword">private</span> <span class="type">HashSet</span>&lt;<span class="keyword">string</span>&gt; _loadedBundles = <span class="keyword">new</span>();
+
+    <span class="keyword">public async</span> <span class="type">Task</span>&lt;<span class="type">AsyncOperationHandle</span>&lt;T&gt;&gt; <span class="function">LoadAssetWithDependencies</span>&lt;T&gt;(
+        <span class="keyword">string</span> bundleLabel,
+        <span class="keyword">string</span> assetAddress) <span class="keyword">where</span> T : <span class="type">Object</span>
+    {
+        <span class="comment">// 1. 의존 번들 먼저 로드</span>
+        <span class="keyword">await</span> EnsureBundleHierarchyLoaded(bundleLabel);
+
+        <span class="comment">// 2. 실제 에셋 로드</span>
+        <span class="keyword">var</span> handle = Addressables.LoadAssetAsync&lt;T&gt;(assetAddress);
+        <span class="keyword">await</span> handle.Task;
+
+        <span class="keyword">return</span> handle;
+    }
+
+    <span class="keyword">private async</span> <span class="type">Task</span> <span class="function">EnsureBundleHierarchyLoaded</span>(<span class="keyword">string</span> bundleLabel)
+    {
+        <span class="keyword">if</span> (_loadedBundles.Contains(bundleLabel))
+            <span class="keyword">return</span>;
+
+        <span class="comment">// 의존성 재귀적으로 로드</span>
+        <span class="keyword">if</span> (BundleDependencies.TryGetValue(bundleLabel, <span class="keyword">out var</span> deps))
+        {
+            <span class="keyword">foreach</span> (<span class="keyword">var</span> dep <span class="keyword">in</span> deps)
+            {
+                <span class="keyword">await</span> EnsureBundleHierarchyLoaded(dep);
+            }
+        }
+
+        <span class="comment">// 이 번들의 에셋 중 하나를 로드하여 번들 활성화</span>
+        <span class="comment">// (또는 DownloadDependenciesAsync 사용)</span>
+        <span class="keyword">var</span> downloadHandle = Addressables.DownloadDependenciesAsync(bundleLabel);
+        <span class="keyword">await</span> downloadHandle.Task;
+
+        <span class="keyword">if</span> (downloadHandle.Status == <span class="type">AsyncOperationStatus</span>.Succeeded)
+        {
+            _loadedBundles.Add(bundleLabel);
+            Debug.Log($<span class="string">"번들 로드 완료: {bundleLabel}"</span>);
+        }
+
+        Addressables.Release(downloadHandle);
+    }
+
+    <span class="keyword">public void</span> <span class="function">UnloadBundle</span>(<span class="keyword">string</span> bundleLabel)
+    {
+        <span class="comment">// 이 번들에 의존하는 다른 번들이 있으면 언로드 불가</span>
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> kvp <span class="keyword">in</span> BundleDependencies)
+        {
+            <span class="keyword">if</span> (kvp.Value.Contains(bundleLabel) && _loadedBundles.Contains(kvp.Key))
+            {
+                Debug.LogWarning(
+                    $<span class="string">"{bundleLabel} 언로드 불가: {kvp.Key}가 의존 중"</span>);
+                <span class="keyword">return</span>;
+            }
+        }
+
+        <span class="comment">// 안전하게 언로드</span>
+        _loadedBundles.Remove(bundleLabel);
+        Resources.UnloadUnusedAssets();
+    }
+}</div>
+            </div>
+        </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. 고급 패턴: 중복 비용 분석</h2>
+
+            <div class="q">중복을 완전히 없애는 게 항상 좋아?</div>
+            <div class="a">
+                <p><span class="warning">무조건 중복 제거가 정답은 아니야</span>. 공유 번들을 너무 잘게 쪼개면 오히려 성능이 나빠질 수 있어:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[중복 제거 vs 로드 오버헤드 트레이드오프]
+
+시나리오: 4MB 텍스처가 3개 번들에서 사용됨
+
+◆ Option A: 중복 허용
+  Bundle_A: 50MB (4MB 텍스처 포함)
+  Bundle_B: 50MB (4MB 텍스처 포함)
+  Bundle_C: 50MB (4MB 텍스처 포함)
+
+  총 크기: 150MB + 8MB 중복 = 158MB
+  로드 시 네트워크 요청: 1개 (해당 번들만)
+
+◆ Option B: 완전 분리
+  Bundle_A: 46MB
+  Bundle_B: 46MB
+  Bundle_C: 46MB
+  Bundle_Shared_Tex: 4MB
+
+  총 크기: 138MB + 4MB = 142MB (16MB 절약)
+  로드 시 네트워크 요청: 2개 (번들 + Shared)
+
+[분석]
+┌─────────────────────────────────────────────────────────┐
+│ 고려 요소                  │ Option A  │ Option B      │
+├─────────────────────────────────────────────────────────┤
+│ 빌드 크기                  │ 158MB     │ 142MB ✓      │
+│ 네트워크 요청 수           │ 1개 ✓    │ 2개          │
+│ 초기 로딩 복잡도           │ 낮음 ✓   │ 높음         │
+│ 부분 다운로드 효율         │ 낮음     │ 높음 ✓       │
+│ 패치 크기 (텍스처 변경 시) │ 12MB     │ 4MB ✓        │
+└─────────────────────────────────────────────────────────┘
+
+결론: 상황에 따라 다름!
+- 크기가 작은 에셋(< 100KB): 중복 허용이 나을 수 있음
+- 크기가 큰 에셋(> 1MB): 분리 권장
+- 자주 변경되는 에셋: 분리 필수
+- 거의 변경 안 되는 에셋: 중복 허용 고려</pre>
+                </div>
+            </div>
+
+            <div class="q">중복 허용 임계값을 어떻게 정해?</div>
+            <div class="a">
+                <p><span class="highlight">비용-편익 분석(Cost-Benefit Analysis)</span>으로 결정해:</p>
+
+                <div class="code-block"><span class="keyword">public class</span> <span class="type">DuplicationCostAnalyzer</span>
+{
+    <span class="comment">// 설정 가능한 임계값</span>
+    <span class="keyword">public float</span> NetworkRequestCostMB = <span class="number">0.5f</span>;  <span class="comment">// 추가 요청의 등가 비용 (MB)</span>
+    <span class="keyword">public float</span> PatchMultiplier = <span class="number">3.0f</span>;       <span class="comment">// 패치 비용 가중치</span>
+    <span class="keyword">public int</span> ExpectedPatchesPerYear = <span class="number">12</span>;    <span class="comment">// 연간 예상 패치 횟수</span>
+
+    <span class="keyword">public</span> <span class="type">DuplicationDecision</span> <span class="function">AnalyzeAsset</span>(
+        <span class="keyword">string</span> assetPath,
+        <span class="keyword">float</span> assetSizeMB,
+        <span class="keyword">int</span> duplicateCount,
+        <span class="keyword">bool</span> isFrequentlyUpdated)
+    {
+        <span class="comment">// 중복 허용 시 비용</span>
+        <span class="keyword">float</span> duplicationCost = assetSizeMB * (duplicateCount - <span class="number">1</span>);
+
+        <span class="comment">// 패치 시 추가 비용 (중복된 만큼 패치도 커짐)</span>
+        <span class="keyword">if</span> (isFrequentlyUpdated)
+        {
+            duplicationCost += assetSizeMB * (duplicateCount - <span class="number">1</span>) *
+                               PatchMultiplier * ExpectedPatchesPerYear;
+        }
+
+        <span class="comment">// 분리 시 비용 (추가 번들 로드 오버헤드)</span>
+        <span class="keyword">float</span> separationCost = NetworkRequestCostMB * duplicateCount;
+
+        <span class="comment">// 분리로 인한 메모리 관리 복잡도</span>
+        <span class="keyword">if</span> (assetSizeMB < <span class="number">0.1f</span>) <span class="comment">// 100KB 미만</span>
+        {
+            separationCost += <span class="number">0.2f</span>; <span class="comment">// 작은 파일 분리는 오버헤드가 큼</span>
+        }
+
+        Debug.Log($<span class="string">"[{assetPath}] 중복 비용: {duplicationCost:F2}MB, "</span> +
+                  $<span class="string">"분리 비용: {separationCost:F2}MB"</span>);
+
+        <span class="keyword">if</span> (duplicationCost > separationCost * <span class="number">2.0f</span>)
+        {
+            <span class="keyword">return new</span> <span class="type">DuplicationDecision</span>
+            {
+                ShouldSeparate = <span class="keyword">true</span>,
+                Reason = $<span class="string">"중복 비용({duplicationCost:F1}MB)이 "</span> +
+                         $<span class="string">"분리 비용({separationCost:F1}MB)의 2배 초과"</span>,
+                Priority = <span class="type">Priority</span>.High
+            };
+        }
+        <span class="keyword">else if</span> (duplicationCost > separationCost)
+        {
+            <span class="keyword">return new</span> <span class="type">DuplicationDecision</span>
+            {
+                ShouldSeparate = <span class="keyword">true</span>,
+                Reason = <span class="string">"중복 비용이 분리 비용보다 큼"</span>,
+                Priority = <span class="type">Priority</span>.Medium
+            };
+        }
+        <span class="keyword">else</span>
+        {
+            <span class="keyword">return new</span> <span class="type">DuplicationDecision</span>
+            {
+                ShouldSeparate = <span class="keyword">false</span>,
+                Reason = <span class="string">"중복 허용이 효율적"</span>,
+                Priority = <span class="type">Priority</span>.Low
+            };
+        }
+    }
+}
+
+<span class="keyword">public struct</span> <span class="type">DuplicationDecision</span>
+{
+    <span class="keyword">public bool</span> ShouldSeparate;
+    <span class="keyword">public string</span> Reason;
+    <span class="keyword">public</span> <span class="type">Priority</span> Priority;
+}
+
+<span class="keyword">public enum</span> <span class="type">Priority</span> { Low, Medium, High }</div>
+            </div>
+        </div>
+
+        <!-- Part 6 -->
+        <div class="conversation">
+            <h2>Part 6. 실무 사례: CI/CD 통합</h2>
+
+            <div class="q">CI/CD에서 중복을 자동으로 체크하려면?</div>
+            <div class="a">
+                <p>빌드 파이프라인에 <span class="highlight">중복 검사 게이트</span>를 추가해:</p>
+
+                <div class="code-block"><span class="comment"># .github/workflows/unity-build.yml</span>
+
+<span class="keyword">name</span>: Unity Build with Duplicate Check
+
+<span class="keyword">on</span>:
+  <span class="keyword">push</span>:
+    <span class="keyword">branches</span>: [main, develop]
+  <span class="keyword">pull_request</span>:
+    <span class="keyword">branches</span>: [main]
+
+<span class="keyword">jobs</span>:
+  <span class="keyword">analyze-duplicates</span>:
+    <span class="keyword">runs-on</span>: ubuntu-latest
+    <span class="keyword">steps</span>:
+      - <span class="keyword">uses</span>: actions/checkout@v3
+
+      - <span class="keyword">name</span>: Setup Unity
+        <span class="keyword">uses</span>: game-ci/unity-builder@v2
+        <span class="keyword">with</span>:
+          <span class="keyword">unityVersion</span>: 2022.3.10f1
+          <span class="keyword">targetPlatform</span>: Android
+          <span class="keyword">buildMethod</span>: BuildScript.AnalyzeDuplicatesOnly
+
+      - <span class="keyword">name</span>: Check Duplicate Threshold
+        <span class="keyword">run</span>: |
+          <span class="comment"># 분석 결과 파일 확인</span>
+          DUPLICATE_MB=$(cat duplicate_report.json | jq '.totalDuplicateSizeMB')
+          THRESHOLD=<span class="number">50</span>  <span class="comment"># 50MB 임계값</span>
+
+          <span class="keyword">if</span> (( $(echo "$DUPLICATE_MB > $THRESHOLD" | bc -l) )); <span class="keyword">then</span>
+            echo "::error::중복 에셋이 ${DUPLICATE_MB}MB로 임계값(${THRESHOLD}MB) 초과"
+            <span class="keyword">exit</span> <span class="number">1</span>
+          <span class="keyword">fi</span>
+
+          echo "✅ 중복 에셋: ${DUPLICATE_MB}MB (임계값: ${THRESHOLD}MB)"
+
+      - <span class="keyword">name</span>: Upload Report
+        <span class="keyword">uses</span>: actions/upload-artifact@v3
+        <span class="keyword">with</span>:
+          <span class="keyword">name</span>: duplicate-report
+          <span class="keyword">path</span>: duplicate_report.json</div>
+
+                <div class="code-block"><span class="comment">// BuildScript.cs - CI용 분석 메서드</span>
+
+<span class="keyword">using</span> UnityEditor;
+<span class="keyword">using</span> UnityEditor.AddressableAssets;
+<span class="keyword">using</span> UnityEditor.AddressableAssets.Build.AnalyzeRules;
+<span class="keyword">using</span> System.IO;
+<span class="keyword">using</span> System.Linq;
+
+<span class="keyword">public static class</span> <span class="type">BuildScript</span>
+{
+    <span class="keyword">public static void</span> <span class="function">AnalyzeDuplicatesOnly</span>()
+    {
+        <span class="keyword">var</span> settings = AddressableAssetSettingsDefaultObject.Settings;
+        <span class="keyword">var</span> rule = <span class="keyword">new</span> <span class="type">CheckBundleDupeDependencies</span>();
+        <span class="keyword">var</span> results = rule.RefreshAnalysis(settings);
+
+        <span class="comment">// 중복 에셋 집계</span>
+        <span class="keyword">var</span> duplicates = results
+            .Where(r => r.severity >= <span class="type">MessageType</span>.Warning)
+            .Select(r => <span class="keyword">new</span>
+            {
+                AssetPath = r.resultName,
+                BundleCount = r.data?.Count ?? <span class="number">0</span>,
+                SizeMB = GetAssetSizeMB(r.resultName)
+            })
+            .ToList();
+
+        <span class="keyword">var</span> totalDuplicateMB = duplicates.Sum(d => d.SizeMB * (d.BundleCount - <span class="number">1</span>));
+
+        <span class="comment">// JSON 리포트 생성</span>
+        <span class="keyword">var</span> report = <span class="keyword">new</span>
+        {
+            timestamp = System.DateTime.UtcNow.ToString(<span class="string">"o"</span>),
+            totalDuplicateSizeMB = totalDuplicateMB,
+            duplicateCount = duplicates.Count,
+            details = duplicates
+        };
+
+        <span class="keyword">var</span> json = JsonUtility.ToJson(report, <span class="keyword">true</span>);
+        File.WriteAllText(<span class="string">"duplicate_report.json"</span>, json);
+
+        Debug.Log($<span class="string">"중복 분석 완료: {totalDuplicateMB:F2}MB"</span>);
+
+        <span class="comment">// CI 환경에서는 exit code로 결과 전달</span>
+        <span class="keyword">if</span> (Application.isBatchMode)
+        {
+            EditorApplication.Exit(totalDuplicateMB > <span class="number">50</span> ? <span class="number">1</span> : <span class="number">0</span>);
+        }
+    }
+
+    <span class="keyword">private static float</span> <span class="function">GetAssetSizeMB</span>(<span class="keyword">string</span> assetPath)
+    {
+        <span class="keyword">var</span> fileInfo = <span class="keyword">new</span> <span class="type">FileInfo</span>(assetPath);
+        <span class="keyword">return</span> fileInfo.Exists ? fileInfo.Length / (<span class="number">1024f</span> * <span class="number">1024f</span>) : <span class="number">0f</span>;
+    }
+}</div>
+            </div>
+
+            <div class="q">PR에서 중복 증가를 막으려면?</div>
+            <div class="a">
+                <p><span class="highlight">베이스라인 비교</span>로 중복이 증가하면 PR을 블록해:</p>
+
+                <div class="code-block"><span class="comment"># duplicate_check.py - PR 중복 비교 스크립트</span>
+
+<span class="keyword">import</span> json
+<span class="keyword">import</span> sys
+<span class="keyword">import</span> os
+
+<span class="keyword">def</span> <span class="function">load_report</span>(path):
+    <span class="keyword">with</span> <span class="function">open</span>(path, <span class="string">'r'</span>) <span class="keyword">as</span> f:
+        <span class="keyword">return</span> json.load(f)
+
+<span class="keyword">def</span> <span class="function">compare_duplicates</span>(base_report, pr_report):
+    base_mb = base_report[<span class="string">'totalDuplicateSizeMB'</span>]
+    pr_mb = pr_report[<span class="string">'totalDuplicateSizeMB'</span>]
+
+    diff = pr_mb - base_mb
+
+    <span class="keyword">print</span>(<span class="string">f"베이스: {base_mb:.2f}MB"</span>)
+    <span class="keyword">print</span>(<span class="string">f"PR: {pr_mb:.2f}MB"</span>)
+    <span class="keyword">print</span>(<span class="string">f"변화: {diff:+.2f}MB"</span>)
+
+    <span class="comment"># 새로 추가된 중복 에셋 식별</span>
+    base_assets = {d[<span class="string">'AssetPath'</span>] <span class="keyword">for</span> d <span class="keyword">in</span> base_report[<span class="string">'details'</span>]}
+    pr_assets = {d[<span class="string">'AssetPath'</span>] <span class="keyword">for</span> d <span class="keyword">in</span> pr_report[<span class="string">'details'</span>]}
+
+    new_duplicates = pr_assets - base_assets
+    <span class="keyword">if</span> new_duplicates:
+        <span class="keyword">print</span>(<span class="string">"\n⚠️ 새로 추가된 중복 에셋:"</span>)
+        <span class="keyword">for</span> asset <span class="keyword">in</span> new_duplicates:
+            <span class="keyword">print</span>(<span class="string">f"  - {asset}"</span>)
+
+    <span class="comment"># 5MB 이상 증가하면 실패</span>
+    <span class="keyword">if</span> diff > <span class="number">5.0</span>:
+        <span class="keyword">print</span>(<span class="string">"\n❌ 중복 에셋이 5MB 이상 증가했습니다."</span>)
+        <span class="keyword">print</span>(<span class="string">"   공유 그룹으로 이동하거나 중복을 제거해주세요."</span>)
+        <span class="keyword">return</span> <span class="number">1</span>
+
+    <span class="keyword">print</span>(<span class="string">"\n✅ 중복 에셋 체크 통과"</span>)
+    <span class="keyword">return</span> <span class="number">0</span>
+
+<span class="keyword">if</span> __name__ == <span class="string">"__main__"</span>:
+    base = load_report(<span class="string">"baseline_duplicate_report.json"</span>)
+    pr = load_report(<span class="string">"duplicate_report.json"</span>)
+    sys.exit(compare_duplicates(base, pr))</div>
+            </div>
+        </div>
+
+        <!-- Part 7 -->
+        <div class="conversation">
+            <h2>Part 7. 종합 정리: 중복 관리 체크리스트</h2>
+
+            <div class="q">실무에서 바로 쓸 수 있는 체크리스트 있어?</div>
+            <div class="a">
+                <div class="diagram-box">
+                    <pre>
+[에셋 중복 관리 완전 체크리스트]
+
+□ 설계 단계
+  ├── □ 계층적 번들 구조 정의 (Core → Shared → Domain → Content)
+  ├── □ 각 레이어의 참조 규칙 문서화
+  ├── □ 공유 에셋 기준 정의 (크기, 사용 빈도)
+  └── □ 중복 허용 임계값 설정 (예: 100KB 미만은 허용)
+
+□ 개발 단계
+  ├── □ 새 에셋 추가 시 의존성 확인
+  ├── □ 2개 이상 번들에서 사용되면 Shared로 이동
+  ├── □ 주기적으로 Analyze 실행 (주 1회 이상)
+  └── □ 큰 텍스처/메시 변경 시 영향 범위 확인
+
+□ 빌드 단계
+  ├── □ CI에서 중복 분석 자동 실행
+  ├── □ 임계값 초과 시 빌드 실패 처리
+  ├── □ 베이스라인 대비 증가량 모니터링
+  └── □ 빌드 리포트에 중복 현황 포함
+
+□ 릴리스 단계
+  ├── □ 최종 빌드 중복 현황 리뷰
+  ├── □ 플랫폼별 빌드 크기 비교
+  ├── □ 패치 크기 예측 및 검증
+  └── □ 베이스라인 업데이트
+
+□ 모니터링
+  ├── □ 빌드 크기 트렌드 추적
+  ├── □ 중복 비율 대시보드
+  ├── □ 패치 크기 히스토리
+  └── □ 메모리 프로파일링 (런타임 중복 확인)</pre>
+                </div>
+
+                <div class="highlight-box">
+                    <strong>💡 핵심 원칙 3가지:</strong>
+                    <ol>
+                        <li><strong>명시적 할당</strong>: 공유될 에셋은 반드시 Shared 그룹에 명시적으로 할당</li>
+                        <li><strong>계층적 구조</strong>: 하위 레이어는 상위 레이어만 참조하도록 설계</li>
+                        <li><strong>자동화된 검증</strong>: CI/CD에서 중복 증가를 자동으로 감지하고 차단</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
         <div class="summary-box">
-            <h3>핵심 정리</h3>
+            <h3>핵심 요약: 중복 에셋의 함정</h3>
             <ul>
-                <li><strong>중복 에셋의 함정</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>중복 원인</strong>: 명시적 할당 없이 여러 번들이 같은 에셋 참조 → 각 번들에 복사됨</li>
+                <li><strong>영향</strong>: 빌드 크기 20-40% 증가, 메모리 낭비, 패치 크기 배가</li>
+                <li><strong>탐지</strong>: Unity Analyze "Check Duplicate Bundle Dependencies", Unreal Asset Audit</li>
+                <li><strong>해결</strong>: 공유 에셋을 Shared 그룹으로 이동, 계층적 번들 구조 설계</li>
+                <li><strong>예방</strong>: CI/CD에서 자동 검사, 임계값 초과 시 빌드 실패</li>
+                <li><strong>트레이드오프</strong>: 작은 에셋은 중복 허용이 효율적일 수 있음 (요청 오버헤드 고려)</li>
             </ul>
         </div>
 
@@ -86,5 +1179,7 @@
             <a href="../asset-bundle-versioning/">번들 버전 관리 &rarr;</a>
         </div>
     </div>
+
+    <script src="../common/script.js"></script>
 </body>
 </html>
