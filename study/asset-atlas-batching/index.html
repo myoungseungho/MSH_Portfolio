@@ -3,38 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atlas와 Batching - 에셋 관리 - MSH Portfolio</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
-        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
-        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
-        .a p { margin-bottom: 12px; }
-        .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
-        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
-        .summary-box ul { list-style: none; }
-        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
-        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
-        .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
-    </style>
+    <title>Atlas와 Batching - 에셋 관리 심화 - MSH Portfolio</title>
+    <link rel="stylesheet" href="../common/styles.css">
 </head>
 <body>
     <div class="container">
@@ -42,42 +12,1040 @@
 
         <div class="header">
             <h1>Atlas와 Batching</h1>
-            <p>텍스처 아틀라스</p>
+            <p>Draw Call을 줄여 렌더링 성능을 극대화하는 핵심 기법</p>
         </div>
 
+        <!-- Part 1 -->
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">Atlas와 Batching이(가) 뭐야?</div>
+            <h2>Part 1. 개념 이해 - Draw Call이 왜 문제인가?</h2>
+
+            <div class="q">Draw Call이 뭐고, 왜 줄여야 해?</div>
             <div class="a">
-                <p><span class="highlight">텍스처 아틀라스</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p><span class="highlight">Draw Call</span>은 CPU가 GPU에게 "이거 그려"라고 명령하는 API 호출입니다. 문제는 <span class="warning">각 Draw Call마다 CPU-GPU 간 상태 전환 비용</span>이 발생한다는 점입니다.</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Draw Call 처리 과정                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   CPU                           GPU                                  │
+│   ────                          ────                                 │
+│                                                                      │
+│   ┌──────────────┐             ┌──────────────┐                     │
+│   │ Draw Call #1 │ ──────────→ │ 상태 설정    │                     │
+│   │ - 텍스처 A   │             │ - 텍스처 바인딩│                    │
+│   │ - 쉐이더 X   │             │ - 쉐이더 설정  │                    │
+│   │ - 메시 데이터│             │ - 버텍스 버퍼  │                    │
+│   └──────────────┘             └───────┬──────┘                     │
+│          │                             │                             │
+│          ▼                             ▼                             │
+│   ┌──────────────┐             ┌──────────────┐                     │
+│   │ Draw Call #2 │ ──────────→ │ 상태 재설정  │  ← 비용 발생!       │
+│   │ - 텍스처 B   │   상태변경!  │ - 다른 텍스처│                     │
+│   │ - 쉐이더 X   │             │              │                     │
+│   └──────────────┘             └──────────────┘                     │
+│                                                                      │
+│   문제: 1000개 오브젝트 = 1000번 상태 전환 = CPU 병목!               │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <p>모바일에서 <span class="warning">Draw Call 100~300개</span>면 이미 CPU 병목이 시작됩니다. PC도 1000개 넘어가면 문제입니다.</p>
+            </div>
+
+            <div class="q">그럼 Atlas가 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">Texture Atlas</span>는 여러 작은 텍스처를 하나의 큰 텍스처로 합친 것입니다. 핵심 아이디어: <span class="key-point">같은 텍스처를 쓰면 Draw Call을 합칠 수 있다!</span></p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Texture Atlas 개념                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   개별 텍스처 (Before)              Atlas (After)                    │
+│   ─────────────────────             ─────────────────                │
+│                                                                      │
+│   ┌────┐ ┌────┐ ┌────┐            ┌─────────────────┐               │
+│   │ A  │ │ B  │ │ C  │            │  A  │  B  │  C  │               │
+│   │64² │ │64² │ │64² │   ───→    ├─────┼─────┼─────┤               │
+│   └────┘ └────┘ └────┘            │  D  │  E  │  F  │               │
+│   ┌────┐ ┌────┐ ┌────┐            ├─────┼─────┼─────┤               │
+│   │ D  │ │ E  │ │ F  │            │  G  │  H  │  I  │               │
+│   └────┘ └────┘ └────┘            └─────────────────┘               │
+│   ┌────┐ ┌────┐ ┌────┐              512 × 512                       │
+│   │ G  │ │ H  │ │ I  │                                              │
+│   └────┘ └────┘ └────┘                                              │
+│                                                                      │
+│   9개 텍스처 바인딩              →  1개 텍스처 바인딩                │
+│   최대 9번 Draw Call             →  1번 Draw Call 가능!             │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <p>각 스프라이트는 Atlas 내에서 <span class="highlight">UV 좌표</span>로 위치를 지정합니다.</p>
+
+                <div class="code-block"><span class="code-comment">// UV 좌표 변환 예시</span>
+<span class="code-keyword">struct</span> <span class="code-type">AtlasSprite</span> {
+    <span class="code-type">Rect</span> uvRect;      <span class="code-comment">// Atlas 내 UV 영역 (0~1 정규화)</span>
+    <span class="code-type">Vector2</span> pivot;    <span class="code-comment">// 스프라이트 기준점</span>
+    <span class="code-type">float</span> pixelsPerUnit;
+};
+
+<span class="code-comment">// 64×64 스프라이트가 512×512 Atlas의 (128, 0) 위치에 있다면:</span>
+<span class="code-type">AtlasSprite</span> sprite = {
+    .uvRect = {
+        .x = <span class="code-number">128.0f</span> / <span class="code-number">512.0f</span>,  <span class="code-comment">// 0.25</span>
+        .y = <span class="code-number">0.0f</span> / <span class="code-number">512.0f</span>,    <span class="code-comment">// 0.0</span>
+        .width = <span class="code-number">64.0f</span> / <span class="code-number">512.0f</span>,  <span class="code-comment">// 0.125</span>
+        .height = <span class="code-number">64.0f</span> / <span class="code-number">512.0f</span> <span class="code-comment">// 0.125</span>
+    },
+    .pivot = { <span class="code-number">0.5f</span>, <span class="code-number">0.5f</span> },
+    .pixelsPerUnit = <span class="code-number">100.0f</span>
+};</div>
+            </div>
+
+            <div class="q">Batching은 뭐야? Atlas랑 어떤 관계야?</div>
+            <div class="a">
+                <p><span class="highlight">Batching</span>은 여러 오브젝트의 Draw Call을 하나로 합치는 기법입니다. Atlas는 Batching을 가능하게 하는 <span class="key-point">전제 조건</span>입니다!</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Batching이 가능한 조건                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Draw Call을 합치려면 아래 조건이 모두 같아야 함:                   │
+│                                                                      │
+│   ┌──────────────────────────────────────────────┐                  │
+│   │  ✓ 같은 Material (쉐이더 + 속성)             │                  │
+│   │  ✓ 같은 Texture (Atlas로 해결!)              │ ← Atlas 역할     │
+│   │  ✓ 같은 Render State (blend, cull 등)        │                  │
+│   │  ✓ 같은 Lighting Mode                        │                  │
+│   └──────────────────────────────────────────────┘                  │
+│                                                                      │
+│   예시: UI 버튼 10개                                                 │
+│   ─────────────────                                                  │
+│                                                                      │
+│   Without Atlas:           With Atlas:                               │
+│   ┌──────────────┐         ┌──────────────┐                         │
+│   │ Button1.png  │→DC #1   │              │                         │
+│   │ Button2.png  │→DC #2   │  UI_Atlas    │→ DC #1 (전부 합침!)     │
+│   │ Button3.png  │→DC #3   │              │                         │
+│   │ ...          │→...     │              │                         │
+│   │ Button10.png │→DC #10  │              │                         │
+│   └──────────────┘         └──────────────┘                         │
+│   = 10 Draw Calls          = 1 Draw Call                            │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
             </div>
         </div>
 
+        <!-- Part 2 -->
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. Batching 종류 - Static, Dynamic, GPU Instancing</h2>
+
+            <div class="q">Static Batching이 뭐야?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p><span class="highlight">Static Batching</span>은 움직이지 않는 오브젝트들의 메시를 빌드 타임에 하나로 합칩니다.</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Static Batching                                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Build Time (에디터에서)                                            │
+│   ─────────────────────                                              │
+│                                                                      │
+│   ┌─────┐ ┌─────┐ ┌─────┐     ┌───────────────────┐                │
+│   │Mesh1│ │Mesh2│ │Mesh3│ ──→ │ Combined Mesh     │                │
+│   │ 100 │ │ 150 │ │  80 │     │ 330 vertices      │                │
+│   │verts│ │verts│ │verts│     │ World Space 좌표! │                │
+│   └─────┘ └─────┘ └─────┘     └───────────────────┘                │
+│                                                                      │
+│   장점:                        단점:                                 │
+│   ────                         ────                                  │
+│   • 런타임 CPU 비용 0          • 추가 메모리 사용                    │
+│   • 1 Draw Call로 처리         • 오브젝트 이동 불가                  │
+│   • 가장 효율적                • 개별 컬링 불가 (큰 덩어리)          │
+│                                                                      │
+│   적합한 대상:                                                       │
+│   ─────────────                                                      │
+│   • 건물, 지형, 소품                                                 │
+│   • 배경 나무, 바위                                                  │
+│   • 절대 움직이지 않는 것                                            │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <div class="code-block"><span class="code-comment">// Unity에서 Static Batching 설정</span>
+<span class="code-comment">// 1. Inspector에서 오브젝트 선택 → Static 체크</span>
+<span class="code-comment">// 2. 또는 코드로:</span>
+
+<span class="code-keyword">void</span> <span class="code-function">SetupStaticBatching</span>(<span class="code-type">GameObject</span>[] staticObjects) {
+    <span class="code-comment">// Static 플래그 설정</span>
+    <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> obj <span class="code-keyword">in</span> staticObjects) {
+        obj.isStatic = <span class="code-keyword">true</span>;
+        <span class="code-comment">// 또는 특정 플래그만:</span>
+        <span class="code-type">StaticEditorFlags</span> flags = <span class="code-type">StaticEditorFlags</span>.BatchingStatic;
+        <span class="code-type">GameObjectUtility</span>.SetStaticEditorFlags(obj, flags);
+    }
+
+    <span class="code-comment">// 런타임에 수동 배칭 (동적 생성 오브젝트용)</span>
+    <span class="code-type">StaticBatchingUtility</span>.Combine(staticObjects, rootObject);
+}</div>
+
+                <div class="highlight-box">
+                    <strong>💡 메모리 트레이드오프:</strong> Static Batching은 각 오브젝트의 메시 데이터를 월드 좌표로 변환하여 저장합니다. 같은 프리팹 100개 → 메시 100배 메모리 사용!
+                </div>
+            </div>
+
+            <div class="q">Dynamic Batching은?</div>
+            <div class="a">
+                <p><span class="highlight">Dynamic Batching</span>은 런타임에 작은 메시들을 합칩니다. CPU에서 매 프레임 변환 계산!</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Dynamic Batching                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   매 프레임 (런타임)                                                 │
+│   ───────────────────                                                │
+│                                                                      │
+│   오브젝트 A, B, C (같은 Material)                                   │
+│        │                                                             │
+│        ▼                                                             │
+│   ┌─────────────────────────────────────┐                           │
+│   │ CPU: Transform 계산                  │                           │
+│   │ ───────────────────                  │                           │
+│   │ for each vertex:                     │                           │
+│   │   worldPos = localPos × worldMatrix  │  ← 매 프레임 CPU 비용!   │
+│   └─────────────────────────────────────┘                           │
+│        │                                                             │
+│        ▼                                                             │
+│   ┌─────────────────────────────────────┐                           │
+│   │ Combined Vertex Buffer               │                           │
+│   │ → 1 Draw Call                        │                           │
+│   └─────────────────────────────────────┘                           │
+│                                                                      │
+│   제한 조건 (Unity):                                                 │
+│   ─────────────────                                                  │
+│   • 버텍스 300개 이하                                                │
+│   • 버텍스 속성 900개 이하 (위치+노말+UV = 3 → 300버텍스)            │
+│   • 동일 스케일 (또는 uniform scale)                                 │
+│   • 실시간 그림자 사용 시 비활성화                                   │
+│   • Multi-pass 쉐이더 불가                                           │
+│                                                                      │
+│   적합한 대상:                                                       │
+│   ─────────────                                                      │
+│   • 파티클 (작은 quad들)                                             │
+│   • UI 요소                                                          │
+│   • 2D 스프라이트                                                    │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <div class="warning-box">
+                    <strong>⚠️ Dynamic Batching 주의:</strong> 버텍스가 많으면 CPU 오버헤드가 Draw Call 비용보다 커질 수 있습니다. Unity에서는 SRP Batcher 사용 시 자동 비활성화됩니다.
+                </div>
+            </div>
+
+            <div class="q">GPU Instancing은 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">GPU Instancing</span>은 같은 메시를 여러 번 그릴 때, 메시 데이터는 1번만 보내고 인스턴스별 Transform만 별도 전송합니다.</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    GPU Instancing                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   일반 렌더링                   GPU Instancing                       │
+│   ────────────                  ──────────────                       │
+│                                                                      │
+│   Draw(Mesh, Transform1)        DrawInstanced(Mesh, count=1000)      │
+│   Draw(Mesh, Transform2)        + Instance Buffer:                   │
+│   Draw(Mesh, Transform3)          [Transform1, Transform2, ...]      │
+│   ...                                                                │
+│   Draw(Mesh, Transform1000)                                          │
+│                                                                      │
+│   = 1000 Draw Calls             = 1 Draw Call!                       │
+│   = 메시 1000번 전송              = 메시 1번 전송                      │
+│                                                                      │
+│   Instance Buffer 구조:                                              │
+│   ────────────────────                                               │
+│   ┌────────────────────────────────────────┐                        │
+│   │ Index │ Position      │ Rotation │ ... │                        │
+│   ├───────┼───────────────┼──────────┼─────┤                        │
+│   │   0   │ (10, 0, 5)    │ (0,90,0) │     │                        │
+│   │   1   │ (15, 0, 8)    │ (0,45,0) │     │                        │
+│   │   2   │ (20, 0, 3)    │ (0,0,0)  │     │                        │
+│   │  ...  │ ...           │ ...      │     │                        │
+│   └────────────────────────────────────────┘                        │
+│                                                                      │
+│   GPU가 SV_InstanceID로 각 인스턴스 구분                             │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <div class="code-block"><span class="code-comment">// GPU Instancing 쉐이더 (HLSL)</span>
+<span class="code-keyword">struct</span> <span class="code-type">InstanceData</span> {
+    <span class="code-type">float4x4</span> objectToWorld;
+    <span class="code-type">float4</span> color;  <span class="code-comment">// 인스턴스별 색상</span>
+};
+
+<span class="code-type">StructuredBuffer</span>&lt;<span class="code-type">InstanceData</span>&gt; _InstanceBuffer;
+
+<span class="code-type">v2f</span> <span class="code-function">vert</span>(<span class="code-type">appdata</span> v, <span class="code-type">uint</span> instanceID : SV_InstanceID) {
+    <span class="code-type">v2f</span> o;
+
+    <span class="code-comment">// 인스턴스별 Transform 적용</span>
+    <span class="code-type">float4x4</span> objectToWorld = _InstanceBuffer[instanceID].objectToWorld;
+    <span class="code-type">float4</span> worldPos = mul(objectToWorld, <span class="code-type">float4</span>(v.vertex.xyz, <span class="code-number">1.0</span>));
+
+    o.vertex = mul(UNITY_MATRIX_VP, worldPos);
+    o.color = _InstanceBuffer[instanceID].color;
+
+    <span class="code-keyword">return</span> o;
+}
+
+<span class="code-comment">// Unity C# - 인스턴스 데이터 설정</span>
+<span class="code-keyword">void</span> <span class="code-function">SetupInstancing</span>() {
+    <span class="code-type">Matrix4x4</span>[] matrices = <span class="code-keyword">new</span> <span class="code-type">Matrix4x4</span>[<span class="code-number">1000</span>];
+    <span class="code-type">Vector4</span>[] colors = <span class="code-keyword">new</span> <span class="code-type">Vector4</span>[<span class="code-number">1000</span>];
+
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i < <span class="code-number">1000</span>; i++) {
+        matrices[i] = <span class="code-type">Matrix4x4</span>.TRS(positions[i], rotations[i], scales[i]);
+        colors[i] = <span class="code-keyword">new</span> <span class="code-type">Vector4</span>(<span class="code-type">Random</span>.value, <span class="code-type">Random</span>.value, <span class="code-type">Random</span>.value, <span class="code-number">1</span>);
+    }
+
+    <span class="code-comment">// DrawMeshInstanced 호출</span>
+    <span class="code-type">Graphics</span>.DrawMeshInstanced(mesh, <span class="code-number">0</span>, material, matrices, <span class="code-number">1000</span>,
+        propertyBlock, <span class="code-type">ShadowCastingMode</span>.On, <span class="code-keyword">true</span>);
+}</div>
+
+                <p><span class="key-point">GPU Instancing 적합한 대상:</span> 잔디, 나무, 군중, 파티클, 총알</p>
+            </div>
+
+            <div class="q">SRP Batcher는 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">SRP Batcher</span>는 Unity의 Scriptable Render Pipeline에서 사용하는 최신 배칭 방식입니다. Draw Call 수는 줄지 않지만, <span class="key-point">GPU 상태 변경을 최소화</span>합니다.</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    SRP Batcher 원리                                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   기존 방식 (Material Property 매번 업로드)                          │
+│   ────────────────────────────────────                               │
+│                                                                      │
+│   Draw #1 → Upload(Material A props) → Upload(Transform) → Draw     │
+│   Draw #2 → Upload(Material A props) → Upload(Transform) → Draw     │
+│   Draw #3 → Upload(Material B props) → Upload(Transform) → Draw     │
+│             ↑                                                        │
+│             같은 Material인데도 매번 업로드!                         │
+│                                                                      │
+│   SRP Batcher (Persistent CBUFFER)                                   │
+│   ────────────────────────────────                                   │
+│                                                                      │
+│   ┌────────────────────────────────────────────────────────┐        │
+│   │ GPU Persistent Memory                                   │        │
+│   │ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │        │
+│   │ │Material A    │  │Material B    │  │Per-Object    │  │        │
+│   │ │CBUFFER       │  │CBUFFER       │  │CBUFFER       │  │        │
+│   │ │(한번 업로드) │  │(한번 업로드) │  │(Transform만) │  │        │
+│   │ └──────────────┘  └──────────────┘  └──────────────┘  │        │
+│   └────────────────────────────────────────────────────────┘        │
+│                                                                      │
+│   Draw #1 → Bind(MatA CBUFFER) → Bind(Obj1 CBUFFER) → Draw          │
+│   Draw #2 → (MatA 이미 바인딩)   → Bind(Obj2 CBUFFER) → Draw        │
+│   Draw #3 → Bind(MatB CBUFFER) → Bind(Obj3 CBUFFER) → Draw          │
+│             ↑                                                        │
+│             Material 변경 시에만 바인딩!                             │
+│                                                                      │
+│   결과: Draw Call 수는 같지만 GPU 상태 변경 ↓↓↓ = 빨라짐            │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <div class="code-block"><span class="code-comment">// SRP Batcher 호환 쉐이더 작성법</span>
+<span class="code-comment">// CBUFFER를 UnityPerMaterial로 그룹핑해야 함!</span>
+
+<span class="code-keyword">CBUFFER_START</span>(UnityPerMaterial)
+    <span class="code-type">float4</span> _Color;
+    <span class="code-type">float4</span> _MainTex_ST;
+    <span class="code-type">float</span> _Metallic;
+    <span class="code-type">float</span> _Smoothness;
+<span class="code-keyword">CBUFFER_END</span>
+
+<span class="code-comment">// 주의: Material Property Block 사용하면 SRP Batcher 깨짐!</span>
+<span class="code-comment">// renderer.SetPropertyBlock(block); // ← 호환 불가</span></div>
             </div>
         </div>
 
+        <!-- Part 3 -->
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. Atlas 제작 - 실전 가이드</h2>
+
+            <div class="q">Atlas를 어떻게 만들어?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p>Atlas 제작은 크게 <span class="highlight">빌드 타임</span> 생성과 <span class="highlight">런타임</span> 생성으로 나뉩니다.</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Atlas 제작 도구                                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   빌드 타임 (오프라인)                                               │
+│   ────────────────────                                               │
+│                                                                      │
+│   ┌─────────────────────────────────────────────┐                   │
+│   │ TexturePacker (유료, 가장 강력)              │                   │
+│   │ • Polygon packing (불규칙 도형 최적화)       │                   │
+│   │ • Multi-atlas 자동 분할                      │                   │
+│   │ • Unity/Unreal/Cocos2d 등 다양한 포맷       │                   │
+│   └─────────────────────────────────────────────┘                   │
+│                                                                      │
+│   ┌─────────────────────────────────────────────┐                   │
+│   │ Unity Sprite Packer (내장, 무료)             │                   │
+│   │ • Packing Tag로 그룹핑                       │                   │
+│   │ • 자동 밉맵 생성                             │                   │
+│   │ • Tight packing 지원                         │                   │
+│   └─────────────────────────────────────────────┘                   │
+│                                                                      │
+│   런타임 (동적)                                                      │
+│   ─────────────                                                      │
+│                                                                      │
+│   ┌─────────────────────────────────────────────┐                   │
+│   │ Dynamic Atlas                                │                   │
+│   │ • 유저 생성 컨텐츠 (프로필, 길드 마크)       │                   │
+│   │ • 다운로드 에셋                              │                   │
+│   │ • 런타임 합성 텍스처                         │                   │
+│   └─────────────────────────────────────────────┘                   │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <div class="code-block"><span class="code-comment">// Unity Sprite Atlas 설정 코드</span>
+<span class="code-keyword">using</span> UnityEngine;
+<span class="code-keyword">using</span> UnityEngine.U2D;
+
+<span class="code-keyword">public class</span> <span class="code-type">AtlasManager</span> : <span class="code-type">MonoBehaviour</span> {
+    [<span class="code-type">SerializeField</span>] <span class="code-type">SpriteAtlas</span> uiAtlas;
+
+    <span class="code-keyword">void</span> <span class="code-function">Awake</span>() {
+        <span class="code-comment">// Late Binding 콜백 등록</span>
+        <span class="code-type">SpriteAtlasManager</span>.atlasRequested += OnAtlasRequested;
+    }
+
+    <span class="code-keyword">void</span> <span class="code-function">OnAtlasRequested</span>(<span class="code-type">string</span> tag, <span class="code-type">Action</span>&lt;<span class="code-type">SpriteAtlas</span>&gt; callback) {
+        <span class="code-comment">// 에셋 번들에서 Atlas 로드</span>
+        <span class="code-keyword">if</span> (tag == <span class="code-string">"UI"</span>) {
+            <span class="code-type">StartCoroutine</span>(LoadAtlasAsync(tag, callback));
+        }
+    }
+
+    <span class="code-type">IEnumerator</span> <span class="code-function">LoadAtlasAsync</span>(<span class="code-type">string</span> tag, <span class="code-type">Action</span>&lt;<span class="code-type">SpriteAtlas</span>&gt; callback) {
+        <span class="code-keyword">var</span> request = <span class="code-type">Resources</span>.LoadAsync&lt;<span class="code-type">SpriteAtlas</span>&gt;($<span class="code-string">"Atlases/{tag}"</span>);
+        <span class="code-keyword">yield return</span> request;
+        callback(request.asset <span class="code-keyword">as</span> <span class="code-type">SpriteAtlas</span>);
+    }
+
+    <span class="code-comment">// 특정 스프라이트 가져오기</span>
+    <span class="code-keyword">public</span> <span class="code-type">Sprite</span> <span class="code-function">GetSprite</span>(<span class="code-type">string</span> name) {
+        <span class="code-keyword">return</span> uiAtlas.GetSprite(name);
+    }
+}</div>
+            </div>
+
+            <div class="q">런타임 Atlas는 어떻게 만들어?</div>
+            <div class="a">
+                <p><span class="highlight">Dynamic Atlas</span>는 런타임에 텍스처를 합성합니다. 대표적인 알고리즘은 <span class="key-point">Binary Tree Bin Packing</span>입니다.</p>
+
+                <div class="code-block"><span class="code-comment">// 런타임 Dynamic Atlas 구현</span>
+<span class="code-keyword">public class</span> <span class="code-type">DynamicAtlas</span> {
+    <span class="code-keyword">private</span> <span class="code-type">Texture2D</span> m_Atlas;
+    <span class="code-keyword">private</span> <span class="code-type">AtlasNode</span> m_RootNode;
+    <span class="code-keyword">private</span> <span class="code-type">int</span> m_Padding = <span class="code-number">2</span>;  <span class="code-comment">// Bleeding 방지 패딩</span>
+
+    <span class="code-keyword">public</span> <span class="code-function">DynamicAtlas</span>(<span class="code-type">int</span> size) {
+        m_Atlas = <span class="code-keyword">new</span> <span class="code-type">Texture2D</span>(size, size, <span class="code-type">TextureFormat</span>.RGBA32, <span class="code-keyword">false</span>);
+        m_RootNode = <span class="code-keyword">new</span> <span class="code-type">AtlasNode</span>(<span class="code-number">0</span>, <span class="code-number">0</span>, size, size);
+    }
+
+    <span class="code-comment">// Binary Tree Packing</span>
+    <span class="code-keyword">public</span> <span class="code-type">Rect</span>? <span class="code-function">Insert</span>(<span class="code-type">Texture2D</span> texture) {
+        <span class="code-type">int</span> w = texture.width + m_Padding * <span class="code-number">2</span>;
+        <span class="code-type">int</span> h = texture.height + m_Padding * <span class="code-number">2</span>;
+
+        <span class="code-type">AtlasNode</span> node = m_RootNode.Insert(w, h);
+        <span class="code-keyword">if</span> (node == <span class="code-keyword">null</span>) <span class="code-keyword">return</span> <span class="code-keyword">null</span>;  <span class="code-comment">// 공간 부족</span>
+
+        <span class="code-comment">// 텍스처 복사 (패딩 포함)</span>
+        <span class="code-type">Color</span>[] pixels = texture.GetPixels();
+        m_Atlas.SetPixels(
+            node.rect.x + m_Padding,
+            node.rect.y + m_Padding,
+            texture.width, texture.height, pixels);
+        m_Atlas.Apply();
+
+        <span class="code-comment">// UV 좌표 반환 (정규화)</span>
+        <span class="code-keyword">return new</span> <span class="code-type">Rect</span>(
+            (node.rect.x + m_Padding) / (<span class="code-type">float</span>)m_Atlas.width,
+            (node.rect.y + m_Padding) / (<span class="code-type">float</span>)m_Atlas.height,
+            texture.width / (<span class="code-type">float</span>)m_Atlas.width,
+            texture.height / (<span class="code-type">float</span>)m_Atlas.height
+        );
+    }
+}
+
+<span class="code-comment">// Binary Tree Node</span>
+<span class="code-keyword">class</span> <span class="code-type">AtlasNode</span> {
+    <span class="code-keyword">public</span> <span class="code-type">RectInt</span> rect;
+    <span class="code-keyword">public</span> <span class="code-type">AtlasNode</span> left, right;
+    <span class="code-keyword">public</span> <span class="code-type">bool</span> occupied;
+
+    <span class="code-keyword">public</span> <span class="code-type">AtlasNode</span> <span class="code-function">Insert</span>(<span class="code-type">int</span> w, <span class="code-type">int</span> h) {
+        <span class="code-comment">// 이미 사용 중</span>
+        <span class="code-keyword">if</span> (occupied) <span class="code-keyword">return</span> <span class="code-keyword">null</span>;
+
+        <span class="code-comment">// 리프 노드가 아님 - 자식에서 검색</span>
+        <span class="code-keyword">if</span> (left != <span class="code-keyword">null</span>) {
+            <span class="code-type">AtlasNode</span> node = left.Insert(w, h);
+            <span class="code-keyword">if</span> (node != <span class="code-keyword">null</span>) <span class="code-keyword">return</span> node;
+            <span class="code-keyword">return</span> right.Insert(w, h);
+        }
+
+        <span class="code-comment">// 공간이 부족</span>
+        <span class="code-keyword">if</span> (rect.width < w || rect.height < h) <span class="code-keyword">return</span> <span class="code-keyword">null</span>;
+
+        <span class="code-comment">// 딱 맞음!</span>
+        <span class="code-keyword">if</span> (rect.width == w && rect.height == h) {
+            occupied = <span class="code-keyword">true</span>;
+            <span class="code-keyword">return</span> <span class="code-keyword">this</span>;
+        }
+
+        <span class="code-comment">// 분할 (더 긴 쪽을 기준으로)</span>
+        <span class="code-type">int</span> dw = rect.width - w;
+        <span class="code-type">int</span> dh = rect.height - h;
+
+        <span class="code-keyword">if</span> (dw > dh) {
+            <span class="code-comment">// 수직 분할</span>
+            left = <span class="code-keyword">new</span> <span class="code-type">AtlasNode</span>(rect.x, rect.y, w, rect.height);
+            right = <span class="code-keyword">new</span> <span class="code-type">AtlasNode</span>(rect.x + w, rect.y, dw, rect.height);
+        } <span class="code-keyword">else</span> {
+            <span class="code-comment">// 수평 분할</span>
+            left = <span class="code-keyword">new</span> <span class="code-type">AtlasNode</span>(rect.x, rect.y, rect.width, h);
+            right = <span class="code-keyword">new</span> <span class="code-type">AtlasNode</span>(rect.x, rect.y + h, rect.width, dh);
+        }
+
+        <span class="code-keyword">return</span> left.Insert(w, h);
+    }
+}</div>
+            </div>
+
+            <div class="q">Atlas 만들 때 주의할 점은?</div>
+            <div class="a">
+                <p>Atlas 제작 시 가장 흔한 문제는 <span class="warning">Texture Bleeding</span>입니다.</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Texture Bleeding 문제                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   문제 상황: 밉맵 또는 필터링 시 인접 텍스처 픽셀이 섞임             │
+│   ─────────────────────────────────────────────────────              │
+│                                                                      │
+│   Atlas 내부:                                                        │
+│   ┌─────┬─────┐         렌더링 결과 (확대):                         │
+│   │ A■■ │ ■■B │           ┌────────────────┐                        │
+│   │ ■■■ │ ■■■ │   ───→    │ A의 가장자리에 │                        │
+│   │ ■■■ │ ■■■ │           │ B색이 묻어남!  │                        │
+│   └─────┴─────┘           └────────────────┘                        │
+│     ↑ 경계가 붙어있음                                                │
+│                                                                      │
+│   해결책:                                                            │
+│   ──────                                                             │
+│                                                                      │
+│   1. 패딩 추가 (2~4픽셀)                                             │
+│   ┌───────────────┐                                                 │
+│   │   ┌───┐ ┌───┐ │                                                 │
+│   │   │ A │ │ B │ │   ← 여백!                                       │
+│   │   └───┘ └───┘ │                                                 │
+│   └───────────────┘                                                 │
+│                                                                      │
+│   2. Edge Extrusion (가장자리 색 확장)                               │
+│   ┌─────────────┐                                                   │
+│   │ ■■■■■■■■■■■ │   ← A의 가장자리 색을 패딩에 채움                 │
+│   │ ■■┌───┐■■ │                                                     │
+│   │ ■■│ A │■■ │                                                     │
+│   │ ■■└───┘■■ │                                                     │
+│   │ ■■■■■■■■■■■ │                                                   │
+│   └─────────────┘                                                   │
+│                                                                      │
+│   3. Mipmap 레벨 제한                                                │
+│   - Atlas용 텍스처는 밉맵 0~2 정도만 사용                            │
+│   - 또는 Mipmap Border 설정                                          │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <div class="highlight-box">
+                    <strong>💡 Atlas 최적 크기:</strong>
+                    <ul>
+                        <li>모바일: 1024×1024 또는 2048×2048</li>
+                        <li>PC/콘솔: 2048×2048 또는 4096×4096</li>
+                        <li>POT(Power of Two) 크기 권장 (압축, 밉맵 호환)</li>
+                    </ul>
+                </div>
             </div>
         </div>
+
+        <!-- Part 4 -->
+        <div class="conversation">
+            <h2>Part 4. 성능 측정과 최적화 전략</h2>
+
+            <div class="q">Draw Call을 어떻게 확인해?</div>
+            <div class="a">
+                <p>각 엔진/플랫폼별 프로파일러에서 Draw Call(Batch)을 확인합니다.</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Draw Call 프로파일링                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Unity - Frame Debugger / Stats Window                              │
+│   ─────────────────────────────────────                              │
+│   ┌─────────────────────────────────────┐                           │
+│   │ Batches: 127                        │   ← 총 Draw Call          │
+│   │ Saved by batching: 856              │   ← 배칭으로 절약          │
+│   │ Tris: 1.2M   Verts: 650K            │                           │
+│   │ SetPass calls: 45                   │   ← Material 전환 횟수     │
+│   └─────────────────────────────────────┘                           │
+│                                                                      │
+│   Frame Debugger로 상세 분석:                                        │
+│   • 왜 배칭이 깨졌는지 이유 표시                                     │
+│   • "Different textures" → Atlas로 해결                              │
+│   • "Different materials" → Material 통합                            │
+│   • "Non-uniform scale" → 스케일 통일                                │
+│                                                                      │
+│   Unreal - GPU Visualizer                                            │
+│   ───────────────────────                                            │
+│   • stat scenerendering                                              │
+│   • stat gpu                                                         │
+│   • ProfileGPU 명령어                                                │
+│                                                                      │
+│   RenderDoc (범용)                                                   │
+│   ────────────────                                                   │
+│   • 모든 Draw Call 캡처                                              │
+│   • 각 호출의 상태 변경 추적                                         │
+│   • Pipeline State 비교                                              │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <div class="code-block"><span class="code-comment">// Unity에서 런타임 Draw Call 모니터링</span>
+<span class="code-keyword">using</span> UnityEngine.Profiling;
+
+<span class="code-keyword">public class</span> <span class="code-type">DrawCallMonitor</span> : <span class="code-type">MonoBehaviour</span> {
+    <span class="code-keyword">void</span> <span class="code-function">OnGUI</span>() {
+        <span class="code-preprocessor">#if UNITY_EDITOR</span>
+        <span class="code-type">int</span> drawCalls = <span class="code-type">UnityStats</span>.drawCalls;
+        <span class="code-type">int</span> batches = <span class="code-type">UnityStats</span>.batches;
+        <span class="code-type">int</span> setPassCalls = <span class="code-type">UnityStats</span>.setPassCalls;
+
+        <span class="code-type">GUILayout</span>.Label($<span class="code-string">"Draw Calls: {drawCalls}"</span>);
+        <span class="code-type">GUILayout</span>.Label($<span class="code-string">"Batches: {batches}"</span>);
+        <span class="code-type">GUILayout</span>.Label($<span class="code-string">"SetPass: {setPassCalls}"</span>);
+
+        <span class="code-comment">// 경고 표시</span>
+        <span class="code-keyword">if</span> (batches > <span class="code-number">200</span>) {
+            <span class="code-type">GUI</span>.color = <span class="code-type">Color</span>.red;
+            <span class="code-type">GUILayout</span>.Label(<span class="code-string">"⚠️ 배치 수 과다!"</span>);
+        }
+        <span class="code-preprocessor">#endif</span>
+    }
+}</div>
+            </div>
+
+            <div class="q">어떤 방식을 선택해야 해?</div>
+            <div class="a">
+                <p>상황에 따라 적절한 배칭 방식을 선택해야 합니다.</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Batching 방식 선택 가이드                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   오브젝트가 움직이는가?                                             │
+│        │                                                             │
+│        ├─ NO ──→ [Static Batching]                                  │
+│        │         • 건물, 지형, 소품                                  │
+│        │         • 가장 효율적                                       │
+│        │                                                             │
+│        └─ YES ─→ 메시가 같은가?                                     │
+│                       │                                              │
+│                       ├─ YES ──→ [GPU Instancing]                   │
+│                       │          • 잔디, 나무, 군중                  │
+│                       │          • 수천~수만 개 가능                 │
+│                       │                                              │
+│                       └─ NO ───→ 메시가 작은가? (< 300 verts)       │
+│                                       │                              │
+│                                       ├─ YES ─→ [Dynamic Batching]  │
+│                                       │         • 2D 스프라이트     │
+│                                       │         • 간단한 파티클     │
+│                                       │                              │
+│                                       └─ NO ──→ [SRP Batcher]       │
+│                                                 • 일반 3D 오브젝트  │
+│                                                 • URP/HDRP 필수     │
+│                                                                      │
+│   2D 게임이라면?                                                     │
+│   ──────────────                                                     │
+│   Sprite Atlas + Dynamic Batching (또는 SRP Batcher)                 │
+│   • 같은 Atlas의 스프라이트는 자동 배칭                              │
+│                                                                      │
+│   UI라면?                                                            │
+│   ───────                                                            │
+│   UI Atlas + Canvas Batching                                         │
+│   • 같은 Canvas 내 같은 Material은 자동 배칭                         │
+│   • Canvas 분리 주의 (Overlay vs World Space)                        │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+            </div>
+        </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. 실전 사례 - UI Atlas 최적화</h2>
+
+            <div class="q">UI에서 Atlas를 어떻게 활용해?</div>
+            <div class="a">
+                <p>UI는 Atlas 활용의 <span class="key-point">가장 효과적인 영역</span>입니다. 버튼, 아이콘, 배경 등을 하나의 Atlas로!</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    UI Atlas 구성 전략                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   권장 Atlas 분리 기준:                                              │
+│   ────────────────────                                               │
+│                                                                      │
+│   ┌──────────────────────────────────────────────────────────┐      │
+│   │  Atlas 1: Common UI (항상 로드)                          │      │
+│   │  ─────────────────────────────                           │      │
+│   │  • 버튼 (normal, pressed, disabled)                      │      │
+│   │  • 기본 아이콘 (닫기, 설정, 홈)                          │      │
+│   │  • 프레임, 테두리                                        │      │
+│   │  • 슬라이더, 체크박스                                    │      │
+│   │  크기: 1024×1024                                         │      │
+│   └──────────────────────────────────────────────────────────┘      │
+│                                                                      │
+│   ┌──────────────────────────────────────────────────────────┐      │
+│   │  Atlas 2: HUD (인게임 항상 표시)                         │      │
+│   │  ────────────────────────────                            │      │
+│   │  • HP/MP 바                                              │      │
+│   │  • 스킬 슬롯 배경                                        │      │
+│   │  • 미니맵 요소                                           │      │
+│   │  • 퀵슬롯                                                │      │
+│   │  크기: 512×512                                           │      │
+│   └──────────────────────────────────────────────────────────┘      │
+│                                                                      │
+│   ┌──────────────────────────────────────────────────────────┐      │
+│   │  Atlas 3: Inventory (인벤토리 열 때만)                   │      │
+│   │  ──────────────────────────────────                      │      │
+│   │  • 아이템 아이콘 (수백 개)                               │      │
+│   │  • 등급별 프레임                                         │      │
+│   │  • 강화 효과                                             │      │
+│   │  크기: 2048×2048 (또는 분할)                             │      │
+│   └──────────────────────────────────────────────────────────┘      │
+│                                                                      │
+│   분리 원칙:                                                         │
+│   ──────────                                                         │
+│   • 함께 표시되는 것은 같은 Atlas                                    │
+│   • 화면마다 다른 것은 별도 Atlas                                    │
+│   • 자주 사용 vs 가끔 사용 분리                                      │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <div class="code-block"><span class="code-comment">// Unity UI에서 Atlas 관리</span>
+<span class="code-keyword">public class</span> <span class="code-type">UIAtlasManager</span> : <span class="code-type">MonoBehaviour</span> {
+    [<span class="code-type">SerializeField</span>] <span class="code-type">SpriteAtlas</span> commonAtlas;
+    [<span class="code-type">SerializeField</span>] <span class="code-type">SpriteAtlas</span> hudAtlas;
+
+    <span class="code-keyword">private</span> <span class="code-type">Dictionary</span>&lt;<span class="code-type">string</span>, <span class="code-type">SpriteAtlas</span>&gt; m_LoadedAtlases;
+
+    <span class="code-keyword">public</span> <span class="code-keyword">async</span> <span class="code-type">Task</span> <span class="code-function">PreloadAtlasesForScreen</span>(<span class="code-type">ScreenType</span> screen) {
+        <span class="code-keyword">switch</span> (screen) {
+            <span class="code-keyword">case</span> <span class="code-type">ScreenType</span>.Inventory:
+                <span class="code-keyword">await</span> LoadAtlasAsync(<span class="code-string">"ItemIcons"</span>);
+                <span class="code-keyword">break</span>;
+            <span class="code-keyword">case</span> <span class="code-type">ScreenType</span>.Shop:
+                <span class="code-keyword">await</span> LoadAtlasAsync(<span class="code-string">"ShopUI"</span>);
+                <span class="code-keyword">break</span>;
+            <span class="code-keyword">case</span> <span class="code-type">ScreenType</span>.Battle:
+                <span class="code-comment">// HUD는 이미 로드됨</span>
+                <span class="code-keyword">break</span>;
+        }
+    }
+
+    <span class="code-keyword">private</span> <span class="code-keyword">async</span> <span class="code-type">Task</span> <span class="code-function">LoadAtlasAsync</span>(<span class="code-type">string</span> atlasName) {
+        <span class="code-keyword">if</span> (m_LoadedAtlases.ContainsKey(atlasName)) <span class="code-keyword">return</span>;
+
+        <span class="code-keyword">var</span> handle = <span class="code-type">Addressables</span>.LoadAssetAsync&lt;<span class="code-type">SpriteAtlas</span>&gt;(atlasName);
+        <span class="code-keyword">await</span> handle.Task;
+
+        m_LoadedAtlases[atlasName] = handle.Result;
+    }
+
+    <span class="code-keyword">public</span> <span class="code-keyword">void</span> <span class="code-function">UnloadAtlas</span>(<span class="code-type">string</span> atlasName) {
+        <span class="code-keyword">if</span> (m_LoadedAtlases.TryGetValue(atlasName, <span class="code-keyword">out</span> <span class="code-keyword">var</span> atlas)) {
+            <span class="code-type">Addressables</span>.Release(atlas);
+            m_LoadedAtlases.Remove(atlasName);
+        }
+    }
+}</div>
+            </div>
+
+            <div class="q">Unity Canvas의 배칭은 어떻게 작동해?</div>
+            <div class="a">
+                <p>Unity UI Canvas는 <span class="highlight">Rebuild</span>와 <span class="highlight">Rebatch</span> 두 단계로 작동합니다.</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Canvas Batching 파이프라인                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   UI 요소 변경 감지                                                  │
+│         │                                                            │
+│         ▼                                                            │
+│   ┌─────────────────────────────────────────┐                       │
+│   │ Rebuild (Layout + Graphics)             │                       │
+│   │ ─────────────────────────────           │                       │
+│   │ • 위치/크기 재계산                       │   ← CPU 비용!        │
+│   │ • Vertex 데이터 재생성                   │                       │
+│   │ • 매 프레임 변경된 것만                  │                       │
+│   └───────────────────┬─────────────────────┘                       │
+│                       │                                              │
+│                       ▼                                              │
+│   ┌─────────────────────────────────────────┐                       │
+│   │ Rebatch (Draw Call 병합)                │                       │
+│   │ ────────────────────────                │                       │
+│   │ • Z-order 정렬                          │                       │
+│   │ • Material 기준 그룹핑                  │                       │
+│   │ • Batch 생성                            │   ← 여기서 최적화!    │
+│   └───────────────────┬─────────────────────┘                       │
+│                       │                                              │
+│                       ▼                                              │
+│   ┌─────────────────────────────────────────┐                       │
+│   │ Render                                  │                       │
+│   │ • 최종 Draw Call 실행                   │                       │
+│   └─────────────────────────────────────────┘                       │
+│                                                                      │
+│   Batch가 깨지는 경우:                                               │
+│   ────────────────────                                               │
+│   1. 다른 Atlas/Texture 사용                                         │
+│   2. 다른 Material                                                   │
+│   3. Z-order 끼어들기 (A-B-A 순서)                                   │
+│   4. Mask, RectMask2D 경계                                           │
+│   5. Canvas 분리                                                     │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <div class="code-block"><span class="code-comment">// Canvas 배칭 최적화 팁</span>
+
+<span class="code-comment">// 1. 자주 변하는 UI와 정적 UI 분리</span>
+<span class="code-comment">//    - Static Canvas: 배경, 프레임</span>
+<span class="code-comment">//    - Dynamic Canvas: 숫자, 게이지</span>
+
+<span class="code-comment">// 2. Z-order 관리 (Hierarchy 순서)</span>
+<span class="code-comment">// BAD: 배칭 깨짐</span>
+<span class="code-comment">//   - Image (Atlas A)</span>
+<span class="code-comment">//   - Text (Atlas B)</span>
+<span class="code-comment">//   - Image (Atlas A)  ← Atlas A 배칭 분리!</span>
+
+<span class="code-comment">// GOOD: 배칭 유지</span>
+<span class="code-comment">//   - Image (Atlas A)</span>
+<span class="code-comment">//   - Image (Atlas A)  ← 같이 배칭!</span>
+<span class="code-comment">//   - Text (Atlas B)</span>
+
+<span class="code-comment">// 3. Layout 그룹 주의</span>
+<span class="code-keyword">public class</span> <span class="code-type">OptimizedList</span> : <span class="code-type">MonoBehaviour</span> {
+    <span class="code-comment">// LayoutGroup은 매 프레임 Rebuild 유발!</span>
+    <span class="code-comment">// 대신 수동 배치 또는 초기화 시에만 Layout</span>
+
+    <span class="code-keyword">void</span> <span class="code-function">Start</span>() {
+        <span class="code-keyword">var</span> layout = GetComponent&lt;<span class="code-type">VerticalLayoutGroup</span>&gt;();
+        <span class="code-type">LayoutRebuilder</span>.ForceRebuildLayoutImmediate(transform <span class="code-keyword">as</span> <span class="code-type">RectTransform</span>);
+        layout.enabled = <span class="code-keyword">false</span>;  <span class="code-comment">// 배치 후 비활성화</span>
+    }
+}</div>
+
+                <div class="warning-box">
+                    <strong>⚠️ Canvas 분리 전략:</strong>
+                    <ul>
+                        <li><strong>Overlay Canvas</strong>: 화면 고정 UI (HUD)</li>
+                        <li><strong>World Space Canvas</strong>: 3D 공간 UI (이름표, HP바)</li>
+                        <li>같은 Canvas 내에서도 Sub Canvas로 Rebuild 범위 제한</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6 -->
+        <div class="conversation">
+            <h2>Part 6. Texture Array - Atlas의 진화</h2>
+
+            <div class="q">Texture Array가 뭐야? Atlas랑 뭐가 달라?</div>
+            <div class="a">
+                <p><span class="highlight">Texture Array</span>는 같은 크기/포맷의 텍스처를 배열로 묶는 GPU 기능입니다. Atlas와 달리 <span class="key-point">UV 왜곡이 없고 개별 밉맵</span>이 가능합니다!</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Atlas vs Texture Array                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Texture Atlas                      Texture Array                   │
+│   ─────────────                      ─────────────                   │
+│                                                                      │
+│   ┌─────────────────┐               ┌───────────────────────┐       │
+│   │ A │ B │ C │ D │ │               │ Layer 0: Texture A    │       │
+│   ├───┼───┼───┼───┤ │               ├───────────────────────┤       │
+│   │ E │ F │ G │ H │ │               │ Layer 1: Texture B    │       │
+│   ├───┼───┼───┼───┤ │               ├───────────────────────┤       │
+│   │ I │ J │ K │ L │ │               │ Layer 2: Texture C    │       │
+│   └─────────────────┘               ├───────────────────────┤       │
+│                                     │ ...                   │       │
+│   문제점:                           └───────────────────────┘       │
+│   • UV 계산 필요                                                     │
+│   • 크기 제각각 → 낭비              장점:                            │
+│   • 밉맵 공유 → Bleeding            • Index로 선택 (UV 0~1 유지)    │
+│   • 불규칙 도형 비효율               • 개별 밉맵 체인                │
+│                                     • 같은 크기 강제 → 효율적        │
+│                                     • 필터링 깨끗함                  │
+│                                                                      │
+│   적합한 사용처:                                                     │
+│   ────────────────                                                   │
+│   Atlas: UI, 2D 스프라이트 (다양한 크기)                             │
+│   Array: 지형 텍스처, 타일맵, 디칼 (동일 크기)                       │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+
+                <div class="code-block"><span class="code-comment">// Texture Array 쉐이더 사용법 (HLSL)</span>
+<span class="code-type">Texture2DArray</span> _TerrainTextures;
+<span class="code-type">SamplerState</span> sampler_TerrainTextures;
+
+<span class="code-type">float4</span> <span class="code-function">SampleTerrainTexture</span>(<span class="code-type">float2</span> uv, <span class="code-type">float</span> layerIndex) {
+    <span class="code-comment">// layer를 z좌표로 사용</span>
+    <span class="code-keyword">return</span> _TerrainTextures.Sample(sampler_TerrainTextures,
+                                    <span class="code-type">float3</span>(uv, layerIndex));
+}
+
+<span class="code-comment">// 지형 블렌딩 예시</span>
+<span class="code-type">float4</span> <span class="code-function">BlendTerrain</span>(<span class="code-type">float2</span> uv, <span class="code-type">float4</span> splatMap) {
+    <span class="code-type">float4</span> grass = SampleTerrainTexture(uv, <span class="code-number">0</span>);  <span class="code-comment">// Layer 0: 잔디</span>
+    <span class="code-type">float4</span> dirt  = SampleTerrainTexture(uv, <span class="code-number">1</span>);  <span class="code-comment">// Layer 1: 흙</span>
+    <span class="code-type">float4</span> rock  = SampleTerrainTexture(uv, <span class="code-number">2</span>);  <span class="code-comment">// Layer 2: 바위</span>
+    <span class="code-type">float4</span> sand  = SampleTerrainTexture(uv, <span class="code-number">3</span>);  <span class="code-comment">// Layer 3: 모래</span>
+
+    <span class="code-comment">// SplatMap으로 블렌딩</span>
+    <span class="code-keyword">return</span> grass * splatMap.r +
+           dirt  * splatMap.g +
+           rock  * splatMap.b +
+           sand  * splatMap.a;
+}</div>
+
+                <div class="code-block"><span class="code-comment">// Unity에서 Texture2DArray 생성</span>
+<span class="code-keyword">public</span> <span class="code-type">Texture2DArray</span> <span class="code-function">CreateTextureArray</span>(<span class="code-type">Texture2D</span>[] textures, <span class="code-type">int</span> size) {
+    <span class="code-type">Texture2DArray</span> array = <span class="code-keyword">new</span> <span class="code-type">Texture2DArray</span>(
+        size, size,
+        textures.Length,
+        <span class="code-type">TextureFormat</span>.DXT5,  <span class="code-comment">// 압축 포맷</span>
+        <span class="code-keyword">true</span>                  <span class="code-comment">// 밉맵</span>
+    );
+
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i < textures.Length; i++) {
+        <span class="code-comment">// 리사이즈 필요시</span>
+        <span class="code-type">Texture2D</span> resized = ResizeTexture(textures[i], size, size);
+
+        <span class="code-comment">// 모든 밉맵 레벨 복사</span>
+        <span class="code-keyword">for</span> (<span class="code-type">int</span> mip = <span class="code-number">0</span>; mip < resized.mipmapCount; mip++) {
+            <span class="code-type">Graphics</span>.CopyTexture(
+                resized, <span class="code-number">0</span>, mip,  <span class="code-comment">// src</span>
+                array, i, mip     <span class="code-comment">// dst (layer i)</span>
+            );
+        }
+    }
+
+    array.Apply(<span class="code-keyword">false</span>);
+    <span class="code-keyword">return</span> array;
+}</div>
+            </div>
+        </div>
+
+        <!-- Part 7 -->
+        <div class="conversation">
+            <h2>Part 7. 트러블슈팅과 면접 대비</h2>
+
+            <div class="q">Draw Call이 안 줄어들 때 체크리스트?</div>
+            <div class="a">
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    배칭 트러블슈팅 체크리스트                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   □ 같은 Material인가?                                               │
+│     → Material Instance가 아닌 Shared Material 사용?                 │
+│     → MaterialPropertyBlock 쓰면 SRP Batcher 깨짐!                   │
+│                                                                      │
+│   □ 같은 Texture(Atlas)인가?                                         │
+│     → Unity Frame Debugger에서 "Different textures" 확인             │
+│     → Atlas Tag 확인, Include in Build 체크                          │
+│                                                                      │
+│   □ Render State가 같은가?                                           │
+│     → Blend Mode, Cull Mode, ZWrite 등                               │
+│     → Transparent와 Opaque 섞으면 안 됨                              │
+│                                                                      │
+│   □ Static Batching 조건 확인                                        │
+│     → Static 플래그 설정?                                            │
+│     → Lightmap 인덱스 같은가?                                        │
+│     → 같은 LOD 그룹?                                                 │
+│                                                                      │
+│   □ Dynamic Batching 제한 확인                                       │
+│     → 버텍스 300개 이하?                                             │
+│     → Uniform scale?                                                 │
+│     → 실시간 그림자 사용 안 함?                                      │
+│                                                                      │
+│   □ GPU Instancing 조건 확인                                         │
+│     → 쉐이더가 Instancing 지원? (Enable GPU Instancing 체크)         │
+│     → 같은 Mesh?                                                     │
+│     → Instance Buffer 크기 제한 (플랫폼별)                           │
+│                                                                      │
+│   □ UI Canvas 특수 케이스                                            │
+│     → Z-order로 배칭 끊김? (A-B-A 순서)                              │
+│     → Mask 경계?                                                     │
+│     → Text와 Image 섞임?                                             │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘</pre></div>
+            </div>
+
+            <div class="q">면접에서 Atlas/Batching 관련 예상 질문은?</div>
+            <div class="a">
+                <div class="highlight-box">
+                    <strong>🎯 예상 질문과 모범 답변:</strong>
+
+                    <p><strong>Q1: Draw Call을 줄이는 방법들을 설명하세요.</strong></p>
+                    <p>A: "첫째, <em>Texture Atlas</em>로 여러 텍스처를 합쳐 Material을 통합합니다. 둘째, <em>Static Batching</em>으로 정적 오브젝트의 메시를 합칩니다. 셋째, <em>GPU Instancing</em>으로 같은 메시의 여러 인스턴스를 한 번에 그립니다. 넷째, <em>SRP Batcher</em>로 GPU 상태 변경을 최소화합니다."</p>
+
+                    <p><strong>Q2: Atlas 사용 시 주의점은?</strong></p>
+                    <p>A: "<em>Texture Bleeding</em>이 가장 큰 문제입니다. 밉맵이나 필터링 시 인접 텍스처 색이 섞일 수 있어, 2~4픽셀 패딩과 Edge Extrusion이 필요합니다. 또한 Atlas 크기가 너무 크면 메모리 낭비, 너무 작으면 여러 Atlas로 분리되어 배칭이 깨집니다."</p>
+
+                    <p><strong>Q3: Static Batching vs Dynamic Batching 차이점?</strong></p>
+                    <p>A: "<em>Static</em>은 빌드 타임에 월드 좌표로 메시를 합쳐 메모리를 더 쓰지만 런타임 비용이 없습니다. <em>Dynamic</em>은 런타임에 CPU가 매 프레임 변환 계산을 하므로 작은 메시(300버텍스 이하)에만 적합합니다."</p>
+
+                    <p><strong>Q4: 모바일에서 Draw Call 목표치는?</strong></p>
+                    <p>A: "일반적으로 <em>100~200개</em>가 안전 범위입니다. 300개 넘어가면 CPU 병목이 시작되고, UI+월드 합쳐서 관리해야 합니다. SetPass Call은 50개 이하를 목표로 합니다."</p>
+                </div>
+            </div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>Atlas와 Batching</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>Draw Call</strong> = CPU→GPU 명령. 상태 전환 비용 때문에 줄여야 함</li>
+                <li><strong>Texture Atlas</strong> = 텍스처 합치기. 같은 Material = 배칭 가능</li>
+                <li><strong>Static Batching</strong> = 정적 오브젝트. 메모리 ↑, CPU 비용 0</li>
+                <li><strong>Dynamic Batching</strong> = 작은 메시 런타임 합성. 300버텍스 이하</li>
+                <li><strong>GPU Instancing</strong> = 같은 메시 수천 개. 잔디, 군중에 최적</li>
+                <li><strong>SRP Batcher</strong> = 상태 변경 최소화. URP/HDRP 필수</li>
+                <li><strong>Texture Array</strong> = 같은 크기 텍스처 배열. 지형에 최적</li>
             </ul>
         </div>
 
@@ -86,5 +1054,6 @@
             <a href="../asset-pipeline-overview/">에셋 파이프라인 전체 그림 &rarr;</a>
         </div>
     </div>
+    <script src="../common/script.js"></script>
 </body>
 </html>
