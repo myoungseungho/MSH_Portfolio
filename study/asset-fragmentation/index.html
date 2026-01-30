@@ -4,37 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>메모리 단편화와의 전쟁 - 에셋 관리 - MSH Portfolio</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
-        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
-        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
-        .a p { margin-bottom: 12px; }
-        .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
-        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
-        .summary-box ul { list-style: none; }
-        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
-        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
-        .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
-    </style>
+    <link rel="stylesheet" href="../common/styles.css">
 </head>
 <body>
     <div class="container">
@@ -42,42 +12,1178 @@
 
         <div class="header">
             <h1>메모리 단편화와의 전쟁</h1>
-            <p>풀 할당자, 청크 관리</p>
+            <p>에셋 로드/언로드 반복으로 발생하는 메모리 조각화 문제와 해결 전략</p>
         </div>
 
+        <!-- Part 1 -->
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">메모리 단편화와의 전쟁이(가) 뭐야?</div>
+            <h2>Part 1. 개념: 메모리 단편화란 무엇인가</h2>
+
+            <div class="q">메모리 단편화(Memory Fragmentation)가 뭐야?</div>
             <div class="a">
-                <p><span class="highlight">풀 할당자, 청크 관리</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p><span class="highlight">메모리 공간이 작은 조각으로 분산되어, 총 여유 공간은 충분해도 연속된 큰 블록을 할당할 수 없는 상태</span>야. 게임에서 에셋을 반복적으로 로드/언로드하면 "구멍 뚫린 치즈" 같은 메모리 상태가 돼.</p>
+
+                <div class="diagram-box">
+                    <pre>
+[메모리 단편화 발생 과정]
+
+초기 상태 (깨끗한 메모리)
+┌────────────────────────────────────────────────────────────┐
+│                      1GB Free                              │
+└────────────────────────────────────────────────────────────┘
+
+에셋 A, B, C 로드 후
+┌──────────┬───────────┬────────────┬────────────────────────┐
+│  A 100MB │  B 200MB  │  C 150MB   │       550MB Free       │
+└──────────┴───────────┴────────────┴────────────────────────┘
+
+에셋 B 언로드 (스테이지 전환)
+┌──────────┬───────────┬────────────┬────────────────────────┐
+│  A 100MB │  🕳️ HOLE  │  C 150MB   │       550MB Free       │
+│          │   200MB   │            │                        │
+└──────────┴───────────┴────────────┴────────────────────────┘
+
+새 에셋 D (250MB) 로드 시도
+총 여유: 200MB + 550MB = 750MB → 충분해 보임
+연속 공간: 550MB max → 250MB 할당 가능!
+
+하지만 몇 시간 후...
+┌────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐
+│ A  │🕳️│ C  │🕳️│ E  │🕳️│ G  │🕳️│ I  │🕳️│ K  │
+│50MB│30MB│80MB│20MB│40MB│50MB│60MB│40MB│30MB│60MB│40MB│
+└────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
+
+총 여유: 200MB (조각 합계)
+최대 연속 공간: 60MB
+→ 100MB 텍스처도 로드 불가! 💥 Out of Memory</pre>
+                </div>
+            </div>
+
+            <div class="q">외부 단편화와 내부 단편화의 차이가 뭐야?</div>
+            <div class="a">
+                <div class="diagram-box">
+                    <pre>
+[단편화의 두 가지 유형]
+
+◆ 외부 단편화 (External Fragmentation)
+  - 할당된 블록들 "사이"에 사용 불가능한 작은 공간 발생
+  - 위 예시처럼 구멍이 여러 개 뚫린 상태
+  - 게임에서 가장 흔한 문제
+
+  ┌──────┐     ┌──────┐     ┌──────┐
+  │ Used │ 🕳️ │ Used │ 🕳️ │ Used │
+  └──────┘     └──────┘     └──────┘
+           ↑           ↑
+        외부 단편화 (사이 공간)
+
+◆ 내부 단편화 (Internal Fragmentation)
+  - 할당된 블록 "내부"에서 낭비되는 공간
+  - 고정 크기 풀에서 작은 객체 할당 시 발생
+  - 메모리 정렬(alignment) 요구사항으로도 발생
+
+  요청: 60바이트
+  할당: 64바이트 블록 (2^n 정렬)
+  ┌─────────────────────────────────┐
+  │ 사용: 60바이트 │ 낭비: 4바이트 │  ← 내부 단편화
+  └─────────────────────────────────┘
+
+[게임에서의 영향]
+┌─────────────────────────────────────────────────────────┐
+│ 유형          │ 발생 원인              │ 주요 영향     │
+├─────────────────────────────────────────────────────────┤
+│ 외부 단편화   │ 다양한 크기의 에셋     │ 할당 실패     │
+│               │ 로드/언로드 반복       │ OOM 크래시    │
+├─────────────────────────────────────────────────────────┤
+│ 내부 단편화   │ 풀 할당자 사용 시      │ 메모리 낭비   │
+│               │ 메모리 정렬            │ 효율 저하     │
+└─────────────────────────────────────────────────────────┘</pre>
+                </div>
+            </div>
+
+            <div class="q">왜 게임에서 특히 문제가 돼?</div>
+            <div class="a">
+                <p>게임은 <span class="warning">장시간 연속 실행 + 동적 에셋 로드/언로드</span>의 조합이 일반적이라 단편화에 취약해:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[게임이 단편화에 취약한 이유]
+
+1. 장시간 세션
+   ├── MMO: 몇 시간 연속 플레이
+   ├── 오픈월드: 스트리밍 지속
+   └── 콘솔: 절전모드로 며칠간 유지
+
+2. 동적 에셋 교체
+   ├── 스테이지 전환
+   ├── 적/NPC 스폰/디스폰
+   ├── 이펙트 생성/소멸
+   └── UI 팝업/닫기
+
+3. 다양한 에셋 크기
+   ├── 텍스처: 256KB ~ 64MB
+   ├── 메시: 1KB ~ 10MB
+   ├── 사운드: 100KB ~ 50MB
+   └── 애니메이션: 500KB ~ 5MB
+
+4. 제한된 메모리 환경
+   ├── 모바일: 2~8GB (시스템 공유)
+   ├── Switch: 4GB
+   ├── PS5/XSX: 16GB (GPU 공유)
+   └── 가상 메모리 사용 제한적
+
+[타임라인 예시: 4시간 RPG 세션]
+0h   ────────────────────────────────▶ 4h
+│ 던전1 ─▶ 마을 ─▶ 던전2 ─▶ 필드 ─▶ ...
+│   ↓       ↓        ↓        ↓
+│ 로드   언로드    로드    언로드 ... (반복)
+│
+└▶ 단편화 점점 심화 → 후반부에 크래시 위험!</pre>
+                </div>
             </div>
         </div>
 
+        <!-- Part 2 -->
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. 왜 필요해: 단편화의 실제 비용</h2>
+
+            <div class="q">단편화 때문에 실제로 어떤 문제가 생겨?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>단편화로 인한 <span class="warning">실제 장애 시나리오</span>들이야:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[단편화로 인한 실제 장애]
+
+◆ Case 1: OOM 크래시 (가장 흔함)
+  상황: 오픈월드 게임 3시간 플레이 후 새 지역 진입
+  증상: "Out of Memory" 크래시
+  원인: 총 1GB 여유지만 최대 연속 50MB
+       256MB 지형 텍스처 할당 실패
+
+  유저 리포트: "왜 램 16GB인데 메모리 부족이죠?"
+  실제 원인: GPU 메모리 단편화
+
+◆ Case 2: 성능 저하 (점진적)
+  상황: 로비 → 전투 → 로비 반복
+  증상: 플레이 시간에 비례해 로딩 느려짐
+  원인: 단편화로 할당자가 빈 공간 검색에 시간 소모
+
+  [로딩 시간 증가 그래프]
+  로딩시간
+    5s │                         ╭──
+    4s │                    ╭────╯
+    3s │              ╭─────╯
+    2s │        ╭─────╯
+    1s │  ──────╯
+       └────────────────────────────▶ 시간
+       0h    1h    2h    3h    4h
+
+◆ Case 3: 비결정적 크래시 (디버깅 악몽)
+  상황: QA에서 재현 안 되지만 라이브에서 발생
+  증상: 특정 조합/순서에서만 크래시
+  원인: 유저마다 다른 플레이 패턴 → 다른 단편화 상태
+
+  재현 조건:
+  - 3번째 던전 클리어 후
+  - 마을에서 NPC 대화 중
+  - 보스 소환 이펙트 로드 시
+  → 정확히 이 순서로만 발생!
+
+◆ Case 4: 콘솔 인증 실패
+  상황: PS/Xbox 인증 테스트
+  증상: "장시간 테스트"에서 불합격
+  원인: 8시간 연속 테스트 중 메모리 누수처럼 보임
+        (실제로는 단편화)
+
+  콘솔 벤더: "메모리 누수 수정하세요"
+  실제 원인: 단편화 관리 미흡</pre>
+                </div>
+            </div>
+
+            <div class="q">단편화 수준을 어떻게 측정해?</div>
+            <div class="a">
+                <p><span class="highlight">단편화 지표(Fragmentation Metrics)</span>로 정량화할 수 있어:</p>
+
+                <div class="code-block"><span class="comment">// Unity - 메모리 단편화 지표 측정</span>
+
+<span class="keyword">using</span> System;
+<span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.Profiling;
+
+<span class="keyword">public class</span> <span class="type">FragmentationAnalyzer</span> : <span class="type">MonoBehaviour</span>
+{
+    [<span class="type">Serializable</span>]
+    <span class="keyword">public struct</span> <span class="type">FragmentationReport</span>
+    {
+        <span class="keyword">public long</span> TotalFreeBytes;
+        <span class="keyword">public long</span> LargestFreeBlockBytes;
+        <span class="keyword">public int</span> FreeBlockCount;
+        <span class="keyword">public float</span> FragmentationRatio;  <span class="comment">// 0 = 완벽, 1 = 최악</span>
+        <span class="keyword">public float</span> EffectiveUsableRatio;
+    }
+
+    <span class="keyword">private</span> <span class="type">List</span>&lt;<span class="keyword">byte</span>[]&gt; _probeAllocations = <span class="keyword">new</span>();
+
+    <span class="comment">/// &lt;summary&gt;</span>
+    <span class="comment">/// 메모리 단편화 수준을 프로빙으로 측정</span>
+    <span class="comment">/// 주의: 측정 자체가 메모리에 영향을 주므로 개발 빌드에서만 사용</span>
+    <span class="comment">/// &lt;/summary&gt;</span>
+    <span class="keyword">public</span> <span class="type">FragmentationReport</span> <span class="function">MeasureFragmentation</span>()
+    {
+        <span class="keyword">var</span> report = <span class="keyword">new</span> <span class="type">FragmentationReport</span>();
+
+        <span class="comment">// 1. 현재 여유 메모리 측정</span>
+        <span class="keyword">long</span> reservedBefore = Profiler.GetTotalReservedMemoryLong();
+        <span class="keyword">long</span> usedBefore = Profiler.GetTotalAllocatedMemoryLong();
+        report.TotalFreeBytes = reservedBefore - usedBefore;
+
+        <span class="comment">// 2. 프로빙으로 최대 연속 블록 크기 찾기</span>
+        report.LargestFreeBlockBytes = FindLargestContiguousBlock();
+
+        <span class="comment">// 3. 단편화 비율 계산</span>
+        <span class="comment">// ratio = 1 - (최대블록 / 총여유)</span>
+        <span class="comment">// 0에 가까울수록 좋음 (큰 블록 할당 가능)</span>
+        <span class="keyword">if</span> (report.TotalFreeBytes > <span class="number">0</span>)
+        {
+            report.FragmentationRatio = <span class="number">1f</span> -
+                (<span class="keyword">float</span>)report.LargestFreeBlockBytes / report.TotalFreeBytes;
+        }
+
+        <span class="comment">// 4. 실효 사용 가능 비율</span>
+        <span class="comment">// 예: 100MB 여유 중 최대 블록이 10MB면 10%만 큰 할당에 사용 가능</span>
+        report.EffectiveUsableRatio =
+            (<span class="keyword">float</span>)report.LargestFreeBlockBytes / report.TotalFreeBytes;
+
+        <span class="keyword">return</span> report;
+    }
+
+    <span class="keyword">private long</span> <span class="function">FindLargestContiguousBlock</span>()
+    {
+        <span class="comment">// 이진 탐색으로 할당 가능한 최대 블록 크기 찾기</span>
+        <span class="keyword">long</span> low = <span class="number">1</span> * <span class="number">1024</span> * <span class="number">1024</span>;   <span class="comment">// 1MB</span>
+        <span class="keyword">long</span> high = <span class="number">512</span> * <span class="number">1024</span> * <span class="number">1024</span>; <span class="comment">// 512MB</span>
+        <span class="keyword">long</span> largest = <span class="number">0</span>;
+
+        <span class="keyword">while</span> (low <= high)
+        {
+            <span class="keyword">long</span> mid = (low + high) / <span class="number">2</span>;
+
+            <span class="keyword">if</span> (TryAllocate((<span class="keyword">int</span>)mid))
+            {
+                largest = mid;
+                low = mid + <span class="number">1</span>;
+            }
+            <span class="keyword">else</span>
+            {
+                high = mid - <span class="number">1</span>;
+            }
+        }
+
+        <span class="keyword">return</span> largest;
+    }
+
+    <span class="keyword">private bool</span> <span class="function">TryAllocate</span>(<span class="keyword">int</span> size)
+    {
+        <span class="keyword">try</span>
+        {
+            <span class="keyword">byte</span>[] buffer = <span class="keyword">new byte</span>[size];
+            <span class="comment">// 할당 성공, 즉시 해제 (GC에 맡김)</span>
+            <span class="keyword">return true</span>;
+        }
+        <span class="keyword">catch</span> (<span class="type">OutOfMemoryException</span>)
+        {
+            <span class="keyword">return false</span>;
+        }
+    }
+
+    <span class="keyword">public void</span> <span class="function">LogFragmentationStatus</span>()
+    {
+        <span class="keyword">var</span> report = MeasureFragmentation();
+
+        Debug.Log($<span class="string">"[Memory Fragmentation Report]\n"</span> +
+            $<span class="string">"  총 여유 메모리: {report.TotalFreeBytes / (1024*1024):F1} MB\n"</span> +
+            $<span class="string">"  최대 연속 블록: {report.LargestFreeBlockBytes / (1024*1024):F1} MB\n"</span> +
+            $<span class="string">"  단편화율: {report.FragmentationRatio * 100:F1}%\n"</span> +
+            $<span class="string">"  실효 사용률: {report.EffectiveUsableRatio * 100:F1}%"</span>);
+
+        <span class="comment">// 경고 임계값</span>
+        <span class="keyword">if</span> (report.FragmentationRatio > <span class="number">0.5f</span>)
+        {
+            Debug.LogWarning(<span class="string">"⚠️ 단편화율 50% 초과! 메모리 정리 권장"</span>);
+        }
+        <span class="keyword">if</span> (report.LargestFreeBlockBytes < <span class="number">64</span> * <span class="number">1024</span> * <span class="number">1024</span>)
+        {
+            Debug.LogError(<span class="string">"🚨 최대 블록 64MB 미만! 큰 에셋 로드 실패 위험"</span>);
+        }
+    }
+}</div>
             </div>
         </div>
 
+        <!-- Part 3 -->
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 실전 적용: 풀 할당자(Pool Allocator)</h2>
+
+            <div class="q">풀 할당자가 뭐고 어떻게 단편화를 막아?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p><span class="highlight">풀 할당자(Pool Allocator)</span>는 동일한 크기의 객체를 미리 할당해두고 재사용하는 방식이야. 같은 크기만 할당하니까 외부 단편화가 원천적으로 발생하지 않아:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[풀 할당자의 원리]
+
+◆ 일반 할당자 (단편화 발생)
+  malloc(100) → malloc(50) → free(100) → malloc(80)
+
+  메모리 상태:
+  ┌────────┬───────┬───────────────────────┐
+  │  🕳️   │ 50B   │        Free           │
+  │ 100B   │       │                       │
+  │(빈공간)│       │                       │
+  └────────┴───────┴───────────────────────┘
+  → 80B 할당 시 100B 구멍 사용? 아니면 뒤에 새로?
+
+◆ 풀 할당자 (단편화 없음)
+  Pool<64B>에서 할당/해제
+
+  ┌──────┬──────┬──────┬──────┬──────┬──────┐
+  │ 64B  │ 64B  │ 64B  │ 64B  │ 64B  │ 64B  │
+  │ Used │ Free │ Used │ Free │ Free │ Used │
+  └──────┴──────┴──────┴──────┴──────┴──────┘
+  → 모든 블록이 같은 크기 → 어떤 Free든 재사용 가능!
+
+[풀 할당자 종류]
+┌─────────────────────────────────────────────────────────┐
+│ 유형              │ 특징                │ 용도          │
+├─────────────────────────────────────────────────────────┤
+│ Fixed-Size Pool   │ 단일 크기 블록      │ 특정 객체     │
+│ Slab Allocator    │ 여러 크기 클래스    │ 범용         │
+│ Free List Pool    │ 연결 리스트 관리    │ 빈번한 할당  │
+│ Ring Buffer       │ FIFO 순환 버퍼      │ 스트리밍 데이터│
+└─────────────────────────────────────────────────────────┘</pre>
+                </div>
+            </div>
+
+            <div class="q">Unity에서 풀 할당자를 어떻게 구현해?</div>
+            <div class="a">
+                <p>Unity의 <span class="highlight">ObjectPool&lt;T&gt;</span>을 활용하거나, 에셋용 커스텀 풀을 만들 수 있어:</p>
+
+                <div class="code-block"><span class="keyword">using</span> System;
+<span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.Pool;
+
+<span class="comment">// 1. Unity 내장 ObjectPool 활용</span>
+<span class="keyword">public class</span> <span class="type">ProjectilePool</span> : <span class="type">MonoBehaviour</span>
+{
+    [<span class="type">SerializeField</span>] <span class="keyword">private</span> <span class="type">GameObject</span> _projectilePrefab;
+    [<span class="type">SerializeField</span>] <span class="keyword">private int</span> _initialCapacity = <span class="number">50</span>;
+    [<span class="type">SerializeField</span>] <span class="keyword">private int</span> _maxSize = <span class="number">200</span>;
+
+    <span class="keyword">private</span> <span class="type">ObjectPool</span>&lt;<span class="type">GameObject</span>&gt; _pool;
+
+    <span class="keyword">private void</span> <span class="function">Awake</span>()
+    {
+        _pool = <span class="keyword">new</span> <span class="type">ObjectPool</span>&lt;<span class="type">GameObject</span>&gt;(
+            createFunc: () => Instantiate(_projectilePrefab),
+            actionOnGet: obj => obj.SetActive(<span class="keyword">true</span>),
+            actionOnRelease: obj => obj.SetActive(<span class="keyword">false</span>),
+            actionOnDestroy: obj => Destroy(obj),
+            collectionCheck: <span class="keyword">true</span>,
+            defaultCapacity: _initialCapacity,
+            maxSize: _maxSize
+        );
+
+        <span class="comment">// 미리 워밍업 (단편화 방지)</span>
+        WarmUp(_initialCapacity);
+    }
+
+    <span class="keyword">private void</span> <span class="function">WarmUp</span>(<span class="keyword">int</span> count)
+    {
+        <span class="keyword">var</span> temp = <span class="keyword">new</span> <span class="type">List</span>&lt;<span class="type">GameObject</span>&gt;(count);
+
+        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i < count; i++)
+        {
+            temp.Add(_pool.Get());
+        }
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> obj <span class="keyword">in</span> temp)
+        {
+            _pool.Release(obj);
+        }
+    }
+
+    <span class="keyword">public</span> <span class="type">GameObject</span> <span class="function">Spawn</span>(<span class="type">Vector3</span> position, <span class="type">Quaternion</span> rotation)
+    {
+        <span class="keyword">var</span> proj = _pool.Get();
+        proj.transform.SetPositionAndRotation(position, rotation);
+        <span class="keyword">return</span> proj;
+    }
+
+    <span class="keyword">public void</span> <span class="function">Despawn</span>(<span class="type">GameObject</span> projectile)
+    {
+        _pool.Release(projectile);
+    }
+}
+
+<span class="comment">// 2. 텍스처 에셋용 메모리 풀</span>
+<span class="keyword">public class</span> <span class="type">TextureMemoryPool</span>
+{
+    <span class="comment">// 크기별 풀 (2의 제곱 크기)</span>
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="keyword">int</span>, <span class="type">Stack</span>&lt;<span class="type">Texture2D</span>&gt;&gt; _pools = <span class="keyword">new</span>();
+
+    <span class="keyword">private static readonly int</span>[] SizeClasses =
+        { <span class="number">64</span>, <span class="number">128</span>, <span class="number">256</span>, <span class="number">512</span>, <span class="number">1024</span>, <span class="number">2048</span>, <span class="number">4096</span> };
+
+    <span class="keyword">public void</span> <span class="function">Initialize</span>(<span class="keyword">int</span> texturesPerSize = <span class="number">5</span>)
+    {
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> size <span class="keyword">in</span> SizeClasses)
+        {
+            _pools[size] = <span class="keyword">new</span> <span class="type">Stack</span>&lt;<span class="type">Texture2D</span>&gt;(texturesPerSize);
+
+            <span class="comment">// 미리 할당</span>
+            <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i < texturesPerSize; i++)
+            {
+                <span class="keyword">var</span> tex = <span class="keyword">new</span> <span class="type">Texture2D</span>(size, size,
+                    <span class="type">TextureFormat</span>.RGBA32, <span class="keyword">false</span>);
+                _pools[size].Push(tex);
+            }
+        }
+
+        Debug.Log(<span class="string">"TextureMemoryPool 초기화 완료 - "</span> +
+                  $<span class="string">"{SizeClasses.Length * texturesPerSize}개 텍스처 사전 할당"</span>);
+    }
+
+    <span class="keyword">public</span> <span class="type">Texture2D</span> <span class="function">Acquire</span>(<span class="keyword">int</span> width, <span class="keyword">int</span> height)
+    {
+        <span class="comment">// 요청 크기를 포함하는 가장 작은 2의 제곱 크기 찾기</span>
+        <span class="keyword">int</span> requiredSize = Mathf.Max(width, height);
+        <span class="keyword">int</span> sizeClass = GetSizeClass(requiredSize);
+
+        <span class="keyword">if</span> (_pools.TryGetValue(sizeClass, <span class="keyword">out var</span> pool) && pool.Count > <span class="number">0</span>)
+        {
+            <span class="keyword">return</span> pool.Pop();
+        }
+
+        <span class="comment">// 풀이 비었으면 새로 생성 (단편화 발생 가능)</span>
+        Debug.LogWarning($<span class="string">"TexturePool[{sizeClass}] 확장 - 단편화 주의"</span>);
+        <span class="keyword">return new</span> <span class="type">Texture2D</span>(sizeClass, sizeClass,
+            <span class="type">TextureFormat</span>.RGBA32, <span class="keyword">false</span>);
+    }
+
+    <span class="keyword">public void</span> <span class="function">Release</span>(<span class="type">Texture2D</span> texture)
+    {
+        <span class="keyword">int</span> size = texture.width;
+        <span class="keyword">if</span> (_pools.TryGetValue(size, <span class="keyword">out var</span> pool))
+        {
+            <span class="comment">// 내용 초기화 (선택적)</span>
+            <span class="comment">// texture.SetPixels32(new Color32[size * size]);</span>
+            pool.Push(texture);
+        }
+        <span class="keyword">else</span>
+        {
+            <span class="comment">// 풀에 맞지 않는 크기는 파괴</span>
+            UnityEngine.Object.Destroy(texture);
+        }
+    }
+
+    <span class="keyword">private int</span> <span class="function">GetSizeClass</span>(<span class="keyword">int</span> size)
+    {
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> s <span class="keyword">in</span> SizeClasses)
+        {
+            <span class="keyword">if</span> (s >= size) <span class="keyword">return</span> s;
+        }
+        <span class="keyword">return</span> SizeClasses[SizeClasses.Length - <span class="number">1</span>];
+    }
+}</div>
             </div>
         </div>
+
+        <!-- Part 4 -->
+        <div class="conversation">
+            <h2>Part 4. 심화 개념: 청크 기반 메모리 관리</h2>
+
+            <div class="q">청크(Chunk) 관리가 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">청크 관리</span>는 관련 에셋들을 하나의 큰 연속 메모리 블록으로 묶어 관리하는 방식이야. 한 번에 로드/언로드하므로 단편화가 발생하지 않아:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[청크 기반 메모리 관리]
+
+◆ 개별 에셋 로드 (단편화 발생)
+  Stage1 에셋들을 개별 할당:
+  ┌──────┬──────┬──────┬──────┬──────┐
+  │Tex_A │Mesh_A│Sound │Tex_B │Mesh_B│
+  │ 10MB │ 5MB  │ 2MB  │ 8MB  │ 3MB  │
+  └──────┴──────┴──────┴──────┴──────┘
+
+  Stage2로 전환 시 일부만 언로드:
+  ┌──────┬──────┬──────┬──────┬──────┐
+  │ 🕳️  │Mesh_A│ 🕳️  │ 🕳️  │Mesh_B│
+  │ 10MB │(공유)│ 2MB  │ 8MB  │(공유)│
+  └──────┴──────┴──────┴──────┴──────┘
+  → 구멍 발생! (20MB 조각)
+
+◆ 청크 단위 로드 (단편화 없음)
+  Stage1 청크 = 모든 에셋을 하나로:
+  ┌───────────────────────────────────┐
+  │        Stage1 Chunk (28MB)        │
+  │ Tex_A + Mesh_A + Sound + Tex_B + …│
+  └───────────────────────────────────┘
+
+  Stage2로 전환 시 청크 통째로 교체:
+  ┌───────────────────────────────────┐
+  │        Stage2 Chunk (32MB)        │
+  │         (새로 연속 할당)           │
+  └───────────────────────────────────┘
+  → 이전 청크 전체 해제 → 구멍 없음!
+
+[공유 에셋 처리]
+┌────────────────────────────────────────────────────────┐
+│ 청크 계층 구조                                         │
+├────────────────────────────────────────────────────────┤
+│ [Persistent Chunk] - 절대 언로드 안 함                │
+│ ├── 공통 UI                                           │
+│ ├── 플레이어 캐릭터                                   │
+│ └── 자주 쓰는 이펙트                                  │
+│                                                        │
+│ [Stage Chunk] - 스테이지별 교체                       │
+│ ├── Stage1_Chunk                                      │
+│ ├── Stage2_Chunk                                      │
+│ └── ...                                               │
+│                                                        │
+│ [Dynamic Chunk] - 필요시 로드                         │
+│ ├── Boss_Chunk                                        │
+│ └── CutScene_Chunk                                    │
+└────────────────────────────────────────────────────────┘</pre>
+                </div>
+            </div>
+
+            <div class="q">청크를 코드로 어떻게 구현해?</div>
+            <div class="a">
+                <div class="code-block"><span class="keyword">using</span> System;
+<span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> System.Runtime.InteropServices;
+<span class="keyword">using</span> UnityEngine;
+
+<span class="comment">/// &lt;summary&gt;</span>
+<span class="comment">/// 청크 기반 메모리 관리자</span>
+<span class="comment">/// 관련 에셋들을 연속된 네이티브 메모리에 할당</span>
+<span class="comment">/// &lt;/summary&gt;</span>
+<span class="keyword">public class</span> <span class="type">MemoryChunk</span> : <span class="type">IDisposable</span>
+{
+    <span class="keyword">public string</span> Name { <span class="keyword">get</span>; }
+    <span class="keyword">public int</span> TotalSize { <span class="keyword">get</span>; }
+    <span class="keyword">public int</span> UsedSize { <span class="keyword">get</span>; <span class="keyword">private set</span>; }
+
+    <span class="keyword">private</span> <span class="type">IntPtr</span> _basePtr;
+    <span class="keyword">private int</span> _offset;
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="keyword">string</span>, (<span class="type">IntPtr</span> ptr, <span class="keyword">int</span> size)&gt; _allocations = <span class="keyword">new</span>();
+    <span class="keyword">private bool</span> _disposed;
+
+    <span class="keyword">public</span> <span class="function">MemoryChunk</span>(<span class="keyword">string</span> name, <span class="keyword">int</span> sizeBytes)
+    {
+        Name = name;
+        TotalSize = sizeBytes;
+
+        <span class="comment">// 네이티브 메모리 할당 (연속된 큰 블록)</span>
+        _basePtr = Marshal.AllocHGlobal(sizeBytes);
+        _offset = <span class="number">0</span>;
+
+        Debug.Log($<span class="string">"[MemoryChunk] '{name}' 생성: {sizeBytes / (1024*1024)}MB"</span>);
+    }
+
+    <span class="comment">/// &lt;summary&gt;</span>
+    <span class="comment">/// 청크 내에서 메모리 할당 (선형 할당자)</span>
+    <span class="comment">/// &lt;/summary&gt;</span>
+    <span class="keyword">public</span> <span class="type">IntPtr</span> <span class="function">Allocate</span>(<span class="keyword">string</span> assetName, <span class="keyword">int</span> size, <span class="keyword">int</span> alignment = <span class="number">16</span>)
+    {
+        <span class="comment">// 정렬 조정</span>
+        <span class="keyword">int</span> alignedOffset = (_offset + alignment - <span class="number">1</span>) & ~(alignment - <span class="number">1</span>);
+
+        <span class="keyword">if</span> (alignedOffset + size > TotalSize)
+        {
+            <span class="keyword">throw new</span> <span class="type">OutOfMemoryException</span>(
+                $<span class="string">"[MemoryChunk] '{Name}' 공간 부족: "</span> +
+                $<span class="string">"요청 {size}B, 여유 {TotalSize - alignedOffset}B"</span>);
+        }
+
+        <span class="type">IntPtr</span> ptr = <span class="type">IntPtr</span>.Add(_basePtr, alignedOffset);
+        _allocations[assetName] = (ptr, size);
+
+        _offset = alignedOffset + size;
+        UsedSize = _offset;
+
+        <span class="keyword">return</span> ptr;
+    }
+
+    <span class="comment">/// &lt;summary&gt;</span>
+    <span class="comment">/// 데이터를 청크에 복사</span>
+    <span class="comment">/// &lt;/summary&gt;</span>
+    <span class="keyword">public void</span> <span class="function">CopyData</span>(<span class="keyword">string</span> assetName, <span class="keyword">byte</span>[] data)
+    {
+        <span class="type">IntPtr</span> ptr = Allocate(assetName, data.Length);
+        Marshal.Copy(data, <span class="number">0</span>, ptr, data.Length);
+    }
+
+    <span class="comment">/// &lt;summary&gt;</span>
+    <span class="comment">/// 특정 에셋의 포인터 가져오기</span>
+    <span class="comment">/// &lt;/summary&gt;</span>
+    <span class="keyword">public</span> <span class="type">IntPtr</span> <span class="function">GetPointer</span>(<span class="keyword">string</span> assetName)
+    {
+        <span class="keyword">if</span> (_allocations.TryGetValue(assetName, <span class="keyword">out var</span> alloc))
+        {
+            <span class="keyword">return</span> alloc.ptr;
+        }
+        <span class="keyword">return</span> <span class="type">IntPtr</span>.Zero;
+    }
+
+    <span class="comment">/// &lt;summary&gt;</span>
+    <span class="comment">/// 청크 전체 초기화 (재사용)</span>
+    <span class="comment">/// 개별 해제 없이 한 번에 리셋</span>
+    <span class="comment">/// &lt;/summary&gt;</span>
+    <span class="keyword">public void</span> <span class="function">Reset</span>()
+    {
+        _allocations.Clear();
+        _offset = <span class="number">0</span>;
+        UsedSize = <span class="number">0</span>;
+
+        <span class="comment">// 선택적: 메모리 제로화</span>
+        <span class="comment">// unsafe { NativeMemory.ZeroMemory(_basePtr, TotalSize); }</span>
+    }
+
+    <span class="keyword">public void</span> <span class="function">Dispose</span>()
+    {
+        <span class="keyword">if</span> (!_disposed)
+        {
+            Marshal.FreeHGlobal(_basePtr);
+            _disposed = <span class="keyword">true</span>;
+            Debug.Log($<span class="string">"[MemoryChunk] '{Name}' 해제"</span>);
+        }
+    }
+}
+
+<span class="comment">/// &lt;summary&gt;</span>
+<span class="comment">/// 스테이지별 청크 관리자</span>
+<span class="comment">/// &lt;/summary&gt;</span>
+<span class="keyword">public class</span> <span class="type">StageChunkManager</span>
+{
+    <span class="keyword">private</span> <span class="type">MemoryChunk</span> _persistentChunk;  <span class="comment">// 상주 에셋</span>
+    <span class="keyword">private</span> <span class="type">MemoryChunk</span> _stageChunkA;      <span class="comment">// 더블 버퍼 A</span>
+    <span class="keyword">private</span> <span class="type">MemoryChunk</span> _stageChunkB;      <span class="comment">// 더블 버퍼 B</span>
+    <span class="keyword">private</span> <span class="type">MemoryChunk</span> _currentStage;
+    <span class="keyword">private bool</span> _useChunkA = <span class="keyword">true</span>;
+
+    <span class="keyword">public void</span> <span class="function">Initialize</span>(
+        <span class="keyword">int</span> persistentSizeMB = <span class="number">64</span>,
+        <span class="keyword">int</span> stageSizeMB = <span class="number">128</span>)
+    {
+        _persistentChunk = <span class="keyword">new</span> <span class="type">MemoryChunk</span>(<span class="string">"Persistent"</span>,
+            persistentSizeMB * <span class="number">1024</span> * <span class="number">1024</span>);
+
+        <span class="comment">// 더블 버퍼링: 전환 시 단편화 방지</span>
+        _stageChunkA = <span class="keyword">new</span> <span class="type">MemoryChunk</span>(<span class="string">"Stage_A"</span>,
+            stageSizeMB * <span class="number">1024</span> * <span class="number">1024</span>);
+        _stageChunkB = <span class="keyword">new</span> <span class="type">MemoryChunk</span>(<span class="string">"Stage_B"</span>,
+            stageSizeMB * <span class="number">1024</span> * <span class="number">1024</span>);
+
+        _currentStage = _stageChunkA;
+    }
+
+    <span class="keyword">public</span> <span class="type">MemoryChunk</span> <span class="function">PrepareNextStage</span>()
+    {
+        <span class="comment">// 사용하지 않는 청크 가져오기</span>
+        <span class="keyword">var</span> nextChunk = _useChunkA ? _stageChunkB : _stageChunkA;
+        nextChunk.Reset();
+        <span class="keyword">return</span> nextChunk;
+    }
+
+    <span class="keyword">public void</span> <span class="function">SwitchToNextStage</span>()
+    {
+        <span class="comment">// 청크 전환</span>
+        _useChunkA = !_useChunkA;
+        _currentStage = _useChunkA ? _stageChunkA : _stageChunkB;
+
+        Debug.Log($<span class="string">"[StageChunkManager] 스테이지 전환: {_currentStage.Name}"</span>);
+    }
+}</div>
+            </div>
+
+            <div class="q">Addressables와 청크 관리를 어떻게 연동해?</div>
+            <div class="a">
+                <div class="code-block"><span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> System.Threading.Tasks;
+<span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.AddressableAssets;
+<span class="keyword">using</span> UnityEngine.ResourceManagement.AsyncOperations;
+
+<span class="comment">/// &lt;summary&gt;</span>
+<span class="comment">/// Addressables 청크 로더</span>
+<span class="comment">/// 관련 에셋을 그룹으로 묶어 한 번에 로드/언로드</span>
+<span class="comment">/// &lt;/summary&gt;</span>
+<span class="keyword">public class</span> <span class="type">AddressableChunkLoader</span>
+{
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="keyword">string</span>, <span class="type">List</span>&lt;<span class="type">AsyncOperationHandle</span>&gt;&gt; _loadedChunks = <span class="keyword">new</span>();
+
+    <span class="comment">/// &lt;summary&gt;</span>
+    <span class="comment">/// 청크(라벨) 단위로 에셋 로드</span>
+    <span class="comment">/// &lt;/summary&gt;</span>
+    <span class="keyword">public async</span> <span class="type">Task</span> <span class="function">LoadChunkAsync</span>(<span class="keyword">string</span> chunkLabel)
+    {
+        <span class="keyword">if</span> (_loadedChunks.ContainsKey(chunkLabel))
+        {
+            Debug.LogWarning($<span class="string">"청크 '{chunkLabel}' 이미 로드됨"</span>);
+            <span class="keyword">return</span>;
+        }
+
+        <span class="keyword">var</span> handles = <span class="keyword">new</span> <span class="type">List</span>&lt;<span class="type">AsyncOperationHandle</span>&gt;();
+
+        <span class="comment">// 1. 청크의 모든 에셋 주소 가져오기</span>
+        <span class="keyword">var</span> locationsHandle = Addressables.LoadResourceLocationsAsync(
+            chunkLabel, <span class="keyword">typeof</span>(<span class="type">Object</span>));
+        <span class="keyword">await</span> locationsHandle.Task;
+
+        <span class="keyword">if</span> (locationsHandle.Status != <span class="type">AsyncOperationStatus</span>.Succeeded)
+        {
+            Debug.LogError($<span class="string">"청크 '{chunkLabel}' 위치 로드 실패"</span>);
+            <span class="keyword">return</span>;
+        }
+
+        <span class="comment">// 2. 모든 에셋 병렬 로드</span>
+        <span class="keyword">var</span> loadTasks = <span class="keyword">new</span> <span class="type">List</span>&lt;<span class="type">Task</span>&gt;();
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> location <span class="keyword">in</span> locationsHandle.Result)
+        {
+            <span class="keyword">var</span> handle = Addressables.LoadAssetAsync&lt;<span class="type">Object</span>&gt;(location);
+            handles.Add(handle);
+            loadTasks.Add(handle.Task);
+        }
+
+        <span class="comment">// 모든 에셋 로드 완료 대기</span>
+        <span class="keyword">await</span> <span class="type">Task</span>.WhenAll(loadTasks);
+
+        _loadedChunks[chunkLabel] = handles;
+
+        Debug.Log($<span class="string">"[AddressableChunk] '{chunkLabel}' 로드 완료: "</span> +
+                  $<span class="string">"{handles.Count}개 에셋"</span>);
+    }
+
+    <span class="comment">/// &lt;summary&gt;</span>
+    <span class="comment">/// 청크 단위로 에셋 언로드</span>
+    <span class="comment">/// &lt;/summary&gt;</span>
+    <span class="keyword">public void</span> <span class="function">UnloadChunk</span>(<span class="keyword">string</span> chunkLabel)
+    {
+        <span class="keyword">if</span> (!_loadedChunks.TryGetValue(chunkLabel, <span class="keyword">out var</span> handles))
+        {
+            Debug.LogWarning($<span class="string">"청크 '{chunkLabel}' 로드되지 않음"</span>);
+            <span class="keyword">return</span>;
+        }
+
+        <span class="comment">// 모든 핸들 해제</span>
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> handle <span class="keyword">in</span> handles)
+        {
+            Addressables.Release(handle);
+        }
+
+        _loadedChunks.Remove(chunkLabel);
+
+        <span class="comment">// 메모리 압축 요청 (GC + 언로드)</span>
+        Resources.UnloadUnusedAssets();
+        System.GC.Collect();
+
+        Debug.Log($<span class="string">"[AddressableChunk] '{chunkLabel}' 언로드 완료"</span>);
+    }
+
+    <span class="comment">/// &lt;summary&gt;</span>
+    <span class="comment">/// 스테이지 전환: 이전 청크 언로드 → 새 청크 로드</span>
+    <span class="comment">/// 단편화 최소화를 위해 순서 중요</span>
+    <span class="comment">/// &lt;/summary&gt;</span>
+    <span class="keyword">public async</span> <span class="type">Task</span> <span class="function">TransitionStageAsync</span>(<span class="keyword">string</span> fromChunk, <span class="keyword">string</span> toChunk)
+    {
+        Debug.Log($<span class="string">"스테이지 전환: {fromChunk} → {toChunk}"</span>);
+
+        <span class="comment">// 1. 새 청크 먼저 다운로드 (로드는 안 함)</span>
+        <span class="keyword">var</span> downloadHandle = Addressables.DownloadDependenciesAsync(toChunk);
+        <span class="keyword">await</span> downloadHandle.Task;
+        Addressables.Release(downloadHandle);
+
+        <span class="comment">// 2. 이전 청크 언로드 (메모리 확보)</span>
+        UnloadChunk(fromChunk);
+
+        <span class="comment">// 3. 잠시 대기 (GC 완료)</span>
+        <span class="keyword">await</span> <span class="type">Task</span>.Yield();
+
+        <span class="comment">// 4. 새 청크 로드</span>
+        <span class="keyword">await</span> LoadChunkAsync(toChunk);
+
+        Debug.Log(<span class="string">"스테이지 전환 완료"</span>);
+    }
+}</div>
+            </div>
+        </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. 고급 패턴: 디프래그멘테이션</h2>
+
+            <div class="q">이미 단편화가 발생했으면 어떻게 해?</div>
+            <div class="a">
+                <p><span class="highlight">디프래그멘테이션(Defragmentation)</span>으로 메모리를 압축할 수 있지만, 게임 런타임에서는 제한적이야:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[디프래그멘테이션 전략]
+
+◆ 불가능한 방법: 직접 메모리 이동
+  - 게임 런타임에서 에셋 포인터 변경 불가
+  - 텍스처, 메시 등은 GPU 메모리에 있음
+  - 이동하면 모든 참조 무효화 → 크래시
+
+◆ 가능한 방법 1: Unload → Reload
+  현재 상태:
+  ┌──────┬───────┬──────┬───────┬──────┐
+  │ A    │ 🕳️   │ B    │ 🕳️   │ C    │
+  └──────┴───────┴──────┴───────┴──────┘
+
+  1. 활성 에셋 목록 수집 (A, B, C)
+  2. 전체 언로드
+  ┌─────────────────────────────────────┐
+  │              Empty                  │
+  └─────────────────────────────────────┘
+
+  3. 순서대로 다시 로드
+  ┌──────┬──────┬──────┬────────────────┐
+  │ A    │ B    │ C    │     Free       │
+  └──────┴──────┴──────┴────────────────┘
+  → 연속된 큰 Free 블록 확보!
+
+  ⚠️ 단점: 로딩 화면 필요, 긴 중단 시간
+
+◆ 가능한 방법 2: 점진적 압축
+  - 로딩 화면 없이 프레임마다 조금씩
+  - 사용 빈도 낮은 에셋부터 재로드
+  - 완전 압축은 불가, 부분 개선</pre>
+                </div>
+            </div>
+
+            <div class="q">Unload-Reload 디프래그를 코드로 어떻게 해?</div>
+            <div class="a">
+                <div class="code-block"><span class="keyword">using</span> System;
+<span class="keyword">using</span> System.Collections;
+<span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> System.Linq;
+<span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.AddressableAssets;
+<span class="keyword">using</span> UnityEngine.ResourceManagement.AsyncOperations;
+
+<span class="keyword">public class</span> <span class="type">MemoryDefragmenter</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">public event</span> <span class="type">Action</span>&lt;<span class="keyword">float</span>&gt; OnProgress;
+    <span class="keyword">public event</span> <span class="type">Action</span> OnComplete;
+
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="keyword">string</span>, <span class="type">Type</span>&gt; _loadedAssets = <span class="keyword">new</span>();
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="keyword">string</span>, <span class="type">AsyncOperationHandle</span>&gt; _handles = <span class="keyword">new</span>();
+
+    <span class="comment">/// &lt;summary&gt;</span>
+    <span class="comment">/// 메모리 디프래그멘테이션 실행</span>
+    <span class="comment">/// 로딩 화면 중에 호출 권장</span>
+    <span class="comment">/// &lt;/summary&gt;</span>
+    <span class="keyword">public</span> <span class="type">IEnumerator</span> <span class="function">DefragmentAsync</span>()
+    {
+        Debug.Log(<span class="string">"[Defrag] 시작..."</span>);
+
+        <span class="comment">// 1. 현재 로드된 에셋 정보 수집</span>
+        <span class="keyword">var</span> assetInfo = _loadedAssets.ToList();
+        <span class="keyword">int</span> total = assetInfo.Count;
+        <span class="keyword">int</span> processed = <span class="number">0</span>;
+
+        <span class="keyword">if</span> (total == <span class="number">0</span>)
+        {
+            Debug.Log(<span class="string">"[Defrag] 로드된 에셋 없음"</span>);
+            OnComplete?.Invoke();
+            <span class="keyword">yield break</span>;
+        }
+
+        <span class="comment">// 2. 모든 에셋 언로드</span>
+        Debug.Log($<span class="string">"[Defrag] {total}개 에셋 언로드 중..."</span>);
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> handle <span class="keyword">in</span> _handles.Values)
+        {
+            Addressables.Release(handle);
+        }
+        _handles.Clear();
+
+        <span class="comment">// GC 실행</span>
+        Resources.UnloadUnusedAssets();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        <span class="keyword">yield return new</span> <span class="type">WaitForSeconds</span>(<span class="number">0.5f</span>); <span class="comment">// GC 완료 대기</span>
+
+        OnProgress?.Invoke(<span class="number">0.3f</span>);
+
+        <span class="comment">// 3. 에셋 순서대로 다시 로드</span>
+        Debug.Log(<span class="string">"[Defrag] 에셋 재로드 중..."</span>);
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> (address, type) <span class="keyword">in</span> assetInfo)
+        {
+            <span class="keyword">var</span> handle = Addressables.LoadAssetAsync&lt;<span class="type">UnityEngine</span>.<span class="type">Object</span>&gt;(address);
+
+            <span class="keyword">while</span> (!handle.IsDone)
+            {
+                <span class="keyword">yield return null</span>;
+            }
+
+            <span class="keyword">if</span> (handle.Status == <span class="type">AsyncOperationStatus</span>.Succeeded)
+            {
+                _handles[address] = handle;
+            }
+
+            processed++;
+            OnProgress?.Invoke(<span class="number">0.3f</span> + <span class="number">0.7f</span> * processed / total);
+        }
+
+        Debug.Log(<span class="string">"[Defrag] 완료!"</span>);
+        OnComplete?.Invoke();
+    }
+
+    <span class="comment">/// &lt;summary&gt;</span>
+    <span class="comment">/// 점진적 디프래그: 프레임당 1개씩 재로드</span>
+    <span class="comment">/// 로딩 화면 없이 백그라운드에서 실행</span>
+    <span class="comment">/// &lt;/summary&gt;</span>
+    <span class="keyword">public</span> <span class="type">IEnumerator</span> <span class="function">IncrementalDefragAsync</span>(<span class="keyword">int</span> assetsPerFrame = <span class="number">1</span>)
+    {
+        <span class="comment">// 사용 빈도 낮은 순으로 정렬 (예: 최근 접근 시간 기준)</span>
+        <span class="keyword">var</span> candidates = GetLowPriorityAssets();
+
+        <span class="keyword">int</span> processed = <span class="number">0</span>;
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> address <span class="keyword">in</span> candidates)
+        {
+            <span class="comment">// 언로드</span>
+            <span class="keyword">if</span> (_handles.TryGetValue(address, <span class="keyword">out var</span> oldHandle))
+            {
+                Addressables.Release(oldHandle);
+                _handles.Remove(address);
+            }
+
+            <span class="comment">// 재로드</span>
+            <span class="keyword">var</span> newHandle = Addressables.LoadAssetAsync&lt;<span class="type">UnityEngine</span>.<span class="type">Object</span>&gt;(address);
+            <span class="keyword">yield return</span> newHandle;
+
+            <span class="keyword">if</span> (newHandle.Status == <span class="type">AsyncOperationStatus</span>.Succeeded)
+            {
+                _handles[address] = newHandle;
+            }
+
+            processed++;
+            <span class="keyword">if</span> (processed % assetsPerFrame == <span class="number">0</span>)
+            {
+                <span class="keyword">yield return null</span>; <span class="comment">// 프레임 양보</span>
+            }
+        }
+    }
+
+    <span class="keyword">private</span> <span class="type">IEnumerable</span>&lt;<span class="keyword">string</span>&gt; <span class="function">GetLowPriorityAssets</span>()
+    {
+        <span class="comment">// 실제 구현: 접근 시간, 사용 빈도 기준 정렬</span>
+        <span class="keyword">return</span> _loadedAssets.Keys.Take(<span class="number">10</span>);
+    }
+}</div>
+            </div>
+        </div>
+
+        <!-- Part 6 -->
+        <div class="conversation">
+            <h2>Part 6. 실무 패턴: 플랫폼별 전략</h2>
+
+            <div class="q">플랫폼마다 단편화 관리가 다르니?</div>
+            <div class="a">
+                <p>플랫폼별로 메모리 특성과 관리 전략이 달라:</p>
+
+                <div class="diagram-box">
+                    <pre>
+[플랫폼별 메모리 단편화 전략]
+
+┌────────────────────────────────────────────────────────────┐
+│                       PC / Desktop                          │
+├────────────────────────────────────────────────────────────┤
+│ 특성:                                                       │
+│ - 가상 메모리 지원 (스왑)                                  │
+│ - 큰 주소 공간 (64-bit)                                    │
+│ - 단편화 영향 상대적으로 낮음                              │
+│                                                             │
+│ 전략:                                                       │
+│ - 표준 할당자 사용 가능                                    │
+│ - 장시간 세션에서만 디프래그 고려                          │
+│ - GPU 메모리 단편화에 더 집중                              │
+└────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────┐
+│                      Mobile (iOS/Android)                   │
+├────────────────────────────────────────────────────────────┤
+│ 특성:                                                       │
+│ - 제한된 메모리 (2-8GB, 시스템 공유)                       │
+│ - OS가 메모리 압박 시 앱 종료 가능                         │
+│ - 백그라운드 전환 시 메모리 해제 요구                      │
+│                                                             │
+│ 전략:                                                       │
+│ - 적극적인 풀링 필수                                       │
+│ - 씬 전환 시 철저한 언로드                                 │
+│ - didReceiveMemoryWarning 핸들링 필수                      │
+│ - 백그라운드 진입 시 디프래그 기회                         │
+└────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────┐
+│                      Console (PS5/Xbox/Switch)              │
+├────────────────────────────────────────────────────────────┤
+│ 특성:                                                       │
+│ - 고정 메모리 (스왑 없음)                                  │
+│ - 인증 테스트에서 장시간 테스트                            │
+│ - 메모리 버짓 엄격                                         │
+│                                                             │
+│ 전략:                                                       │
+│ - 청크 기반 관리 필수                                      │
+│ - 워밍업 시 모든 풀 사전 할당                              │
+│ - 절대 런타임에 큰 동적 할당 금지                          │
+│ - 주기적 디프래그 (로딩 화면 활용)                         │
+└────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────┐
+│                      WebGL / Browser                        │
+├────────────────────────────────────────────────────────────┤
+│ 특성:                                                       │
+│ - JavaScript 힙 제한 (브라우저별 상이)                     │
+│ - GC 타이밍 제어 불가                                      │
+│ - ArrayBuffer 할당 비용 높음                               │
+│                                                             │
+│ 전략:                                                       │
+│ - 에셋 크기 최소화                                         │
+│ - 재사용 최대화                                            │
+│ - 대형 텍스처 스트리밍                                     │
+│ - 씬 전환 시 수동 GC 요청                                  │
+└────────────────────────────────────────────────────────────┘</pre>
+                </div>
+            </div>
+
+            <div class="q">콘솔 인증용 메모리 관리 체크리스트가 있어?</div>
+            <div class="a">
+                <div class="diagram-box">
+                    <pre>
+[콘솔 인증 통과를 위한 메모리 단편화 체크리스트]
+
+□ 사전 할당 (Warm-up)
+  ├── □ 게임 시작 시 모든 풀 워밍업
+  ├── □ 최대 동시 객체 수 × 1.2 여유 확보
+  └── □ 런타임 풀 확장 로깅 및 경고
+
+□ 청크 설계
+  ├── □ 스테이지별 청크 크기 프로파일링
+  ├── □ 공유 에셋 Persistent 청크에 배치
+  └── □ 더블 버퍼링 구현 (전환 시 오버랩)
+
+□ 씬 전환
+  ├── □ 이전 씬 에셋 완전 언로드
+  ├── □ Resources.UnloadUnusedAssets() 호출
+  ├── □ GC.Collect() 수동 호출
+  └── □ 전환 후 단편화 지표 로깅
+
+□ 장시간 테스트
+  ├── □ 4시간 연속 플레이 테스트
+  ├── □ 10회 스테이지 반복 전환 테스트
+  ├── □ 메모리 증가 그래프 모니터링
+  └── □ 최대 연속 블록 크기 추적
+
+□ 인증 대비
+  ├── □ TRC/XR 메모리 요구사항 확인
+  ├── □ 절전모드 복귀 테스트
+  ├── □ 백그라운드 다운로드 중 테스트
+  └── □ 메모리 누수 vs 단편화 구분
+
+□ 디프래그 전략
+  ├── □ 로딩 화면에서 디프래그 실행
+  ├── □ 특정 조건(플레이 2시간 후) 자동 실행
+  └── □ 디프래그 불가 상황 대비 경고 시스템</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 7 -->
+        <div class="conversation">
+            <h2>Part 7. 종합 정리: 단편화 방지 원칙</h2>
+
+            <div class="q">메모리 단편화 관리의 핵심 원칙은?</div>
+            <div class="a">
+                <div class="highlight-box">
+                    <strong>💡 단편화 관리 5대 원칙:</strong>
+                    <ol>
+                        <li><strong>풀링 최우선</strong>: 빈번히 생성/삭제되는 객체는 반드시 풀 사용</li>
+                        <li><strong>청크 단위 관리</strong>: 관련 에셋은 함께 로드/언로드</li>
+                        <li><strong>사전 할당</strong>: 런타임 동적 할당 최소화, 워밍업 필수</li>
+                        <li><strong>주기적 압축</strong>: 로딩 화면 등 기회에 디프래그</li>
+                        <li><strong>모니터링</strong>: 단편화 지표 추적, 조기 경고</li>
+                    </ol>
+                </div>
+
+                <div class="diagram-box">
+                    <pre>
+[단편화 방지 흐름도]
+
+게임 시작
+    │
+    ▼
+┌─────────────────────────────────────┐
+│ 1. 사전 할당 (Warm-up)              │
+│    - 풀 워밍업                      │
+│    - Persistent 청크 로드           │
+│    - 시스템 텍스처 미리 로드        │
+└─────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────┐
+│ 2. 게임 플레이 중                   │
+│    - 풀에서만 할당/해제             │
+│    - 청크 단위 에셋 교체            │
+│    - 단편화 지표 모니터링           │
+└─────────────────────────────────────┘
+    │
+    ├──────────────────────────────────────────┐
+    │ 스테이지 전환                            │
+    ▼                                          ▼
+┌─────────────────────────────────┐  ┌─────────────────────────────────┐
+│ 3a. 로딩 화면 있음              │  │ 3b. 심리스 전환                 │
+│     - 이전 청크 전체 언로드     │  │     - 더블 버퍼 청크 사용       │
+│     - GC 실행                   │  │     - 점진적 에셋 교체          │
+│     - 새 청크 로드              │  │     - 백그라운드 프리로드       │
+│     - 디프래그 실행 (선택)      │  │                                 │
+└─────────────────────────────────┘  └─────────────────────────────────┘
+    │                                          │
+    └──────────────────────────────────────────┘
+                    │
+                    ▼
+            단편화 체크
+            ┌────────────────────────────────────┐
+            │ 단편화율 > 50%? ─────────▶ 디프래그 │
+            │       │                   예약     │
+            │       ▼ 아니오                     │
+            │ 정상 진행                          │
+            └────────────────────────────────────┘</pre>
+                </div>
+            </div>
+        </div>
+
         <div class="summary-box">
-            <h3>핵심 정리</h3>
+            <h3>핵심 요약: 메모리 단편화와의 전쟁</h3>
             <ul>
-                <li><strong>메모리 단편화와의 전쟁</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>단편화 정의</strong>: 메모리 조각화로 연속 블록 할당 실패 → 총 여유 있어도 OOM</li>
+                <li><strong>주요 원인</strong>: 다양한 크기 에셋의 반복적 로드/언로드</li>
+                <li><strong>풀 할당자</strong>: 동일 크기 블록 재사용 → 외부 단편화 방지</li>
+                <li><strong>청크 관리</strong>: 관련 에셋을 연속 메모리에 묶어 함께 관리</li>
+                <li><strong>디프래그</strong>: Unload → Reload로 메모리 압축 (로딩 화면 활용)</li>
+                <li><strong>모니터링</strong>: 단편화율, 최대 연속 블록 크기 추적</li>
             </ul>
         </div>
 
@@ -86,5 +1192,7 @@
             <a href="../asset-world-streaming/">월드 스트리밍 - 오픈월드의 비밀 &rarr;</a>
         </div>
     </div>
+
+    <script src="../common/script.js"></script>
 </body>
 </html>
