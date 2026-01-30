@@ -3,38 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reference Counting - 에셋 관리 - MSH Portfolio</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
-        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
-        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
-        .a p { margin-bottom: 12px; }
-        .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
-        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
-        .summary-box ul { list-style: none; }
-        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
-        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
-        .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
-    </style>
+    <title>Reference Counting - 에셋 관리 심화 - MSH Portfolio</title>
+    <link rel="stylesheet" href="../common/styles.css">
 </head>
 <body>
     <div class="container">
@@ -42,81 +12,1191 @@
 
         <div class="header">
             <h1>Reference Counting</h1>
-            <p>아무도 안 쓰면 해제</p>
+            <p>아무도 안 쓰면 해제 - 리소스 수명 관리의 핵심 패턴</p>
         </div>
 
+        <!-- Part 1: 기본 개념 -->
         <div class="conversation">
             <h2>Part 1. Reference Counting이란?</h2>
+
             <div class="q">레퍼런스 카운팅이 뭐야?</div>
             <div class="a">
-                <p><span class="highlight">리소스를 몇 군데서 사용하는지</span> 세는 것</p>
-                <p>카운트가 0이 되면 → 메모리 해제</p>
+                <p><span class="highlight">리소스를 몇 군데서 사용하는지 세는 것</span></p>
+                <p>카운트가 0이 되면 → 아무도 안 쓰니까 → <span class="warning">메모리 해제!</span></p>
+                <p>핵심 원칙: <span class="key-point">"마지막으로 사용 끝낸 놈이 불 끄고 나가라"</span></p>
             </div>
-            <div class="code-block">// 텍스처를 여러 오브젝트가 공유
-Texture* tex = LoadTexture("shared.dds");
-// refCount = 1
 
-obj1->SetTexture(tex);  // refCount = 2
-obj2->SetTexture(tex);  // refCount = 3
+            <div class="diagram-box"><pre>
+Reference Counting의 핵심 아이디어
 
-delete obj1;            // refCount = 2
-delete obj2;            // refCount = 1
-delete obj3;            // refCount = 0 → 텍스처 해제!</div>
+    ┌─────────────────────────────────────────────────────────────┐
+    │                      Texture (hero.png)                      │
+    │                      ┌─────────────────┐                     │
+    │                      │  RefCount: 3    │                     │
+    │                      └────────┬────────┘                     │
+    │                               │                              │
+    │              ┌────────────────┼────────────────┐             │
+    │              │                │                │             │
+    │              ▼                ▼                ▼             │
+    │        ┌──────────┐    ┌──────────┐    ┌──────────┐         │
+    │        │ Player   │    │ NPC_A    │    │ Portrait │         │
+    │        │ Object   │    │ Object   │    │ UI       │         │
+    │        └──────────┘    └──────────┘    └──────────┘         │
+    │                                                              │
+    │   같은 텍스처를 3군데서 공유 중 → 메모리 1개만 사용!          │
+    └─────────────────────────────────────────────────────────────┘
+
+
+    RefCount 변화 과정:
+
+    LoadTexture()     → RefCount = 1  (생성)
+    Player 사용       → RefCount = 2  (AddRef)
+    NPC 사용          → RefCount = 3  (AddRef)
+    Player 삭제       → RefCount = 2  (Release)
+    Portrait UI 삭제  → RefCount = 1  (Release)
+    NPC 삭제          → RefCount = 0  → 💥 DELETE!
+            </pre></div>
+
+            <div class="q">왜 게임에서 중요해?</div>
+            <div class="a">
+                <p>게임에서는 <span class="highlight">같은 리소스를 수백 개가 공유</span>하거든!</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+게임에서 Reference Counting이 필요한 이유
+
+[예시: 병사 100명이 같은 모델/텍스처 사용]
+
+Without Reference Counting:
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  병사1 → Model 복사본 (50MB)
+  병사2 → Model 복사본 (50MB)
+  병사3 → Model 복사본 (50MB)
+  ...
+  병사100 → Model 복사본 (50MB)
+  ─────────────────────────────
+  총 메모리: 5GB  💀 메모리 폭발!
+
+
+With Reference Counting:
+━━━━━━━━━━━━━━━━━━━━━━━
+
+  병사1   ──┐
+  병사2   ──┼──→ Model (RefCount: 100)  ← 50MB 1개만!
+  병사3   ──┤
+  ...      │
+  병사100 ──┘
+  ─────────────────────────────
+  총 메모리: 50MB  ✅ 100배 절약!
+
+
+해제 문제도 해결:
+━━━━━━━━━━━━━━━
+
+  Q: 병사 50명이 죽었다. 모델을 해제해야 할까?
+  A: RefCount가 50이니까 NO! 아직 50명이 쓰고 있음.
+
+  Q: 마지막 병사가 죽었다. 이제 해제?
+  A: RefCount가 0이 되었으니 YES! 이제 진짜 해제.
+            </pre></div>
         </div>
 
+        <!-- Part 2: 기본 구현 -->
         <div class="conversation">
-            <h2>Part 2. 동작 원리</h2>
-            <div class="q">어떻게 세?</div>
-            <div class="a">
-                <p>참조할 때 <span class="key-point">AddRef()</span> → 카운트 +1</p>
-                <p>해제할 때 <span class="key-point">Release()</span> → 카운트 -1</p>
-                <p>0이 되면 실제 삭제</p>
-            </div>
-            <div class="diagram">Reference Counting 흐름:
+            <h2>Part 2. Reference Counting 기본 구현</h2>
 
-LoadTexture()
-    ↓
-┌─────────────┐
-│ refCount: 1 │ ← 생성
-└─────────────┘
-    ↓ AddRef()
-┌─────────────┐
-│ refCount: 2 │ ← 참조 추가
-└─────────────┘
-    ↓ Release()
-┌─────────────┐
-│ refCount: 1 │ ← 참조 해제
-└─────────────┘
-    ↓ Release()
-┌─────────────┐
-│ refCount: 0 │ → DELETE!
-└─────────────┘</div>
-        </div>
-
-        <div class="conversation">
-            <h2>Part 3. 스마트 포인터</h2>
-            <div class="q">C++에서는?</div>
+            <div class="q">어떻게 만들어?</div>
             <div class="a">
-                <p><span class="highlight">std::shared_ptr</span>이 자동으로 해줌</p>
-                <p>수동으로 AddRef/Release 안 해도 됨</p>
+                <p>핵심 3가지: <span class="highlight">카운터 변수</span> + <span class="highlight">AddRef()</span> + <span class="highlight">Release()</span></p>
             </div>
-            <div class="code-block">// shared_ptr 사용
-auto tex = std::make_shared<Texture>();
-// refCount = 1
+
+            <div class="code-block"><span class="comment">// 가장 단순한 Reference Counting 구현</span>
+<span class="keyword">class</span> <span class="type">RefCounted</span>
+{
+<span class="keyword">private</span>:
+    <span class="type">int</span> m_RefCount;
+
+<span class="keyword">public</span>:
+    <span class="function">RefCounted</span>()
+        : m_RefCount(<span class="number">1</span>)  <span class="comment">// 생성 시 1로 시작!</span>
+    {}
+
+    <span class="comment">// 참조 추가</span>
+    <span class="type">void</span> <span class="function">AddRef</span>()
+    {
+        m_RefCount++;
+    }
+
+    <span class="comment">// 참조 해제</span>
+    <span class="type">void</span> <span class="function">Release</span>()
+    {
+        m_RefCount--;
+
+        <span class="keyword">if</span> (m_RefCount == <span class="number">0</span>)
+        {
+            <span class="keyword">delete this</span>;  <span class="comment">// 💀 자기 자신 삭제</span>
+        }
+    }
+
+    <span class="type">int</span> <span class="function">GetRefCount</span>() <span class="keyword">const</span>
+    {
+        <span class="keyword">return</span> m_RefCount;
+    }
+
+<span class="keyword">protected</span>:
+    <span class="comment">// 직접 delete 방지 - 반드시 Release()로만 삭제</span>
+    <span class="keyword">virtual</span> ~<span class="function">RefCounted</span>() = <span class="keyword">default</span>;
+};</div>
+
+            <div class="diagram-box"><pre>
+AddRef / Release 호출 시점
+
+┌─────────────────────────────────────────────────────────────────┐
+│                         AddRef() 호출                            │
+├─────────────────────────────────────────────────────────────────┤
+│  • 포인터를 다른 변수에 복사할 때                                 │
+│  • 컨테이너에 추가할 때                                          │
+│  • 함수 인자로 전달받을 때 (소유권 가질 때)                       │
+│  • 콜백/이벤트 핸들러에 등록할 때                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                        Release() 호출                            │
+├─────────────────────────────────────────────────────────────────┤
+│  • 포인터 변수가 스코프를 벗어날 때                               │
+│  • 다른 객체로 교체할 때                                         │
+│  • 컨테이너에서 제거할 때                                        │
+│  • 객체가 소멸할 때 (소유하던 리소스 정리)                        │
+└─────────────────────────────────────────────────────────────────┘
+
+
+코드 예시:
+━━━━━━━━━
+
+void UseTexture(Texture* tex)
+{
+    tex->AddRef();      // ← 이 함수에서 사용할 거니까 AddRef
+
+    // ... 텍스처 사용 ...
+
+    tex->Release();     // ← 다 썼으니 Release
+}
+            </pre></div>
+
+            <div class="q">이거 불편하지 않아? 매번 AddRef/Release 호출해야 해?</div>
+            <div class="a">
+                <p>그래서 <span class="highlight">스마트 포인터</span>를 쓰는 거야!</p>
+                <p>포인터를 감싸서 <span class="key-point">자동으로 AddRef/Release</span> 호출해줌.</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// 간단한 스마트 포인터 구현</span>
+<span class="keyword">template</span>&lt;<span class="keyword">typename</span> <span class="type">T</span>&gt;
+<span class="keyword">class</span> <span class="type">RefPtr</span>
+{
+<span class="keyword">private</span>:
+    <span class="type">T</span>* m_Ptr;
+
+<span class="keyword">public</span>:
+    <span class="comment">// 생성자 - 포인터 받으면 AddRef</span>
+    <span class="function">RefPtr</span>(<span class="type">T</span>* ptr = <span class="keyword">nullptr</span>)
+        : m_Ptr(ptr)
+    {
+        <span class="keyword">if</span> (m_Ptr)
+        {
+            m_Ptr-><span class="function">AddRef</span>();
+        }
+    }
+
+    <span class="comment">// 복사 생성자 - 복사하면 AddRef</span>
+    <span class="function">RefPtr</span>(<span class="keyword">const</span> <span class="type">RefPtr</span>& other)
+        : m_Ptr(other.m_Ptr)
+    {
+        <span class="keyword">if</span> (m_Ptr)
+        {
+            m_Ptr-><span class="function">AddRef</span>();
+        }
+    }
+
+    <span class="comment">// 소멸자 - 범위 벗어나면 Release</span>
+    ~<span class="function">RefPtr</span>()
+    {
+        <span class="keyword">if</span> (m_Ptr)
+        {
+            m_Ptr-><span class="function">Release</span>();
+        }
+    }
+
+    <span class="comment">// 대입 연산자</span>
+    <span class="type">RefPtr</span>& <span class="keyword">operator</span>=(<span class="keyword">const</span> <span class="type">RefPtr</span>& other)
+    {
+        <span class="keyword">if</span> (<span class="keyword">this</span> != &other)
+        {
+            <span class="comment">// 기존 것 Release</span>
+            <span class="keyword">if</span> (m_Ptr)
+            {
+                m_Ptr-><span class="function">Release</span>();
+            }
+
+            <span class="comment">// 새 것 AddRef</span>
+            m_Ptr = other.m_Ptr;
+            <span class="keyword">if</span> (m_Ptr)
+            {
+                m_Ptr-><span class="function">AddRef</span>();
+            }
+        }
+        <span class="keyword">return</span> *<span class="keyword">this</span>;
+    }
+
+    <span class="comment">// 포인터처럼 사용</span>
+    <span class="type">T</span>* <span class="keyword">operator</span>->() <span class="keyword">const</span> { <span class="keyword">return</span> m_Ptr; }
+    <span class="type">T</span>& <span class="keyword">operator</span>*() <span class="keyword">const</span> { <span class="keyword">return</span> *m_Ptr; }
+    <span class="keyword">operator</span> <span class="type">bool</span>() <span class="keyword">const</span> { <span class="keyword">return</span> m_Ptr != <span class="keyword">nullptr</span>; }
+};</div>
+
+            <div class="diagram-box"><pre>
+스마트 포인터의 자동 관리
+
+[수동 관리 (위험!)]
+━━━━━━━━━━━━━━━━━
+
+Texture* tex = LoadTexture("hero.png");  // RefCount = 1
+tex->AddRef();                           // RefCount = 2
+
+// ... 여기서 예외 발생하면? Release 누락! 💀
+
+tex->Release();                          // 호출 안 됨 → 메모리 누수!
+
+
+[스마트 포인터 (안전!)]
+━━━━━━━━━━━━━━━━━━━━
 
 {
-    auto copy = tex;  // refCount = 2
-}  // 스코프 끝 → refCount = 1
+    RefPtr<Texture> tex = LoadTexture("hero.png");  // RefCount = 1
+    RefPtr<Texture> copy = tex;                     // RefCount = 2
 
-tex = nullptr;  // refCount = 0 → 자동 삭제!</div>
+    // 예외가 발생해도...
+    throw std::exception();
+
+}   // 스코프 끝 → 소멸자 자동 호출
+    // copy 소멸 → Release() → RefCount = 1
+    // tex 소멸 → Release() → RefCount = 0 → DELETE!
+    // ✅ 메모리 누수 없음!
+            </pre></div>
         </div>
+
+        <!-- Part 3: std::shared_ptr 심층 분석 -->
+        <div class="conversation">
+            <h2>Part 3. std::shared_ptr 심층 분석</h2>
+
+            <div class="q">C++ 표준의 shared_ptr은 어떻게 동작해?</div>
+            <div class="a">
+                <p>shared_ptr은 <span class="highlight">Control Block</span>이라는 별도 메모리를 사용해.</p>
+                <p>Control Block에 RefCount가 저장돼 있어.</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+std::shared_ptr의 내부 구조
+
+┌─────────────────────────────────────────────────────────────────┐
+│                        shared_ptr A                              │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  T* ptr       ────────────────────────┐                  │    │
+│  │  ControlBlock* ctrl ──────────┐       │                  │    │
+│  └───────────────────────────────┼───────┼──────────────────┘    │
+│                                  │       │                       │
+│                                  ▼       ▼                       │
+│                        ┌──────────────────────────────┐          │
+│                        │      Control Block           │          │
+│                        ├──────────────────────────────┤          │
+│                        │  strong_count: 2             │          │
+│                        │  weak_count: 1               │          │
+│                        │  deleter: default_delete<T>  │          │
+│                        │  allocator: ...              │          │
+│                        └──────────────────────────────┘          │
+│                                  │                               │
+│                                  ▼                               │
+│                        ┌──────────────────────────────┐          │
+│                        │      실제 객체 (T)           │          │
+│                        │  ┌────────────────────────┐  │          │
+│                        │  │  Texture 데이터        │  │          │
+│                        │  │  (픽셀, 메타데이터 등)  │  │          │
+│                        │  └────────────────────────┘  │          │
+│                        └──────────────────────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+
+
+shared_ptr 복사 시:
+━━━━━━━━━━━━━━━━━━
+
+auto a = std::make_shared<Texture>();  // strong_count = 1
+auto b = a;                            // strong_count = 2, 같은 Control Block 공유
+auto c = a;                            // strong_count = 3
+
+c.reset();                             // strong_count = 2
+b.reset();                             // strong_count = 1
+a.reset();                             // strong_count = 0 → 객체 삭제!
+            </pre></div>
+
+            <div class="q">make_shared랑 new의 차이는?</div>
+            <div class="a">
+                <p><span class="highlight">make_shared</span>가 훨씬 효율적이야!</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// 방법 1: new 사용 (비추천)</span>
+<span class="type">std::shared_ptr</span>&lt;<span class="type">Texture</span>&gt; tex1(<span class="keyword">new</span> <span class="type">Texture</span>());
+
+<span class="comment">// 메모리 할당 2번:
+// 1. new Texture() → 객체 메모리
+// 2. shared_ptr 내부 → Control Block 메모리</span>
+
+
+<span class="comment">// 방법 2: make_shared 사용 (추천!)</span>
+<span class="keyword">auto</span> tex2 = <span class="type">std::make_shared</span>&lt;<span class="type">Texture</span>&gt;();
+
+<span class="comment">// 메모리 할당 1번:
+// 객체 + Control Block을 한 덩어리로 할당!</span></div>
+
+            <div class="diagram-box"><pre>
+new vs make_shared 메모리 레이아웃
+
+[new Texture() 방식]
+━━━━━━━━━━━━━━━━━━━
+
+  할당 1:                    할당 2:
+  ┌──────────────────┐      ┌──────────────────┐
+  │  Texture 객체    │      │  Control Block   │
+  │  (실제 데이터)    │      │  (RefCount 등)   │
+  └──────────────────┘      └──────────────────┘
+        ↑                          ↑
+        └──────────── 서로 다른 메모리 위치
+
+
+[make_shared 방식]
+━━━━━━━━━━━━━━━━━━
+
+  할당 1 (한 덩어리):
+  ┌────────────────────────────────────────┐
+  │  Control Block  │  Texture 객체        │
+  │  (RefCount 등)  │  (실제 데이터)        │
+  └────────────────────────────────────────┘
+        연속된 메모리 → 캐시 효율 ↑
+
+
+장점 비교:
+┌────────────────────┬────────────────┬────────────────────┐
+│       항목         │  new 방식      │  make_shared 방식  │
+├────────────────────┼────────────────┼────────────────────┤
+│  메모리 할당 횟수   │      2번       │       1번         │
+│  캐시 지역성       │      나쁨       │       좋음        │
+│  예외 안전성       │   취약할 수 있음 │       안전        │
+│  메모리 단편화     │      발생 가능   │       최소화      │
+└────────────────────┴────────────────┴────────────────────┘
+            </pre></div>
+        </div>
+
+        <!-- Part 4: 순환 참조 문제 -->
+        <div class="conversation">
+            <h2>Part 4. 순환 참조 문제와 weak_ptr</h2>
+
+            <div class="q">Reference Counting의 치명적 약점이 있다며?</div>
+            <div class="a">
+                <p><span class="warning">순환 참조(Circular Reference)</span>가 발생하면 영원히 해제 안 돼!</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+순환 참조 문제
+
+[정상 참조]
+━━━━━━━━━━━
+
+Parent ──────────────→ Child
+  ↑                      │
+  │       (참조 없음)      │
+  └───────────────────────┘
+
+Parent 삭제 → Child RefCount 감소 → Child 삭제  ✅
+
+
+[순환 참조 - 메모리 누수!]
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+Parent ──────────────→ Child
+  ↑                      │
+  │      (부모 참조)       │
+  └───────────────────────┘
+
+  Parent.refCount = 1 (Child가 참조)
+  Child.refCount = 1 (Parent가 참조)
+
+  아무도 해제 못 함!  → 💀 메모리 누수!
+
+
+게임에서 흔한 순환 참조 예시:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• GameObject ↔ Component
+• Entity ↔ Entity (상호 참조)
+• UI Widget ↔ Data Binding
+• Event Emitter ↔ Event Listener
+            </pre></div>
+
+            <div class="q">어떻게 해결해?</div>
+            <div class="a">
+                <p><span class="highlight">weak_ptr</span>을 사용해!</p>
+                <p>weak_ptr은 <span class="key-point">RefCount를 증가시키지 않는 참조</span>야.</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// 순환 참조가 발생하는 코드 (잘못된 예)</span>
+<span class="keyword">class</span> <span class="type">Parent</span>
+{
+    <span class="type">std::shared_ptr</span>&lt;<span class="type">Child</span>&gt; m_Child;  <span class="comment">// 자식 소유</span>
+};
+
+<span class="keyword">class</span> <span class="type">Child</span>
+{
+    <span class="type">std::shared_ptr</span>&lt;<span class="type">Parent</span>&gt; m_Parent;  <span class="comment">// 💀 순환 참조!</span>
+};
+
+
+<span class="comment">// 해결: weak_ptr 사용</span>
+<span class="keyword">class</span> <span class="type">Parent</span>
+{
+    <span class="type">std::shared_ptr</span>&lt;<span class="type">Child</span>&gt; m_Child;  <span class="comment">// 자식 소유 (strong)</span>
+};
+
+<span class="keyword">class</span> <span class="type">Child</span>
+{
+    <span class="type">std::weak_ptr</span>&lt;<span class="type">Parent</span>&gt; m_Parent;  <span class="comment">// ✅ 부모 참조 (weak)</span>
+
+    <span class="type">void</span> <span class="function">DoSomethingWithParent</span>()
+    {
+        <span class="comment">// weak_ptr은 직접 접근 불가</span>
+        <span class="comment">// lock()으로 shared_ptr 획득 시도</span>
+        <span class="keyword">if</span> (<span class="keyword">auto</span> parent = m_Parent.<span class="function">lock</span>())
+        {
+            <span class="comment">// 부모가 아직 살아있음 - 사용 가능</span>
+            parent-><span class="function">DoSomething</span>();
+        }
+        <span class="keyword">else</span>
+        {
+            <span class="comment">// 부모가 이미 삭제됨</span>
+        }
+    }
+};</div>
+
+            <div class="diagram-box"><pre>
+weak_ptr의 동작 원리
+
+Control Block 구조:
+━━━━━━━━━━━━━━━━━━
+
+┌────────────────────────────────────┐
+│         Control Block              │
+├────────────────────────────────────┤
+│  strong_count: 2  ← shared_ptr 수  │
+│  weak_count: 1    ← weak_ptr 수    │
+└────────────────────────────────────┘
+
+• strong_count가 0 → 객체 삭제
+• weak_count가 0 → Control Block도 삭제
+
+
+weak_ptr.lock() 동작:
+━━━━━━━━━━━━━━━━━━━━━
+
+                    weak_ptr
+                       │
+                       ▼
+           ┌─────────────────────┐
+           │   strong_count > 0? │
+           └──────────┬──────────┘
+                      │
+           ┌──────────┴──────────┐
+           │ YES                  │ NO
+           ▼                      ▼
+    ┌─────────────────┐    ┌─────────────────┐
+    │ shared_ptr 반환  │    │ 빈 shared_ptr   │
+    │ strong_count++  │    │ (nullptr)       │
+    └─────────────────┘    └─────────────────┘
+            </pre></div>
+
+            <div class="code-block"><span class="comment">// 게임에서의 실제 사용 예시: 컴포넌트 시스템</span>
+<span class="keyword">class</span> <span class="type">GameObject</span>
+{
+    <span class="type">std::vector</span>&lt;<span class="type">std::shared_ptr</span>&lt;<span class="type">Component</span>&gt;&gt; m_Components;
+
+<span class="keyword">public</span>:
+    <span class="keyword">template</span>&lt;<span class="keyword">typename</span> <span class="type">T</span>&gt;
+    <span class="type">std::shared_ptr</span>&lt;<span class="type">T</span>&gt; <span class="function">AddComponent</span>()
+    {
+        <span class="keyword">auto</span> comp = <span class="type">std::make_shared</span>&lt;<span class="type">T</span>&gt;();
+        comp-><span class="function">SetOwner</span>(<span class="function">weak_from_this</span>());  <span class="comment">// weak_ptr로 전달!</span>
+        m_Components.<span class="function">push_back</span>(comp);
+        <span class="keyword">return</span> comp;
+    }
+};
+
+<span class="keyword">class</span> <span class="type">Component</span>
+{
+    <span class="type">std::weak_ptr</span>&lt;<span class="type">GameObject</span>&gt; m_Owner;  <span class="comment">// weak로 소유자 참조</span>
+
+<span class="keyword">public</span>:
+    <span class="type">void</span> <span class="function">SetOwner</span>(<span class="type">std::weak_ptr</span>&lt;<span class="type">GameObject</span>&gt; owner)
+    {
+        m_Owner = owner;
+    }
+
+    <span class="type">std::shared_ptr</span>&lt;<span class="type">GameObject</span>&gt; <span class="function">GetOwner</span>() <span class="keyword">const</span>
+    {
+        <span class="keyword">return</span> m_Owner.<span class="function">lock</span>();  <span class="comment">// 안전하게 접근</span>
+    }
+};</div>
+        </div>
+
+        <!-- Part 5: Thread Safety -->
+        <div class="conversation">
+            <h2>Part 5. Thread Safety - 멀티스레드 환경</h2>
+
+            <div class="q">멀티스레드에서 RefCount 관리하면 문제 없어?</div>
+            <div class="a">
+                <p><span class="warning">Race Condition</span> 발생 가능!</p>
+                <p>두 스레드가 동시에 RefCount를 수정하면 값이 꼬여.</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+Race Condition 문제
+
+[Thread A]                    [Thread B]
+    │                             │
+    ▼                             ▼
+refCount 읽기 (1)            refCount 읽기 (1)
+    │                             │
+    ▼                             ▼
+refCount + 1 = 2             refCount + 1 = 2
+    │                             │
+    ▼                             ▼
+refCount 쓰기 (2)            refCount 쓰기 (2)
+
+결과: refCount = 2  💥 (기대값: 3)
+
+
+해결책: Atomic 연산
+━━━━━━━━━━━━━━━━━━━
+
+std::atomic<int> refCount;
+
+refCount.fetch_add(1);  // 원자적 증가 (한 번에 읽고-수정하고-쓰기)
+
+Thread A와 B가 동시에 해도:
+refCount = 3  ✅
+            </pre></div>
+
+            <div class="code-block"><span class="comment">// Thread-Safe Reference Counting</span>
+<span class="keyword">class</span> <span class="type">ThreadSafeRefCounted</span>
+{
+<span class="keyword">private</span>:
+    <span class="type">std::atomic</span>&lt;<span class="type">int</span>&gt; m_RefCount;  <span class="comment">// 원자적 카운터</span>
+
+<span class="keyword">public</span>:
+    <span class="function">ThreadSafeRefCounted</span>()
+        : m_RefCount(<span class="number">1</span>)
+    {}
+
+    <span class="type">void</span> <span class="function">AddRef</span>()
+    {
+        <span class="comment">// memory_order_relaxed: 순서 보장 불필요</span>
+        m_RefCount.<span class="function">fetch_add</span>(<span class="number">1</span>, <span class="type">std::memory_order_relaxed</span>);
+    }
+
+    <span class="type">void</span> <span class="function">Release</span>()
+    {
+        <span class="comment">// memory_order_acq_rel: 해제 전 모든 쓰기가 완료되어야 함</span>
+        <span class="keyword">if</span> (m_RefCount.<span class="function">fetch_sub</span>(<span class="number">1</span>, <span class="type">std::memory_order_acq_rel</span>) == <span class="number">1</span>)
+        {
+            <span class="keyword">delete this</span>;
+        }
+    }
+};
+
+
+<span class="comment">// std::shared_ptr은 기본적으로 Thread-Safe!</span>
+<span class="comment">// Control Block의 카운터가 atomic으로 구현됨</span>
+
+<span class="comment">// 하지만 주의!</span>
+<span class="type">std::shared_ptr</span>&lt;<span class="type">Texture</span>&gt; globalTex;
+
+<span class="comment">// Thread A</span>
+globalTex = tex1;  <span class="comment">// ❌ 위험! shared_ptr 자체의 대입은 atomic이 아님</span>
+
+<span class="comment">// Thread B</span>
+globalTex = tex2;  <span class="comment">// ❌ 동시 대입 시 미정의 동작!</span>
+
+
+<span class="comment">// 해결: mutex 사용 또는 atomic_store</span>
+<span class="type">std::atomic</span>&lt;<span class="type">std::shared_ptr</span>&lt;<span class="type">Texture</span>&gt;&gt; atomicTex;  <span class="comment">// C++20</span>
+<span class="comment">// 또는</span>
+<span class="type">std::atomic_store</span>(&globalTex, tex1);  <span class="comment">// C++11</span></div>
+
+            <div class="diagram-box"><pre>
+Memory Order 이해하기
+
+┌────────────────────────────────────────────────────────────────┐
+│  memory_order_relaxed                                          │
+│  • 가장 빠름                                                    │
+│  • 순서 보장 없음                                               │
+│  • AddRef에 적합 (증가만 하면 됨)                               │
+└────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│  memory_order_acquire                                          │
+│  • 이 연산 이후의 읽기/쓰기가 이 연산 이전으로 재배치 안 됨     │
+│  • 데이터 읽기 시작점에 사용                                    │
+└────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│  memory_order_release                                          │
+│  • 이 연산 이전의 읽기/쓰기가 이 연산 이후로 재배치 안 됨       │
+│  • 데이터 쓰기 완료점에 사용                                    │
+└────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│  memory_order_acq_rel                                          │
+│  • acquire + release 결합                                      │
+│  • Release()에 적합 (객체 삭제 전 모든 쓰기 완료 보장)          │
+└────────────────────────────────────────────────────────────────┘
+            </pre></div>
+        </div>
+
+        <!-- Part 6: 에셋 매니저 통합 -->
+        <div class="conversation">
+            <h2>Part 6. 에셋 매니저에서의 Reference Counting</h2>
+
+            <div class="q">에셋 매니저는 RefCount를 어떻게 활용해?</div>
+            <div class="a">
+                <p><span class="highlight">캐시 + RefCount</span> 조합으로 에셋 수명 관리!</p>
+            </div>
+
+            <div class="code-block"><span class="keyword">class</span> <span class="type">AssetManager</span>
+{
+<span class="keyword">private</span>:
+    <span class="comment">// 캐시: 에셋 경로 → weak_ptr</span>
+    <span class="type">std::unordered_map</span>&lt;<span class="type">std::string</span>, <span class="type">std::weak_ptr</span>&lt;<span class="type">Asset</span>&gt;&gt; m_Cache;
+    <span class="type">std::mutex</span> m_Mutex;
+
+<span class="keyword">public</span>:
+    <span class="keyword">template</span>&lt;<span class="keyword">typename</span> <span class="type">T</span>&gt;
+    <span class="type">std::shared_ptr</span>&lt;<span class="type">T</span>&gt; <span class="function">Load</span>(<span class="keyword">const</span> <span class="type">std::string</span>& path)
+    {
+        <span class="type">std::lock_guard</span>&lt;<span class="type">std::mutex</span>&gt; lock(m_Mutex);
+
+        <span class="comment">// 1. 캐시에서 찾기</span>
+        <span class="keyword">auto</span> it = m_Cache.<span class="function">find</span>(path);
+        <span class="keyword">if</span> (it != m_Cache.<span class="function">end</span>())
+        {
+            <span class="comment">// weak_ptr → shared_ptr 변환 시도</span>
+            <span class="keyword">if</span> (<span class="keyword">auto</span> asset = it->second.<span class="function">lock</span>())
+            {
+                <span class="comment">// 아직 살아있음! 재사용</span>
+                <span class="keyword">return</span> <span class="type">std::static_pointer_cast</span>&lt;<span class="type">T</span>&gt;(asset);
+            }
+            <span class="comment">// 이미 삭제됨 - 캐시 항목 제거</span>
+            m_Cache.<span class="function">erase</span>(it);
+        }
+
+        <span class="comment">// 2. 새로 로드</span>
+        <span class="keyword">auto</span> asset = <span class="function">LoadFromDisk</span>&lt;<span class="type">T</span>&gt;(path);
+
+        <span class="comment">// 3. 캐시에 등록 (weak_ptr로!)</span>
+        m_Cache[path] = asset;
+
+        <span class="keyword">return</span> asset;
+    }
+
+<span class="keyword">private</span>:
+    <span class="keyword">template</span>&lt;<span class="keyword">typename</span> <span class="type">T</span>&gt;
+    <span class="type">std::shared_ptr</span>&lt;<span class="type">T</span>&gt; <span class="function">LoadFromDisk</span>(<span class="keyword">const</span> <span class="type">std::string</span>& path)
+    {
+        <span class="comment">// 실제 디스크에서 로드</span>
+        <span class="keyword">auto</span> data = <span class="function">ReadFile</span>(path);
+        <span class="keyword">return</span> <span class="type">std::make_shared</span>&lt;<span class="type">T</span>&gt;(data);
+    }
+};</div>
+
+            <div class="diagram-box"><pre>
+에셋 매니저의 캐시 전략
+
+┌─────────────────────────────────────────────────────────────────┐
+│                       AssetManager                              │
+│                                                                 │
+│   ┌───────────────────────────────────────────────────────┐    │
+│   │              Cache (weak_ptr)                          │    │
+│   │                                                        │    │
+│   │   "hero.png"  ──→  weak_ptr (valid)                   │    │
+│   │   "sword.png" ──→  weak_ptr (expired - 삭제 대기)     │    │
+│   │   "map.png"   ──→  weak_ptr (valid)                   │    │
+│   └───────────────────────────────────────────────────────┘    │
+│                              │                                  │
+│                              ▼                                  │
+└─────────────────────────────────────────────────────────────────┘
+
+왜 weak_ptr을 쓸까?
+━━━━━━━━━━━━━━━━━━━
+
+[shared_ptr로 캐시하면]
+• 캐시가 RefCount를 유지 → 영원히 해제 안 됨
+• 메모리 누수!
+
+[weak_ptr로 캐시하면]
+• 캐시는 RefCount에 영향 없음
+• 사용처가 없으면 자동 삭제
+• 다음 Load() 시 expired 확인 → 재로드
+
+
+로드 흐름:
+━━━━━━━━━
+
+Load("hero.png") 호출
+        │
+        ▼
+┌─────────────────────┐
+│ 캐시에 있나?         │
+└──────────┬──────────┘
+           │
+    ┌──────┴──────┐
+    │ YES         │ NO
+    ▼             ▼
+┌─────────┐   ┌─────────────┐
+│ lock()  │   │ 디스크 로드  │
+│ 성공?   │   └──────┬──────┘
+└────┬────┘          │
+     │               ▼
+  ┌──┴──┐     ┌─────────────┐
+  │ YES │     │ 캐시에 등록  │
+  │     │     └──────┬──────┘
+  │     │            │
+  ▼     ▼            ▼
+반환  재로드      반환
+            </pre></div>
+
+            <div class="code-block"><span class="comment">// 강제 유지가 필요한 에셋: 핀 시스템</span>
+<span class="keyword">class</span> <span class="type">AssetManagerWithPin</span>
+{
+<span class="keyword">private</span>:
+    <span class="type">std::unordered_map</span>&lt;<span class="type">std::string</span>, <span class="type">std::weak_ptr</span>&lt;<span class="type">Asset</span>&gt;&gt; m_Cache;
+
+    <span class="comment">// 핀된 에셋은 shared_ptr로 강제 유지</span>
+    <span class="type">std::unordered_map</span>&lt;<span class="type">std::string</span>, <span class="type">std::shared_ptr</span>&lt;<span class="type">Asset</span>&gt;&gt; m_PinnedAssets;
+
+<span class="keyword">public</span>:
+    <span class="comment">// 핀: 무조건 메모리에 유지</span>
+    <span class="type">void</span> <span class="function">Pin</span>(<span class="keyword">const</span> <span class="type">std::string</span>& path)
+    {
+        <span class="keyword">auto</span> asset = <span class="function">Load</span>&lt;<span class="type">Asset</span>&gt;(path);
+        m_PinnedAssets[path] = asset;  <span class="comment">// shared_ptr로 유지</span>
+    }
+
+    <span class="comment">// 언핀: LRU/RefCount에 맡김</span>
+    <span class="type">void</span> <span class="function">Unpin</span>(<span class="keyword">const</span> <span class="type">std::string</span>& path)
+    {
+        m_PinnedAssets.<span class="function">erase</span>(path);
+        <span class="comment">// 다른 참조가 없으면 자동 삭제됨</span>
+    }
+};
+
+
+<span class="comment">// 사용 예시</span>
+<span class="type">AssetManagerWithPin</span> manager;
+
+<span class="comment">// UI 텍스처는 항상 유지</span>
+manager.<span class="function">Pin</span>(<span class="string">"ui_atlas.png"</span>);
+
+<span class="comment">// 몬스터 텍스처는 사용 후 자동 정리</span>
+{
+    <span class="keyword">auto</span> monsterTex = manager.<span class="function">Load</span>&lt;<span class="type">Texture</span>&gt;(<span class="string">"goblin.png"</span>);
+    <span class="comment">// 몬스터 처리...</span>
+}  <span class="comment">// 스코프 끝 → 참조 없음 → 자동 삭제</span></div>
+        </div>
+
+        <!-- Part 7: Unity/Unreal 비교 -->
+        <div class="conversation">
+            <h2>Part 7. Unity와 Unreal의 Reference Counting</h2>
+
+            <div class="q">Unity는 어떻게 해?</div>
+            <div class="a">
+                <p>Unity는 <span class="highlight">Garbage Collection</span>을 사용해.</p>
+                <p>C#의 GC가 참조 없는 객체를 자동 수집해.</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// Unity (C#) - GC 기반</span>
+<span class="keyword">public class</span> <span class="type">TextureManager</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="comment">// 참조가 있으면 유지, 없으면 GC가 수집</span>
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="keyword">string</span>, <span class="type">WeakReference</span>&lt;<span class="type">Texture</span>&gt;&gt; _cache;
+
+    <span class="keyword">public</span> <span class="type">Texture</span> <span class="function">Load</span>(<span class="keyword">string</span> path)
+    {
+        <span class="keyword">if</span> (_cache.<span class="function">TryGetValue</span>(path, <span class="keyword">out var</span> weakRef))
+        {
+            <span class="keyword">if</span> (weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out var</span> tex))
+            {
+                <span class="keyword">return</span> tex;  <span class="comment">// 캐시 히트</span>
+            }
+        }
+
+        <span class="comment">// 새로 로드</span>
+        <span class="keyword">var</span> newTex = <span class="type">Resources</span>.<span class="function">Load</span>&lt;<span class="type">Texture</span>&gt;(path);
+        _cache[path] = <span class="keyword">new</span> <span class="type">WeakReference</span>&lt;<span class="type">Texture</span>&gt;(newTex);
+        <span class="keyword">return</span> newTex;
+    }
+}
+
+
+<span class="comment">// Addressables는 명시적 Release 필요!</span>
+<span class="keyword">public async</span> <span class="type">Task</span> <span class="function">UseTexture</span>()
+{
+    <span class="keyword">var</span> handle = <span class="type">Addressables</span>.<span class="function">LoadAssetAsync</span>&lt;<span class="type">Texture</span>&gt;(<span class="string">"hero"</span>);
+    <span class="keyword">await</span> handle.Task;
+
+    <span class="comment">// 사용...</span>
+
+    <span class="comment">// 반드시 Release 호출! (Reference Counting)</span>
+    <span class="type">Addressables</span>.<span class="function">Release</span>(handle);
+}</div>
+
+            <div class="q">Unreal은?</div>
+            <div class="a">
+                <p>Unreal은 <span class="highlight">TSharedPtr / TWeakPtr</span>을 자체 구현해서 사용해.</p>
+                <p>UObject는 별도의 <span class="key-point">GC 시스템</span>이 있어.</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// Unreal Engine - TSharedPtr 사용</span>
+<span class="keyword">class</span> <span class="type">FMyAssetManager</span>
+{
+<span class="keyword">private</span>:
+    <span class="type">TMap</span>&lt;<span class="type">FString</span>, <span class="type">TWeakPtr</span>&lt;<span class="type">FMyAsset</span>&gt;&gt; Cache;
+
+<span class="keyword">public</span>:
+    <span class="type">TSharedPtr</span>&lt;<span class="type">FMyAsset</span>&gt; <span class="function">LoadAsset</span>(<span class="keyword">const</span> <span class="type">FString</span>& Path)
+    {
+        <span class="comment">// 캐시 확인</span>
+        <span class="keyword">if</span> (<span class="type">TWeakPtr</span>&lt;<span class="type">FMyAsset</span>&gt;* Found = Cache.<span class="function">Find</span>(Path))
+        {
+            <span class="keyword">if</span> (<span class="type">TSharedPtr</span>&lt;<span class="type">FMyAsset</span>&gt; Pinned = Found-><span class="function">Pin</span>())
+            {
+                <span class="keyword">return</span> Pinned;
+            }
+        }
+
+        <span class="comment">// 새로 로드</span>
+        <span class="type">TSharedPtr</span>&lt;<span class="type">FMyAsset</span>&gt; NewAsset = <span class="function">MakeShared</span>&lt;<span class="type">FMyAsset</span>&gt;();
+        Cache.<span class="function">Add</span>(Path, NewAsset);
+        <span class="keyword">return</span> NewAsset;
+    }
+};
+
+
+<span class="comment">// UObject는 다름! - Unreal GC 사용</span>
+<span class="type">UCLASS</span>()
+<span class="keyword">class</span> <span class="type">UMyObject</span> : <span class="keyword">public</span> <span class="type">UObject</span>
+{
+    <span class="type">GENERATED_BODY</span>()
+
+    <span class="comment">// UPROPERTY가 붙은 참조는 GC가 추적</span>
+    <span class="type">UPROPERTY</span>()
+    <span class="type">UTexture2D</span>* Texture;  <span class="comment">// GC가 관리</span>
+
+    <span class="comment">// UPROPERTY 없으면 GC가 모름!</span>
+    <span class="type">UObject</span>* DangerousRef;  <span class="comment">// ⚠️ GC가 수집할 수 있음</span>
+};</div>
+
+            <div class="diagram-box"><pre>
+Unity vs Unreal 비교
+
+┌──────────────────────────────────────────────────────────────────┐
+│                           Unity                                  │
+├──────────────────────────────────────────────────────────────────┤
+│  일반 C# 객체    : Garbage Collector (자동)                      │
+│  Addressables    : Reference Counting (수동 Release)             │
+│  Resources       : GC + Unload 수동 호출                         │
+│                                                                  │
+│  특징: GC pause 발생 가능 (프레임 드랍 주의)                     │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│                          Unreal                                  │
+├──────────────────────────────────────────────────────────────────┤
+│  TSharedPtr/Ptr  : Reference Counting (자동)                     │
+│  UObject         : Unreal GC (Mark & Sweep 변형)                 │
+│  Raw Pointer     : 수동 관리 (위험!)                             │
+│                                                                  │
+│  특징: Incremental GC로 프레임 영향 최소화                       │
+└──────────────────────────────────────────────────────────────────┘
+
+
+핵심 차이:
+━━━━━━━━━━
+
+• Unity: GC가 언제 돌지 예측 어려움 → 스파이크 발생 가능
+• Unreal: Reference Counting은 즉시 해제 → 예측 가능한 성능
+            </pre></div>
+        </div>
+
+        <!-- Part 8: 디버깅과 메모리 누수 감지 -->
+        <div class="conversation">
+            <h2>Part 8. 디버깅과 메모리 누수 감지</h2>
+
+            <div class="q">RefCount 관련 버그는 어떻게 찾아?</div>
+            <div class="a">
+                <p>대표적인 문제와 디버깅 방법:</p>
+            </div>
+
+            <div class="code-block"><span class="comment">// 1. 메모리 누수 감지용 RefCounted 클래스</span>
+<span class="keyword">class</span> <span class="type">DebugRefCounted</span>
+{
+<span class="keyword">private</span>:
+    <span class="type">std::atomic</span>&lt;<span class="type">int</span>&gt; m_RefCount;
+    <span class="type">std::string</span> m_DebugName;
+
+    <span class="comment">// 전역 추적</span>
+    <span class="keyword">static</span> <span class="type">std::unordered_set</span>&lt;<span class="type">DebugRefCounted</span>*&gt; s_AllInstances;
+    <span class="keyword">static</span> <span class="type">std::mutex</span> s_Mutex;
+
+<span class="keyword">public</span>:
+    <span class="function">DebugRefCounted</span>(<span class="keyword">const</span> <span class="type">std::string</span>& name)
+        : m_RefCount(<span class="number">1</span>)
+        , m_DebugName(name)
+    {
+        <span class="type">std::lock_guard</span>&lt;<span class="type">std::mutex</span>&gt; lock(s_Mutex);
+        s_AllInstances.<span class="function">insert</span>(<span class="keyword">this</span>);
+
+<span class="keyword">#if</span> _DEBUG
+        <span class="function">printf</span>(<span class="string">"[RefCount] Created: %s (count: %d)\n"</span>,
+               m_DebugName.<span class="function">c_str</span>(), m_RefCount.<span class="function">load</span>());
+<span class="keyword">#endif</span>
+    }
+
+    <span class="type">void</span> <span class="function">AddRef</span>()
+    {
+        <span class="type">int</span> oldCount = m_RefCount.<span class="function">fetch_add</span>(<span class="number">1</span>);
+
+<span class="keyword">#if</span> _DEBUG
+        <span class="function">printf</span>(<span class="string">"[RefCount] AddRef: %s (%d → %d)\n"</span>,
+               m_DebugName.<span class="function">c_str</span>(), oldCount, oldCount + <span class="number">1</span>);
+<span class="keyword">#endif</span>
+    }
+
+    <span class="type">void</span> <span class="function">Release</span>()
+    {
+        <span class="type">int</span> oldCount = m_RefCount.<span class="function">fetch_sub</span>(<span class="number">1</span>);
+
+<span class="keyword">#if</span> _DEBUG
+        <span class="function">printf</span>(<span class="string">"[RefCount] Release: %s (%d → %d)\n"</span>,
+               m_DebugName.<span class="function">c_str</span>(), oldCount, oldCount - <span class="number">1</span>);
+<span class="keyword">#endif</span>
+
+        <span class="keyword">if</span> (oldCount == <span class="number">1</span>)
+        {
+            {
+                <span class="type">std::lock_guard</span>&lt;<span class="type">std::mutex</span>&gt; lock(s_Mutex);
+                s_AllInstances.<span class="function">erase</span>(<span class="keyword">this</span>);
+            }
+            <span class="keyword">delete this</span>;
+        }
+    }
+
+    <span class="comment">// 메모리 누수 체크</span>
+    <span class="keyword">static</span> <span class="type">void</span> <span class="function">ReportLeaks</span>()
+    {
+        <span class="type">std::lock_guard</span>&lt;<span class="type">std::mutex</span>&gt; lock(s_Mutex);
+
+        <span class="keyword">if</span> (!s_AllInstances.<span class="function">empty</span>())
+        {
+            <span class="function">printf</span>(<span class="string">"=== MEMORY LEAKS DETECTED ===\n"</span>);
+            <span class="keyword">for</span> (<span class="keyword">auto</span>* obj : s_AllInstances)
+            {
+                <span class="function">printf</span>(<span class="string">"  Leaked: %s (refCount: %d)\n"</span>,
+                       obj->m_DebugName.<span class="function">c_str</span>(),
+                       obj->m_RefCount.<span class="function">load</span>());
+            }
+        }
+        <span class="keyword">else</span>
+        {
+            <span class="function">printf</span>(<span class="string">"=== No memory leaks! ===\n"</span>);
+        }
+    }
+};</div>
+
+            <div class="diagram-box"><pre>
+흔한 RefCount 버그와 해결법
+
+┌─────────────────────────────────────────────────────────────────┐
+│  버그 1: Double Release (이중 해제)                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Texture* tex = LoadTexture();  // refCount = 1                 │
+│  tex->Release();                // refCount = 0 → DELETE        │
+│  tex->Release();                // 💀 이미 삭제된 메모리 접근!   │
+│                                                                 │
+│  해결: Release 후 포인터를 nullptr로 설정                        │
+│        또는 스마트 포인터 사용                                   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  버그 2: AddRef 누락                                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Texture* tex = LoadTexture();  // refCount = 1                 │
+│  myList.push_back(tex);         // AddRef 안 함!                │
+│  tex->Release();                // refCount = 0 → DELETE        │
+│  // myList 사용 시 → 💀 댕글링 포인터!                          │
+│                                                                 │
+│  해결: 컨테이너에 추가할 때 AddRef                               │
+│        또는 스마트 포인터 컨테이너 사용                          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  버그 3: Release 누락 (메모리 누수)                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  void Process() {                                               │
+│      Texture* tex = LoadTexture();  // refCount = 1             │
+│      tex->AddRef();                 // refCount = 2             │
+│      if (error) return;             // Release 안 함!           │
+│      tex->Release();                                            │
+│  }                                                              │
+│  // 💀 에러 시 refCount가 계속 2 → 메모리 누수                  │
+│                                                                 │
+│  해결: RAII 패턴 (스마트 포인터) 사용                            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+            </pre></div>
+
+            <div class="code-block"><span class="comment">// 2. 콜 스택 추적이 가능한 고급 버전</span>
+<span class="keyword">class</span> <span class="type">TrackedRefCounted</span>
+{
+<span class="keyword">private</span>:
+    <span class="keyword">struct</span> <span class="type">RefHistory</span>
+    {
+        <span class="type">bool</span> IsAddRef;
+        <span class="type">std::string</span> CallStack;
+        <span class="type">std::chrono::system_clock::time_point</span> Time;
+    };
+
+    <span class="type">std::vector</span>&lt;<span class="type">RefHistory</span>&gt; m_History;
+    <span class="type">std::mutex</span> m_HistoryMutex;
+
+<span class="keyword">public</span>:
+    <span class="type">void</span> <span class="function">AddRef</span>()
+    {
+        <span class="type">std::lock_guard</span>&lt;<span class="type">std::mutex</span>&gt; lock(m_HistoryMutex);
+
+        m_RefCount++;
+
+        <span class="comment">// 콜 스택 기록</span>
+        m_History.<span class="function">push_back</span>({
+            <span class="keyword">true</span>,
+            <span class="function">CaptureCallStack</span>(),
+            <span class="type">std::chrono::system_clock::now</span>()
+        });
+    }
+
+    <span class="type">void</span> <span class="function">PrintHistory</span>()
+    {
+        <span class="function">printf</span>(<span class="string">"=== Reference History ===\n"</span>);
+        <span class="keyword">for</span> (<span class="keyword">const auto</span>& h : m_History)
+        {
+            <span class="function">printf</span>(<span class="string">"[%s] %s\n"</span>,
+                   h.IsAddRef ? <span class="string">"AddRef"</span> : <span class="string">"Release"</span>,
+                   h.CallStack.<span class="function">c_str</span>());
+        }
+    }
+};</div>
+        </div>
+
+        <!-- Part 9: 성능 고려사항 -->
+        <div class="conversation">
+            <h2>Part 9. 성능 고려사항</h2>
+
+            <div class="q">Reference Counting의 성능 오버헤드는?</div>
+            <div class="a">
+                <p>의외로 <span class="warning">Atomic 연산 비용</span>이 있어!</p>
+            </div>
+
+            <div class="diagram-box"><pre>
+Reference Counting 성능 비용
+
+┌─────────────────────────────────────────────────────────────────┐
+│  연산                    │  대략적 비용                          │
+├─────────────────────────────────────────────────────────────────┤
+│  일반 정수 증가 (i++)    │  ~1 cycle                             │
+│  Atomic 증가             │  ~10-100 cycles (캐시 상태에 따라)     │
+│  메모리 할당 (new)       │  ~100-1000 cycles                     │
+│  디스크 I/O              │  ~1,000,000+ cycles                   │
+└─────────────────────────────────────────────────────────────────┘
+
+상대적으로 보면:
+• 디스크 로드 1번 >> Atomic 연산 10,000번
+• 걱정할 필요 거의 없음!
+
+
+하지만 주의할 경우:
+━━━━━━━━━━━━━━━━━━
+
+1. 핫 루프에서 shared_ptr 복사가 수천 번 일어날 때
+   → 참조로 전달하거나 raw pointer 사용 고려
+
+2. 캐시 라인 경합 (False Sharing)
+   → RefCount와 다른 데이터가 같은 캐시 라인에 있으면 성능 저하
+            </pre></div>
+
+            <div class="code-block"><span class="comment">// 성능 최적화 팁</span>
+
+<span class="comment">// 1. 복사 대신 참조로 전달</span>
+<span class="type">void</span> <span class="function">Bad</span>(<span class="type">std::shared_ptr</span>&lt;<span class="type">Texture</span>&gt; tex)   <span class="comment">// 복사 → AddRef + Release</span>
+{
+    tex-><span class="function">Use</span>();
+}
+
+<span class="type">void</span> <span class="function">Good</span>(<span class="keyword">const</span> <span class="type">std::shared_ptr</span>&lt;<span class="type">Texture</span>&gt;& tex)  <span class="comment">// 참조 → 카운터 변경 없음</span>
+{
+    tex-><span class="function">Use</span>();
+}
+
+
+<span class="comment">// 2. 로컬에서만 사용할 땐 raw pointer</span>
+<span class="type">void</span> <span class="function">ProcessTextures</span>(<span class="keyword">const</span> <span class="type">std::vector</span>&lt;<span class="type">std::shared_ptr</span>&lt;<span class="type">Texture</span>&gt;&gt;& textures)
+{
+    <span class="keyword">for</span> (<span class="keyword">const auto</span>& tex : textures)
+    {
+        <span class="comment">// 이 함수 내에서만 사용 → raw pointer도 안전</span>
+        <span class="type">Texture</span>* raw = tex.<span class="function">get</span>();
+        raw-><span class="function">Process</span>();  <span class="comment">// Atomic 연산 없음!</span>
+    }
+}
+
+
+<span class="comment">// 3. 캐시 라인 정렬로 False Sharing 방지</span>
+<span class="keyword">struct</span> <span class="keyword">alignas</span>(<span class="number">64</span>) <span class="type">CacheAlignedRefCount</span>  <span class="comment">// 64바이트 정렬</span>
+{
+    <span class="type">std::atomic</span>&lt;<span class="type">int</span>&gt; RefCount;
+    <span class="type">char</span> Padding[<span class="number">60</span>];  <span class="comment">// 다른 데이터와 분리</span>
+};</div>
+        </div>
+
+        <!-- Summary -->
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li>사용 횟수를 <strong>카운트</strong></li>
-                <li>카운트 0 → <strong>메모리 해제</strong></li>
-                <li><strong>shared_ptr</strong>이 자동 관리</li>
-                <li>여러 오브젝트가 <strong>리소스 공유</strong> 가능</li>
+                <li><strong>Reference Counting</strong> - 참조 횟수를 세고, 0이면 삭제</li>
+                <li><strong>스마트 포인터</strong> - AddRef/Release를 자동 호출 (RAII)</li>
+                <li><strong>shared_ptr</strong> - Control Block에 카운터 저장</li>
+                <li><strong>weak_ptr</strong> - 순환 참조 해결, RefCount 증가 안 함</li>
+                <li><strong>Thread Safety</strong> - Atomic 카운터 필수</li>
+                <li><strong>에셋 매니저</strong> - weak_ptr 캐시 + Pin 시스템</li>
+                <li><strong>디버깅</strong> - 전역 추적, 콜 스택 기록</li>
             </ul>
         </div>
 
@@ -125,5 +1205,7 @@ tex = nullptr;  // refCount = 0 → 자동 삭제!</div>
             <a href="../asset-lru-cache/">LRU 캐시 &rarr;</a>
         </div>
     </div>
+
+    <script src="../common/script.js"></script>
 </body>
 </html>
