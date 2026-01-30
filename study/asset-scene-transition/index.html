@@ -4,37 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>씬 전환 시 메모리 정리 - 에셋 관리 - MSH Portfolio</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
-        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
-        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
-        .a p { margin-bottom: 12px; }
-        .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
-        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
-        .summary-box ul { list-style: none; }
-        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
-        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
-        .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
-    </style>
+    <link rel="stylesheet" href="../common/styles.css">
 </head>
 <body>
     <div class="container">
@@ -42,42 +12,969 @@
 
         <div class="header">
             <h1>씬 전환 시 메모리 정리</h1>
-            <p>이전 씬 리소스 해제</p>
+            <p>메모리 누수 없는 깔끔한 씬 전환 전략</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">씬 전환 시 메모리 정리이(가) 뭐야?</div>
+            <h2>Part 1. 개념 - 씬 전환의 메모리 문제</h2>
+
+            <div class="q">씬 전환할 때 왜 메모리 정리가 필요해?</div>
             <div class="a">
-                <p><span class="highlight">이전 씬 리소스 해제</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p>Unity의 <span class="highlight">SceneManager.LoadScene()</span>은 이전 씬 오브젝트를 파괴하지만, <span class="warning">에셋은 자동 해제되지 않습니다</span>.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                    씬 전환 시 메모리 상태                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Scene A 로드 상태                                              │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  GameObject들          에셋 (메모리)                     │   │
+│  │  ├─ Player ─────────→ PlayerTexture (10MB)              │   │
+│  │  ├─ Enemy ──────────→ EnemyTexture (8MB)                │   │
+│  │  └─ Environment ────→ EnvTexture (20MB)                 │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  LoadScene("SceneB") 호출 후                                    │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  GameObject들 (파괴됨)  에셋 (메모리) ← 여전히 남아있음! │   │
+│  │  ├─ Player ❌           PlayerTexture (10MB) ✓          │   │
+│  │  ├─ Enemy ❌            EnemyTexture (8MB) ✓            │   │
+│  │  └─ Environment ❌      EnvTexture (20MB) ✓             │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Scene B 로드 후 (정리 안 함)                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  총 메모리 사용량:                                       │   │
+│  │  Scene A 에셋: 38MB (미사용, 누수!)                      │   │
+│  │  Scene B 에셋: 45MB (현재 사용)                          │   │
+│  │  ─────────────────────────                               │   │
+│  │  합계: 83MB (실제 필요: 45MB)                            │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</pre></div>
+                <p>씬을 여러 번 전환하면 <span class="warning">메모리가 계속 누적</span>되어 결국 크래시합니다.</p>
+            </div>
+
+            <div class="q">왜 에셋이 자동으로 안 지워져?</div>
+            <div class="a">
+                <p>Unity의 <span class="highlight">에셋 캐싱 시스템</span> 때문입니다. 성능을 위해 의도적으로 유지합니다.</p>
+                <div class="code-block"><span class="comment">// Unity 내부 동작 (개념적 설명)</span>
+
+<span class="comment">// Resources.Load나 AssetBundle.Load 시</span>
+<span class="comment">// Unity는 내부적으로 에셋을 캐싱합니다</span>
+
+<span class="keyword">internal class</span> <span class="type">AssetCache</span>
+{
+    <span class="comment">// 한 번 로드된 에셋은 여기 캐시됨</span>
+    <span class="keyword">static</span> <span class="type">Dictionary</span>&lt;<span class="type">string</span>, <span class="type">Object</span>&gt; loadedAssets;
+
+    <span class="keyword">public static</span> <span class="type">T</span> <span class="function">Load</span>&lt;<span class="type">T</span>&gt;(<span class="type">string</span> path)
+    {
+        <span class="keyword">if</span> (loadedAssets.<span class="function">ContainsKey</span>(path))
+            <span class="keyword">return</span> loadedAssets[path];  <span class="comment">// 캐시에서 반환</span>
+
+        <span class="keyword">var</span> asset = <span class="function">LoadFromDisk</span>(path);
+        loadedAssets[path] = asset;  <span class="comment">// 캐시에 저장</span>
+        <span class="keyword">return</span> asset;
+    }
+}
+
+<span class="comment">// 이 캐시는 명시적으로 비우지 않으면 유지됩니다</span>
+<span class="comment">// Resources.UnloadUnusedAssets()가 그 역할을 합니다</span></div>
+                <div class="highlight-box">
+                    <strong>💡 캐싱의 장점</strong><br>
+                    같은 에셋을 다시 로드할 때 디스크 I/O 없이 즉시 반환됩니다. 씬을 왔다 갔다 하는 게임에서는 오히려 성능에 유리합니다.
+                </div>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. 기본 정리 방법</h2>
+
+            <div class="q">Resources.UnloadUnusedAssets()가 뭐야?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>현재 <span class="highlight">참조되지 않는 에셋을 메모리에서 해제</span>하는 Unity 내장 함수입니다.</p>
+                <div class="code-block"><span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.SceneManagement;
+<span class="keyword">using</span> System.Collections;
+
+<span class="keyword">public class</span> <span class="type">BasicSceneTransition</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">public</span> <span class="keyword">void</span> <span class="function">LoadSceneWithCleanup</span>(<span class="type">string</span> sceneName)
+    {
+        <span class="function">StartCoroutine</span>(<span class="function">LoadSceneCoroutine</span>(sceneName));
+    }
+
+    <span class="keyword">private</span> <span class="type">IEnumerator</span> <span class="function">LoadSceneCoroutine</span>(<span class="type">string</span> sceneName)
+    {
+        <span class="comment">// 1. 새 씬 로드 (이전 씬의 GameObject들이 파괴됨)</span>
+        <span class="keyword">yield return</span> SceneManager.<span class="function">LoadSceneAsync</span>(sceneName);
+
+        <span class="comment">// 2. 미사용 에셋 해제</span>
+        <span class="keyword">yield return</span> Resources.<span class="function">UnloadUnusedAssets</span>();
+
+        <span class="comment">// 3. GC 실행 (관리되는 메모리 정리)</span>
+        System.GC.<span class="function">Collect</span>();
+    }
+}</div>
+            </div>
+
+            <div class="q">UnloadUnusedAssets은 언제 호출해야 해?</div>
+            <div class="a">
+                <p><span class="highlight">씬 로드 직후</span>가 가장 효과적입니다. 이전 씬의 참조가 모두 끊어진 상태이기 때문입니다.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│               UnloadUnusedAssets 타이밍                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ❌ 잘못된 타이밍: 씬 로드 전                                    │
+│  ─────────────────────────────                                  │
+│  Resources.UnloadUnusedAssets();  ← 이전 씬 오브젝트가 아직     │
+│  SceneManager.LoadScene("B");        참조 중이라 해제 안 됨     │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  ✅ 올바른 타이밍: 씬 로드 후                                    │
+│  ────────────────────────────                                   │
+│  SceneManager.LoadScene("B");     ← 이전 씬 오브젝트 파괴       │
+│  Resources.UnloadUnusedAssets();  ← 참조 끊어진 에셋 해제       │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  ✅✅ 가장 좋은 타이밍: 로딩 화면 중                              │
+│  ────────────────────────────────                               │
+│  SceneManager.LoadScene("Loading");  ← 경량 로딩 씬             │
+│  Resources.UnloadUnusedAssets();     ← 여기서 정리 (히칭 숨김)  │
+│  SceneManager.LoadScene("B");        ← 실제 씬 로드             │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</pre></div>
+            </div>
+
+            <div class="q">GC.Collect()도 꼭 호출해야 해?</div>
+            <div class="a">
+                <p><span class="highlight">권장하지만 필수는 아닙니다</span>. UnloadUnusedAssets가 내부적으로 GC를 트리거하기도 합니다.</p>
+                <div class="code-block"><span class="comment">// UnloadUnusedAssets vs GC.Collect 차이</span>
+
+<span class="comment">// Resources.UnloadUnusedAssets()</span>
+<span class="comment">// - Unity 네이티브 에셋 (Texture, Mesh, AudioClip 등) 해제</span>
+<span class="comment">// - 내부적으로 GC를 호출할 수 있음 (보장되지 않음)</span>
+<span class="comment">// - 비동기 (AsyncOperation 반환)</span>
+
+<span class="comment">// System.GC.Collect()</span>
+<span class="comment">// - C# 관리 메모리 (클래스 인스턴스, 배열 등) 해제</span>
+<span class="comment">// - 동기 (즉시 실행, 프레임 히칭 유발 가능)</span>
+
+<span class="comment">// 둘 다 호출하는 것이 가장 확실함</span>
+<span class="keyword">private</span> <span class="type">IEnumerator</span> <span class="function">FullCleanup</span>()
+{
+    <span class="comment">// 1. 네이티브 에셋 정리</span>
+    <span class="keyword">yield return</span> Resources.<span class="function">UnloadUnusedAssets</span>();
+
+    <span class="comment">// 2. 관리 메모리 정리</span>
+    System.GC.<span class="function">Collect</span>();
+
+    <span class="comment">// 3. Finalizer 대기 (완전한 정리)</span>
+    System.GC.<span class="function">WaitForPendingFinalizers</span>();
+
+    <span class="comment">// 4. 한 번 더 GC (Finalizer가 해제한 객체 정리)</span>
+    System.GC.<span class="function">Collect</span>();
+}</div>
+                <div class="warning-box">
+                    <strong>⚠️ GC.Collect() 주의사항</strong><br>
+                    게임플레이 중에 GC.Collect()를 호출하면 프레임 히칭이 발생합니다. 반드시 로딩 화면이나 일시정지 상태에서만 호출하세요.
+                </div>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 로딩 씬 패턴</h2>
+
+            <div class="q">로딩 씬이 왜 필요해?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p><span class="highlight">메모리 정리 히칭을 숨기고</span>, 메모리 피크를 낮추기 위해서입니다.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│              로딩 씬 없이 직접 전환 (위험)                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  메모리                                                         │
+│  ▲                                                              │
+│  │         ┌─────────────────┐                                  │
+│  │         │  Scene A + B    │ ← 두 씬이 동시에 메모리에!       │
+│  │         │    (피크!)      │   메모리 부족 → 크래시 위험      │
+│  │  ┌──────┤                 ├──────┐                          │
+│  │  │Scene │                 │Scene │                          │
+│  │  │  A   │                 │  B   │                          │
+│  └──┴──────┴─────────────────┴──────┴──────→ 시간               │
+│             ↑                                                   │
+│        LoadSceneAsync                                           │
+│        (Additive처럼 동작)                                      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│              로딩 씬을 통한 전환 (안전)                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  메모리                                                         │
+│  ▲                                                              │
+│  │  ┌──────┐       ┌──────┐                                    │
+│  │  │Scene │       │Scene │                                    │
+│  │  │  A   │  ┌─┐  │  B   │                                    │
+│  │  │      │  │L│  │      │                                    │
+│  └──┴──────┴──┴─┴──┴──────┴──────→ 시간                        │
+│             ↑  ↑                                                │
+│        Unload  로딩 씬 (경량)                                   │
+│        + GC    여기서 정리!                                     │
+│                                                                 │
+│  💡 로딩 씬은 2-5MB 정도로 최소화                               │
+│     A 해제 후 B 로드 → 피크 메모리 대폭 감소                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</pre></div>
+            </div>
+
+            <div class="q">로딩 씬 매니저 어떻게 만들어?</div>
+            <div class="a">
+                <p>싱글톤 패턴으로 <span class="highlight">전역 씬 전환 관리자</span>를 만듭니다.</p>
+                <div class="code-block"><span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.SceneManagement;
+<span class="keyword">using</span> UnityEngine.UI;
+<span class="keyword">using</span> System;
+<span class="keyword">using</span> System.Collections;
+
+<span class="keyword">public class</span> <span class="type">SceneTransitionManager</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">public static</span> <span class="type">SceneTransitionManager</span> Instance { <span class="keyword">get</span>; <span class="keyword">private set</span>; }
+
+    [<span class="type">SerializeField</span>] <span class="keyword">private string</span> loadingSceneName = <span class="string">"LoadingScene"</span>;
+    [<span class="type">SerializeField</span>] <span class="keyword">private float</span> minimumLoadingTime = <span class="number">1f</span>;
+
+    <span class="keyword">private string</span> _targetSceneName;
+    <span class="keyword">private</span> <span class="type">Action</span> _onLoadComplete;
+
+    <span class="keyword">private void</span> <span class="function">Awake</span>()
+    {
+        <span class="keyword">if</span> (Instance != <span class="keyword">null</span>)
+        {
+            <span class="function">Destroy</span>(gameObject);
+            <span class="keyword">return</span>;
+        }
+        Instance = <span class="keyword">this</span>;
+        <span class="function">DontDestroyOnLoad</span>(gameObject);
+    }
+
+    <span class="keyword">public void</span> <span class="function">LoadScene</span>(<span class="type">string</span> sceneName, <span class="type">Action</span> onComplete = <span class="keyword">null</span>)
+    {
+        _targetSceneName = sceneName;
+        _onLoadComplete = onComplete;
+        <span class="function">StartCoroutine</span>(<span class="function">TransitionCoroutine</span>());
+    }
+
+    <span class="keyword">private</span> <span class="type">IEnumerator</span> <span class="function">TransitionCoroutine</span>()
+    {
+        <span class="keyword">float</span> startTime = <span class="type">Time</span>.realtimeSinceStartup;
+
+        <span class="comment">// 1. 로딩 씬으로 이동</span>
+        <span class="keyword">yield return</span> SceneManager.<span class="function">LoadSceneAsync</span>(loadingSceneName);
+
+        <span class="comment">// 2. 이전 씬 에셋 정리 (핵심!)</span>
+        <span class="keyword">yield return</span> <span class="function">CleanupMemory</span>();
+
+        <span class="comment">// 3. 타겟 씬 로드</span>
+        <span class="keyword">var</span> loadOp = SceneManager.<span class="function">LoadSceneAsync</span>(_targetSceneName);
+        loadOp.allowSceneActivation = <span class="keyword">false</span>;
+
+        <span class="comment">// 4. 로딩 진행률 업데이트</span>
+        <span class="keyword">while</span> (loadOp.progress &lt; <span class="number">0.9f</span>)
+        {
+            <span class="function">UpdateLoadingUI</span>(loadOp.progress / <span class="number">0.9f</span>);
+            <span class="keyword">yield return</span> <span class="keyword">null</span>;
+        }
+
+        <span class="comment">// 5. 최소 로딩 시간 보장 (UX)</span>
+        <span class="keyword">float</span> elapsed = <span class="type">Time</span>.realtimeSinceStartup - startTime;
+        <span class="keyword">if</span> (elapsed &lt; minimumLoadingTime)
+        {
+            <span class="keyword">yield return</span> <span class="keyword">new</span> <span class="type">WaitForSecondsRealtime</span>(
+                minimumLoadingTime - elapsed);
+        }
+
+        <span class="comment">// 6. 씬 활성화</span>
+        loadOp.allowSceneActivation = <span class="keyword">true</span>;
+        <span class="keyword">yield return</span> loadOp;
+
+        _onLoadComplete?.<span class="function">Invoke</span>();
+    }
+
+    <span class="keyword">private</span> <span class="type">IEnumerator</span> <span class="function">CleanupMemory</span>()
+    {
+        <span class="comment">// 프레임 대기 (오브젝트 파괴 완료 보장)</span>
+        <span class="keyword">yield return</span> <span class="keyword">null</span>;
+        <span class="keyword">yield return</span> <span class="keyword">null</span>;
+
+        <span class="comment">// 미사용 에셋 해제</span>
+        <span class="keyword">yield return</span> Resources.<span class="function">UnloadUnusedAssets</span>();
+
+        <span class="comment">// GC 실행</span>
+        System.GC.<span class="function">Collect</span>();
+        System.GC.<span class="function">WaitForPendingFinalizers</span>();
+        System.GC.<span class="function">Collect</span>();
+
+        <span class="comment">// 정리 완료 대기</span>
+        <span class="keyword">yield return</span> <span class="keyword">null</span>;
+    }
+
+    <span class="keyword">private void</span> <span class="function">UpdateLoadingUI</span>(<span class="keyword">float</span> progress)
+    {
+        <span class="comment">// 로딩 UI 업데이트 (LoadingScene에 있는 UI 찾아서 업데이트)</span>
+        <span class="keyword">var</span> slider = <span class="type">FindObjectOfType</span>&lt;<span class="type">Slider</span>&gt;();
+        <span class="keyword">if</span> (slider != <span class="keyword">null</span>)
+            slider.value = progress;
+    }
+}</div>
+            </div>
+
+            <div class="q">로딩 씬은 어떻게 만들어?</div>
+            <div class="a">
+                <p><span class="highlight">최소한의 UI만</span> 포함하여 메모리 사용량을 극도로 낮춥니다.</p>
+                <div class="code-block"><span class="comment">// LoadingScene 구성</span>
+<span class="comment">// - Canvas (로딩 UI)</span>
+<span class="comment">//   - Background (단색 또는 그라데이션)</span>
+<span class="comment">//   - Loading Slider</span>
+<span class="comment">//   - Loading Text</span>
+<span class="comment">//   - Optional: 로딩 팁 텍스트</span>
+
+<span class="keyword">public class</span> <span class="type">LoadingSceneUI</span> : <span class="type">MonoBehaviour</span>
+{
+    [<span class="type">SerializeField</span>] <span class="keyword">private</span> <span class="type">Slider</span> progressSlider;
+    [<span class="type">SerializeField</span>] <span class="keyword">private</span> <span class="type">Text</span> progressText;
+    [<span class="type">SerializeField</span>] <span class="keyword">private</span> <span class="type">Text</span> tipText;
+    [<span class="type">SerializeField</span>] <span class="keyword">private string</span>[] tips;
+
+    <span class="keyword">private void</span> <span class="function">Start</span>()
+    {
+        <span class="comment">// 랜덤 팁 표시</span>
+        <span class="keyword">if</span> (tips.Length > <span class="number">0</span> && tipText != <span class="keyword">null</span>)
+        {
+            tipText.text = tips[<span class="type">Random</span>.<span class="function">Range</span>(<span class="number">0</span>, tips.Length)];
+        }
+    }
+
+    <span class="keyword">public void</span> <span class="function">SetProgress</span>(<span class="keyword">float</span> progress)
+    {
+        progressSlider.value = progress;
+        progressText.text = <span class="string">$"{(int)(progress * 100)}%"</span>;
+    }
+}
+
+<span class="comment">// 💡 로딩 씬 최적화 팁:</span>
+<span class="comment">// - 텍스처는 압축률 높게 (ETC2, ASTC)</span>
+<span class="comment">// - 폰트는 시스템 폰트 또는 경량 폰트</span>
+<span class="comment">// - 애니메이션 최소화</span>
+<span class="comment">// - 목표: 2-5MB 이하</span></div>
             </div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 4. Addressables와 씬 전환</h2>
+
+            <div class="q">Addressables 쓸 때는 어떻게 해?</div>
+            <div class="a">
+                <p>Addressables는 <span class="highlight">참조 카운팅</span> 기반이라 더 세밀한 제어가 가능합니다.</p>
+                <div class="code-block"><span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.AddressableAssets;
+<span class="keyword">using</span> UnityEngine.ResourceManagement.AsyncOperations;
+<span class="keyword">using</span> UnityEngine.ResourceManagement.ResourceProviders;
+<span class="keyword">using</span> System.Collections;
+<span class="keyword">using</span> System.Collections.Generic;
+
+<span class="keyword">public class</span> <span class="type">AddressableSceneManager</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">private</span> <span class="type">AsyncOperationHandle</span>&lt;<span class="type">SceneInstance</span>&gt; _currentSceneHandle;
+    <span class="keyword">private</span> <span class="type">List</span>&lt;<span class="type">AsyncOperationHandle</span>&gt; _sceneAssetHandles = <span class="keyword">new</span>();
+
+    <span class="keyword">public</span> <span class="type">IEnumerator</span> <span class="function">LoadSceneAsync</span>(<span class="type">string</span> sceneAddress)
+    {
+        <span class="comment">// 1. 로딩 씬으로 이동 (Resources 기반 경량 씬)</span>
+        <span class="keyword">yield return</span> SceneManager.<span class="function">LoadSceneAsync</span>(<span class="string">"LoadingScene"</span>);
+
+        <span class="comment">// 2. 이전 씬의 Addressable 핸들 해제</span>
+        <span class="keyword">yield return</span> <span class="function">ReleaseCurrentScene</span>();
+
+        <span class="comment">// 3. 메모리 정리</span>
+        <span class="keyword">yield return</span> Resources.<span class="function">UnloadUnusedAssets</span>();
+        System.GC.<span class="function">Collect</span>();
+
+        <span class="comment">// 4. 새 씬 로드</span>
+        _currentSceneHandle = Addressables.<span class="function">LoadSceneAsync</span>(
+            sceneAddress,
+            <span class="type">LoadSceneMode</span>.Single
+        );
+
+        <span class="keyword">while</span> (!_currentSceneHandle.IsDone)
+        {
+            <span class="function">UpdateProgress</span>(_currentSceneHandle.PercentComplete);
+            <span class="keyword">yield return</span> <span class="keyword">null</span>;
+        }
+    }
+
+    <span class="keyword">private</span> <span class="type">IEnumerator</span> <span class="function">ReleaseCurrentScene</span>()
+    {
+        <span class="comment">// 씬에서 로드한 에셋 핸들 해제</span>
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> handle <span class="keyword">in</span> _sceneAssetHandles)
+        {
+            <span class="keyword">if</span> (handle.IsValid())
+            {
+                Addressables.<span class="function">Release</span>(handle);
+            }
+        }
+        _sceneAssetHandles.<span class="function">Clear</span>();
+
+        <span class="comment">// 이전 씬 핸들 해제</span>
+        <span class="keyword">if</span> (_currentSceneHandle.IsValid())
+        {
+            <span class="keyword">yield return</span> Addressables.<span class="function">UnloadSceneAsync</span>(
+                _currentSceneHandle
+            );
+        }
+    }
+
+    <span class="comment">// 씬 내에서 에셋 로드 시 핸들 등록</span>
+    <span class="keyword">public void</span> <span class="function">RegisterAssetHandle</span>(<span class="type">AsyncOperationHandle</span> handle)
+    {
+        _sceneAssetHandles.<span class="function">Add</span>(handle);
+    }
+}</div>
+            </div>
+
+            <div class="q">씬별 에셋 그룹은 어떻게 관리해?</div>
+            <div class="a">
+                <p><span class="highlight">씬 단위로 Addressable Group을 분리</span>하면 자동 해제가 쉬워집니다.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                Addressable Group 구조 예시                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Addressables Groups                                            │
+│  ├─ Common (항상 로드)                                          │
+│  │   ├─ UI/CommonAtlas                                         │
+│  │   ├─ Audio/BGM_Common                                       │
+│  │   └─ Fonts/MainFont                                         │
+│  │                                                              │
+│  ├─ Scene_MainMenu                                              │
+│  │   ├─ UI/MainMenuBackground                                  │
+│  │   └─ Audio/BGM_MainMenu                                     │
+│  │                                                              │
+│  ├─ Scene_Village                                               │
+│  │   ├─ Environment/Village_*                                  │
+│  │   ├─ Characters/NPC_*                                       │
+│  │   └─ Audio/Ambient_Village                                  │
+│  │                                                              │
+│  └─ Scene_Dungeon                                               │
+│      ├─ Environment/Dungeon_*                                  │
+│      ├─ Enemies/Monster_*                                      │
+│      └─ Audio/BGM_Battle                                       │
+│                                                                 │
+│  💡 씬 전환 시:                                                  │
+│     - Common 그룹: 유지                                         │
+│     - 이전 씬 그룹: 해제                                        │
+│     - 새 씬 그룹: 로드                                          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</pre></div>
+                <div class="code-block"><span class="keyword">public class</span> <span class="type">SceneAssetGroup</span>
+{
+    <span class="keyword">public string</span> SceneName;
+    <span class="keyword">public</span> <span class="type">List</span>&lt;<span class="type">string</span>&gt; AssetLabels = <span class="keyword">new</span>();
+    <span class="keyword">public</span> <span class="type">List</span>&lt;<span class="type">AsyncOperationHandle</span>&gt; LoadedHandles = <span class="keyword">new</span>();
+
+    <span class="keyword">public</span> <span class="type">IEnumerator</span> <span class="function">PreloadAssets</span>()
+    {
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> label <span class="keyword">in</span> AssetLabels)
+        {
+            <span class="keyword">var</span> handle = Addressables.<span class="function">LoadAssetsAsync</span>&lt;<span class="type">Object</span>&gt;(
+                label,
+                <span class="keyword">null</span>  <span class="comment">// 개별 콜백 불필요</span>
+            );
+            LoadedHandles.<span class="function">Add</span>(handle);
+            <span class="keyword">yield return</span> handle;
+        }
+    }
+
+    <span class="keyword">public void</span> <span class="function">ReleaseAllAssets</span>()
+    {
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> handle <span class="keyword">in</span> LoadedHandles)
+        {
+            <span class="keyword">if</span> (handle.IsValid())
+            {
+                Addressables.<span class="function">Release</span>(handle);
+            }
+        }
+        LoadedHandles.<span class="function">Clear</span>();
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. DontDestroyOnLoad 처리</h2>
+
+            <div class="q">DontDestroyOnLoad 오브젝트는 어떻게 해?</div>
+            <div class="a">
+                <p>씬 전환에도 살아남는 오브젝트는 <span class="warning">참조하는 에셋도 해제되지 않습니다</span>.</p>
+                <div class="code-block"><span class="keyword">public class</span> <span class="type">PersistentObjectManager</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">public static</span> <span class="type">PersistentObjectManager</span> Instance { <span class="keyword">get</span>; <span class="keyword">private set</span>; }
+
+    <span class="comment">// 씬별로 교체 가능한 에셋 참조</span>
+    <span class="keyword">private</span> <span class="type">AudioClip</span> _currentBGM;
+    <span class="keyword">private</span> <span class="type">Sprite</span> _currentPlayerIcon;
+
+    <span class="keyword">private void</span> <span class="function">Awake</span>()
+    {
+        <span class="keyword">if</span> (Instance != <span class="keyword">null</span>)
+        {
+            <span class="function">Destroy</span>(gameObject);
+            <span class="keyword">return</span>;
+        }
+        Instance = <span class="keyword">this</span>;
+        <span class="function">DontDestroyOnLoad</span>(gameObject);
+
+        <span class="comment">// 씬 로드 이벤트 구독</span>
+        SceneManager.sceneUnloaded += <span class="function">OnSceneUnloaded</span>;
+    }
+
+    <span class="keyword">private void</span> <span class="function">OnSceneUnloaded</span>(<span class="type">Scene</span> scene)
+    {
+        <span class="comment">// 씬별 에셋 참조 해제</span>
+        <span class="function">ClearSceneSpecificAssets</span>();
+    }
+
+    <span class="keyword">public void</span> <span class="function">ClearSceneSpecificAssets</span>()
+    {
+        <span class="comment">// 씬 전환 시 교체될 에셋 참조 해제</span>
+        _currentBGM = <span class="keyword">null</span>;
+        _currentPlayerIcon = <span class="keyword">null</span>;
+
+        <span class="comment">// 이렇게 해야 UnloadUnusedAssets에서 해제됨</span>
+    }
+
+    <span class="comment">// 새 씬에서 에셋 설정</span>
+    <span class="keyword">public void</span> <span class="function">SetBGM</span>(<span class="type">AudioClip</span> clip)
+    {
+        _currentBGM = clip;
+        <span class="comment">// AudioSource 재생...</span>
+    }
+}</div>
+            </div>
+
+            <div class="q">오브젝트 풀도 문제야?</div>
+            <div class="a">
+                <p>맞습니다. 오브젝트 풀이 <span class="highlight">DontDestroyOnLoad</span>라면 풀링된 오브젝트의 에셋도 계속 유지됩니다.</p>
+                <div class="code-block"><span class="keyword">public class</span> <span class="type">SceneAwareObjectPool</span> : <span class="type">MonoBehaviour</span>
+{
+    [<span class="type">SerializeField</span>] <span class="keyword">private</span> <span class="type">GameObject</span> prefab;
+    <span class="keyword">private</span> <span class="type">Queue</span>&lt;<span class="type">GameObject</span>&gt; _pool = <span class="keyword">new</span>();
+    <span class="keyword">private string</span> _originalScene;
+
+    <span class="keyword">private void</span> <span class="function">Awake</span>()
+    {
+        _originalScene = SceneManager.<span class="function">GetActiveScene</span>().name;
+        SceneManager.sceneLoaded += <span class="function">OnSceneLoaded</span>;
+    }
+
+    <span class="keyword">private void</span> <span class="function">OnSceneLoaded</span>(<span class="type">Scene</span> scene, <span class="type">LoadSceneMode</span> mode)
+    {
+        <span class="comment">// 원래 씬이 아니면 풀 클리어</span>
+        <span class="keyword">if</span> (scene.name != _originalScene)
+        {
+            <span class="function">ClearPool</span>();
+        }
+    }
+
+    <span class="keyword">public void</span> <span class="function">ClearPool</span>()
+    {
+        <span class="keyword">while</span> (_pool.Count > <span class="number">0</span>)
+        {
+            <span class="keyword">var</span> obj = _pool.<span class="function">Dequeue</span>();
+            <span class="keyword">if</span> (obj != <span class="keyword">null</span>)
+            {
+                <span class="function">Destroy</span>(obj);
+            }
+        }
+
+        <span class="comment">// 프리팹 참조도 해제 (필요 시)</span>
+        <span class="comment">// prefab = null;</span>
+    }
+
+    <span class="keyword">private void</span> <span class="function">OnDestroy</span>()
+    {
+        SceneManager.sceneLoaded -= <span class="function">OnSceneLoaded</span>;
+    }
+}</div>
+                <div class="highlight-box">
+                    <strong>💡 풀 관리 전략</strong><br>
+                    1. 씬별 풀: 씬과 함께 생성/파괴<br>
+                    2. 전역 풀: 공용 프리팹만 (UI, 파티클 등)<br>
+                    3. 하이브리드: 전역 풀이지만 씬 전환 시 비활성 오브젝트 파괴
+                </div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 고급 패턴</h2>
+
+            <div class="q">Additive 씬 로딩에서는 어떻게 해?</div>
+            <div class="a">
+                <p>Additive로 로드한 씬은 <span class="highlight">명시적으로 Unload</span>해야 합니다.</p>
+                <div class="code-block"><span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.SceneManagement;
+<span class="keyword">using</span> System.Collections;
+<span class="keyword">using</span> System.Collections.Generic;
+
+<span class="keyword">public class</span> <span class="type">AdditiveSceneManager</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">private</span> <span class="type">List</span>&lt;<span class="type">string</span>&gt; _loadedAdditiveScenes = <span class="keyword">new</span>();
+    <span class="keyword">private string</span> _mainSceneName;
+
+    <span class="comment">// 메인 씬 + 서브 씬들 로드</span>
+    <span class="keyword">public</span> <span class="type">IEnumerator</span> <span class="function">LoadMainWithSubScenes</span>(
+        <span class="type">string</span> mainScene,
+        <span class="type">string</span>[] subScenes)
+    {
+        <span class="comment">// 1. 기존 Additive 씬들 언로드</span>
+        <span class="keyword">yield return</span> <span class="function">UnloadAllAdditiveScenes</span>();
+
+        <span class="comment">// 2. 메모리 정리</span>
+        <span class="keyword">yield return</span> Resources.<span class="function">UnloadUnusedAssets</span>();
+        System.GC.<span class="function">Collect</span>();
+
+        <span class="comment">// 3. 메인 씬 로드</span>
+        <span class="keyword">yield return</span> SceneManager.<span class="function">LoadSceneAsync</span>(mainScene);
+        _mainSceneName = mainScene;
+
+        <span class="comment">// 4. 서브 씬들 Additive 로드</span>
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> subScene <span class="keyword">in</span> subScenes)
+        {
+            <span class="keyword">yield return</span> SceneManager.<span class="function">LoadSceneAsync</span>(
+                subScene,
+                <span class="type">LoadSceneMode</span>.Additive
+            );
+            _loadedAdditiveScenes.<span class="function">Add</span>(subScene);
+        }
+    }
+
+    <span class="comment">// 특정 서브 씬만 언로드</span>
+    <span class="keyword">public</span> <span class="type">IEnumerator</span> <span class="function">UnloadSubScene</span>(<span class="type">string</span> sceneName)
+    {
+        <span class="keyword">if</span> (!_loadedAdditiveScenes.<span class="function">Contains</span>(sceneName))
+            <span class="keyword">yield break</span>;
+
+        <span class="keyword">yield return</span> SceneManager.<span class="function">UnloadSceneAsync</span>(sceneName);
+        _loadedAdditiveScenes.<span class="function">Remove</span>(sceneName);
+
+        <span class="comment">// 언로드 후 정리</span>
+        <span class="keyword">yield return</span> Resources.<span class="function">UnloadUnusedAssets</span>();
+    }
+
+    <span class="comment">// 모든 Additive 씬 언로드</span>
+    <span class="keyword">public</span> <span class="type">IEnumerator</span> <span class="function">UnloadAllAdditiveScenes</span>()
+    {
+        <span class="keyword">var</span> scenesToUnload = <span class="keyword">new</span> <span class="type">List</span>&lt;<span class="type">string</span>&gt;(_loadedAdditiveScenes);
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> sceneName <span class="keyword">in</span> scenesToUnload)
+        {
+            <span class="keyword">var</span> scene = SceneManager.<span class="function">GetSceneByName</span>(sceneName);
+            <span class="keyword">if</span> (scene.isLoaded)
+            {
+                <span class="keyword">yield return</span> SceneManager.<span class="function">UnloadSceneAsync</span>(scene);
+            }
+        }
+
+        _loadedAdditiveScenes.<span class="function">Clear</span>();
+    }
+}</div>
+            </div>
+
+            <div class="q">씬 전환 중 프레임 드랍을 어떻게 줄여?</div>
+            <div class="a">
+                <p><span class="highlight">작업을 여러 프레임에 분산</span>하여 히칭을 줄입니다.</p>
+                <div class="code-block"><span class="keyword">public class</span> <span class="type">SmoothSceneTransition</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="comment">// 점진적 메모리 정리</span>
+    <span class="keyword">private</span> <span class="type">IEnumerator</span> <span class="function">GradualCleanup</span>()
+    {
+        <span class="comment">// 1단계: 비활성 오브젝트 파괴 (여러 프레임)</span>
+        <span class="keyword">var</span> inactiveObjects = <span class="type">FindObjectsOfType</span>&lt;<span class="type">GameObject</span>&gt;(<span class="keyword">true</span>)
+            .<span class="function">Where</span>(go => !go.activeInHierarchy)
+            .<span class="function">ToList</span>();
+
+        <span class="keyword">int</span> destroyedPerFrame = <span class="number">10</span>;
+        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; inactiveObjects.Count; i += destroyedPerFrame)
+        {
+            <span class="keyword">for</span> (<span class="keyword">int</span> j = i; j &lt; <span class="type">Mathf</span>.<span class="function">Min</span>(i + destroyedPerFrame, inactiveObjects.Count); j++)
+            {
+                <span class="function">Destroy</span>(inactiveObjects[j]);
+            }
+            <span class="keyword">yield return</span> <span class="keyword">null</span>;  <span class="comment">// 프레임 양보</span>
+        }
+
+        <span class="comment">// 2단계: Resources.UnloadUnusedAssets (자체가 비동기)</span>
+        <span class="keyword">var</span> unloadOp = Resources.<span class="function">UnloadUnusedAssets</span>();
+
+        <span class="comment">// 진행률 모니터링</span>
+        <span class="keyword">while</span> (!unloadOp.isDone)
+        {
+            <span class="comment">// UI 업데이트 가능</span>
+            <span class="keyword">yield return</span> <span class="keyword">null</span>;
+        }
+
+        <span class="comment">// 3단계: 점진적 GC (Generation별)</span>
+        System.GC.<span class="function">Collect</span>(<span class="number">0</span>);  <span class="comment">// Gen 0만</span>
+        <span class="keyword">yield return</span> <span class="keyword">null</span>;
+
+        System.GC.<span class="function">Collect</span>(<span class="number">1</span>);  <span class="comment">// Gen 0, 1</span>
+        <span class="keyword">yield return</span> <span class="keyword">null</span>;
+
+        System.GC.<span class="function">Collect</span>(<span class="number">2</span>);  <span class="comment">// 전체</span>
+        <span class="keyword">yield return</span> <span class="keyword">null</span>;
+    }
+
+    <span class="comment">// 타임슬라이스 로딩</span>
+    <span class="keyword">private</span> <span class="type">IEnumerator</span> <span class="function">TimeSlicedLoading</span>(<span class="type">string</span> sceneName)
+    {
+        <span class="keyword">var</span> loadOp = SceneManager.<span class="function">LoadSceneAsync</span>(sceneName);
+        loadOp.allowSceneActivation = <span class="keyword">false</span>;
+
+        <span class="comment">// 프레임당 로딩 시간 제한 (16ms = 60fps)</span>
+        <span class="keyword">float</span> maxLoadTimePerFrame = <span class="number">0.016f</span>;
+
+        <span class="keyword">while</span> (loadOp.progress &lt; <span class="number">0.9f</span>)
+        {
+            <span class="keyword">float</span> frameStart = <span class="type">Time</span>.realtimeSinceStartup;
+
+            <span class="comment">// 이 프레임에서 얼마나 더 로딩할 수 있나?</span>
+            <span class="keyword">while</span> (<span class="type">Time</span>.realtimeSinceStartup - frameStart &lt; maxLoadTimePerFrame
+                   && loadOp.progress &lt; <span class="number">0.9f</span>)
+            {
+                <span class="comment">// Unity 내부 로딩 진행</span>
+            }
+
+            <span class="keyword">yield return</span> <span class="keyword">null</span>;  <span class="comment">// 프레임 양보</span>
+        }
+
+        loadOp.allowSceneActivation = <span class="keyword">true</span>;
+        <span class="keyword">yield return</span> loadOp;
+    }
+}</div>
+            </div>
+
+            <div class="q">메모리 스냅샷으로 검증하는 방법은?</div>
+            <div class="a">
+                <p>Unity Profiler로 <span class="highlight">씬 전환 전후 메모리를 비교</span>합니다.</p>
+                <div class="code-block"><span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.Profiling;
+
+<span class="keyword">public class</span> <span class="type">MemoryDebugger</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">private long</span> _beforeTransitionMemory;
+    <span class="keyword">private long</span> _afterTransitionMemory;
+
+    <span class="keyword">public void</span> <span class="function">CaptureBeforeTransition</span>()
+    {
+        _beforeTransitionMemory = <span class="type">Profiler</span>.GetTotalAllocatedMemoryLong();
+
+        Debug.<span class="function">Log</span>(<span class="string">$@"
+═══════════════════════════════════════
+씬 전환 전 메모리 스냅샷
+═══════════════════════════════════════
+Total Allocated: {_beforeTransitionMemory / (1024f * 1024f):F2} MB
+Total Reserved:  {Profiler.GetTotalReservedMemoryLong() / (1024f * 1024f):F2} MB
+Mono Heap:       {Profiler.GetMonoHeapSizeLong() / (1024f * 1024f):F2} MB
+Mono Used:       {Profiler.GetMonoUsedSizeLong() / (1024f * 1024f):F2} MB
+═══════════════════════════════════════"</span>);
+    }
+
+    <span class="keyword">public void</span> <span class="function">CaptureAfterTransition</span>()
+    {
+        _afterTransitionMemory = <span class="type">Profiler</span>.GetTotalAllocatedMemoryLong();
+        <span class="keyword">long</span> difference = _afterTransitionMemory - _beforeTransitionMemory;
+
+        Debug.<span class="function">Log</span>(<span class="string">$@"
+═══════════════════════════════════════
+씬 전환 후 메모리 스냅샷
+═══════════════════════════════════════
+Total Allocated: {_afterTransitionMemory / (1024f * 1024f):F2} MB
+변화량:          {difference / (1024f * 1024f):F2} MB
+───────────────────────────────────────
+{(difference > 0 ? "⚠️ 메모리 증가! 누수 가능성" : "✅ 정상")}
+═══════════════════════════════════════"</span>);
+
+        <span class="keyword">if</span> (difference > <span class="number">10</span> * <span class="number">1024</span> * <span class="number">1024</span>)  <span class="comment">// 10MB 이상 증가</span>
+        {
+            Debug.<span class="function">LogWarning</span>(<span class="string">"메모리 누수 의심! Memory Profiler로 상세 분석 필요"</span>);
+        }
+    }
+
+    <span class="comment">// 에디터 전용: 상세 메모리 분석</span>
+<span class="directive">#if UNITY_EDITOR</span>
+    [<span class="type">ContextMenu</span>(<span class="string">"Log Detailed Memory"</span>)]
+    <span class="keyword">private void</span> <span class="function">LogDetailedMemory</span>()
+    {
+        <span class="keyword">var</span> textures = Resources.<span class="function">FindObjectsOfTypeAll</span>&lt;<span class="type">Texture</span>&gt;();
+        <span class="keyword">var</span> meshes = Resources.<span class="function">FindObjectsOfTypeAll</span>&lt;<span class="type">Mesh</span>&gt;();
+        <span class="keyword">var</span> materials = Resources.<span class="function">FindObjectsOfTypeAll</span>&lt;<span class="type">Material</span>&gt;();
+        <span class="keyword">var</span> audioClips = Resources.<span class="function">FindObjectsOfTypeAll</span>&lt;<span class="type">AudioClip</span>&gt;();
+
+        Debug.<span class="function">Log</span>(<span class="string">$@"
+로드된 에셋 현황:
+- Textures:   {textures.Length}
+- Meshes:     {meshes.Length}
+- Materials:  {materials.Length}
+- AudioClips: {audioClips.Length}"</span>);
+    }
+<span class="directive">#endif</span>
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 플랫폼별 고려사항</h2>
+
+            <div class="q">모바일에서 주의할 점은?</div>
+            <div class="a">
+                <p>모바일은 메모리가 제한적이므로 <span class="highlight">더 적극적인 정리</span>가 필요합니다.</p>
+                <div class="code-block"><span class="keyword">public class</span> <span class="type">MobileSceneTransition</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">private</span> <span class="type">IEnumerator</span> <span class="function">MobileOptimizedTransition</span>(<span class="type">string</span> sceneName)
+    {
+        <span class="comment">// 1. 로딩 전 가능한 모든 것 정리</span>
+        <span class="function">PreCleanup</span>();
+
+        <span class="comment">// 2. 로딩 씬으로 이동</span>
+        <span class="keyword">yield return</span> SceneManager.<span class="function">LoadSceneAsync</span>(<span class="string">"LoadingScene"</span>);
+
+        <span class="comment">// 3. 적극적 메모리 정리</span>
+        <span class="keyword">yield return</span> <span class="function">AggressiveCleanup</span>();
+
+        <span class="comment">// 4. 메모리 여유 확인</span>
+        <span class="keyword">if</span> (!<span class="function">HasEnoughMemory</span>())
+        {
+            <span class="comment">// 추가 정리 또는 품질 낮추기</span>
+            <span class="function">LowerQualitySettings</span>();
+            <span class="keyword">yield return</span> <span class="function">AggressiveCleanup</span>();
+        }
+
+        <span class="comment">// 5. 새 씬 로드</span>
+        <span class="keyword">yield return</span> SceneManager.<span class="function">LoadSceneAsync</span>(sceneName);
+    }
+
+    <span class="keyword">private void</span> <span class="function">PreCleanup</span>()
+    {
+        <span class="comment">// 오브젝트 풀 클리어</span>
+        ObjectPoolManager.Instance?.<span class="function">ClearAllPools</span>();
+
+        <span class="comment">// 캐시된 데이터 클리어</span>
+        DataCache.Instance?.<span class="function">Clear</span>();
+
+        <span class="comment">// 이벤트 리스너 정리 (메모리 누수 방지)</span>
+        EventManager.Instance?.<span class="function">ClearAllListeners</span>();
+    }
+
+    <span class="keyword">private</span> <span class="type">IEnumerator</span> <span class="function">AggressiveCleanup</span>()
+    {
+        <span class="comment">// 프레임 대기</span>
+        <span class="keyword">yield return</span> <span class="keyword">null</span>;
+        <span class="keyword">yield return</span> <span class="keyword">null</span>;
+
+        <span class="comment">// 미사용 에셋 해제</span>
+        <span class="keyword">yield return</span> Resources.<span class="function">UnloadUnusedAssets</span>();
+
+        <span class="comment">// 풀 GC 실행</span>
+        System.GC.<span class="function">Collect</span>();
+        System.GC.<span class="function">WaitForPendingFinalizers</span>();
+        System.GC.<span class="function">Collect</span>();
+
+        <span class="comment">// iOS: 메모리 압박 상황에서 추가 정리</span>
+<span class="directive">#if UNITY_IOS</span>
+        UnityEngine.iOS.Device.<span class="function">SetNoBackupFlag</span>(
+            <span class="type">Application</span>.temporaryCachePath);
+<span class="directive">#endif</span>
+
+        <span class="comment">// Android: Low Memory 콜백 대응</span>
+<span class="directive">#if UNITY_ANDROID</span>
+        <span class="comment">// Addressables 메모리 프로파일러 확인</span>
+<span class="directive">#endif</span>
+
+        <span class="keyword">yield return</span> <span class="keyword">null</span>;
+    }
+
+    <span class="keyword">private bool</span> <span class="function">HasEnoughMemory</span>()
+    {
+        <span class="keyword">long</span> available = <span class="type">Profiler</span>.GetTotalReservedMemoryLong() -
+                        <span class="type">Profiler</span>.GetTotalAllocatedMemoryLong();
+
+        <span class="comment">// 최소 50MB 여유 확보</span>
+        <span class="keyword">return</span> available > <span class="number">50</span> * <span class="number">1024</span> * <span class="number">1024</span>;
+    }
+
+    <span class="keyword">private void</span> <span class="function">LowerQualitySettings</span>()
+    {
+        <span class="type">QualitySettings</span>.SetQualityLevel(
+            <span class="type">QualitySettings</span>.GetQualityLevel() - <span class="number">1</span>,
+            <span class="keyword">true</span>);
+    }
+}</div>
+            </div>
+
+            <div class="q">콘솔에서는 다른가?</div>
+            <div class="a">
+                <p>콘솔은 메모리가 고정되어 있어 <span class="highlight">예측 가능한 패턴</span>이 중요합니다.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                 플랫폼별 메모리 전략                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  모바일 (iOS/Android)                                           │
+│  ──────────────────                                             │
+│  특징: 메모리 제한, 백그라운드 킬 가능                          │
+│  전략:                                                          │
+│  - 적극적 정리 (매 씬 전환)                                     │
+│  - 메모리 워닝 콜백 대응                                        │
+│  - 적응적 품질 조절                                             │
+│  - 작은 로딩 씬 (2-3MB)                                         │
+│                                                                 │
+│  콘솔 (PS5/Xbox/Switch)                                         │
+│  ─────────────────────                                          │
+│  특징: 고정 메모리, 예측 가능                                   │
+│  전략:                                                          │
+│  - 메모리 버짓 시스템                                           │
+│  - 스트리밍 활용 (오픈월드)                                     │
+│  - 에셋 프리로딩                                                │
+│  - 큰 로딩 씬 가능 (10-20MB)                                    │
+│                                                                 │
+│  PC                                                             │
+│  ──                                                             │
+│  특징: 가변 메모리, 스펙 다양                                   │
+│  전략:                                                          │
+│  - 최소/권장 스펙 기준 설정                                     │
+│  - 런타임 메모리 체크                                           │
+│  - 사용자 설정 옵션 제공                                        │
+│  - 대용량 캐싱 가능                                             │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</pre></div>
+            </div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>씬 전환 시 메모리 정리</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>Resources.UnloadUnusedAssets()</strong>: 씬 로드 후 호출하여 미사용 에셋 해제</li>
+                <li><strong>로딩 씬 패턴</strong>: 메모리 피크를 낮추고 정리 히칭을 숨김</li>
+                <li><strong>Addressables</strong>: 참조 카운팅 기반, 핸들 명시적 해제 필요</li>
+                <li><strong>DontDestroyOnLoad</strong>: 씬 전환 시 참조 해제 필요</li>
+                <li><strong>Additive 씬</strong>: UnloadSceneAsync로 명시적 언로드</li>
+                <li><strong>점진적 정리</strong>: 여러 프레임에 분산하여 히칭 최소화</li>
+                <li><strong>모바일</strong>: 적극적 정리 + 메모리 워닝 대응</li>
             </ul>
         </div>
 
@@ -86,5 +983,7 @@
             <a href="../asset-fragmentation/">메모리 단편화와의 전쟁 &rarr;</a>
         </div>
     </div>
+
+    <script src="../common/script.js"></script>
 </body>
 </html>
