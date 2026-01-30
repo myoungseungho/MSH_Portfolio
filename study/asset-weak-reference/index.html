@@ -4,37 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Weak Reference - 에셋 관리 - MSH Portfolio</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
-        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
-        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
-        .a p { margin-bottom: 12px; }
-        .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
-        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
-        .summary-box ul { list-style: none; }
-        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
-        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
-        .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
-    </style>
+    <link rel="stylesheet" href="../common/styles.css">
 </head>
 <body>
     <div class="container">
@@ -42,42 +12,1021 @@
 
         <div class="header">
             <h1>Weak Reference</h1>
-            <p>있으면 쓰고 없으면 말고</p>
+            <p>GC와 협력하는 스마트한 참조 관리</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">Weak Reference이(가) 뭐야?</div>
+            <h2>Part 1. 개념 - Strong vs Weak Reference</h2>
+
+            <div class="q">Strong Reference가 뭐야?</div>
             <div class="a">
-                <p><span class="highlight">있으면 쓰고 없으면 말고</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p><span class="highlight">객체를 살려두는 참조</span>입니다. 우리가 평소 쓰는 모든 변수가 Strong Reference예요.</p>
+                <p>Strong Reference가 하나라도 있으면 GC는 그 객체를 <span class="warning">절대 수거하지 않습니다</span>.</p>
+                <div class="code-block"><span class="comment">// Strong Reference - 일반적인 참조</span>
+<span class="keyword">class</span> <span class="type">Player</span>
+{
+    <span class="comment">// 이 참조가 살아있는 한 Texture는 GC 대상이 아님</span>
+    <span class="keyword">private</span> <span class="type">Texture2D</span> portrait;  <span class="comment">// Strong Reference</span>
+
+    <span class="keyword">public</span> <span class="keyword">void</span> <span class="function">SetPortrait</span>(<span class="type">Texture2D</span> tex)
+    {
+        portrait = tex;  <span class="comment">// Strong Reference 생성</span>
+    }
+}
+
+<span class="comment">// Player 인스턴스가 살아있으면 → portrait도 살아있음</span>
+<span class="comment">// portrait이 살아있으면 → Texture2D도 살아있음</span>
+<span class="comment">// 이 체인이 끊어져야 GC 수거 가능</span></div>
+            </div>
+
+            <div class="q">그럼 Weak Reference는?</div>
+            <div class="a">
+                <p><span class="highlight">객체를 살려두지 않는 참조</span>입니다. "있으면 쓰고, 없으면 말고"의 철학이죠.</p>
+                <p>GC 입장에서 Weak Reference만 있는 객체는 <span class="key-point">"참조 없음"과 동일</span>합니다.</p>
+                <div class="code-block"><span class="keyword">using</span> System;
+
+<span class="comment">// Weak Reference - GC가 수거할 수 있는 참조</span>
+<span class="keyword">class</span> <span class="type">AssetCache</span>
+{
+    <span class="comment">// WeakReference&lt;T&gt;로 감싸면 GC가 수거 가능</span>
+    <span class="keyword">private</span> <span class="type">WeakReference</span>&lt;<span class="type">Texture2D</span>&gt; cachedTexture;
+
+    <span class="keyword">public</span> <span class="keyword">void</span> <span class="function">Cache</span>(<span class="type">Texture2D</span> tex)
+    {
+        cachedTexture = <span class="keyword">new</span> <span class="type">WeakReference</span>&lt;<span class="type">Texture2D</span>&gt;(tex);
+    }
+
+    <span class="keyword">public</span> <span class="type">Texture2D</span> <span class="function">TryGetCached</span>()
+    {
+        <span class="comment">// TryGetTarget: 아직 살아있으면 true + 객체 반환</span>
+        <span class="comment">// GC가 수거했으면 false</span>
+        <span class="keyword">if</span> (cachedTexture != <span class="keyword">null</span> &&
+            cachedTexture.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="type">Texture2D</span> tex))
+        {
+            <span class="keyword">return</span> tex;  <span class="comment">// 캐시 히트!</span>
+        }
+        <span class="keyword">return</span> <span class="keyword">null</span>;  <span class="comment">// 캐시 미스 (GC가 수거함)</span>
+    }
+}</div>
+            </div>
+
+            <div class="q">왜 굳이 Weak Reference를 써?</div>
+            <div class="a">
+                <p>핵심은 <span class="highlight">메모리 압박 시 자동 해제</span>입니다.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                    Strong vs Weak 비교                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Strong Reference (일반 캐시)              메모리 상황          │
+│  ┌──────────────────────┐                                       │
+│  │ Cache Dictionary     │                                       │
+│  │ ├─ "hero" → Tex1 ────┼──→ Texture1 (10MB)  │                │
+│  │ ├─ "enemy" → Tex2 ───┼──→ Texture2 (8MB)   │  메모리 부족!  │
+│  │ └─ "boss" → Tex3 ────┼──→ Texture3 (15MB)  │  하지만 해제   │
+│  └──────────────────────┘                        불가능 ❌      │
+│                                                                 │
+│  Weak Reference (스마트 캐시)                                   │
+│  ┌──────────────────────┐                                       │
+│  │ Cache Dictionary     │                                       │
+│  │ ├─ "hero" → Weak ────┼─ ─ → Texture1 (10MB)  │              │
+│  │ ├─ "enemy" → Weak ───┼─ ─ → (GC 수거됨)      │  메모리 부족  │
+│  │ └─ "boss" → Weak ────┼─ ─ → (GC 수거됨)      │  → 자동해제!  │
+│  └──────────────────────┘                          ✅           │
+│                                                                 │
+│  ─── : Strong Reference (GC 불가)                               │
+│  ─ ─ : Weak Reference (GC 가능)                                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</pre></div>
+                <p><span class="key-point">메모리가 부족하면 GC가 알아서 정리</span>해주므로 OOM을 예방할 수 있습니다.</p>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. C# WeakReference 구현</h2>
+
+            <div class="q">WeakReference&lt;T&gt; 어떻게 써?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>.NET 4.5+에서 제공하는 <span class="highlight">제네릭 WeakReference&lt;T&gt;</span>를 사용합니다.</p>
+                <div class="code-block"><span class="keyword">using</span> System;
+<span class="keyword">using</span> System.Collections.Generic;
+
+<span class="keyword">public class</span> <span class="type">WeakReferenceCache</span>&lt;<span class="type">TKey</span>, <span class="type">TValue</span>&gt; <span class="keyword">where</span> <span class="type">TValue</span> : <span class="keyword">class</span>
+{
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="type">TKey</span>, <span class="type">WeakReference</span>&lt;<span class="type">TValue</span>&gt;&gt; _cache
+        = <span class="keyword">new</span> <span class="type">Dictionary</span>&lt;<span class="type">TKey</span>, <span class="type">WeakReference</span>&lt;<span class="type">TValue</span>&gt;&gt;();
+
+    <span class="comment">// 캐시에 저장 (Weak 참조로)</span>
+    <span class="keyword">public</span> <span class="keyword">void</span> <span class="function">Add</span>(<span class="type">TKey</span> key, <span class="type">TValue</span> value)
+    {
+        _cache[key] = <span class="keyword">new</span> <span class="type">WeakReference</span>&lt;<span class="type">TValue</span>&gt;(value);
+    }
+
+    <span class="comment">// 캐시에서 조회 (없으면 null)</span>
+    <span class="keyword">public</span> <span class="type">TValue</span> <span class="function">TryGet</span>(<span class="type">TKey</span> key)
+    {
+        <span class="keyword">if</span> (_cache.<span class="function">TryGetValue</span>(key, <span class="keyword">out</span> <span class="keyword">var</span> weakRef))
+        {
+            <span class="keyword">if</span> (weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="type">TValue</span> value))
+            {
+                <span class="keyword">return</span> value;  <span class="comment">// 아직 살아있음!</span>
+            }
+            <span class="comment">// GC가 수거함 → 딕셔너리에서도 제거</span>
+            _cache.<span class="function">Remove</span>(key);
+        }
+        <span class="keyword">return</span> <span class="keyword">null</span>;
+    }
+
+    <span class="comment">// 캐시 정리 (죽은 참조 제거)</span>
+    <span class="keyword">public</span> <span class="keyword">void</span> <span class="function">Cleanup</span>()
+    {
+        <span class="keyword">var</span> deadKeys = <span class="keyword">new</span> <span class="type">List</span>&lt;<span class="type">TKey</span>&gt;();
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> kvp <span class="keyword">in</span> _cache)
+        {
+            <span class="keyword">if</span> (!kvp.Value.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> _))
+            {
+                deadKeys.<span class="function">Add</span>(kvp.Key);
+            }
+        }
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> key <span class="keyword">in</span> deadKeys)
+        {
+            _cache.<span class="function">Remove</span>(key);
+        }
+    }
+}</div>
+            </div>
+
+            <div class="q">SetTarget은 뭐야?</div>
+            <div class="a">
+                <p>WeakReference의 대상 객체를 <span class="highlight">변경</span>하는 메서드입니다.</p>
+                <div class="code-block"><span class="keyword">var</span> weakRef = <span class="keyword">new</span> <span class="type">WeakReference</span>&lt;<span class="type">Texture2D</span>&gt;(textureA);
+
+<span class="comment">// 나중에 다른 텍스처로 변경</span>
+weakRef.<span class="function">SetTarget</span>(textureB);
+
+<span class="comment">// 참조 해제 (null로 설정)</span>
+weakRef.<span class="function">SetTarget</span>(<span class="keyword">null</span>);</div>
+                <p><span class="warning">주의</span>: SetTarget(null)을 해도 WeakReference 객체 자체는 남아있습니다. 딕셔너리에서 완전히 제거하려면 Remove를 호출해야 합니다.</p>
+            </div>
+
+            <div class="q">trackResurrection이 뭐야?</div>
+            <div class="a">
+                <p>WeakReference 생성자의 두 번째 파라미터로, <span class="highlight">Finalizer 실행 후에도 추적할지</span> 결정합니다.</p>
+                <div class="code-block"><span class="comment">// trackResurrection = false (기본값, Short Weak Reference)</span>
+<span class="keyword">var</span> shortWeak = <span class="keyword">new</span> <span class="type">WeakReference</span>&lt;<span class="type">MyClass</span>&gt;(obj, <span class="keyword">false</span>);
+
+<span class="comment">// trackResurrection = true (Long Weak Reference)</span>
+<span class="keyword">var</span> longWeak = <span class="keyword">new</span> <span class="type">WeakReference</span>&lt;<span class="type">MyClass</span>&gt;(obj, <span class="keyword">true</span>);</div>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│              Short vs Long Weak Reference                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  GC 단계:  ① 마킹 → ② Finalizer 큐잉 → ③ Finalizer 실행 → ④ 해제│
+│                                                                 │
+│  Short Weak (trackResurrection = false)                        │
+│  ─────────────────────────────────────                         │
+│  참조 유효: ├────────┤                                          │
+│            ① 마킹    ② 이후 null                                │
+│                                                                 │
+│  Long Weak (trackResurrection = true)                          │
+│  ────────────────────────────────────                          │
+│  참조 유효: ├─────────────────────────────────┤                 │
+│            ① 마킹 ────────────────────────── ④ 해제 직전까지    │
+│                                                                 │
+│  💡 언제 Long Weak?                                             │
+│     - Finalizer에서 객체를 부활시키는 경우 (매우 드묾)           │
+│     - 디버깅/진단 목적                                          │
+│                                                                 │
+│  🎮 게임에서는 99%가 Short Weak로 충분                           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</pre></div>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. Unity 에셋 시스템과 Weak Reference</h2>
+
+            <div class="q">Unity에서 Weak Reference를 어떻게 활용해?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p>Unity의 UnityEngine.Object는 특수한 객체이므로 <span class="highlight">null 체크 방식이 다릅니다</span>.</p>
+                <div class="code-block"><span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> System;
+<span class="keyword">using</span> System.Collections.Generic;
+
+<span class="keyword">public class</span> <span class="type">UnityAssetCache</span>&lt;<span class="type">T</span>&gt; <span class="keyword">where</span> <span class="type">T</span> : UnityEngine.<span class="type">Object</span>
+{
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="type">string</span>, <span class="type">WeakReference</span>&lt;<span class="type">T</span>&gt;&gt; _cache
+        = <span class="keyword">new</span> <span class="type">Dictionary</span>&lt;<span class="type">string</span>, <span class="type">WeakReference</span>&lt;<span class="type">T</span>&gt;&gt;();
+
+    <span class="keyword">public</span> <span class="type">T</span> <span class="function">TryGet</span>(<span class="type">string</span> key)
+    {
+        <span class="keyword">if</span> (_cache.<span class="function">TryGetValue</span>(key, <span class="keyword">out</span> <span class="keyword">var</span> weakRef))
+        {
+            <span class="keyword">if</span> (weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="type">T</span> asset))
+            {
+                <span class="comment">// ⚠️ Unity 객체는 추가 체크 필요!</span>
+                <span class="comment">// C# 참조는 살아있지만 Unity 네이티브 객체가</span>
+                <span class="comment">// Destroy 되었을 수 있음</span>
+                <span class="keyword">if</span> (asset != <span class="keyword">null</span>)  <span class="comment">// Unity의 == null 연산자</span>
+                {
+                    <span class="keyword">return</span> asset;
+                }
+            }
+            _cache.<span class="function">Remove</span>(key);
+        }
+        <span class="keyword">return</span> <span class="keyword">null</span>;
+    }
+
+    <span class="keyword">public</span> <span class="keyword">void</span> <span class="function">Add</span>(<span class="type">string</span> key, <span class="type">T</span> asset)
+    {
+        <span class="keyword">if</span> (asset == <span class="keyword">null</span>) <span class="keyword">return</span>;
+        _cache[key] = <span class="keyword">new</span> <span class="type">WeakReference</span>&lt;<span class="type">T</span>&gt;(asset);
+    }
+}</div>
+                <div class="highlight-box">
+                    <strong>⚠️ Unity 객체의 특수성</strong><br>
+                    Unity 객체는 C# 래퍼 + 네이티브 객체 구조입니다. Destroy() 호출 시 네이티브는 즉시 해제되지만 C# 래퍼는 GC까지 남아있습니다. 따라서 WeakReference.TryGetTarget이 true여도 Unity의 == null이 true일 수 있습니다.
+                </div>
+            </div>
+
+            <div class="q">Addressables에서는 어떻게 해?</div>
+            <div class="a">
+                <p>Addressables는 <span class="highlight">AsyncOperationHandle</span>로 참조 카운팅을 합니다. Weak Reference와 함께 쓰면 더 유연해집니다.</p>
+                <div class="code-block"><span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.AddressableAssets;
+<span class="keyword">using</span> UnityEngine.ResourceManagement.AsyncOperations;
+<span class="keyword">using</span> System;
+<span class="keyword">using</span> System.Collections.Generic;
+
+<span class="keyword">public class</span> <span class="type">AddressableWeakCache</span>
+{
+    <span class="keyword">private class</span> <span class="type">CacheEntry</span>
+    {
+        <span class="keyword">public</span> <span class="type">WeakReference</span>&lt;<span class="type">Object</span>&gt; WeakAsset;
+        <span class="keyword">public</span> <span class="type">AsyncOperationHandle</span> Handle;
+        <span class="keyword">public</span> <span class="type">DateTime</span> LastAccess;
+    }
+
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="type">string</span>, <span class="type">CacheEntry</span>&gt; _cache
+        = <span class="keyword">new</span> <span class="type">Dictionary</span>&lt;<span class="type">string</span>, <span class="type">CacheEntry</span>&gt;();
+
+    <span class="keyword">public</span> <span class="keyword">async</span> <span class="type">Task</span>&lt;<span class="type">T</span>&gt; <span class="function">LoadAsync</span>&lt;<span class="type">T</span>&gt;(<span class="type">string</span> address) <span class="keyword">where</span> <span class="type">T</span> : <span class="type">Object</span>
+    {
+        <span class="comment">// 1. 캐시 확인</span>
+        <span class="keyword">if</span> (_cache.<span class="function">TryGetValue</span>(address, <span class="keyword">out</span> <span class="keyword">var</span> entry))
+        {
+            <span class="keyword">if</span> (entry.WeakAsset.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="keyword">var</span> cached) &&
+                cached != <span class="keyword">null</span>)
+            {
+                entry.LastAccess = <span class="type">DateTime</span>.Now;
+                <span class="keyword">return</span> (<span class="type">T</span>)cached;  <span class="comment">// 캐시 히트!</span>
+            }
+
+            <span class="comment">// Weak 참조가 죽었으면 Handle도 해제</span>
+            <span class="keyword">if</span> (entry.Handle.IsValid())
+            {
+                Addressables.<span class="function">Release</span>(entry.Handle);
+            }
+            _cache.<span class="function">Remove</span>(address);
+        }
+
+        <span class="comment">// 2. 새로 로드</span>
+        <span class="keyword">var</span> handle = Addressables.<span class="function">LoadAssetAsync</span>&lt;<span class="type">T</span>&gt;(address);
+        <span class="keyword">await</span> handle.Task;
+
+        <span class="keyword">if</span> (handle.Status == <span class="type">AsyncOperationStatus</span>.Succeeded)
+        {
+            <span class="keyword">var</span> asset = handle.Result;
+            _cache[address] = <span class="keyword">new</span> <span class="type">CacheEntry</span>
+            {
+                WeakAsset = <span class="keyword">new</span> <span class="type">WeakReference</span>&lt;<span class="type">Object</span>&gt;(asset),
+                Handle = handle,
+                LastAccess = <span class="type">DateTime</span>.Now
+            };
+            <span class="keyword">return</span> asset;
+        }
+
+        <span class="keyword">return</span> <span class="keyword">null</span>;
+    }
+
+    <span class="comment">// 오래된 약한 참조 정리</span>
+    <span class="keyword">public</span> <span class="keyword">void</span> <span class="function">CleanupStale</span>(<span class="type">TimeSpan</span> maxAge)
+    {
+        <span class="keyword">var</span> now = <span class="type">DateTime</span>.Now;
+        <span class="keyword">var</span> toRemove = <span class="keyword">new</span> <span class="type">List</span>&lt;<span class="type">string</span>&gt;();
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> kvp <span class="keyword">in</span> _cache)
+        {
+            <span class="keyword">var</span> entry = kvp.Value;
+
+            <span class="comment">// 죽은 참조 또는 오래된 참조 제거</span>
+            <span class="keyword">bool</span> isDead = !entry.WeakAsset.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="keyword">var</span> asset)
+                          || asset == <span class="keyword">null</span>;
+            <span class="keyword">bool</span> isStale = (now - entry.LastAccess) > maxAge;
+
+            <span class="keyword">if</span> (isDead || isStale)
+            {
+                <span class="keyword">if</span> (entry.Handle.IsValid())
+                {
+                    Addressables.<span class="function">Release</span>(entry.Handle);
+                }
+                toRemove.<span class="function">Add</span>(kvp.Key);
+            }
+        }
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> key <span class="keyword">in</span> toRemove)
+        {
+            _cache.<span class="function">Remove</span>(key);
+        }
+    }
+}</div>
+            </div>
+
+            <div class="q">Resources.Load와 다른 점은?</div>
+            <div class="a">
+                <p>Resources.Load는 <span class="warning">명시적 Unload 필요</span>, Addressables + WeakRef는 <span class="key-point">자동 해제 가능</span>합니다.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│              Resources vs Addressables + WeakRef                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Resources.Load 방식                                            │
+│  ───────────────────                                            │
+│  var tex = Resources.Load&lt;Texture2D&gt;("hero");                   │
+│                                                                 │
+│  ┌─────────────┐     ┌──────────────┐                          │
+│  │ Resources   │────→│ Texture2D    │  GC 불가 (Unity 캐시)    │
+│  │   Cache     │     │  (Native)    │                          │
+│  └─────────────┘     └──────────────┘                          │
+│                                                                 │
+│  해제하려면: Resources.UnloadUnusedAssets() 또는                │
+│             Resources.UnloadAsset(tex) 명시 호출 필요           │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Addressables + WeakReference 방식                              │
+│  ────────────────────────────────                               │
+│  handle = Addressables.LoadAssetAsync("hero");                  │
+│  weakRef = new WeakReference(handle.Result);                    │
+│                                                                 │
+│  ┌─────────────┐ ─ ─ ┌──────────────┐                          │
+│  │ WeakRef     │     │ Texture2D    │  GC 가능!                │
+│  │   Cache     │     │  (Native)    │                          │
+│  └─────────────┘     └──────────────┘                          │
+│                                                                 │
+│  메모리 압박 시 GC가 자동으로 수거                              │
+│  → 캐시 미스 시 Addressables.Release + 재로드                   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</pre></div>
             </div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 4. Soft Reference vs Weak Reference</h2>
+
+            <div class="q">Soft Reference가 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">메모리가 부족할 때만 수거되는 참조</span>입니다. Java에는 있지만 <span class="warning">C#에는 없습니다</span>.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│              참조 강도 스펙트럼 (Java 기준)                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  강함                                              약함         │
+│  ←────────────────────────────────────────────────────→        │
+│                                                                 │
+│  Strong      Soft        Weak        Phantom                   │
+│  ──────      ────        ────        ───────                   │
+│  절대 GC    메모리       GC 때마다   Finalize                   │
+│  안 됨      부족 시만    수거 대상   이후에만                   │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  C#에서의 구현:                                                 │
+│                                                                 │
+│  Strong ───────→ 일반 참조 (T reference)                       │
+│  Weak ─────────→ WeakReference&lt;T&gt;                              │
+│  Soft ─────────→ ❌ 직접 구현 필요 (아래 참조)                  │
+│  Phantom ──────→ 불필요 (Finalizer로 대체)                     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</pre></div>
+            </div>
+
+            <div class="q">C#에서 Soft Reference를 어떻게 구현해?</div>
+            <div class="a">
+                <p>메모리 사용량을 모니터링하며 <span class="highlight">조건부로 Strong/Weak를 전환</span>하는 방식으로 구현합니다.</p>
+                <div class="code-block"><span class="keyword">using</span> System;
+<span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.Profiling;
+
+<span class="keyword">public class</span> <span class="type">SoftReference</span>&lt;<span class="type">T</span>&gt; <span class="keyword">where</span> <span class="type">T</span> : <span class="keyword">class</span>
+{
+    <span class="keyword">private</span> <span class="type">T</span> _strongRef;                    <span class="comment">// Strong 보관</span>
+    <span class="keyword">private</span> <span class="type">WeakReference</span>&lt;<span class="type">T</span>&gt; _weakRef;     <span class="comment">// Weak 보관</span>
+    <span class="keyword">private</span> <span class="keyword">readonly</span> <span class="type">long</span> _memoryThreshold;  <span class="comment">// 압박 기준</span>
+
+    <span class="keyword">public</span> <span class="function">SoftReference</span>(<span class="type">T</span> target, <span class="type">long</span> memoryThresholdMB = <span class="number">100</span>)
+    {
+        _strongRef = target;
+        _weakRef = <span class="keyword">new</span> <span class="type">WeakReference</span>&lt;<span class="type">T</span>&gt;(target);
+        _memoryThreshold = memoryThresholdMB * <span class="number">1024</span> * <span class="number">1024</span>;
+    }
+
+    <span class="keyword">public</span> <span class="type">T</span> Target
+    {
+        <span class="keyword">get</span>
+        {
+            <span class="function">UpdateReferenceMode</span>();
+
+            <span class="comment">// Strong이 있으면 그것 반환</span>
+            <span class="keyword">if</span> (_strongRef != <span class="keyword">null</span>)
+                <span class="keyword">return</span> _strongRef;
+
+            <span class="comment">// Weak에서 시도</span>
+            <span class="keyword">if</span> (_weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="type">T</span> target))
+                <span class="keyword">return</span> target;
+
+            <span class="keyword">return</span> <span class="keyword">null</span>;  <span class="comment">// GC됨</span>
+        }
+    }
+
+    <span class="keyword">public</span> <span class="type">bool</span> IsAlive
+    {
+        <span class="keyword">get</span>
+        {
+            <span class="keyword">if</span> (_strongRef != <span class="keyword">null</span>) <span class="keyword">return</span> <span class="keyword">true</span>;
+            <span class="keyword">return</span> _weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> _);
+        }
+    }
+
+    <span class="keyword">private</span> <span class="keyword">void</span> <span class="function">UpdateReferenceMode</span>()
+    {
+        <span class="keyword">long</span> usedMemory = <span class="type">Profiler</span>.GetTotalAllocatedMemoryLong();
+        <span class="keyword">long</span> reservedMemory = <span class="type">Profiler</span>.GetTotalReservedMemoryLong();
+        <span class="keyword">long</span> freeMemory = reservedMemory - usedMemory;
+
+        <span class="keyword">if</span> (freeMemory &lt; _memoryThreshold)
+        {
+            <span class="comment">// 메모리 압박 → Strong 해제, Weak만 유지</span>
+            <span class="keyword">if</span> (_strongRef != <span class="keyword">null</span>)
+            {
+                Debug.<span class="function">Log</span>(<span class="string">$"[SoftRef] 메모리 압박으로 Strong 해제"</span>);
+                _strongRef = <span class="keyword">null</span>;
+            }
+        }
+        <span class="keyword">else</span>
+        {
+            <span class="comment">// 메모리 여유 → Weak가 살아있으면 Strong 복원</span>
+            <span class="keyword">if</span> (_strongRef == <span class="keyword">null</span> &&
+                _weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="type">T</span> target))
+            {
+                _strongRef = target;
+            }
+        }
+    }
+
+    <span class="comment">// 명시적 해제</span>
+    <span class="keyword">public</span> <span class="keyword">void</span> <span class="function">Clear</span>()
+    {
+        _strongRef = <span class="keyword">null</span>;
+        _weakRef.<span class="function">SetTarget</span>(<span class="keyword">null</span>);
+    }
+}</div>
+            </div>
+
+            <div class="q">게임에서 Soft 캐시 어떻게 써?</div>
+            <div class="a">
+                <p><span class="highlight">자주 쓰는 에셋은 Strong, 가끔 쓰는 에셋은 Weak</span>로 관리하는 하이브리드 방식입니다.</p>
+                <div class="code-block"><span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> UnityEngine;
+
+<span class="keyword">public class</span> <span class="type">HybridAssetCache</span>
+{
+    <span class="keyword">private class</span> <span class="type">CacheEntry</span>
+    {
+        <span class="keyword">public</span> <span class="type">SoftReference</span>&lt;<span class="type">Object</span>&gt; Reference;
+        <span class="keyword">public</span> <span class="type">int</span> HitCount;
+        <span class="keyword">public</span> <span class="type">float</span> LastAccessTime;
+    }
+
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="type">string</span>, <span class="type">CacheEntry</span>&gt; _cache = <span class="keyword">new</span>();
+    <span class="keyword">private const int</span> HOT_THRESHOLD = <span class="number">5</span>;  <span class="comment">// 5번 이상 = Hot</span>
+
+    <span class="keyword">public</span> <span class="type">T</span> <span class="function">Get</span>&lt;<span class="type">T</span>&gt;(<span class="type">string</span> key) <span class="keyword">where</span> <span class="type">T</span> : <span class="type">Object</span>
+    {
+        <span class="keyword">if</span> (_cache.<span class="function">TryGetValue</span>(key, <span class="keyword">out</span> <span class="keyword">var</span> entry))
+        {
+            entry.HitCount++;
+            entry.LastAccessTime = <span class="type">Time</span>.realtimeSinceStartup;
+
+            <span class="keyword">var</span> asset = entry.Reference.Target <span class="keyword">as</span> <span class="type">T</span>;
+            <span class="keyword">if</span> (asset != <span class="keyword">null</span>)
+            {
+                <span class="keyword">return</span> asset;  <span class="comment">// 캐시 히트</span>
+            }
+
+            <span class="comment">// 캐시 미스 (GC됨) - 재로드 필요</span>
+            _cache.<span class="function">Remove</span>(key);
+        }
+        <span class="keyword">return</span> <span class="keyword">null</span>;
+    }
+
+    <span class="keyword">public</span> <span class="keyword">void</span> <span class="function">Add</span>(<span class="type">string</span> key, <span class="type">Object</span> asset)
+    {
+        <span class="comment">// 첫 로드 시 기본 100MB 임계값으로 Soft Reference 생성</span>
+        _cache[key] = <span class="keyword">new</span> <span class="type">CacheEntry</span>
+        {
+            Reference = <span class="keyword">new</span> <span class="type">SoftReference</span>&lt;<span class="type">Object</span>&gt;(asset, <span class="number">100</span>),
+            HitCount = <span class="number">1</span>,
+            LastAccessTime = <span class="type">Time</span>.realtimeSinceStartup
+        };
+    }
+
+    <span class="comment">// Hot 에셋(자주 사용)을 Strong으로 고정</span>
+    <span class="keyword">public</span> <span class="keyword">void</span> <span class="function">PromoteHotAssets</span>()
+    {
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> entry <span class="keyword">in</span> _cache.Values)
+        {
+            <span class="keyword">if</span> (entry.HitCount >= HOT_THRESHOLD)
+            {
+                <span class="comment">// Hot 에셋은 임계값을 0으로 → 항상 Strong 유지</span>
+                <span class="keyword">var</span> target = entry.Reference.Target;
+                <span class="keyword">if</span> (target != <span class="keyword">null</span>)
+                {
+                    entry.Reference = <span class="keyword">new</span> <span class="type">SoftReference</span>&lt;<span class="type">Object</span>&gt;(
+                        target,
+                        <span class="number">0</span>  <span class="comment">// 항상 Strong 유지</span>
+                    );
+                }
+            }
+        }
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 실전 패턴: 조건부 로딩</h2>
+
+            <div class="q">조건부 로딩이 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">있으면 즉시 사용, 없으면 로드</span> 패턴입니다. WeakReference의 핵심 활용법이죠.</p>
+                <div class="code-block"><span class="keyword">using</span> System;
+<span class="keyword">using</span> System.Threading.Tasks;
+<span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.AddressableAssets;
+
+<span class="keyword">public class</span> <span class="type">ConditionalAssetLoader</span>&lt;<span class="type">T</span>&gt; <span class="keyword">where</span> <span class="type">T</span> : <span class="type">Object</span>
+{
+    <span class="keyword">private</span> <span class="type">WeakReference</span>&lt;<span class="type">T</span>&gt; _weakRef;
+    <span class="keyword">private readonly</span> <span class="type">string</span> _address;
+    <span class="keyword">private</span> <span class="type">Task</span>&lt;<span class="type">T</span>&gt; _loadingTask;
+
+    <span class="keyword">public</span> <span class="function">ConditionalAssetLoader</span>(<span class="type">string</span> address)
+    {
+        _address = address;
+    }
+
+    <span class="comment">// 동기적 접근: 있으면 반환, 없으면 null</span>
+    <span class="keyword">public</span> <span class="type">T</span> <span class="function">GetIfLoaded</span>()
+    {
+        <span class="keyword">if</span> (_weakRef != <span class="keyword">null</span> &&
+            _weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="type">T</span> asset) &&
+            asset != <span class="keyword">null</span>)
+        {
+            <span class="keyword">return</span> asset;
+        }
+        <span class="keyword">return</span> <span class="keyword">null</span>;
+    }
+
+    <span class="comment">// 비동기 접근: 없으면 로드해서 반환</span>
+    <span class="keyword">public</span> <span class="keyword">async</span> <span class="type">Task</span>&lt;<span class="type">T</span>&gt; <span class="function">GetOrLoadAsync</span>()
+    {
+        <span class="comment">// 1. 이미 있으면 즉시 반환</span>
+        <span class="keyword">var</span> existing = <span class="function">GetIfLoaded</span>();
+        <span class="keyword">if</span> (existing != <span class="keyword">null</span>)
+            <span class="keyword">return</span> existing;
+
+        <span class="comment">// 2. 이미 로딩 중이면 그 Task 대기</span>
+        <span class="keyword">if</span> (_loadingTask != <span class="keyword">null</span> && !_loadingTask.IsCompleted)
+            <span class="keyword">return await</span> _loadingTask;
+
+        <span class="comment">// 3. 새로 로드</span>
+        _loadingTask = <span class="function">LoadInternalAsync</span>();
+        <span class="keyword">return await</span> _loadingTask;
+    }
+
+    <span class="keyword">private</span> <span class="keyword">async</span> <span class="type">Task</span>&lt;<span class="type">T</span>&gt; <span class="function">LoadInternalAsync</span>()
+    {
+        <span class="keyword">try</span>
+        {
+            <span class="keyword">var</span> handle = Addressables.<span class="function">LoadAssetAsync</span>&lt;<span class="type">T</span>&gt;(_address);
+            <span class="keyword">var</span> asset = <span class="keyword">await</span> handle.Task;
+
+            <span class="keyword">if</span> (asset != <span class="keyword">null</span>)
+            {
+                _weakRef = <span class="keyword">new</span> <span class="type">WeakReference</span>&lt;<span class="type">T</span>&gt;(asset);
+            }
+
+            <span class="keyword">return</span> asset;
+        }
+        <span class="keyword">finally</span>
+        {
+            _loadingTask = <span class="keyword">null</span>;
+        }
+    }
+}</div>
+            </div>
+
+            <div class="q">이걸 UI에 어떻게 적용해?</div>
+            <div class="a">
+                <p>아이콘 같은 UI 이미지에 <span class="highlight">지연 로딩 + 캐시</span> 패턴을 적용합니다.</p>
+                <div class="code-block"><span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.UI;
+
+<span class="keyword">public class</span> <span class="type">WeakIconManager</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">private static</span> <span class="type">Dictionary</span>&lt;<span class="type">string</span>, <span class="type">ConditionalAssetLoader</span>&lt;<span class="type">Sprite</span>&gt;&gt;
+        _loaders = <span class="keyword">new</span>();
+
+    [<span class="type">SerializeField</span>] <span class="keyword">private</span> <span class="type">Sprite</span> _placeholder;
+
+    <span class="keyword">public</span> <span class="keyword">async void</span> <span class="function">SetIcon</span>(<span class="type">Image</span> image, <span class="type">string</span> iconAddress)
+    {
+        <span class="comment">// 로더 가져오거나 생성</span>
+        <span class="keyword">if</span> (!_loaders.<span class="function">TryGetValue</span>(iconAddress, <span class="keyword">out</span> <span class="keyword">var</span> loader))
+        {
+            loader = <span class="keyword">new</span> <span class="type">ConditionalAssetLoader</span>&lt;<span class="type">Sprite</span>&gt;(iconAddress);
+            _loaders[iconAddress] = loader;
+        }
+
+        <span class="comment">// 즉시 사용 가능하면 바로 적용</span>
+        <span class="keyword">var</span> immediate = loader.<span class="function">GetIfLoaded</span>();
+        <span class="keyword">if</span> (immediate != <span class="keyword">null</span>)
+        {
+            image.sprite = immediate;
+            <span class="keyword">return</span>;
+        }
+
+        <span class="comment">// 플레이스홀더 표시 후 비동기 로드</span>
+        image.sprite = _placeholder;
+
+        <span class="keyword">var</span> sprite = <span class="keyword">await</span> loader.<span class="function">GetOrLoadAsync</span>();
+
+        <span class="comment">// 로드 완료 - Image가 아직 유효한지 확인</span>
+        <span class="keyword">if</span> (image != <span class="keyword">null</span> && sprite != <span class="keyword">null</span>)
+        {
+            image.sprite = sprite;
+        }
+    }
+
+    <span class="comment">// 메모리 정리</span>
+    <span class="keyword">public static void</span> <span class="function">ClearUnusedLoaders</span>()
+    {
+        <span class="keyword">var</span> toRemove = <span class="keyword">new</span> <span class="type">List</span>&lt;<span class="type">string</span>&gt;();
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> kvp <span class="keyword">in</span> _loaders)
+        {
+            <span class="keyword">if</span> (kvp.Value.<span class="function">GetIfLoaded</span>() == <span class="keyword">null</span>)
+            {
+                toRemove.<span class="function">Add</span>(kvp.Key);
+            }
+        }
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> key <span class="keyword">in</span> toRemove)
+        {
+            _loaders.<span class="function">Remove</span>(key);
+        }
+    }
+}</div>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                  WeakIconManager 동작 흐름                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  SetIcon("items/sword") 호출                                    │
+│         │                                                       │
+│         ▼                                                       │
+│  ┌──────────────────┐                                           │
+│  │ GetIfLoaded()    │                                           │
+│  └────────┬─────────┘                                           │
+│           │                                                     │
+│     ┌─────┴─────┐                                               │
+│     │           │                                               │
+│  [있음]       [없음]                                            │
+│     │           │                                               │
+│     ▼           ▼                                               │
+│  즉시 적용   Placeholder                                        │
+│  (0ms)       표시                                               │
+│                 │                                               │
+│                 ▼                                               │
+│           GetOrLoadAsync()                                      │
+│                 │                                               │
+│           ┌─────┴─────┐                                         │
+│           │           │                                         │
+│       [로딩중]    [새로드]                                      │
+│           │           │                                         │
+│           ▼           ▼                                         │
+│        Task대기   Addressables                                  │
+│           │       .LoadAssetAsync                               │
+│           │           │                                         │
+│           └─────┬─────┘                                         │
+│                 ▼                                               │
+│          WeakRef 저장                                           │
+│                 │                                               │
+│                 ▼                                               │
+│          Image.sprite = 로드된 스프라이트                       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</pre></div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 주의사항과 안티패턴</h2>
+
+            <div class="q">WeakReference 쓸 때 주의할 점은?</div>
+            <div class="a">
+                <p>몇 가지 <span class="warning">흔한 실수</span>가 있습니다.</p>
+                <div class="code-block"><span class="comment">// ❌ 안티패턴 1: TryGetTarget 결과를 변수에 안 받음</span>
+<span class="keyword">if</span> (weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="keyword">var</span> asset))
+{
+    <span class="comment">// ... 다른 코드 ...</span>
+}
+<span class="comment">// 여기서 asset 다시 접근하면 GC될 수 있음!</span>
+<span class="function">UseAsset</span>(asset);  <span class="comment">// 위험! asset이 null일 수 있음</span>
+
+<span class="comment">// ✅ 올바른 패턴: 지역 변수로 Strong 참조 유지</span>
+<span class="keyword">if</span> (weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="keyword">var</span> asset) && asset != <span class="keyword">null</span>)
+{
+    <span class="comment">// 이 블록 안에서는 asset이 Strong 참조로 유지됨</span>
+    <span class="function">UseAsset</span>(asset);  <span class="comment">// 안전!</span>
+}
+
+
+<span class="comment">// ❌ 안티패턴 2: Dictionary 키를 정리 안 함</span>
+<span class="type">Dictionary</span>&lt;<span class="type">string</span>, <span class="type">WeakReference</span>&lt;<span class="type">Object</span>&gt;&gt; cache;
+<span class="comment">// 객체가 GC되어도 Dictionary에 키는 계속 남아있음</span>
+<span class="comment">// → 메모리 누수 (키 문자열 + WeakReference 객체)</span>
+
+<span class="comment">// ✅ 올바른 패턴: 주기적 정리</span>
+<span class="keyword">private void</span> <span class="function">CleanupDeadReferences</span>()
+{
+    <span class="keyword">var</span> deadKeys = cache
+        .<span class="function">Where</span>(kvp => !kvp.Value.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> _))
+        .<span class="function">Select</span>(kvp => kvp.Key)
+        .<span class="function">ToList</span>();
+
+    <span class="keyword">foreach</span> (<span class="keyword">var</span> key <span class="keyword">in</span> deadKeys)
+        cache.<span class="function">Remove</span>(key);
+}
+
+
+<span class="comment">// ❌ 안티패턴 3: Unity 객체 null 체크 누락</span>
+<span class="keyword">if</span> (weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="type">GameObject</span> go))
+{
+    go.<span class="function">SetActive</span>(<span class="keyword">true</span>);  <span class="comment">// Destroy된 객체면 크래시!</span>
+}
+
+<span class="comment">// ✅ 올바른 패턴: Unity null 체크 추가</span>
+<span class="keyword">if</span> (weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="type">GameObject</span> go) && go != <span class="keyword">null</span>)
+{
+    go.<span class="function">SetActive</span>(<span class="keyword">true</span>);  <span class="comment">// 안전!</span>
+}</div>
+            </div>
+
+            <div class="q">ConditionalWeakTable은 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">키도 Weak로 관리</span>하는 특수 컬렉션입니다. 키가 GC되면 엔트리도 자동 제거됩니다.</p>
+                <div class="code-block"><span class="keyword">using</span> System.Runtime.CompilerServices;
+<span class="keyword">using</span> UnityEngine;
+
+<span class="keyword">public class</span> <span class="type">GameObjectMetadata</span>
+{
+    <span class="comment">// ConditionalWeakTable: 키(GameObject)가 GC되면 자동 정리</span>
+    <span class="keyword">private static</span> <span class="type">ConditionalWeakTable</span>&lt;<span class="type">GameObject</span>, <span class="type">Metadata</span>&gt;
+        _metadata = <span class="keyword">new</span>();
+
+    <span class="keyword">public class</span> <span class="type">Metadata</span>
+    {
+        <span class="keyword">public</span> <span class="type">string</span> OriginalName;
+        <span class="keyword">public</span> <span class="type">float</span> SpawnTime;
+        <span class="keyword">public</span> <span class="type">int</span> CustomId;
+    }
+
+    <span class="comment">// GameObject에 메타데이터 연결</span>
+    <span class="keyword">public static void</span> <span class="function">SetMetadata</span>(<span class="type">GameObject</span> go, <span class="type">Metadata</span> data)
+    {
+        _metadata.<span class="function">Add</span>(go, data);
+        <span class="comment">// go가 Destroy/GC되면 data도 자동 정리됨!</span>
+    }
+
+    <span class="comment">// 메타데이터 조회</span>
+    <span class="keyword">public static</span> <span class="type">Metadata</span> <span class="function">GetMetadata</span>(<span class="type">GameObject</span> go)
+    {
+        _metadata.<span class="function">TryGetValue</span>(go, <span class="keyword">out</span> <span class="keyword">var</span> data);
+        <span class="keyword">return</span> data;
+    }
+}</div>
+                <div class="highlight-box">
+                    <strong>💡 ConditionalWeakTable 활용</strong><br>
+                    기존 클래스를 수정하지 않고 추가 데이터를 연결할 때 유용합니다. Dictionary와 달리 키 객체가 GC되면 자동으로 엔트리가 제거되어 메모리 누수가 없습니다.
+                </div>
+            </div>
+
+            <div class="q">GC.KeepAlive는 뭐야?</div>
+            <div class="a">
+                <p>JIT 최적화로 인한 <span class="highlight">조기 GC를 방지</span>하는 메서드입니다.</p>
+                <div class="code-block"><span class="keyword">public void</span> <span class="function">ProcessWithWeakRef</span>()
+{
+    <span class="keyword">var</span> data = <span class="keyword">new</span> <span class="type">LargeData</span>();
+    <span class="keyword">var</span> weakRef = <span class="keyword">new</span> <span class="type">WeakReference</span>&lt;<span class="type">LargeData</span>&gt;(data);
+
+    <span class="comment">// JIT가 "data는 더 이상 안 쓰네?" 판단하면</span>
+    <span class="comment">// 이 시점에서 GC 대상이 될 수 있음!</span>
+
+    <span class="function">DoSomethingLong</span>();  <span class="comment">// 시간 오래 걸리는 작업</span>
+
+    <span class="comment">// weakRef.TryGetTarget이 실패할 수 있음</span>
+    <span class="keyword">if</span> (weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="keyword">var</span> result))
+    {
+        <span class="comment">// 여기 못 들어올 수 있음</span>
+    }
+
+    <span class="comment">// 해결책: KeepAlive로 참조 유지 강제</span>
+    GC.<span class="function">KeepAlive</span>(data);  <span class="comment">// 이 줄까지 data가 살아있도록 보장</span>
+}</div>
+                <div class="warning-box">
+                    <strong>⚠️ KeepAlive 위치 중요</strong><br>
+                    GC.KeepAlive()는 반드시 객체를 마지막으로 사용하는 코드 <strong>이후</strong>에 호출해야 합니다. 메서드 끝에 두는 것이 일반적입니다.
+                </div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 성능과 메모리 영향</h2>
+
+            <div class="q">WeakReference 자체의 오버헤드는?</div>
+            <div class="a">
+                <p><span class="highlight">매우 작습니다</span>. WeakReference&lt;T&gt; 객체 하나당 약 16-24바이트입니다.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│              WeakReference 메모리 오버헤드 분석                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  WeakReference&lt;T&gt; 객체 구조 (x64 기준)                          │
+│  ┌─────────────────────────────────────┐                        │
+│  │ Object Header          8 bytes     │                        │
+│  │ Method Table Ptr       8 bytes     │                        │
+│  │ GC Handle              8 bytes     │  ← 핵심: GC와 연결     │
+│  └─────────────────────────────────────┘                        │
+│                           총 ~24 bytes                          │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  비용 비교                                                      │
+│  ─────────────────────────────────────                         │
+│  Strong 참조 (T reference)          8 bytes (포인터만)          │
+│  WeakReference&lt;T&gt;                   24 bytes                    │
+│  Dictionary&lt;string, WeakRef&gt; 엔트리  ~72 bytes                  │
+│                                                                 │
+│  💡 결론: 개별 오버헤드는 작지만, 수천 개 캐시하면 누적됨        │
+│                                                                 │
+│  캐시 1000개 기준:                                              │
+│  - Strong Dict만: ~48KB                                        │
+│  - WeakRef Dict:  ~72KB (+24KB, +50%)                          │
+│  - 관리 대상 에셋 절약: 수십~수백 MB                            │
+│                                                                 │
+│  → 오버헤드 대비 이득이 압도적으로 큼                           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</pre></div>
+            </div>
+
+            <div class="q">GC 성능에 영향은?</div>
+            <div class="a">
+                <p>WeakReference가 많으면 <span class="highlight">GC가 추가 작업</span>을 해야 합니다.</p>
+                <div class="code-block"><span class="comment">// GC 동작 시 WeakReference 처리 단계</span>
+
+<span class="comment">// 1. 일반 GC 단계</span>
+<span class="comment">//    - 루트에서 시작해 Strong 참조 추적</span>
+<span class="comment">//    - 도달 가능한 객체 마킹</span>
+
+<span class="comment">// 2. WeakReference 처리 단계 (추가 비용)</span>
+<span class="comment">//    - 모든 WeakReference 순회</span>
+<span class="comment">//    - 대상 객체가 마킹되지 않았으면 → 참조 무효화</span>
+<span class="comment">//    - 대상 객체가 마킹되었으면 → 그대로 유지</span>
+
+<span class="comment">// 3. 수거 단계</span>
+<span class="comment">//    - 마킹 안 된 객체 해제</span>
+
+
+<span class="comment">// WeakReference 수에 따른 GC 영향 (대략적)</span>
+<span class="comment">// - 100개 이하: 무시할 수준</span>
+<span class="comment">// - 1,000개: 0.1ms 미만 추가</span>
+<span class="comment">// - 10,000개: 0.5~1ms 추가 가능</span>
+<span class="comment">// - 100,000개: 5~10ms 추가 가능 (문제 수준)</span></div>
+                <div class="highlight-box">
+                    <strong>💡 최적화 팁</strong><br>
+                    WeakReference 개수는 수천 개 이하로 유지하세요. 에셋 캐시 용도라면 충분합니다. 수만 개 이상 필요하다면 다른 전략(LRU 캐시 + 명시적 해제)을 고려하세요.
+                </div>
+            </div>
+
+            <div class="q">프로파일링은 어떻게 해?</div>
+            <div class="a">
+                <p>Unity Profiler와 커스텀 통계를 함께 활용합니다.</p>
+                <div class="code-block"><span class="keyword">using</span> System.Collections.Generic;
+<span class="keyword">using</span> UnityEngine;
+
+<span class="keyword">public class</span> <span class="type">WeakRefProfiler</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="type">string</span>, <span class="type">WeakReference</span>&lt;<span class="type">Object</span>&gt;&gt; _cache = <span class="keyword">new</span>();
+
+    <span class="comment">// 통계</span>
+    <span class="keyword">private int</span> _hitCount;
+    <span class="keyword">private int</span> _missCount;
+    <span class="keyword">private int</span> _gcCollectedCount;
+
+    <span class="keyword">public</span> <span class="type">T</span> <span class="function">Get</span>&lt;<span class="type">T</span>&gt;(<span class="type">string</span> key) <span class="keyword">where</span> <span class="type">T</span> : <span class="type">Object</span>
+    {
+        <span class="keyword">if</span> (_cache.<span class="function">TryGetValue</span>(key, <span class="keyword">out</span> <span class="keyword">var</span> weakRef))
+        {
+            <span class="keyword">if</span> (weakRef.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="keyword">var</span> obj) && obj != <span class="keyword">null</span>)
+            {
+                _hitCount++;
+                <span class="keyword">return</span> (<span class="type">T</span>)obj;
+            }
+
+            <span class="comment">// GC에 의해 수거됨</span>
+            _gcCollectedCount++;
+            _cache.<span class="function">Remove</span>(key);
+        }
+
+        _missCount++;
+        <span class="keyword">return</span> <span class="keyword">null</span>;
+    }
+
+    <span class="keyword">public void</span> <span class="function">PrintStats</span>()
+    {
+        <span class="keyword">int</span> aliveCount = <span class="number">0</span>;
+        <span class="keyword">int</span> deadCount = <span class="number">0</span>;
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> kvp <span class="keyword">in</span> _cache)
+        {
+            <span class="keyword">if</span> (kvp.Value.<span class="function">TryGetTarget</span>(<span class="keyword">out</span> <span class="keyword">var</span> obj) && obj != <span class="keyword">null</span>)
+                aliveCount++;
+            <span class="keyword">else</span>
+                deadCount++;
+        }
+
+        <span class="keyword">float</span> hitRate = _hitCount + _missCount > <span class="number">0</span>
+            ? (<span class="keyword">float</span>)_hitCount / (_hitCount + _missCount) * <span class="number">100</span>
+            : <span class="number">0</span>;
+
+        Debug.<span class="function">Log</span>(<span class="string">$@"
+═══════════════════════════════════════
+WeakReference Cache Statistics
+═══════════════════════════════════════
+  Total Entries: {_cache.Count}
+  Alive: {aliveCount}
+  Dead (pending cleanup): {deadCount}
+───────────────────────────────────────
+  Cache Hits: {_hitCount}
+  Cache Misses: {_missCount}
+  Hit Rate: {hitRate:F1}%
+───────────────────────────────────────
+  GC Collected: {_gcCollectedCount}
+═══════════════════════════════════════"</span>);
+    }
+
+<span class="directive">#if UNITY_EDITOR</span>
+    <span class="keyword">private void</span> <span class="function">OnGUI</span>()
+    {
+        <span class="keyword">if</span> (!Debug.isDebugBuild) <span class="keyword">return</span>;
+
+        GUILayout.<span class="function">BeginArea</span>(<span class="keyword">new</span> <span class="type">Rect</span>(<span class="number">10</span>, <span class="number">10</span>, <span class="number">200</span>, <span class="number">100</span>));
+        GUILayout.<span class="function">Label</span>(<span class="string">$"WeakRef Cache: {_cache.Count}"</span>);
+        GUILayout.<span class="function">Label</span>(<span class="string">$"Hit Rate: {(_hitCount * 100f / Mathf.Max(_hitCount + _missCount, 1)):F1}%"</span>);
+        GUILayout.<span class="function">Label</span>(<span class="string">$"GC Collected: {_gcCollectedCount}"</span>);
+        GUILayout.<span class="function">EndArea</span>();
+    }
+<span class="directive">#endif</span>
+}</div>
+            </div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>Weak Reference</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>WeakReference</strong> = GC가 수거할 수 있는 참조 (메모리 압박 시 자동 해제)</li>
+                <li><strong>TryGetTarget</strong> 패턴으로 안전하게 접근 (+ Unity null 체크 필수)</li>
+                <li><strong>Soft Reference</strong>는 C#에 없음 → 메모리 임계값 기반 하이브리드 구현</li>
+                <li><strong>조건부 로딩</strong>: GetIfLoaded() → 없으면 GetOrLoadAsync()</li>
+                <li><strong>Dictionary 키 정리</strong> 필수 (죽은 WeakReference 엔트리 제거)</li>
+                <li><strong>ConditionalWeakTable</strong>: 키도 Weak로 관리하는 특수 컬렉션</li>
+                <li><strong>오버헤드</strong>: 객체당 ~24바이트, 수천 개까지는 무시할 수준</li>
             </ul>
         </div>
 
@@ -86,5 +1035,7 @@
             <a href="../asset-scene-transition/">씬 전환 시 메모리 정리 &rarr;</a>
         </div>
     </div>
+
+    <script src="../common/script.js"></script>
 </body>
 </html>
