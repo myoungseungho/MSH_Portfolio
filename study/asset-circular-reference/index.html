@@ -3,38 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>순환 참조의 지옥 - 에셋 관리 - MSH Portfolio</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
-        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
-        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
-        .a p { margin-bottom: 12px; }
-        .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
-        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
-        .summary-box ul { list-style: none; }
-        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
-        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
-        .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
-    </style>
+    <title>순환 참조의 지옥 - 에셋 관리 심층 분석</title>
+    <link rel="stylesheet" href="../common/styles.css">
 </head>
 <body>
     <div class="container">
@@ -42,42 +12,1023 @@
 
         <div class="header">
             <h1>순환 참조의 지옥</h1>
-            <p>A→B→C→A 메모리 누수</p>
+            <p>A→B→C→A 고리가 만드는 메모리 누수와 해결 전략</p>
         </div>
 
+        <!-- Part 1: 개념 -->
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">순환 참조의 지옥이(가) 뭐야?</div>
+            <h2>Part 1. 순환 참조란?</h2>
+
+            <div class="q">순환 참조가 뭐야?</div>
             <div class="a">
-                <p><span class="highlight">A→B→C→A 메모리 누수</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p><span class="highlight">순환 참조(Circular Reference)</span>는 에셋들이 서로를 참조하여 닫힌 고리를 형성하는 상태입니다. A가 B를 참조하고, B가 C를 참조하고, C가 다시 A를 참조하면 순환이 발생합니다.</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                      순환 참조 기본 패턴                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [직접 순환 참조]                                                │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│      A ─────────→ B                                             │
+│      ↑             │                                            │
+│      └─────────────┘                                            │
+│                                                                 │
+│      예: Player 프리팹이 Weapon 프리팹 참조                      │
+│          Weapon 프리팹이 Player 프리팹 참조 (소유자 표시용)       │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [간접 순환 참조]                                                │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│      A ──→ B ──→ C ──→ D                                       │
+│      ↑                   │                                      │
+│      └───────────────────┘                                      │
+│                                                                 │
+│      예: UI 시스템                                               │
+│          MainUI → GameUI → Inventory → ItemPopup → MainUI       │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [자기 참조 (Self-Reference)]                                    │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│           ┌────┐                                                │
+│           │    │                                                │
+│           ▼    │                                                │
+│           A ───┘                                                │
+│                                                                 │
+│      예: 트리 구조의 노드가 자신의 프리팹을 자식으로 참조         │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">순환 참조가 왜 문제야?</div>
+            <div class="a">
+                <p>순환 참조는 <span class="warning">여러 심각한 문제</span>를 일으킵니다:</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                    순환 참조의 문제점                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [1. 메모리 누수 (Memory Leak)]                                  │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  번들 A 언로드 시도:                                             │
+│  ─────────────────                                              │
+│  "B가 아직 A를 참조 중 → 언로드 불가"                            │
+│                                                                 │
+│  번들 B 언로드 시도:                                             │
+│  ─────────────────                                              │
+│  "A가 아직 B를 참조 중 → 언로드 불가"                            │
+│                                                                 │
+│  결과: A도 B도 영원히 메모리에 남음 → 누수!                      │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [2. 빌드 크기 폭발]                                             │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  번들 빌드 시:                                                   │
+│                                                                 │
+│  Bundle_A를 빌드 → B가 필요 → B를 A에 포함                      │
+│  Bundle_B를 빌드 → A가 필요 → A를 B에 포함                      │
+│                                                                 │
+│  결과: A와 B 모두에 중복 에셋 포함 → 용량 2배!                   │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [3. 로딩 순서 교착 (Deadlock)]                                  │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  동기 로딩 시:                                                   │
+│                                                                 │
+│  Load(A) → A가 B 필요 → Load(B)                                 │
+│            → B가 A 필요 → Load(A) ← 이미 로딩 중!               │
+│                                                                 │
+│  결과: 무한 대기 또는 스택 오버플로우                             │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [4. 가비지 컬렉션 문제]                                         │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  참조 카운팅 방식 GC에서:                                        │
+│                                                                 │
+│  A.refCount = 1 (B가 참조)                                      │
+│  B.refCount = 1 (A가 참조)                                      │
+│                                                                 │
+│  외부 참조 없어도 서로 참조 → refCount > 0 → 수집 안 됨          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
             </div>
         </div>
 
+        <!-- Part 2: 유형별 순환 참조 -->
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. 순환 참조 유형</h2>
+
+            <div class="q">실제로 어떤 상황에서 순환 참조가 발생해?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>게임 개발에서 흔히 발생하는 순환 참조 패턴들입니다:</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                 게임에서 흔한 순환 참조 패턴                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [패턴 1: 양방향 소유 관계]                                      │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│      ┌────────────┐          ┌────────────┐                     │
+│      │   Player   │──owns──→│   Weapon   │                     │
+│      │  프리팹    │←─owner──│   프리팹   │                     │
+│      └────────────┘          └────────────┘                     │
+│                                                                 │
+│  원인: Weapon이 소유자(Player)를 알아야 하는 상황                │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [패턴 2: UI 네비게이션]                                         │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│      ┌──────────┐    ┌──────────┐    ┌──────────┐              │
+│      │  메인UI  │───→│  상점UI  │───→│ 아이템UI │              │
+│      └──────────┘    └──────────┘    └──────────┘              │
+│           ↑                               │                     │
+│           └───────────────────────────────┘                     │
+│                    (메인으로 돌아가기)                           │
+│                                                                 │
+│  원인: 모든 UI가 메인 UI 참조를 직접 가지고 있음                 │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [패턴 3: 컴포넌트 상호 의존]                                    │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│      ┌──────────────┐        ┌──────────────┐                   │
+│      │ AudioManager │───────→│ GameManager  │                   │
+│      │   (사운드)   │←───────│   (게임)     │                   │
+│      └──────────────┘        └──────────────┘                   │
+│                                                                 │
+│  원인: 매니저 클래스들이 서로 직접 참조                          │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [패턴 4: 번들 간 공유 에셋]                                     │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│      Bundle_Characters                  Bundle_Enemies          │
+│      ┌──────────────────┐              ┌──────────────────┐     │
+│      │ PlayerPrefab     │              │ EnemyPrefab      │     │
+│      │   └─ CommonVFX ──┼──────────────┼→ CommonVFX       │     │
+│      │   └─ SharedMat ──┼──────────────┼→ SharedMat       │     │
+│      └──────────────────┘              └──────────────────┘     │
+│                │                               │                │
+│                └───────────────┬───────────────┘                │
+│                                ▼                                │
+│                    두 번들이 같은 에셋 참조                      │
+│                    → 중복 포함 또는 암묵적 의존성                │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">코드에서는 순환 참조가 어떻게 보여?</div>
+            <div class="a">
+                <div class="code-block"><span class="code-comment">// 순환 참조 예시 - 이런 코드가 문제!</span>
+
+<span class="code-comment">// ❌ 패턴 1: 양방향 참조</span>
+<span class="code-keyword">public class</span> <span class="code-type">Player</span> : MonoBehaviour
+{
+    <span class="code-comment">// Player가 Weapon 프리팹을 직접 참조</span>
+    [SerializeField] <span class="code-keyword">private</span> Weapon m_WeaponPrefab;
+}
+
+<span class="code-keyword">public class</span> <span class="code-type">Weapon</span> : MonoBehaviour
+{
+    <span class="code-comment">// Weapon이 Player 프리팹을 다시 참조 → 순환!</span>
+    [SerializeField] <span class="code-keyword">private</span> Player m_OwnerPrefab;
+}
+
+<span class="code-comment">// ❌ 패턴 2: ScriptableObject 순환 참조</span>
+[CreateAssetMenu]
+<span class="code-keyword">public class</span> <span class="code-type">SkillData</span> : ScriptableObject
+{
+    <span class="code-keyword">public string</span> skillName;
+    <span class="code-keyword">public</span> SkillData nextSkill;  <span class="code-comment">// 연계 스킬</span>
+}
+
+<span class="code-comment">// 데이터 설정에서:</span>
+<span class="code-comment">// FireBall.nextSkill = IceBall</span>
+<span class="code-comment">// IceBall.nextSkill = ThunderBolt</span>
+<span class="code-comment">// ThunderBolt.nextSkill = FireBall  ← 순환!</span>
+
+<span class="code-comment">// ❌ 패턴 3: 매니저 간 순환</span>
+<span class="code-keyword">public class</span> <span class="code-type">GameManager</span> : MonoBehaviour
+{
+    <span class="code-keyword">public</span> AudioManager audioManager;  <span class="code-comment">// Inspector에서 연결</span>
+
+    <span class="code-keyword">public void</span> <span class="code-function">OnGameOver</span>()
+    {
+        audioManager.PlayGameOverSound();
+    }
+}
+
+<span class="code-keyword">public class</span> <span class="code-type">AudioManager</span> : MonoBehaviour
+{
+    <span class="code-keyword">public</span> GameManager gameManager;  <span class="code-comment">// Inspector에서 연결 → 순환!</span>
+
+    <span class="code-keyword">public void</span> <span class="code-function">OnSoundFinished</span>()
+    {
+        gameManager.OnAudioComplete();
+    }
+}</pre></div>
             </div>
         </div>
 
+        <!-- Part 3: 순환 참조 감지 -->
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 순환 참조 감지 방법</h2>
+
+            <div class="q">순환 참조를 어떻게 찾아내?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p>순환 참조 감지는 <span class="highlight">그래프 이론의 사이클 탐지</span> 알고리즘을 사용합니다:</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                    순환 참조 감지 알고리즘                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [1. DFS (깊이 우선 탐색) 기반 사이클 감지]                       │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  상태 정의:                                                     │
+│  - WHITE (미방문)                                               │
+│  - GRAY  (현재 탐색 중 - 스택에 있음)                           │
+│  - BLACK (탐색 완료)                                            │
+│                                                                 │
+│  알고리즘:                                                       │
+│  1. 노드 방문 시 GRAY로 마킹                                     │
+│  2. 인접 노드가 GRAY면 → 사이클 발견!                           │
+│  3. 모든 인접 노드 탐색 후 BLACK으로 마킹                        │
+│                                                                 │
+│     A ──→ B ──→ C                                               │
+│     ↑           │                                               │
+│     └───────────┘                                               │
+│                                                                 │
+│  탐색: A(GRAY) → B(GRAY) → C(GRAY) → A(이미 GRAY!) → 사이클!    │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [2. 위상 정렬 (Topological Sort) 활용]                          │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  원리: DAG(방향 비순환 그래프)만 위상 정렬 가능                   │
+│                                                                 │
+│  알고리즘:                                                       │
+│  1. 모든 노드의 진입 차수(in-degree) 계산                        │
+│  2. 진입 차수 0인 노드부터 제거                                  │
+│  3. 제거된 노드의 간선 삭제, 인접 노드 진입 차수 감소            │
+│  4. 모든 노드 제거 가능 → 사이클 없음                           │
+│     제거 불가 노드 존재 → 사이클 있음!                           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">Unity에서 순환 참조를 감지하는 코드는?</div>
+            <div class="a">
+                <div class="code-block"><span class="code-comment">// CircularReferenceDetector.cs - 에디터용 순환 참조 감지</span>
+<span class="code-keyword">using</span> System.Collections.Generic;
+<span class="code-keyword">using</span> UnityEngine;
+<span class="code-keyword">using</span> UnityEditor;
+
+<span class="code-keyword">public class</span> <span class="code-type">CircularReferenceDetector</span>
+{
+    <span class="code-keyword">private enum</span> <span class="code-type">NodeState</span> { White, Gray, Black }
+
+    <span class="code-keyword">private</span> Dictionary&lt;<span class="code-keyword">string</span>, HashSet&lt;<span class="code-keyword">string</span>&gt;&gt; m_Graph;
+    <span class="code-keyword">private</span> Dictionary&lt;<span class="code-keyword">string</span>, NodeState&gt; m_States;
+    <span class="code-keyword">private</span> List&lt;<span class="code-keyword">string</span>&gt; m_CurrentPath;
+    <span class="code-keyword">private</span> List&lt;List&lt;<span class="code-keyword">string</span>&gt;&gt; m_Cycles;
+
+    <span class="code-comment">// 프리팹의 참조 관계로 그래프 구축</span>
+    <span class="code-keyword">public void</span> <span class="code-function">BuildGraphFromPrefabs</span>(<span class="code-keyword">string</span> folderPath)
+    {
+        m_Graph = <span class="code-keyword">new</span> Dictionary&lt;<span class="code-keyword">string</span>, HashSet&lt;<span class="code-keyword">string</span>&gt;&gt;();
+
+        <span class="code-keyword">string</span>[] guids = AssetDatabase.FindAssets(<span class="code-string">"t:Prefab"</span>, <span class="code-keyword">new</span>[] { folderPath });
+
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> guid <span class="code-keyword">in</span> guids)
+        {
+            <span class="code-keyword">string</span> path = AssetDatabase.GUIDToAssetPath(guid);
+            <span class="code-keyword">string</span>[] dependencies = AssetDatabase.GetDependencies(path, <span class="code-keyword">false</span>);
+
+            <span class="code-keyword">if</span> (!m_Graph.ContainsKey(path))
+            {
+                m_Graph[path] = <span class="code-keyword">new</span> HashSet&lt;<span class="code-keyword">string</span>&gt;();
+            }
+
+            <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> dep <span class="code-keyword">in</span> dependencies)
+            {
+                <span class="code-keyword">if</span> (dep.EndsWith(<span class="code-string">".prefab"</span>) && dep != path)
+                {
+                    m_Graph[path].Add(dep);
+
+                    <span class="code-keyword">if</span> (!m_Graph.ContainsKey(dep))
+                    {
+                        m_Graph[dep] = <span class="code-keyword">new</span> HashSet&lt;<span class="code-keyword">string</span>&gt;();
+                    }
+                }
+            }
+        }
+    }
+
+    <span class="code-comment">// DFS로 사이클 감지</span>
+    <span class="code-keyword">public</span> List&lt;List&lt;<span class="code-keyword">string</span>&gt;&gt; <span class="code-function">FindCycles</span>()
+    {
+        m_States = <span class="code-keyword">new</span> Dictionary&lt;<span class="code-keyword">string</span>, NodeState&gt;();
+        m_Cycles = <span class="code-keyword">new</span> List&lt;List&lt;<span class="code-keyword">string</span>&gt;&gt;();
+        m_CurrentPath = <span class="code-keyword">new</span> List&lt;<span class="code-keyword">string</span>&gt;();
+
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> node <span class="code-keyword">in</span> m_Graph.Keys)
+        {
+            m_States[node] = NodeState.White;
+        }
+
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> node <span class="code-keyword">in</span> m_Graph.Keys)
+        {
+            <span class="code-keyword">if</span> (m_States[node] == NodeState.White)
+            {
+                DFS(node);
+            }
+        }
+
+        <span class="code-keyword">return</span> m_Cycles;
+    }
+
+    <span class="code-keyword">private void</span> <span class="code-function">DFS</span>(<span class="code-keyword">string</span> node)
+    {
+        m_States[node] = NodeState.Gray;
+        m_CurrentPath.Add(node);
+
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> neighbor <span class="code-keyword">in</span> m_Graph[node])
+        {
+            <span class="code-keyword">if</span> (m_States[neighbor] == NodeState.Gray)
+            {
+                <span class="code-comment">// 사이클 발견!</span>
+                <span class="code-keyword">int</span> cycleStart = m_CurrentPath.IndexOf(neighbor);
+                <span class="code-keyword">var</span> cycle = m_CurrentPath.GetRange(cycleStart,
+                    m_CurrentPath.Count - cycleStart);
+                cycle.Add(neighbor); <span class="code-comment">// 시작점 다시 추가로 순환 표시</span>
+                m_Cycles.Add(cycle);
+            }
+            <span class="code-keyword">else if</span> (m_States[neighbor] == NodeState.White)
+            {
+                DFS(neighbor);
+            }
+        }
+
+        m_States[node] = NodeState.Black;
+        m_CurrentPath.RemoveAt(m_CurrentPath.Count - <span class="code-number">1</span>);
+    }
+}
+
+<span class="code-comment">// 에디터 메뉴에서 실행</span>
+<span class="code-keyword">public class</span> <span class="code-type">CircularRefMenu</span>
+{
+    [MenuItem(<span class="code-string">"Tools/Detect Circular References"</span>)]
+    <span class="code-keyword">static void</span> <span class="code-function">DetectCircularReferences</span>()
+    {
+        <span class="code-keyword">var</span> detector = <span class="code-keyword">new</span> CircularReferenceDetector();
+        detector.BuildGraphFromPrefabs(<span class="code-string">"Assets/Prefabs"</span>);
+
+        <span class="code-keyword">var</span> cycles = detector.FindCycles();
+
+        <span class="code-keyword">if</span> (cycles.Count == <span class="code-number">0</span>)
+        {
+            Debug.Log(<span class="code-string">"순환 참조 없음!"</span>);
+        }
+        <span class="code-keyword">else</span>
+        {
+            <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> cycle <span class="code-keyword">in</span> cycles)
+            {
+                Debug.LogWarning(<span class="code-string">$"순환 발견: {string.Join(" → ", cycle)}"</span>);
+            }
+        }
+    }
+}</pre></div>
             </div>
         </div>
+
+        <!-- Part 4: 해결 전략 -->
+        <div class="conversation">
+            <h2>Part 4. 순환 참조 해결 전략</h2>
+
+            <div class="q">순환 참조를 어떻게 끊어?</div>
+            <div class="a">
+                <p>주요 해결 전략들입니다:</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                    순환 참조 해결 전략 개요                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [전략 1: 약한 참조 (Weak Reference)]                            │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  Before:  A ←──────→ B  (양방향 강한 참조)                      │
+│  After:   A ─────────→ B  (강한 참조)                           │
+│           A ←─ ─ ─ ─ ─ B  (약한 참조)                           │
+│                                                                 │
+│  약한 참조는 GC 대상에서 제외 안 됨                              │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [전략 2: 이벤트/콜백 패턴]                                       │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  Before:  Player ←──────→ Weapon                                │
+│                                                                 │
+│  After:   Player ──────→ Weapon                                 │
+│           Player ←─event─ (OnDamageDealt 이벤트)                │
+│                                                                 │
+│  Weapon이 Player를 직접 참조하지 않고 이벤트로 통신              │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [전략 3: 인터페이스 분리]                                        │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  Before:  A ←──────→ B (구체 클래스 참조)                       │
+│                                                                 │
+│  After:   A ──────→ IB (인터페이스)                             │
+│           B implements IB                                       │
+│           B ──────→ IA (인터페이스)                             │
+│           A implements IA                                       │
+│                                                                 │
+│  서로 인터페이스만 알고, 구체 구현 모름 → 의존성 역전            │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [전략 4: 공유 번들 분리]                                        │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  Before:                                                        │
+│    Bundle_A ────→ SharedAsset ←──── Bundle_B                   │
+│         ↑____________________________↓                          │
+│         (암묵적 순환 의존)                                       │
+│                                                                 │
+│  After:                                                         │
+│    Bundle_A ────┐              ┌──── Bundle_B                  │
+│                 ↓              ↓                                │
+│              Bundle_Shared (SharedAsset)                        │
+│                                                                 │
+│  공유 에셋을 별도 번들로 분리하여 의존 방향 단일화               │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [전략 5: 런타임 동적 참조]                                       │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  Before:  [SerializeField] Player m_Player; (에디터 참조)       │
+│                                                                 │
+│  After:   Player m_Player;                                      │
+│           void Start() {                                        │
+│               m_Player = FindObjectOfType<Player>();            │
+│           }                                                     │
+│                                                                 │
+│  에셋 참조 대신 런타임에 찾아서 연결                             │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">실제 코드로 해결 방법을 보여줘</div>
+            <div class="a">
+                <div class="code-block"><span class="code-comment">// ===== 해결 전략 1: 이벤트/콜백 패턴 =====</span>
+
+<span class="code-comment">// Before: 순환 참조</span>
+<span class="code-keyword">public class</span> <span class="code-type">Player_Bad</span> : MonoBehaviour
+{
+    [SerializeField] <span class="code-keyword">private</span> Weapon_Bad m_Weapon;
+}
+
+<span class="code-keyword">public class</span> <span class="code-type">Weapon_Bad</span> : MonoBehaviour
+{
+    [SerializeField] <span class="code-keyword">private</span> Player_Bad m_Owner; <span class="code-comment">// 순환!</span>
+
+    <span class="code-keyword">void</span> <span class="code-function">OnDealDamage</span>(<span class="code-keyword">int</span> damage)
+    {
+        m_Owner.AddKillCount();
+    }
+}
+
+<span class="code-comment">// After: 이벤트로 분리</span>
+<span class="code-keyword">public class</span> <span class="code-type">Player_Good</span> : MonoBehaviour
+{
+    [SerializeField] <span class="code-keyword">private</span> Weapon_Good m_Weapon;
+
+    <span class="code-keyword">void</span> <span class="code-function">Awake</span>()
+    {
+        m_Weapon.OnDamageDealt += HandleDamageDealt;
+    }
+
+    <span class="code-keyword">void</span> <span class="code-function">OnDestroy</span>()
+    {
+        m_Weapon.OnDamageDealt -= HandleDamageDealt;
+    }
+
+    <span class="code-keyword">private void</span> <span class="code-function">HandleDamageDealt</span>(<span class="code-keyword">int</span> damage)
+    {
+        AddKillCount();
+    }
+}
+
+<span class="code-keyword">public class</span> <span class="code-type">Weapon_Good</span> : MonoBehaviour
+{
+    <span class="code-comment">// Player를 직접 참조하지 않음!</span>
+    <span class="code-keyword">public</span> System.Action&lt;<span class="code-keyword">int</span>&gt; OnDamageDealt;
+
+    <span class="code-keyword">void</span> <span class="code-function">DealDamage</span>(<span class="code-keyword">int</span> damage)
+    {
+        OnDamageDealt?.Invoke(damage);
+    }
+}
+
+<span class="code-comment">// ===== 해결 전략 2: 인터페이스 분리 =====</span>
+
+<span class="code-comment">// 인터페이스 정의</span>
+<span class="code-keyword">public interface</span> <span class="code-type">IDamageable</span>
+{
+    <span class="code-keyword">void</span> TakeDamage(<span class="code-keyword">int</span> amount);
+}
+
+<span class="code-keyword">public interface</span> <span class="code-type">IWeaponHolder</span>
+{
+    <span class="code-keyword">void</span> OnWeaponFired();
+}
+
+<span class="code-comment">// 구현 - 서로 인터페이스만 알고 있음</span>
+<span class="code-keyword">public class</span> <span class="code-type">Player_Interface</span> : MonoBehaviour, IWeaponHolder, IDamageable
+{
+    <span class="code-keyword">private</span> IWeapon m_Weapon; <span class="code-comment">// 인터페이스로 참조</span>
+
+    <span class="code-keyword">public void</span> <span class="code-function">TakeDamage</span>(<span class="code-keyword">int</span> amount) { ... }
+    <span class="code-keyword">public void</span> <span class="code-function">OnWeaponFired</span>() { ... }
+}
+
+<span class="code-keyword">public interface</span> <span class="code-type">IWeapon</span>
+{
+    <span class="code-keyword">void</span> Fire();
+    <span class="code-keyword">void</span> SetHolder(IWeaponHolder holder);
+}
+
+<span class="code-keyword">public class</span> <span class="code-type">Weapon_Interface</span> : MonoBehaviour, IWeapon
+{
+    <span class="code-keyword">private</span> IWeaponHolder m_Holder; <span class="code-comment">// 인터페이스로 참조</span>
+
+    <span class="code-keyword">public void</span> <span class="code-function">SetHolder</span>(IWeaponHolder holder)
+    {
+        m_Holder = holder;
+    }
+
+    <span class="code-keyword">public void</span> <span class="code-function">Fire</span>()
+    {
+        m_Holder?.OnWeaponFired();
+    }
+}
+
+<span class="code-comment">// ===== 해결 전략 3: 약한 참조 (WeakReference) =====</span>
+
+<span class="code-keyword">using</span> System;
+
+<span class="code-keyword">public class</span> <span class="code-type">Weapon_WeakRef</span> : MonoBehaviour
+{
+    <span class="code-comment">// WeakReference: GC가 Player를 수집하는 것을 막지 않음</span>
+    <span class="code-keyword">private</span> WeakReference&lt;Player&gt; m_OwnerRef;
+
+    <span class="code-keyword">public void</span> <span class="code-function">SetOwner</span>(Player owner)
+    {
+        m_OwnerRef = <span class="code-keyword">new</span> WeakReference&lt;Player&gt;(owner);
+    }
+
+    <span class="code-keyword">void</span> <span class="code-function">OnDealDamage</span>()
+    {
+        <span class="code-comment">// TryGetTarget: 참조가 아직 유효한지 확인</span>
+        <span class="code-keyword">if</span> (m_OwnerRef != <span class="code-keyword">null</span> && m_OwnerRef.TryGetTarget(<span class="code-keyword">out var</span> owner))
+        {
+            owner.AddKillCount();
+        }
+    }
+}</pre></div>
+            </div>
+        </div>
+
+        <!-- Part 5: 번들 순환 참조 -->
+        <div class="conversation">
+            <h2>Part 5. 번들 간 순환 참조</h2>
+
+            <div class="q">Asset Bundle 간 순환 참조는 어떻게 처리해?</div>
+            <div class="a">
+                <p>번들 간 순환 참조는 특히 위험합니다. 메모리 누수와 빌드 크기 증가의 주범입니다.</p>
+
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                 번들 순환 참조 문제와 해결                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [문제 상황]                                                    │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│       Bundle_UI                    Bundle_Game                  │
+│      ┌──────────────┐            ┌──────────────┐               │
+│      │  MainMenu    │───uses───→│  Player      │               │
+│      │  프리팹      │            │  프리팹      │               │
+│      └──────────────┘            └──────────────┘               │
+│             ↑                           │                       │
+│             │                           │                       │
+│             └────────────uses───────────┘                       │
+│                 (Player가 MainMenu 참조)                         │
+│                                                                 │
+│  결과:                                                          │
+│  - Bundle_UI 빌드 시 Player 중복 포함                           │
+│  - Bundle_Game 빌드 시 MainMenu 중복 포함                       │
+│  - 또는 서로 의존하여 로딩 교착                                  │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [해결 1: 레이어 아키텍처]                                        │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│      Layer 3: Feature (상위)                                    │
+│      ┌──────────────┐  ┌──────────────┐                         │
+│      │  Bundle_UI   │  │ Bundle_Game  │                         │
+│      └──────┬───────┘  └──────┬───────┘                         │
+│             │                 │  (상위 → 하위만 참조)            │
+│             ▼                 ▼                                 │
+│      Layer 2: Shared (중간)                                     │
+│      ┌─────────────────────────────────┐                        │
+│      │        Bundle_Common            │                        │
+│      │  (공유 프리팹, 머티리얼)        │                        │
+│      └─────────────────┬───────────────┘                        │
+│                        │                                        │
+│                        ▼                                        │
+│      Layer 1: Core (하위)                                       │
+│      ┌─────────────────────────────────┐                        │
+│      │        Bundle_Core              │                        │
+│      │   (기본 셰이더, 폰트)           │                        │
+│      └─────────────────────────────────┘                        │
+│                                                                 │
+│  규칙: 상위 레이어 → 하위 레이어만 참조 가능                     │
+│        같은 레이어, 하위 → 상위 참조 금지                        │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [해결 2: Addressables 사용]                                     │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  Unity Addressables는 의존성을 자동으로 분석하고                 │
+│  순환 참조를 경고해줍니다.                                       │
+│                                                                 │
+│  설정:                                                          │
+│  - Group 간 의존성 리포트 확인                                  │
+│  - "Can't Be Built" 에러 시 순환 참조 의심                      │
+│  - Analyze 창에서 "Check Duplicate Bundle Dependencies"        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">번들 의존성을 분석하는 코드는?</div>
+            <div class="a">
+                <div class="code-block"><span class="code-comment">// BundleDependencyAnalyzer.cs - 번들 간 의존성 분석</span>
+<span class="code-keyword">using</span> System.Collections.Generic;
+<span class="code-keyword">using</span> UnityEngine;
+<span class="code-keyword">using</span> UnityEditor;
+
+<span class="code-keyword">public class</span> <span class="code-type">BundleDependencyAnalyzer</span>
+{
+    <span class="code-keyword">public struct</span> <span class="code-type">BundleInfo</span>
+    {
+        <span class="code-keyword">public string</span> Name;
+        <span class="code-keyword">public</span> HashSet&lt;<span class="code-keyword">string</span>&gt; Dependencies;
+        <span class="code-keyword">public</span> HashSet&lt;<span class="code-keyword">string</span>&gt; Dependents;
+        <span class="code-keyword">public int</span> Layer; <span class="code-comment">// 계산된 레이어</span>
+    }
+
+    <span class="code-keyword">private</span> Dictionary&lt;<span class="code-keyword">string</span>, BundleInfo&gt; m_Bundles;
+
+    <span class="code-comment">// 번들 의존성 그래프 구축</span>
+    <span class="code-keyword">public void</span> <span class="code-function">BuildDependencyGraph</span>()
+    {
+        m_Bundles = <span class="code-keyword">new</span> Dictionary&lt;<span class="code-keyword">string</span>, BundleInfo&gt;();
+
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> bundleName <span class="code-keyword">in</span> AssetDatabase.GetAllAssetBundleNames())
+        {
+            <span class="code-keyword">var</span> info = <span class="code-keyword">new</span> BundleInfo
+            {
+                Name = bundleName,
+                Dependencies = <span class="code-keyword">new</span> HashSet&lt;<span class="code-keyword">string</span>&gt;(),
+                Dependents = <span class="code-keyword">new</span> HashSet&lt;<span class="code-keyword">string</span>&gt;(),
+                Layer = -<span class="code-number">1</span>
+            };
+
+            <span class="code-comment">// 이 번들이 의존하는 다른 번들들</span>
+            <span class="code-keyword">string</span>[] deps = AssetDatabase.GetAssetBundleDependencies(bundleName, <span class="code-keyword">false</span>);
+            <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> dep <span class="code-keyword">in</span> deps)
+            {
+                info.Dependencies.Add(dep);
+            }
+
+            m_Bundles[bundleName] = info;
+        }
+
+        <span class="code-comment">// 역방향 관계 구축 (누가 나를 의존하는가)</span>
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> kvp <span class="code-keyword">in</span> m_Bundles)
+        {
+            <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> dep <span class="code-keyword">in</span> kvp.Value.Dependencies)
+            {
+                <span class="code-keyword">if</span> (m_Bundles.ContainsKey(dep))
+                {
+                    <span class="code-keyword">var</span> depInfo = m_Bundles[dep];
+                    depInfo.Dependents.Add(kvp.Key);
+                    m_Bundles[dep] = depInfo;
+                }
+            }
+        }
+    }
+
+    <span class="code-comment">// 순환 참조 검사</span>
+    <span class="code-keyword">public</span> List&lt;List&lt;<span class="code-keyword">string</span>&gt;&gt; <span class="code-function">FindBundleCycles</span>()
+    {
+        <span class="code-keyword">var</span> cycles = <span class="code-keyword">new</span> List&lt;List&lt;<span class="code-keyword">string</span>&gt;&gt;();
+        <span class="code-keyword">var</span> visited = <span class="code-keyword">new</span> HashSet&lt;<span class="code-keyword">string</span>&gt;();
+        <span class="code-keyword">var</span> recStack = <span class="code-keyword">new</span> HashSet&lt;<span class="code-keyword">string</span>&gt;();
+        <span class="code-keyword">var</span> path = <span class="code-keyword">new</span> List&lt;<span class="code-keyword">string</span>&gt;();
+
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> bundle <span class="code-keyword">in</span> m_Bundles.Keys)
+        {
+            <span class="code-keyword">if</span> (!visited.Contains(bundle))
+            {
+                DFSFindCycle(bundle, visited, recStack, path, cycles);
+            }
+        }
+
+        <span class="code-keyword">return</span> cycles;
+    }
+
+    <span class="code-keyword">private void</span> <span class="code-function">DFSFindCycle</span>(<span class="code-keyword">string</span> node, HashSet&lt;<span class="code-keyword">string</span>&gt; visited,
+        HashSet&lt;<span class="code-keyword">string</span>&gt; recStack, List&lt;<span class="code-keyword">string</span>&gt; path, List&lt;List&lt;<span class="code-keyword">string</span>&gt;&gt; cycles)
+    {
+        visited.Add(node);
+        recStack.Add(node);
+        path.Add(node);
+
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> dep <span class="code-keyword">in</span> m_Bundles[node].Dependencies)
+        {
+            <span class="code-keyword">if</span> (!visited.Contains(dep))
+            {
+                DFSFindCycle(dep, visited, recStack, path, cycles);
+            }
+            <span class="code-keyword">else if</span> (recStack.Contains(dep))
+            {
+                <span class="code-comment">// 사이클 발견</span>
+                <span class="code-keyword">int</span> start = path.IndexOf(dep);
+                <span class="code-keyword">var</span> cycle = path.GetRange(start, path.Count - start);
+                cycle.Add(dep);
+                cycles.Add(cycle);
+            }
+        }
+
+        recStack.Remove(node);
+        path.RemoveAt(path.Count - <span class="code-number">1</span>);
+    }
+
+    <span class="code-comment">// 레이어 계산 (위상 정렬)</span>
+    <span class="code-keyword">public void</span> <span class="code-function">CalculateLayers</span>()
+    {
+        <span class="code-keyword">var</span> inDegree = <span class="code-keyword">new</span> Dictionary&lt;<span class="code-keyword">string</span>, <span class="code-keyword">int</span>&gt;();
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> kvp <span class="code-keyword">in</span> m_Bundles)
+        {
+            inDegree[kvp.Key] = kvp.Value.Dependencies.Count;
+        }
+
+        <span class="code-keyword">var</span> queue = <span class="code-keyword">new</span> Queue&lt;<span class="code-keyword">string</span>&gt;();
+        <span class="code-keyword">int</span> currentLayer = <span class="code-number">0</span>;
+
+        <span class="code-comment">// 의존성이 없는 번들 = Layer 0</span>
+        <span class="code-keyword">foreach</span> (<span class="code-keyword">var</span> kvp <span class="code-keyword">in</span> inDegree)
+        {
+            <span class="code-keyword">if</span> (kvp.Value == <span class="code-number">0</span>)
+            {
+                queue.Enqueue(kvp.Key);
+                <span class="code-keyword">var</span> info = m_Bundles[kvp.Key];
+                info.Layer = currentLayer;
+                m_Bundles[kvp.Key] = info;
+            }
+        }
+
+        <span class="code-keyword">while</span> (queue.Count &gt; <span class="code-number">0</span>)
+        {
+            <span class="code-keyword">int</span> levelSize = queue.Count;
+            currentLayer++;
+
+            <span class="code-keyword">for</span> (<span class="code-keyword">int</span> i = <span class="code-number">0</span>; i &lt; levelSize; i++)
+            {
+                <span class="code-keyword">string</span> current = queue.Dequeue();
+
+                <span class="code-keyword">foreach</span> (<span class="code-keyword">string</span> dependent <span class="code-keyword">in</span> m_Bundles[current].Dependents)
+                {
+                    inDegree[dependent]--;
+                    <span class="code-keyword">if</span> (inDegree[dependent] == <span class="code-number">0</span>)
+                    {
+                        queue.Enqueue(dependent);
+                        <span class="code-keyword">var</span> info = m_Bundles[dependent];
+                        info.Layer = currentLayer;
+                        m_Bundles[dependent] = info;
+                    }
+                }
+            }
+        }
+    }
+}</pre></div>
+            </div>
+        </div>
+
+        <!-- Part 6: 예방 전략 -->
+        <div class="conversation">
+            <h2>Part 6. 순환 참조 예방</h2>
+
+            <div class="q">순환 참조가 애초에 생기지 않게 하려면?</div>
+            <div class="a">
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                    순환 참조 예방 가이드라인                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [1. 의존성 방향 규칙 수립]                                       │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│      Application Layer (앱 진입점)                              │
+│             ↓                                                   │
+│      Feature Layer (게임 기능)                                  │
+│             ↓                                                   │
+│      Domain Layer (비즈니스 로직)                               │
+│             ↓                                                   │
+│      Infrastructure Layer (기술 기반)                           │
+│                                                                 │
+│  규칙: 화살표 방향으로만 의존 가능                               │
+│        상위가 하위를 알되, 하위가 상위를 알면 안 됨              │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [2. 폴더 구조로 강제]                                           │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  Assets/                                                        │
+│  ├── _Core/            (Layer 1 - 누구도 참조 가능)             │
+│  │   ├── Shaders/                                               │
+│  │   └── Materials/                                             │
+│  ├── _Shared/          (Layer 2 - Core만 참조)                  │
+│  │   ├── CommonPrefabs/                                         │
+│  │   └── CommonUI/                                              │
+│  ├── Game/             (Layer 3 - Core, Shared 참조)            │
+│  │   ├── Characters/                                            │
+│  │   └── Weapons/                                               │
+│  └── UI/               (Layer 3 - Core, Shared 참조)            │
+│      └── Menus/                                                 │
+│                                                                 │
+│  같은 레이어 간 참조 금지 (Game ↔ UI 직접 참조 X)               │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [3. 코드 리뷰 체크리스트]                                        │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  □ SerializeField로 다른 프리팹 참조 추가 시:                   │
+│    - 역방향 참조가 이미 있는지 확인                              │
+│    - 같은 레이어 또는 상위 레이어인지 확인                       │
+│                                                                 │
+│  □ 새 스크립트 작성 시:                                         │
+│    - 다른 매니저/컴포넌트 직접 참조 피하기                       │
+│    - 이벤트/인터페이스 사용 권장                                 │
+│                                                                 │
+│  □ 새 번들 추가 시:                                             │
+│    - 번들 의존성 그래프 업데이트                                 │
+│    - CI에서 순환 참조 검사 실행                                  │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [4. CI 자동 검사]                                               │
+│  ─────────────────────────────────────────────────────          │
+│                                                                 │
+│  빌드 파이프라인에 순환 참조 검사 추가:                          │
+│                                                                 │
+│  1. Unity 빌드 전 스크립트 실행                                 │
+│  2. CircularReferenceDetector 실행                              │
+│  3. 순환 발견 시 빌드 실패 처리                                  │
+│  4. 슬랙/이메일 알림                                            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+</pre></div>
+            </div>
+
+            <div class="q">Unity vs Unreal에서 순환 참조 처리가 다른가요?</div>
+            <div class="a">
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│              Unity vs Unreal 순환 참조 처리 비교                  │
+├──────────────────────────────┬──────────────────────────────────┤
+│           Unity              │            Unreal                │
+├──────────────────────────────┼──────────────────────────────────┤
+│                              │                                  │
+│ 참조 방식:                   │ 참조 방식:                       │
+│ ─────────────────            │ ─────────────────                │
+│ [SerializeField]             │ UPROPERTY() 매크로               │
+│ 로 에디터 참조               │ 로 프로퍼티 노출                 │
+│                              │                                  │
+│ public GameObject target;    │ UPROPERTY()                      │
+│                              │ AActor* Target;                  │
+│                              │                                  │
+├──────────────────────────────┼──────────────────────────────────┤
+│                              │                                  │
+│ Soft Reference:              │ Soft Reference:                  │
+│ ─────────────────            │ ─────────────────                │
+│ Addressables 사용            │ TSoftObjectPtr<> 내장           │
+│ AssetReference 타입          │ FSoftObjectPath                  │
+│                              │                                  │
+│ [SerializeField]             │ UPROPERTY()                      │
+│ AssetReference prefabRef;    │ TSoftObjectPtr<AActor> ActorRef;│
+│                              │                                  │
+├──────────────────────────────┼──────────────────────────────────┤
+│                              │                                  │
+│ 순환 감지 도구:              │ 순환 감지 도구:                  │
+│ ─────────────────            │ ─────────────────                │
+│ - Addressables Analyze       │ - Reference Viewer (내장)        │
+│ - Asset Bundle Browser       │ - Size Map                       │
+│ - 커스텀 에디터 스크립트     │ - Commandlet                     │
+│                              │                                  │
+├──────────────────────────────┼──────────────────────────────────┤
+│                              │                                  │
+│ 권장 해결책:                 │ 권장 해결책:                     │
+│ ─────────────────            │ ─────────────────                │
+│ 1. Addressables 사용         │ 1. Soft Reference 사용           │
+│ 2. 이벤트/델리게이트         │ 2. 델리게이트/이벤트            │
+│ 3. ScriptableObject로 분리   │ 3. 인터페이스 (UInterface)       │
+│ 4. ServiceLocator 패턴       │ 4. Subsystem 패턴                │
+│                              │                                  │
+└──────────────────────────────┴──────────────────────────────────┘
+</pre></div>
+            </div>
+        </div>
+
+        <!-- Part 7: 실전 체크리스트 -->
+        <div class="conversation">
+            <h2>Part 7. 순환 참조 해결 체크리스트</h2>
+
+            <div class="q">순환 참조 문제를 발견했을 때 어떤 순서로 해결해야 해?</div>
+            <div class="a">
+                <div class="highlight-box">
+                    <h4>순환 참조 해결 단계</h4>
+                    <ol>
+                        <li><strong>식별</strong>: 어떤 에셋들이 순환에 포함되어 있는지 파악</li>
+                        <li><strong>분류</strong>: 순환 유형 판단 (프리팹/번들/코드)</li>
+                        <li><strong>우선순위</strong>: 끊어야 할 연결 선택 (가장 약한 의존성)</li>
+                        <li><strong>리팩토링</strong>: 이벤트/인터페이스/Soft Reference로 대체</li>
+                        <li><strong>검증</strong>: 순환 참조 감지 도구로 재확인</li>
+                        <li><strong>예방</strong>: CI 검사 추가</li>
+                    </ol>
+                </div>
+
+                <div class="warning-box">
+                    <h4>⚠️ 순환 참조 해결 시 주의사항</h4>
+                    <ul>
+                        <li>한 번에 모든 순환을 끊으려 하지 말 것 → 점진적 리팩토링</li>
+                        <li>WeakReference는 null 체크 필수 → 참조 대상이 GC될 수 있음</li>
+                        <li>이벤트 구독 해제 잊지 않기 → 메모리 누수 원인</li>
+                        <li>런타임 참조 해결은 성능 비용 고려</li>
+                        <li>팀 전체가 의존성 규칙을 이해해야 함</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary -->
         <div class="summary-box">
-            <h3>핵심 정리</h3>
+            <h3>핵심 정리: 순환 참조</h3>
             <ul>
-                <li><strong>순환 참조의 지옥</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>순환 참조</strong>: A→B→C→A 형태의 닫힌 의존성 고리</li>
+                <li><strong>문제점</strong>: 메모리 누수, 빌드 크기 증가, 로딩 교착</li>
+                <li><strong>감지</strong>: DFS 사이클 탐지, 위상 정렬</li>
+                <li><strong>해결</strong>: 약한 참조, 이벤트, 인터페이스, 공유 번들 분리</li>
+                <li><strong>예방</strong>: 레이어 아키텍처, 의존성 방향 규칙, CI 검사</li>
             </ul>
         </div>
 
@@ -86,5 +1037,7 @@
             <a href="../asset-soft-hard-reference/">Soft vs Hard Reference &rarr;</a>
         </div>
     </div>
+
+    <script src="../common/script.js"></script>
 </body>
 </html>
