@@ -33,7 +33,6 @@
         .nav-links a { color: #0891B2; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
     </style>
 </head>
 <body>
@@ -42,42 +41,316 @@
 
         <div class="header">
             <h1>텍스처 스트리밍</h1>
-            <p>Mipmap 레벨별 스트리밍</p>
+            <p>멀리 있으면 흐릿하게, 가까우면 선명하게</p>
         </div>
 
+        <!-- Part 1: 문제 인식 -->
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">텍스처 스트리밍이(가) 뭐야?</div>
+            <h2>Part 1. 문제: 4K 텍스처의 딜레마</h2>
+
+            <div class="q">4K 텍스처 하나가 메모리를 얼마나 먹어?</div>
             <div class="a">
-                <p><span class="highlight">Mipmap 레벨별 스트리밍</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p>4096 × 4096 텍스처, RGBA 포맷이면:</p>
+                <p><span class="warning">4096 × 4096 × 4바이트 = 64MB</span></p>
+                <p>캐릭터 하나에 텍스처가 5장이면? <span class="warning">320MB</span></p>
+                <p>캐릭터 100명이면? <span class="warning">32GB...</span> RAM 전체를 잡아먹는다!</p>
+            </div>
+            <div class="diagram">텍스처 크기 계산:
+
+해상도         계산식                    메모리
+───────────────────────────────────────────────
+ 256 × 256    256 × 256 × 4         =    256 KB
+ 512 × 512    512 × 512 × 4         =      1 MB
+1024 × 1024   1024 × 1024 × 4       =      4 MB
+2048 × 2048   2048 × 2048 × 4       =     16 MB
+4096 × 4096   4096 × 4096 × 4       =     64 MB  ← 4K
+8192 × 8192   8192 × 8192 × 4       =    256 MB  ← 8K
+
+압축 포맷 (BC7) 사용 시 약 1/4:
+4096 × 4096 BC7 = 16MB (여전히 큼!)</div>
+
+            <div class="q">근데 멀리 있는 건 어차피 작게 보이잖아?</div>
+            <div class="a">
+                <p><span class="key-point">바로 그거다!</span></p>
+                <p>화면에서 10픽셀로 보이는 물체에 4K 텍스처는 <span class="warning">낭비</span></p>
+                <p>멀리 있으면 저해상도, 가까우면 고해상도 → 이게 <span class="highlight">텍스처 스트리밍</span></p>
             </div>
         </div>
 
+        <!-- Part 2: Mipmap 기초 -->
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. Mipmap이 뭔데?</h2>
+
+            <div class="q">Mipmap이 뭐야?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>하나의 텍스처를 <span class="highlight">여러 해상도 버전</span>으로 미리 만들어 두는 것</p>
+                <p>원본 4K → 2K → 1K → 512 → 256 → ... → 1×1</p>
+                <p>각 단계를 <span class="highlight">Mip Level</span>이라고 함</p>
+            </div>
+            <div class="diagram">Mipmap 체인:
+
+Level 0 (원본):  4096 × 4096  = 64 MB   ████████████████████████████████
+Level 1:         2048 × 2048  = 16 MB   ████████████████
+Level 2:         1024 × 1024  =  4 MB   ████████
+Level 3:          512 × 512   =  1 MB   ████
+Level 4:          256 × 256   = 256 KB  ██
+Level 5:          128 × 128   =  64 KB  █
+Level 6:           64 × 64    =  16 KB  ▪
+Level 7:           32 × 32    =   4 KB  ·
+...
+Level 12:           1 × 1     =   4 B   ·
+
+전체 Mipmap 용량 = 원본의 약 1.33배 (64MB → 85MB)</div>
+
+            <div class="q">왜 미리 만들어 둬?</div>
+            <div class="a">
+                <p>1. <span class="key-point">실시간 축소는 느리다</span> - GPU가 매 프레임 축소 연산?</p>
+                <p>2. <span class="key-point">품질 문제</span> - 실시간 축소는 모아레 패턴 발생</p>
+                <p>3. <span class="key-point">GPU가 Mipmap 선택을 하드웨어로 지원</span></p>
+            </div>
+            <div class="diagram">Mipmap 없이 축소하면:
+
+원본 텍스처 (체크무늬)     실시간 축소 결과
+┌────────────────────┐     ┌──────────┐
+│ ■ □ ■ □ ■ □ ■ □   │     │ ░░░░░░░░ │  ← 모아레 패턴!
+│ □ ■ □ ■ □ ■ □ ■   │  →  │ ░░░░░░░░ │    깜빡거림!
+│ ■ □ ■ □ ■ □ ■ □   │     │ ░░░░░░░░ │    지글지글!
+│ □ ■ □ ■ □ ■ □ ■   │     └──────────┘
+└────────────────────┘
+
+Mipmap 사용:
+┌────────────────────┐     ┌──────────┐
+│ ■ □ ■ □ ■ □ ■ □   │     │ ▓▓▓▓▓▓▓▓ │  ← 부드러운 회색
+│ □ ■ □ ■ □ ■ □ ■   │  →  │ ▓▓▓▓▓▓▓▓ │    미리 평균 계산됨
+│ ■ □ ■ □ ■ □ ■ □   │     │ ▓▓▓▓▓▓▓▓ │
+└────────────────────┘     └──────────┘</div>
+        </div>
+
+        <!-- Part 3: GPU의 Mip 선택 -->
+        <div class="conversation">
+            <h2>Part 3. GPU가 Mip Level을 선택하는 방법</h2>
+
+            <div class="q">GPU가 어떻게 알아서 골라?</div>
+            <div class="a">
+                <p>GPU는 <span class="highlight">화면에 그려지는 픽셀 크기</span>를 계산한다</p>
+                <p>텍스처의 1 텍셀(texel)이 화면의 1 픽셀에 가까운 Mip을 선택</p>
+            </div>
+            <div class="diagram">Mip Level 선택 기준:
+
+카메라와 오브젝트 거리 → 화면에 보이는 크기 → Mip Level
+
+예시: 4K 텍스처가 붙은 벽
+
+거리        화면 픽셀    필요 해상도    Mip Level
+────────────────────────────────────────────────
+1m          2000 px     4096 (원본)    Level 0
+5m           400 px     512            Level 3
+20m          100 px     128            Level 5
+100m          20 px     32             Level 7
+500m           4 px     4              Level 10
+
+→ 멀어질수록 낮은 Mip 사용 = 메모리 절약!</div>
+
+            <div class="q">그게 스트리밍이랑 무슨 상관?</div>
+            <div class="a">
+                <p>핵심 아이디어: <span class="key-point">필요한 Mip Level만 메모리에 올리자!</span></p>
+                <p>100m 밖에 있으면 Level 5까지만 로딩 (64KB)</p>
+                <p>가까워지면 Level 0까지 추가 로딩 (64MB)</p>
             </div>
         </div>
 
+        <!-- Part 4: 텍스처 스트리밍 동작 -->
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 4. 텍스처 스트리밍의 실제 동작</h2>
+
+            <div class="q">구체적으로 어떻게 동작해?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p>1. 처음에는 <span class="highlight">최저 Mip만 로딩</span> (Level 7~12)</p>
+                <p>2. 카메라가 가까워지면 <span class="highlight">높은 Mip 요청</span></p>
+                <p>3. 백그라운드에서 <span class="highlight">비동기 로딩</span></p>
+                <p>4. 로딩 완료되면 <span class="highlight">GPU 텍스처 업데이트</span></p>
+            </div>
+            <div class="diagram">텍스처 스트리밍 시퀀스:
+
+시간 →
+────────────────────────────────────────────────────────────
+
+[게임 시작]
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│  모든 텍스처의 Mip Level 7~12만 로딩 (수 KB씩)          │
+│  → 빠른 시작, 최소 메모리                               │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼
+[플레이어가 오브젝트에 접근]
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│  1. 거리 계산 → 필요한 Mip Level 결정                   │
+│  2. 현재 로딩된 것보다 높은 Mip 필요?                   │
+│     → Yes: 스트리밍 요청 큐에 추가                      │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼
+[스트리밍 스레드]
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│  1. 우선순위 높은 것부터 디스크에서 읽기                 │
+│  2. 압축 해제 (BC7 → Raw)                               │
+│  3. GPU로 업로드                                        │
+│  4. 기존 Mip과 교체                                     │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼
+[플레이어가 멀어짐]
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│  높은 Mip은 메모리 예산 부족 시 해제                     │
+│  → 다른 텍스처에 메모리 양보                            │
+└─────────────────────────────────────────────────────────┘</div>
+        </div>
+
+        <!-- Part 5: 실제 현상 -->
+        <div class="conversation">
+            <h2>Part 5. 게임에서 보이는 현상</h2>
+
+            <div class="q">텍스처가 흐릿했다가 선명해지는 거?</div>
+            <div class="a">
+                <p><span class="key-point">맞다!</span> 그게 바로 텍스처 스트리밍</p>
+                <p>로딩이 늦으면 저해상도가 먼저 보이고, 고해상도가 나중에 팝!</p>
+                <p>이걸 <span class="warning">"텍스처 팝인(Pop-in)"</span>이라고 함</p>
+            </div>
+            <div class="diagram">텍스처 팝인 현상:
+
+시간 →
+
+[처음]        [0.5초 후]      [1초 후]
+┌────────┐    ┌────────┐    ┌────────┐
+│ ░░░░░░ │    │ ▒▒▒▒▒▒ │    │ ██████ │
+│ ░░░░░░ │ →  │ ▒▒▒▒▒▒ │ →  │ ██████ │
+│ ░░░░░░ │    │ ▒▒▒▒▒▒ │    │ ██████ │
+└────────┘    └────────┘    └────────┘
+ Mip 7        Mip 3          Mip 0
+ (흐릿)       (중간)         (선명)
+
+너무 급격하면 눈에 거슬림!
+→ 부드럽게 블렌딩하거나, 미리 로딩(예측)으로 해결</div>
+
+            <div class="q">팝인 줄이는 방법은?</div>
+            <div class="a">
+                <p>1. <span class="key-point">예측 로딩</span> - 플레이어 이동 방향 예측</p>
+                <p>2. <span class="key-point">Mip 블렌딩</span> - 두 Mip을 서서히 전환</p>
+                <p>3. <span class="key-point">높은 I/O 대역폭</span> - SSD가 빠르면 팝인 짧음</p>
+                <p>4. <span class="key-point">메모리 여유</span> - 더 많이 미리 로딩</p>
             </div>
         </div>
+
+        <!-- Part 6: 구현 코드 -->
+        <div class="conversation">
+            <h2>Part 6. 간단한 구현 개념</h2>
+
+            <div class="q">코드로 보면?</div>
+            <div class="a">
+                <p>간략화된 텍스처 스트리밍 시스템:</p>
+            </div>
+            <div class="code-block">// 텍스처 스트리밍 매니저
+class TextureStreamer
+{
+    void Update()
+    {
+        for (auto& texture : allTextures)
+        {
+            // 1. 필요한 Mip Level 계산
+            float distance = GetDistanceToCamera(texture);
+            int desiredMip = CalculateMipLevel(distance);
+
+            // 2. 현재 로딩된 것보다 더 높은 품질 필요?
+            if (desiredMip < texture.loadedMip)
+            {
+                // 스트리밍 요청
+                RequestMipLoad(texture, desiredMip);
+            }
+
+            // 3. 메모리 예산 초과 시 낮은 우선순위 해제
+            if (IsOverMemoryBudget())
+            {
+                UnloadLowPriorityMips();
+            }
+        }
+    }
+
+    int CalculateMipLevel(float distance)
+    {
+        // 거리에 따른 Mip Level 계산
+        // 가까우면 0(최고), 멀면 높은 숫자(저품질)
+        return log2(distance / screenPixelRatio);
+    }
+};</div>
+
+            <div class="code-block">// Unity에서의 텍스처 스트리밍 설정
+// Project Settings > Quality > Texture Streaming
+
+Texture Streaming: Enabled
+Memory Budget: 512 MB          // VRAM 예산
+Max Level Reduction: 2         // 최대 몇 Mip 낮출 수 있나
+Max IO Requests: 8             // 동시 로딩 요청 수
+
+// 개별 텍스처 설정
+textureImporter.streamingMipmaps = true;
+textureImporter.streamingMipmapsPriority = 0;  // 높을수록 우선</div>
+        </div>
+
+        <!-- Part 7: Virtual Texture 맛보기 -->
+        <div class="conversation">
+            <h2>Part 7. 더 발전된 형태: Virtual Texture</h2>
+
+            <div class="q">Mipmap 스트리밍의 한계는?</div>
+            <div class="a">
+                <p>Mip 단위로 스트리밍 → <span class="warning">전체 레벨을 한 번에</span> 로딩해야 함</p>
+                <p>4K 텍스처 Mip 0 = 16~64MB 한 번에 로딩</p>
+            </div>
+
+            <div class="q">Virtual Texture는 뭐가 달라?</div>
+            <div class="a">
+                <p>텍스처를 <span class="highlight">작은 타일(예: 128×128)</span>로 쪼갬</p>
+                <p><span class="key-point">화면에 보이는 타일만</span> 로딩</p>
+                <p>→ 거대한 텍스처도 필요한 부분만 메모리에</p>
+            </div>
+            <div class="diagram">Mipmap Streaming vs Virtual Texture:
+
+Mipmap Streaming:
+┌────────────────────────────┐
+│       전체 Mip Level       │  ← 레벨 단위 로딩
+│       한 번에 로딩         │
+└────────────────────────────┘
+
+Virtual Texture:
+┌────┬────┬────┬────┬────┐
+│ ▓▓ │ ░░ │ ░░ │ ░░ │ ░░ │  ← 타일 단위 로딩
+├────┼────┼────┼────┼────┤     ▓▓ = 로딩됨
+│ ▓▓ │ ▓▓ │ ░░ │ ░░ │ ░░ │     ░░ = 안 로딩
+├────┼────┼────┼────┼────┤
+│ ░░ │ ▓▓ │ ▓▓ │ ░░ │ ░░ │  화면에 보이는 부분만!
+├────┼────┼────┼────┼────┤
+│ ░░ │ ░░ │ ▓▓ │ ░░ │ ░░ │
+└────┴────┴────┴────┴────┘
+
+→ 더 세밀한 메모리 관리 가능</div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>텍스처 스트리밍</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>Mipmap</strong> = 같은 텍스처의 여러 해상도 버전</li>
+                <li>GPU가 <strong>거리에 따라</strong> 적절한 Mip 선택</li>
+                <li>텍스처 스트리밍 = <strong>필요한 Mip만</strong> 메모리에 로딩</li>
+                <li>가까워지면 로딩, 멀어지면 해제 → <strong>메모리 절약</strong></li>
+                <li><strong>텍스처 팝인</strong> = 저해상도→고해상도 전환이 보이는 현상</li>
+                <li>Virtual Texture = 타일 단위로 더 세밀하게 관리</li>
             </ul>
         </div>
 

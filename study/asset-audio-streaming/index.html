@@ -33,7 +33,6 @@
         .nav-links a { color: #0891B2; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
     </style>
 </head>
 <body>
@@ -42,42 +41,207 @@
 
         <div class="header">
             <h1>오디오 스트리밍</h1>
-            <p>BGM은 왜 안 끊길까</p>
+            <p>3분짜리 BGM을 어떻게 끊김없이 재생할까?</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">오디오 스트리밍이(가) 뭐야?</div>
+            <h2>Part 1. 문제 상황 - BGM 파일의 크기</h2>
+            <div class="q">BGM 파일이 얼마나 크길래 스트리밍이 필요해?</div>
             <div class="a">
-                <p><span class="highlight">BGM은 왜 안 끊길까</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p>3분짜리 BGM을 <span class="highlight">비압축 PCM</span>으로 저장하면:</p>
+            </div>
+            <div class="diagram">샘플링 레이트: 44,100 Hz (1초에 44,100번 샘플링)
+비트 뎁스: 16bit (샘플당 2바이트)
+채널: 스테레오 (2채널)
+
+1초 = 44,100 × 2바이트 × 2채널 = 176,400 바이트 ≈ 172KB
+
+3분 = 180초 × 172KB = <span class="warning">30.96MB</span>
+
+게임에 BGM 10곡이면? → 약 310MB가 메모리에!</div>
+            <div class="a">
+                <p>효과음(0.5초)은 <span class="key-point">86KB</span>라 메모리에 올려도 됨</p>
+                <p>하지만 BGM은 너무 커서 <span class="warning">전부 로딩하면 메모리 폭발</span></p>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. 해결책 - 조금씩 읽기</h2>
+            <div class="q">그럼 어떻게 해야 해?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>핵심 아이디어: <span class="highlight">전체를 읽지 말고, 재생할 부분만 조금씩 읽자</span></p>
+            </div>
+            <div class="diagram">전체 로딩 (❌ 나쁜 방법):
+┌──────────────────────────────────────────┐
+│          30MB 전체를 메모리에            │
+└──────────────────────────────────────────┘
+→ 메모리 30MB 사용
+
+스트리밍 (✅ 좋은 방법):
+┌────┐
+│256K│ ← 현재 재생 중인 부분만
+└────┘
+→ 메모리 256KB만 사용!
+
+메모리 절약: 30MB → 256KB = <span class="key-point">99% 절약</span></div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 링 버퍼 (Ring Buffer)</h2>
+            <div class="q">조금씩 읽으면 끊기지 않아?</div>
+            <div class="a">
+                <p><span class="highlight">링 버퍼(원형 버퍼)</span>를 사용하면 끊김 없이 재생 가능!</p>
+                <p>읽기와 재생을 <span class="key-point">동시에</span> 진행하는 구조</p>
+            </div>
+            <div class="diagram">링 버퍼 구조 (4개 블록 예시):
+
+     ┌─────────────────────────────────┐
+     │                                 │
+     ▼                                 │
+┌────────┐   ┌────────┐   ┌────────┐   ┌────────┐
+│ 블록 A │ → │ 블록 B │ → │ 블록 C │ → │ 블록 D │
+│재생완료│   │재생 중 │   │읽기완료│   │ 읽는중 │
+└────────┘   └────────┘   └────────┘   └────────┘
+    ↑             ↑
+  Write        Read
+  Position     Position
+
+시간 흐름:
+T=0: A 재생, B 읽기
+T=1: B 재생, C 읽기, A에 새 데이터 쓰기
+T=2: C 재생, D 읽기, B에 새 데이터 쓰기
+... (무한 반복)</div>
+            <div class="a">
+                <p><span class="key-point">핵심</span>: 재생 위치가 읽기 위치를 절대 추월하지 않도록!</p>
+                <p>버퍼 크기가 클수록 안전하지만, 메모리를 더 사용</p>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 4. 더블 버퍼링</h2>
+            <div class="q">더 간단한 방법은 없어?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p><span class="highlight">더블 버퍼링</span>: 버퍼 2개로 번갈아 사용</p>
+            </div>
+            <div class="diagram">더블 버퍼링 동작:
+
+상태 1: 버퍼 A 재생 중
+┌────────────────┐   ┌────────────────┐
+│   버퍼 A       │   │   버퍼 B       │
+│   🔊 재생중    │   │   📥 로딩중    │
+└────────────────┘   └────────────────┘
+
+상태 2: 버퍼 A 끝나면 스왑!
+┌────────────────┐   ┌────────────────┐
+│   버퍼 A       │   │   버퍼 B       │
+│   📥 로딩중    │   │   🔊 재생중    │
+└────────────────┘   └────────────────┘
+
+→ A 재생하는 동안 B 로딩
+→ B 재생하는 동안 A 로딩
+→ 무한 반복!</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 압축 포맷과 디코딩</h2>
+            <div class="q">압축하면 더 좋지 않아?</div>
+            <div class="a">
+                <p>맞아! 실제 게임에서는 <span class="highlight">압축된 오디오</span>를 스트리밍해</p>
+            </div>
+            <div class="diagram">포맷별 비교:
+
+포맷      │ 압축률  │ CPU 부하 │ 음질   │ 용도
+──────────┼─────────┼──────────┼────────┼─────────────
+PCM/WAV   │ 없음    │ 없음     │ 원본   │ 효과음
+OGG Vorbis│ 10:1    │ 중간     │ 좋음   │ BGM (PC)
+MP3       │ 10:1    │ 중간     │ 보통   │ BGM (호환용)
+AAC       │ 12:1    │ 중간     │ 좋음   │ 모바일
+ADPCM     │ 4:1     │ 낮음     │ 보통   │ 효과음
+Opus      │ 15:1    │ 중간     │ 매우좋음│ 최신 게임
+
+30MB WAV → 3MB OGG (10배 압축!)
+→ 디스크 I/O도 줄고, 스트리밍 버퍼도 작아짐</div>
+            <div class="a">
+                <p><span class="warning">주의</span>: 압축 포맷은 실시간 <span class="key-point">디코딩</span>이 필요</p>
+                <p>디스크 → 압축 데이터 로드 → CPU 디코딩 → PCM → 재생</p>
             </div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 6. Unity 구현 예시</h2>
+            <div class="q">실제로 어떻게 설정해?</div>
+            <div class="a">
+                <p>Unity에서는 AudioClip Import Settings에서 설정:</p>
+            </div>
+            <div class="code-block"><span style="color:#9CA3AF;">// AudioClip Import Settings</span>
+
+<span style="color:#F472B6;">Load Type 옵션:</span>
+
+1. <span style="color:#34D399;">Decompress On Load</span>
+   → 로딩 시 압축 해제, 메모리에 PCM 저장
+   → 효과음에 적합 (빠른 재생, 메모리 많이 사용)
+
+2. <span style="color:#34D399;">Compressed In Memory</span>
+   → 압축 상태로 메모리에, 재생 시 디코딩
+   → 중간 크기 오디오 (메모리 절약, CPU 사용)
+
+3. <span style="color:#34D399;">Streaming</span> ★ BGM용!
+   → 디스크에서 실시간 스트리밍
+   → BGM에 적합 (메모리 최소, 디스크 I/O)</div>
+            <div class="code-block"><span style="color:#9CA3AF;">// 코드에서 스트리밍 BGM 재생</span>
+
+<span style="color:#F472B6;">public class</span> BGMManager : MonoBehaviour
+{
+    <span style="color:#60A5FA;">AudioSource</span> audioSource;
+
+    <span style="color:#F472B6;">void</span> PlayBGM(<span style="color:#60A5FA;">string</span> bgmPath)
+    {
+        <span style="color:#9CA3AF;">// 스트리밍으로 로드 (메모리에 전체 로드 안함)</span>
+        <span style="color:#60A5FA;">AudioClip</span> clip = Resources.Load&lt;AudioClip&gt;(bgmPath);
+
+        <span style="color:#9CA3AF;">// 이미 Import Settings에서 Streaming 설정됨</span>
+        audioSource.clip = clip;
+        audioSource.loop = <span style="color:#34D399;">true</span>;
+        audioSource.Play();
+    }
+}</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 스트리밍 vs 프리로드 판단 기준</h2>
+            <div class="q">언제 스트리밍하고 언제 전체 로드해?</div>
+            <div class="a">
+                <p>간단한 판단 기준:</p>
+            </div>
+            <div class="diagram">판단 플로우:
+
+오디오 길이가 얼마?
+    │
+    ├─ 1초 미만 ──────→ Decompress On Load (효과음)
+    │                   예: 발소리, 총소리, UI 사운드
+    │
+    ├─ 1~10초 ────────→ Compressed In Memory
+    │                   예: 대사, 짧은 환경음
+    │
+    └─ 10초 이상 ─────→ Streaming ★
+                        예: BGM, 긴 환경음, 내레이션
+
+메모리 vs 반응속도 트레이드오프:
+┌─────────────────────────────────────────────┐
+│ 프리로드   ◄─────────────────► 스트리밍    │
+│ 즉시 재생                      메모리 절약  │
+│ 메모리 많이                    약간 지연    │
+└─────────────────────────────────────────────┘</div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>오디오 스트리밍</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li>3분 BGM = <strong>30MB</strong> → 스트리밍으로 <strong>256KB</strong>만 사용</li>
+                <li><strong>링 버퍼/더블 버퍼</strong>로 끊김 없는 재생</li>
+                <li><strong>OGG/AAC</strong> 압축으로 디스크 I/O 감소</li>
+                <li>효과음은 <strong>프리로드</strong>, BGM은 <strong>스트리밍</strong></li>
+                <li>Unity: Load Type을 <strong>"Streaming"</strong>으로 설정</li>
             </ul>
         </div>
 

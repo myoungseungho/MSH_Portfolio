@@ -33,7 +33,6 @@
         .nav-links a { color: #0891B2; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
     </style>
 </head>
 <body>
@@ -42,42 +41,210 @@
 
         <div class="header">
             <h1>메시 스트리밍 - LOD 연계</h1>
-            <p>거리별 메시 품질</p>
+            <p>100만 폴리곤 캐릭터를 어떻게 부드럽게 보여줄까?</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">메시 스트리밍 - LOD 연계이(가) 뭐야?</div>
+            <h2>Part 1. LOD란 무엇인가?</h2>
+            <div class="q">LOD가 뭐야?</div>
             <div class="a">
-                <p><span class="highlight">거리별 메시 품질</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p><span class="highlight">LOD (Level of Detail)</span> = 거리에 따라 다른 품질의 메시 사용</p>
+                <p>멀리 있는 건 어차피 작게 보이니까, <span class="key-point">폴리곤 수를 줄여도 모름</span></p>
             </div>
+            <div class="diagram">캐릭터 메시 LOD 예시:
+
+LOD 0 (가까움)     LOD 1 (중간)      LOD 2 (멀리)      LOD 3 (아주 멀리)
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│    ◉        │   │    ●        │   │    •        │   │    .        │
+│   /|\       │   │   /|        │   │   /         │   │             │
+│   / \       │   │   /\        │   │   △        │   │    △       │
+└─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘
+  100,000 폴리곤    25,000 폴리곤     5,000 폴리곤      500 폴리곤
+  (5m 이내)         (5~20m)           (20~50m)          (50m+)
+
+GPU 부하 비교:
+LOD 0: ████████████████████ 100%
+LOD 1: █████                 25%
+LOD 2: █                      5%
+LOD 3: ▏                     0.5%</div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. 전통적인 LOD의 문제</h2>
+            <div class="q">LOD만 있으면 되는거 아냐?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p><span class="warning">문제 1: 모든 LOD를 메모리에 들고 있어야 함</span></p>
+                <p><span class="warning">문제 2: LOD 전환 시 "팝핑" 현상</span></p>
             </div>
+            <div class="diagram">문제 1 - 메모리:
+
+캐릭터 1개의 메시 메모리:
+├─ LOD 0: 10MB
+├─ LOD 1: 3MB
+├─ LOD 2: 1MB
+└─ LOD 3: 0.2MB
+────────────────
+총 14.2MB (한 캐릭터에!)
+
+화면에 캐릭터 100명이면? → 1,420MB = <span class="warning">1.4GB!</span>
+
+문제 2 - 팝핑 현상:
+
+프레임 N:   고품질 메시 ████████
+프레임 N+1: 저품질 메시 ▓▓▓▓
+            └── 갑자기 바뀌어서 눈에 띔! (팝핑)</div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 메시 스트리밍이란?</h2>
+            <div class="q">그래서 메시 스트리밍이 뭔데?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p>핵심 아이디어: <span class="highlight">필요한 LOD만 그때그때 로드</span></p>
+                <p>모든 LOD를 메모리에 들고 있지 않고, <span class="key-point">현재 필요한 것만</span> 로드</p>
             </div>
+            <div class="diagram">전통 방식 vs 메시 스트리밍:
+
+전통 방식 (모두 로드):
+┌─────────────────────────────────────┐
+│  LOD0   LOD1   LOD2   LOD3          │ ← 전부 메모리에
+│  10MB   3MB    1MB    0.2MB         │
+└─────────────────────────────────────┘
+메모리: 14.2MB
+
+메시 스트리밍 (필요한 것만):
+┌───────────────┐
+│    LOD 1      │ ← 현재 거리에서 필요한 것만!
+│    3MB        │
+└───────────────┘
+메모리: 3MB (78% 절약!)
+
+거리 변경 시:
+Player 접근 → LOD 0 스트리밍 요청 → 로드 완료 → LOD 전환
+             (비동기로 미리 로드)</div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 4. 스트리밍 풀과 우선순위</h2>
+            <div class="q">어떤 메시를 먼저 로드해?</div>
+            <div class="a">
+                <p><span class="highlight">우선순위 시스템</span>으로 결정:</p>
+            </div>
+            <div class="diagram">우선순위 계산 공식:
+
+Priority = (화면 크기) × (중요도) / (이미 로드된 LOD 품질)
+
+화면 크기: 해당 오브젝트가 화면에서 차지하는 픽셀 수
+중요도: 플레이어 캐릭터 > NPC > 배경 오브젝트
+이미 로드된 LOD: 현재 로드된 것과 필요한 것의 차이
+
+예시:
+┌────────────────────────────────────────────────────┐
+│ 오브젝트          │ 화면크기 │ 중요도 │ 우선순위  │
+├────────────────────────────────────────────────────┤
+│ 플레이어 캐릭터   │ 10000px  │  1.0   │   HIGH    │
+│ 카메라 앞 NPC     │  5000px  │  0.8   │   HIGH    │
+│ 멀리 있는 건물    │   500px  │  0.3   │   LOW     │
+│ 배경 나무들       │   100px  │  0.1   │   LOWEST  │
+└────────────────────────────────────────────────────┘
+
+스트리밍 순서: 플레이어 → NPC → 건물 → 나무</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 부드러운 LOD 전환</h2>
+            <div class="q">팝핑 현상은 어떻게 해결해?</div>
+            <div class="a">
+                <p><span class="highlight">크로스 페이드 (Dithering)</span> 또는 <span class="highlight">모핑</span> 사용</p>
+            </div>
+            <div class="diagram">1. 디더링 크로스 페이드:
+
+LOD 0: ████████████████████ (100% 불투명)
+LOD 1: ░░░░░░░░░░░░░░░░░░░░ (0% 불투명)
+                ↓ 전환 중...
+LOD 0: ██████████░░░░░░░░░░ (50%)
+LOD 1: ░░░░░░░░░░██████████ (50%)
+                ↓ 전환 완료
+LOD 0: ░░░░░░░░░░░░░░░░░░░░ (0%)
+LOD 1: ████████████████████ (100%)
+
+→ 두 메시를 동시에 그리면서 알파 블렌딩
+→ 부드럽지만 <span class="warning">일시적으로 Draw Call 2배</span>
+
+2. 버텍스 모핑 (Unreal의 방식):
+LOD 0의 버텍스 위치 → LOD 1의 버텍스 위치로 보간
+→ 하나의 메시만 그리면서 부드럽게 변형
+→ <span class="key-point">더 효율적이지만 구현 복잡</span></div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. Unreal Engine 구현</h2>
+            <div class="q">실제로 어떻게 설정해?</div>
+            <div class="a">
+                <p>Unreal Engine의 Static Mesh LOD 설정:</p>
+            </div>
+            <div class="code-block"><span style="color:#9CA3AF;">// Static Mesh LOD 설정 (에디터)</span>
+
+<span style="color:#F472B6;">LOD Settings:</span>
+├─ Auto Compute LOD Distances: ✓
+│   → 화면 크기 기반 자동 계산
+│
+├─ LOD 0 Screen Size: 1.0    (거의 화면 전체)
+├─ LOD 1 Screen Size: 0.5    (화면의 절반)
+├─ LOD 2 Screen Size: 0.25   (화면의 1/4)
+├─ LOD 3 Screen Size: 0.1    (화면의 1/10)
+│
+└─ <span style="color:#F472B6;">Streaming:</span>
+    ├─ Never Stream: ✗       (스트리밍 활성화)
+    ├─ Streaming Distance Multiplier: 1.0
+    └─ LOD for Collision: 0   (콜리전은 항상 LOD0)</div>
+            <div class="code-block"><span style="color:#9CA3AF;">// 블루프린트에서 LOD 강제 설정</span>
+
+<span style="color:#9CA3AF;">// 특정 오브젝트의 LOD 강제 지정</span>
+StaticMeshComponent-&gt;<span style="color:#60A5FA;">SetForcedLodModel</span>(2);
+
+<span style="color:#9CA3AF;">// LOD 전환 거리 커스텀</span>
+StaticMeshComponent-&gt;<span style="color:#60A5FA;">SetLODScreenSizeForLODLevel</span>(1, 0.3f);
+
+<span style="color:#9CA3AF;">// 스트리밍 우선순위 높이기</span>
+StaticMeshComponent-&gt;<span style="color:#60A5FA;">SetStreamingDistanceMultiplier</span>(2.0f);</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. HLOD (Hierarchical LOD)</h2>
+            <div class="q">건물들이 아주 많으면 어떻게 해?</div>
+            <div class="a">
+                <p><span class="highlight">HLOD</span>: 여러 오브젝트를 <span class="key-point">하나로 합쳐서</span> LOD 처리</p>
+            </div>
+            <div class="diagram">일반 LOD (개별 처리):
+┌───┐ ┌───┐ ┌───┐ ┌───┐
+│나무│ │나무│ │나무│ │나무│  ← 멀리서도 4개 각각 처리
+└───┘ └───┘ └───┘ └───┘      → Draw Call 4개
+
+HLOD (묶어서 처리):
+가까이:
+┌───┐ ┌───┐ ┌───┐ ┌───┐      ← 개별 나무 렌더링
+└───┘ └───┘ └───┘ └───┘        Draw Call 4개
+
+멀리:
+┌─────────────────────┐        ← 하나로 합친 HLOD 메시
+│       숲 전체       │          Draw Call 1개!
+└─────────────────────┘
+
+HLOD 빌드 과정:
+1. 가까운 오브젝트들을 그룹으로 묶음
+2. 각 그룹의 저품질 메시를 하나로 병합
+3. 멀리서는 병합된 메시만 렌더링
+4. 가까워지면 개별 메시로 전환</div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>메시 스트리밍 - LOD 연계</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>LOD</strong>: 거리에 따라 다른 품질의 메시 사용</li>
+                <li><strong>메시 스트리밍</strong>: 필요한 LOD만 그때그때 로드</li>
+                <li><strong>우선순위</strong>: 화면 크기 × 중요도로 로드 순서 결정</li>
+                <li><strong>크로스 페이드/모핑</strong>: 팝핑 없이 부드러운 전환</li>
+                <li><strong>HLOD</strong>: 여러 오브젝트를 하나로 합쳐 최적화</li>
             </ul>
         </div>
 

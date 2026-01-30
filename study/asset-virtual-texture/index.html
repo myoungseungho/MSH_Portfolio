@@ -33,7 +33,6 @@
         .nav-links a { color: #0891B2; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
     </style>
 </head>
 <body>
@@ -42,42 +41,282 @@
 
         <div class="header">
             <h1>Virtual Texture</h1>
-            <p>8K 텍스처도 문제없어</p>
+            <p>8K 텍스처도 메모리 걱정 없이 사용하는 마법</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">Virtual Texture이(가) 뭐야?</div>
+            <h2>Part 1. 문제 상황</h2>
+            <div class="q">왜 Virtual Texture가 필요해?</div>
             <div class="a">
-                <p><span class="highlight">8K 텍스처도 문제없어</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p>오픈월드 게임의 <span class="warning">지형 텍스처 문제</span>를 해결하기 위해</p>
+            </div>
+            <div class="diagram">오픈월드 지형 텍스처 문제:
+
+지형 크기: 4km × 4km
+텍스처 해상도 요구: 1픽셀 = 1cm 디테일
+
+필요한 텍스처 크기:
+4,000m × 100픽셀/m = 400,000 픽셀
+→ 400,000 × 400,000 = <span class="warning">160,000 메가픽셀!</span>
+
+메모리 계산 (RGBA 8bit):
+160,000,000,000 × 4바이트 = <span class="warning">640GB!</span>
+
+현실:
+- GPU VRAM: 8~24GB
+- 시스템 RAM: 16~64GB
+- 불가능!</div>
+            <div class="a">
+                <p>해결책: <span class="highlight">전체를 로드하지 말고, 보이는 부분만 로드</span></p>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. Virtual Texture 개념</h2>
+            <div class="q">Virtual Texture가 뭐야?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p><span class="highlight">가상 메모리</span>처럼 동작하는 텍스처 시스템</p>
+                <p>OS의 가상 메모리 → GPU 텍스처에 적용!</p>
             </div>
+            <div class="diagram">가상 메모리 vs Virtual Texture:
+
+가상 메모리 (OS):
+┌───────────────────────────────────┐
+│    가상 주소 공간 (크게 보임)      │
+│    ┌─────┐ ┌─────┐ ┌─────┐       │
+│    │페이지│ │페이지│ │페이지│       │
+│    └──┬──┘ └──┬──┘ └──┬──┘       │
+└───────┼───────┼───────┼───────────┘
+        ↓       ↓       ↓
+┌───────────────────────────────────┐
+│   물리 메모리 (실제는 작음)        │
+│   ┌─────┐ ┌─────┐                 │
+│   │페이지│ │페이지│  (일부만 로드)  │
+│   └─────┘ └─────┘                 │
+└───────────────────────────────────┘
+
+Virtual Texture (GPU):
+┌───────────────────────────────────┐
+│    가상 텍스처 (64K × 64K 가능!)   │
+│    ┌─────┐ ┌─────┐ ┌─────┐       │
+│    │타일 │ │타일 │ │타일 │        │
+│    └──┬──┘ └──┬──┘ └──┬──┘       │
+└───────┼───────┼───────┼───────────┘
+        ↓       ↓       ↓
+┌───────────────────────────────────┐
+│   Physical Texture (8K × 8K)      │
+│   ┌─────┐ ┌─────┐                 │
+│   │타일 │ │타일 │  (보이는 것만!)  │
+│   └─────┘ └─────┘                 │
+└───────────────────────────────────┘</div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 타일 기반 구조</h2>
+            <div class="q">어떻게 일부만 로드해?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p>텍스처를 <span class="highlight">타일(Tile)</span>로 나누고, 필요한 타일만 로드</p>
             </div>
+            <div class="diagram">타일 구조:
+
+Virtual Texture (논리적으로 거대):
+┌───┬───┬───┬───┬───┬───┬───┬───┐
+│ A │ B │ C │ D │ E │ F │ G │ H │
+├───┼───┼───┼───┼───┼───┼───┼───┤
+│ I │ J │ K │ L │ M │ N │ O │ P │
+├───┼───┼───┼───┼───┼───┼───┼───┤
+│ Q │ R │ S │ T │ U │ V │ W │ X │  ← 각 칸 = 128×128 타일
+├───┼───┼───┼───┼───┼───┼───┼───┤
+│ Y │ Z │...│...│...│...│...│...│
+└───┴───┴───┴───┴───┴───┴───┴───┘
+
+현재 카메라가 보는 영역:
+        ┌─────────┐
+        │ K │ L │ M │ ← 이 타일들만 필요!
+        ├───┼───┼───┤
+        │ S │ T │ U │
+        └─────────┘
+
+Physical Texture (실제 GPU 메모리):
+┌───┬───┬───┐
+│ K │ L │ M │  ← 9개 타일만 로드
+├───┼───┼───┤
+│ S │ T │ U │     = 9 × 128 × 128 × 4바이트
+├───┼───┼───┤     = <span class="key-point">589KB만 사용!</span>
+│...│...│...│
+└───┴───┴───┘</div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 4. 피드백 분석</h2>
+            <div class="q">어떤 타일이 필요한지 어떻게 알아?</div>
+            <div class="a">
+                <p><span class="highlight">피드백 버퍼</span>: GPU가 "이 타일 필요해!"라고 알려줌</p>
+            </div>
+            <div class="diagram">피드백 분석 파이프라인:
+
+1단계: 피드백 렌더 패스
+┌─────────────────────────────────────────┐
+│   장면을 렌더링하면서 각 픽셀이          │
+│   어떤 타일을 필요로 하는지 기록         │
+│                                         │
+│   픽셀 → (타일 X, 타일 Y, Mip Level)   │
+└─────────────────────────────────────────┘
+                    ↓
+2단계: CPU 리드백
+┌─────────────────────────────────────────┐
+│   피드백 버퍼를 CPU로 읽어옴             │
+│   (저해상도로 다운샘플링해서 비용 절감)  │
+└─────────────────────────────────────────┘
+                    ↓
+3단계: 타일 요청 생성
+┌─────────────────────────────────────────┐
+│   필요한 타일 목록 생성:                 │
+│   - 타일 K, Mip 0 (고해상도)            │
+│   - 타일 L, Mip 0                       │
+│   - 타일 M, Mip 1 (중해상도)            │
+└─────────────────────────────────────────┘
+                    ↓
+4단계: 스트리밍
+┌─────────────────────────────────────────┐
+│   디스크에서 해당 타일 로드 →            │
+│   Physical Texture에 업로드             │
+└─────────────────────────────────────────┘</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. Indirection Table</h2>
+            <div class="q">가상 주소를 실제 주소로 어떻게 변환해?</div>
+            <div class="a">
+                <p><span class="highlight">Indirection Table</span>: 가상 타일 → 물리 타일 매핑</p>
+            </div>
+            <div class="diagram">Indirection Table 구조:
+
+Virtual Texture UV → Indirection Table → Physical Texture UV
+
+셰이더에서:
+1. 가상 UV로 Indirection Table 샘플링
+2. Physical Texture의 실제 위치 획득
+3. 해당 위치에서 실제 텍스처 샘플링
+
+┌─────────────────────────────────────────────────┐
+│ Indirection Table (작은 텍스처)                 │
+├───┬───┬───┬───┐                                │
+│(0,0)│(1,0)│(2,0)│...│  ← 각 픽셀 = 타일 하나의 │
+├───┼───┼───┼───┤       물리 위치 정보          │
+│(0,1)│(1,1)│(2,1)│...│                          │
+└───┴───┴───┴───┘                                │
+    │                                             │
+    ↓ 샘플링하면                                  │
+┌─────────────────┐                               │
+│ R: Physical X   │ ← 물리 텍스처의 X 위치       │
+│ G: Physical Y   │ ← 물리 텍스처의 Y 위치       │
+│ B: Mip Level    │ ← 현재 로드된 Mip            │
+└─────────────────┘                               │
+└─────────────────────────────────────────────────┘</div>
+            <div class="code-block"><span style="color:#9CA3AF;">// 셰이더에서 Virtual Texture 샘플링</span>
+
+<span style="color:#60A5FA;">float4</span> SampleVirtualTexture(<span style="color:#60A5FA;">float2</span> VirtualUV)
+{
+    <span style="color:#9CA3AF;">// 1. Indirection Table에서 물리 위치 조회</span>
+    <span style="color:#60A5FA;">float4</span> IndirectionData = IndirectionTable.Sample(VirtualUV);
+
+    <span style="color:#60A5FA;">float2</span> PhysicalOffset = IndirectionData.xy;
+    <span style="color:#60A5FA;">float</span> MipLevel = IndirectionData.z;
+
+    <span style="color:#9CA3AF;">// 2. 타일 내 로컬 UV 계산</span>
+    <span style="color:#60A5FA;">float2</span> TileUV = frac(VirtualUV * TileCount);
+
+    <span style="color:#9CA3AF;">// 3. 물리 텍스처에서 실제 샘플링</span>
+    <span style="color:#60A5FA;">float2</span> PhysicalUV = PhysicalOffset + TileUV * TileSize;
+    <span style="color:#F472B6;">return</span> PhysicalTexture.SampleLevel(PhysicalUV, MipLevel);
+}</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. Runtime Virtual Texture (RVT)</h2>
+            <div class="q">Unreal의 RVT는 뭐가 달라?</div>
+            <div class="a">
+                <p><span class="highlight">RVT</span>: 런타임에 <span class="key-point">실시간으로 생성</span>되는 Virtual Texture</p>
+                <p>지형 + 데칼 + 폴리지를 하나로 합성!</p>
+            </div>
+            <div class="diagram">일반 Virtual Texture vs RVT:
+
+일반 Virtual Texture:
+┌──────────────────────────────────────────────┐
+│  미리 베이크된 텍스처를 타일로 스트리밍      │
+│  → 정적인 데이터만 가능                      │
+└──────────────────────────────────────────────┘
+
+Runtime Virtual Texture (RVT):
+┌──────────────────────────────────────────────┐
+│  실시간으로 렌더링해서 Virtual Texture 생성  │
+│                                              │
+│  지형 + 데칼 + 폴리지 → 하나의 VT로 합성    │
+│                                              │
+│  장점:                                       │
+│  - 동적 데칼 (총알 자국 등) 지원            │
+│  - 지형 블렌딩 실시간 처리                  │
+│  - 메모리 효율 극대화                       │
+└──────────────────────────────────────────────┘
+
+RVT 합성 과정:
+┌─────────┐   ┌─────────┐   ┌─────────┐
+│ 지형    │ + │ 데칼    │ + │ 폴리지  │
+│ 텍스처  │   │ (혈흔)  │   │ (풀)    │
+└────┬────┘   └────┬────┘   └────┬────┘
+     │             │             │
+     └──────┬──────┴──────┬──────┘
+            ↓             ↓
+     ┌─────────────────────────┐
+     │  Runtime Virtual Texture │
+     │  (합성된 최종 결과)       │
+     └─────────────────────────┘</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 장단점과 적용</h2>
+            <div class="q">언제 Virtual Texture를 써야 해?</div>
+            <div class="a">
+                <p>대규모 지형, 많은 고유 텍스처가 있을 때 효과적</p>
+            </div>
+            <div class="diagram">장단점:
+
+장점:
+┌──────────────────────────────────────────────┐
+│ ✓ 거대한 텍스처 지원 (64K × 64K 이상)       │
+│ ✓ 보이는 것만 로드 → 메모리 효율            │
+│ ✓ 텍스처 개수 무제한 (하나로 합치니까)       │
+│ ✓ 동적 해상도 (가까우면 고해상도)           │
+└──────────────────────────────────────────────┘
+
+단점:
+┌──────────────────────────────────────────────┐
+│ ✗ 구현 복잡도 높음                          │
+│ ✗ 피드백 분석 오버헤드                      │
+│ ✗ 타일 경계 아티팩트 가능                   │
+│ ✗ 모바일에서 지원 제한적                    │
+└──────────────────────────────────────────────┘
+
+적용 추천:
+┌────────────────────────────────────────────────┐
+│ 시나리오               │ Virtual Texture 사용 │
+├────────────────────────────────────────────────┤
+│ 오픈월드 지형          │ <span class="key-point">강력 추천</span>           │
+│ 고유 텍스처 많은 환경  │ <span class="key-point">추천</span>                │
+│ 작은 실내 맵           │ 불필요 (오버헤드만)   │
+│ 모바일 게임            │ 주의 필요             │
+└────────────────────────────────────────────────┘</div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>Virtual Texture</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>Virtual Texture</strong>: 가상 메모리처럼 동작하는 텍스처</li>
+                <li><strong>타일</strong> 단위로 나눠서 필요한 것만 로드</li>
+                <li><strong>피드백 버퍼</strong>로 필요한 타일 파악</li>
+                <li><strong>Indirection Table</strong>로 가상→물리 주소 변환</li>
+                <li><strong>RVT</strong>: 런타임에 실시간 생성되는 Virtual Texture</li>
             </ul>
         </div>
 

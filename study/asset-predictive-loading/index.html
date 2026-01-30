@@ -33,7 +33,6 @@
         .nav-links a { color: #0891B2; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
     </style>
 </head>
 <body>
@@ -42,42 +41,267 @@
 
         <div class="header">
             <h1>예측 로딩</h1>
-            <p>플레이어 이동 방향 예측</p>
+            <p>플레이어가 어디로 갈지 어떻게 알까?</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">예측 로딩이(가) 뭐야?</div>
+            <h2>Part 1. 예측 로딩이란?</h2>
+            <div class="q">예측 로딩이 뭐야?</div>
             <div class="a">
-                <p><span class="highlight">플레이어 이동 방향 예측</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p><span class="highlight">예측 로딩</span> = 플레이어가 <span class="key-point">필요로 하기 전에</span> 미리 에셋을 로드</p>
+                <p>"지금 필요해!"가 아니라 "곧 필요할 거야"를 예측</p>
             </div>
+            <div class="diagram">반응형 로딩 (나쁜 예):
+─────────────────────────────────────────────→ 시간
+플레이어:  ───────────────────→ 문 열기!
+에셋 로드:                       ┌──────┐
+                                 │로딩! │
+                                 └──────┘
+                                     ↑
+                           <span class="warning">여기서 히치 발생!</span>
+
+예측 로딩 (좋은 예):
+─────────────────────────────────────────────→ 시간
+플레이어:  ── 문 앞으로 이동 ──→ 문 열기!
+에셋 로드: ──┌──────┐───────────────────────
+            │로딩  │ (미리 완료)
+            └──────┘
+                 ↑
+        문 앞에 왔을 때 로딩 시작
+        → 문 열 때는 이미 로딩 완료! ✓</div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. 예측의 종류</h2>
+            <div class="q">어떻게 예측해?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>크게 <span class="highlight">4가지 예측 방법</span>이 있어:</p>
             </div>
+            <div class="diagram">예측 방법 비교:
+
+1. 거리 기반 (Distance-based)
+┌─────────────────────────────────────┐
+│        ●──────────────→            │
+│     플레이어    반경 내 에셋 로드    │
+│        └─── 100m 반경 ───┘         │
+└─────────────────────────────────────┘
+장점: 구현 간단
+단점: 방향 무시, 불필요한 로딩 많음
+
+2. 방향 기반 (Velocity-based)
+┌─────────────────────────────────────┐
+│                    ○ 예측 위치      │
+│                  ↗                  │
+│        ●───→ 이동 방향              │
+│     플레이어                        │
+└─────────────────────────────────────┘
+장점: 이동 방향만 로드
+단점: 급회전 시 예측 실패
+
+3. 시선 기반 (Look-at)
+┌─────────────────────────────────────┐
+│        ●───👁───→ 보는 방향 로드   │
+│     플레이어                        │
+└─────────────────────────────────────┘
+장점: 플레이어 의도 반영
+단점: VR/FPS 외엔 적용 어려움
+
+4. 게임 로직 기반 (Context-aware)
+┌─────────────────────────────────────┐
+│  퀘스트: "보스방으로 가라"           │
+│        ●─ ─ ─ ─ ─→ 🚪 보스방        │
+│     플레이어    (보스 에셋 로드!)    │
+└─────────────────────────────────────┘
+장점: 가장 정확
+단점: 구현 복잡</div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 속도 기반 예측</h2>
+            <div class="q">이동 방향으로 예측하는 건 어떻게 해?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p><span class="highlight">현재 속도 × 시간</span>으로 미래 위치 예측</p>
             </div>
+            <div class="diagram">속도 기반 예측 공식:
+
+예측 위치 = 현재 위치 + (속도 × 예측 시간)
+
+예시:
+현재 위치: (100, 0, 200)
+속도: (10, 0, 5) m/s
+예측 시간: 3초
+
+예측 위치 = (100, 0, 200) + (10, 0, 5) × 3
+         = (100 + 30, 0, 200 + 15)
+         = (130, 0, 215)
+
+┌───────────────────────────────────────┐
+│                                       │
+│  (100,200) ●────────→ ○ (130,215)    │
+│         현재          예측 위치       │
+│                                       │
+│  이 위치의 청크 에셋을 미리 로드!     │
+└───────────────────────────────────────┘</div>
+            <div class="code-block"><span style="color:#9CA3AF;">// C++ 속도 기반 예측</span>
+
+<span style="color:#60A5FA;">FVector</span> PredictFuturePosition(<span style="color:#60A5FA;">float</span> PredictionTime)
+{
+    <span style="color:#60A5FA;">FVector</span> CurrentPos = Player-&gt;GetActorLocation();
+    <span style="color:#60A5FA;">FVector</span> Velocity = Player-&gt;GetVelocity();
+
+    <span style="color:#9CA3AF;">// 단순 선형 예측</span>
+    <span style="color:#F472B6;">return</span> CurrentPos + Velocity * PredictionTime;
+}
+
+<span style="color:#F472B6;">void</span> UpdatePredictiveLoading()
+{
+    <span style="color:#9CA3AF;">// 3초 후 위치 예측</span>
+    <span style="color:#60A5FA;">FVector</span> FuturePos = PredictFuturePosition(3.0f);
+
+    <span style="color:#9CA3AF;">// 해당 위치의 청크 로드 요청</span>
+    StreamingManager-&gt;RequestChunkAt(FuturePos);
+}</div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 4. 트리거 볼륨</h2>
+            <div class="q">특정 지역에 들어가면 로딩 시작하는 건?</div>
+            <div class="a">
+                <p><span class="highlight">트리거 볼륨</span>: 특정 영역 진입 시 로딩 시작</p>
+                <p>가장 <span class="key-point">확실하고 간단한</span> 예측 방법</p>
+            </div>
+            <div class="diagram">트리거 볼륨 배치:
+
+┌─────────────────────────────────────────────┐
+│                                             │
+│   ┌───────────┐    ┌─────────────────────┐  │
+│   │ 트리거    │    │     다음 방         │  │
+│   │ 볼륨      │    │  (에셋 로드 대상)   │  │
+│   │           │    │                     │  │
+│   └───────────┘    └─────────────────────┘  │
+│         ↑                                   │
+│   ● 플레이어가 진입하면                     │
+│     다음 방 에셋 로드 시작!                 │
+│                                             │
+└─────────────────────────────────────────────┘
+
+실제 게임 예시:
+┌──────────────────────────────────────────────────┐
+│ 현재 방 │ 복도 (트리거) │ 보스방 (로드 대상)     │
+│         │               │                        │
+│    ●────→ [진입]        │ 보스 모델, 텍스처,     │
+│         │               │ 이펙트, BGM 로드      │
+└──────────────────────────────────────────────────┘
+
+보스방 문 앞에 도착할 때쯤 로딩 완료!</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 예측 실패 처리</h2>
+            <div class="q">예측이 틀리면 어떻게 해?</div>
+            <div class="a">
+                <p>예측은 <span class="warning">틀릴 수 있다</span>! 대비책이 필요</p>
+            </div>
+            <div class="diagram">예측 실패 시나리오:
+
+예측: 플레이어가 동쪽으로 갈 것
+현실: 플레이어가 갑자기 서쪽으로 회전!
+
+┌─────────────────────────────────────────────┐
+│                                             │
+│   서쪽 청크      ●→→→→     동쪽 청크       │
+│   (로드 안됨)   플레이어   (로드 중)        │
+│                   ↓                         │
+│               갑자기 회전!                  │
+│                   ↓                         │
+│   ←←←←←←←       ●                          │
+│   (로드 시작!)                              │
+│                                             │
+└─────────────────────────────────────────────┘
+
+대비책:
+1. <span class="key-point">폴백 에셋</span>: 저품질 에셋을 항상 준비
+   고품질 로딩 안됨 → 저품질 먼저 보여주기
+
+2. <span class="key-point">최소 거리 로딩</span>: 플레이어 바로 주변은 항상 로드
+   예측과 무관하게 안전 영역 확보
+
+3. <span class="key-point">로드 우선순위 재조정</span>: 방향 바뀌면 즉시 우선순위 변경
+   동쪽 로딩 중단 → 서쪽 로딩 시작</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. Unreal Engine 구현</h2>
+            <div class="q">언리얼에서는 어떻게 해?</div>
+            <div class="a">
+                <p>Unreal의 <span class="highlight">Level Streaming Volume</span> 사용</p>
+            </div>
+            <div class="code-block"><span style="color:#9CA3AF;">// 레벨 스트리밍 볼륨 설정 (블루프린트)</span>
+
+<span style="color:#F472B6;">1. Level Streaming Volume 배치</span>
+   - 트리거 영역에 볼륨 배치
+   - Associated Levels: 로드할 서브레벨 지정
+
+<span style="color:#F472B6;">2. Streaming Settings</span>
+   - Streaming Usage: SVB Visibility Blocking On Load
+   - Disable Distance Streaming: false
+   - Currently Streaming: 현재 스트리밍 상태
+
+<span style="color:#9CA3AF;">// C++에서 수동 스트리밍 제어</span>
+<span style="color:#F472B6;">void</span> ABossRoom::OnTriggerEnter()
+{
+    <span style="color:#9CA3AF;">// 보스 레벨 스트리밍 시작</span>
+    <span style="color:#60A5FA;">FLatentActionInfo</span> LatentInfo;
+    UGameplayStatics::<span style="color:#60A5FA;">LoadStreamLevel</span>(
+        <span style="color:#F472B6;">this</span>,
+        TEXT(<span style="color:#A5B4FC;">"BossRoom_Level"</span>),
+        <span style="color:#34D399;">true</span>,   <span style="color:#9CA3AF;">// Make visible after load</span>
+        <span style="color:#34D399;">false</span>,  <span style="color:#9CA3AF;">// Don't block</span>
+        LatentInfo
+    );
+}</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 예측 로딩 최적화</h2>
+            <div class="q">예측 로딩을 더 효율적으로 하려면?</div>
+            <div class="a">
+                <p>로딩 <span class="highlight">우선순위</span>와 <span class="highlight">버짓</span> 관리가 핵심</p>
+            </div>
+            <div class="diagram">우선순위 기반 예측 로딩:
+
+우선순위 = (필요 확률) × (중요도) / (로딩 시간)
+
+예시:
+┌────────────────────────────────────────────────┐
+│ 에셋              │ 확률  │ 중요도 │ 우선순위 │
+├────────────────────────────────────────────────┤
+│ 이동 방향 텍스처  │ 90%  │  1.0   │   HIGH   │
+│ 플레이어 뒤 청크  │ 10%  │  0.5   │   LOW    │
+│ 퀘스트 목적지     │ 70%  │  1.0   │   HIGH   │
+│ 랜덤 NPC 대화     │ 20%  │  0.3   │   LOW    │
+└────────────────────────────────────────────────┘
+
+로딩 버짓 분배:
+┌─────────────────────────────────────────┐
+│ 프레임당 스트리밍 버짓: 2ms             │
+├─────────────────────────────────────────┤
+│ HIGH 우선순위: 1.5ms                    │
+│ MEDIUM 우선순위: 0.4ms                  │
+│ LOW 우선순위: 0.1ms                     │
+└─────────────────────────────────────────┘
+
+→ 예측 확률 높은 것에 버짓 집중!</div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>예측 로딩</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>예측 로딩</strong>: 필요하기 전에 미리 로드</li>
+                <li><strong>거리/속도/시선/게임로직</strong> 기반 예측</li>
+                <li><strong>트리거 볼륨</strong>: 가장 확실한 예측 방법</li>
+                <li>예측 실패 대비: <strong>폴백 에셋, 최소 거리 로딩</strong></li>
+                <li><strong>우선순위와 버짓</strong>으로 효율적 관리</li>
             </ul>
         </div>
 
