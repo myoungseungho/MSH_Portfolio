@@ -33,7 +33,6 @@
         .nav-links a { color: #0891B2; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
     </style>
 </head>
 <body>
@@ -42,42 +41,291 @@
 
         <div class="header">
             <h1>Unreal Pak 파일 구조</h1>
-            <p>.pak 내부와 마운트</p>
+            <p>.pak 파일 안에는 뭐가 들어있을까?</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">Unreal Pak 파일 구조이(가) 뭐야?</div>
+            <h2>Part 1. Pak 파일이란?</h2>
+            <div class="q">Pak 파일이 뭐야?</div>
             <div class="a">
-                <p><span class="highlight">.pak 내부와 마운트</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p><span class="highlight">.pak</span> = 언리얼의 <span class="key-point">에셋 아카이브</span> 포맷</p>
+                <p>여러 파일을 하나로 묶어서 효율적으로 배포</p>
             </div>
+            <div class="diagram">Pak 파일 = ZIP과 비슷한 개념:
+
+빌드 전 (개별 파일):
+Content/
+├── Characters/
+│   ├── Warrior.uasset
+│   └── Archer.uasset
+├── Maps/
+│   └── Level1.umap
+└── Textures/
+    ├── Ground.uasset
+    └── Sky.uasset
+
+빌드 후 (Pak으로 묶음):
+MyGame-WindowsNoEditor.pak (500MB)
+├── ../Content/Characters/Warrior.uasset
+├── ../Content/Characters/Archer.uasset
+├── ../Content/Maps/Level1.umap
+├── ../Content/Textures/Ground.uasset
+└── ../Content/Textures/Sky.uasset
+
+장점:
+- <span class="key-point">하나의 파일</span>로 배포 간편
+- <span class="key-point">압축</span> 가능 (용량 절감)
+- <span class="key-point">암호화</span> 가능 (해킹 방지)
+- <span class="key-point">순차 읽기</span> 최적화 (HDD 성능)</div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. Pak 파일 내부 구조</h2>
+            <div class="q">Pak 파일 안은 어떻게 생겼어?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p><span class="highlight">데이터 + 인덱스 + 푸터</span> 구조</p>
             </div>
+            <div class="diagram">Pak 파일 바이너리 구조:
+
+┌──────────────────────────────────────────────────┐
+│                                                  │
+│             파일 데이터 영역                     │
+│   ┌────────────────────────────────────────┐    │
+│   │ File 1 Data (압축/암호화 가능)         │    │
+│   ├────────────────────────────────────────┤    │
+│   │ File 2 Data                            │    │
+│   ├────────────────────────────────────────┤    │
+│   │ File 3 Data                            │    │
+│   ├────────────────────────────────────────┤    │
+│   │ ...                                    │    │
+│   └────────────────────────────────────────┘    │
+│                                                  │
+├──────────────────────────────────────────────────┤
+│                                                  │
+│             인덱스 (파일 목록)                   │
+│   ┌────────────────────────────────────────┐    │
+│   │ MountPoint: "../../../"                │    │
+│   │ FileCount: 1000                        │    │
+│   │ File 1: Name, Offset, Size, Hash       │    │
+│   │ File 2: Name, Offset, Size, Hash       │    │
+│   │ ...                                    │    │
+│   └────────────────────────────────────────┘    │
+│                                                  │
+├──────────────────────────────────────────────────┤
+│             푸터 (Footer)                        │
+│   ┌────────────────────────────────────────┐    │
+│   │ Magic: 0x5A6F12E1                      │    │
+│   │ Version: 11                            │    │
+│   │ IndexOffset: 0x1F3A0000                │    │
+│   │ IndexSize: 524288                      │    │
+│   │ IndexHash: SHA1                        │    │
+│   └────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────┘
+
+읽기 순서:
+1. 파일 끝에서 푸터 읽기
+2. 푸터의 IndexOffset으로 인덱스 찾기
+3. 인덱스에서 원하는 파일의 Offset 확인
+4. 해당 Offset에서 데이터 읽기</div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 마운트 포인트</h2>
+            <div class="q">마운트 포인트가 뭐야?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p><span class="highlight">Mount Point</span> = Pak 내 파일들의 <span class="key-point">가상 루트 경로</span></p>
             </div>
+            <div class="diagram">마운트 포인트 동작:
+
+Pak 파일 (MountPoint: "../../../")
+├── Content/Characters/Warrior.uasset
+└── Content/Maps/Level1.umap
+
+게임 실행 시 마운트:
+MyGame/
+├── Content/                ← 실제 폴더
+│   └── (비어있음)
+└── Saved/
+
+      ↓ Pak 마운트 후
+
+MyGame/
+├── Content/                ← Pak에서 가상 매핑
+│   ├── Characters/
+│   │   └── Warrior.uasset  ← Pak에서 읽음!
+│   └── Maps/
+│       └── Level1.umap     ← Pak에서 읽음!
+└── Saved/
+
+코드에서는 경로만 사용:
+FString Path = "/Game/Characters/Warrior";
+→ Pak에서 자동으로 찾아줌!</div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 4. 청킹 (Chunking)</h2>
+            <div class="q">DLC는 어떻게 별도로 배포해?</div>
+            <div class="a">
+                <p><span class="highlight">청킹</span>: 콘텐츠를 여러 Pak으로 분리</p>
+            </div>
+            <div class="diagram">청킹 설정:
+
+Project Settings > Packaging > Asset Manager
+
+Chunk 0: 기본 게임 (항상 포함)
+├── 코어 시스템
+├── 플레이어 캐릭터
+└── 메인 메뉴
+
+Chunk 1: DLC 1
+├── 새 맵
+├── 새 캐릭터
+└── 새 퀘스트
+
+Chunk 2: DLC 2
+└── ...
+
+빌드 결과:
+WindowsNoEditor/
+├── MyGame-WindowsNoEditor.pak        (Chunk 0)
+├── pakchunk1-WindowsNoEditor.pak     (Chunk 1 = DLC1)
+└── pakchunk2-WindowsNoEditor.pak     (Chunk 2 = DLC2)
+
+장점:
+- 기본 게임: 필수 다운로드
+- DLC: 구매 시에만 다운로드
+- 패치: 변경된 청크만 업데이트</div>
+            <div class="code-block"><span style="color:#9CA3AF;">// PrimaryAssetLabel로 청크 지정</span>
+
+<span style="color:#9CA3AF;">// 에디터에서 에셋에 라벨 할당:</span>
+<span style="color:#9CA3AF;">// Asset → Asset Actions → Assign to Chunk</span>
+
+<span style="color:#9CA3AF;">// DefaultGame.ini 설정</span>
+[/Script/UnrealEd.ProjectPackagingSettings]
+bGenerateChunks=True
+
+<span style="color:#9CA3AF;">// C++에서 런타임 마운트</span>
+<span style="color:#F472B6;">bool</span> MountDLC(<span style="color:#60A5FA;">FString</span> PakPath)
+{
+    <span style="color:#60A5FA;">FPakPlatformFile</span>* PakPlatform =
+        (<span style="color:#60A5FA;">FPakPlatformFile</span>*)(FPlatformFileManager::Get()
+            .FindPlatformFile(TEXT(<span style="color:#A5B4FC;">"PakFile"</span>)));
+
+    <span style="color:#F472B6;">if</span> (PakPlatform)
+    {
+        <span style="color:#F472B6;">return</span> PakPlatform-&gt;Mount(*PakPath, 0, <span style="color:#F472B6;">nullptr</span>);
+    }
+    <span style="color:#F472B6;">return false</span>;
+}</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 암호화와 서명</h2>
+            <div class="q">해커가 Pak을 열어보면 어떡해?</div>
+            <div class="a">
+                <p><span class="highlight">AES 암호화</span>로 콘텐츠 보호 가능</p>
+            </div>
+            <div class="diagram">암호화 옵션:
+
+Project Settings > Packaging > Pak File Settings
+
+┌────────────────────────────────────────────────┐
+│ ☑ Encrypt Pak Index                           │
+│   → 파일 목록 암호화 (파일명 숨김)            │
+│                                                │
+│ ☑ Encrypt Ini Files                           │
+│   → 설정 파일 암호화                          │
+│                                                │
+│ ☑ Encrypt UAsset Files                        │
+│   → 에셋 파일 암호화                          │
+│                                                │
+│ ☐ Sign Pak Files                              │
+│   → 무결성 검증용 서명 (변조 감지)            │
+└────────────────────────────────────────────────┘
+
+암호화 키 설정:
+Project Settings > Crypto > Encryption Key
+→ 256-bit AES 키 설정 (Base64)
+
+<span class="warning">주의!</span>
+- 암호화해도 메모리 덤프로 추출 가능
+- 완벽한 보안은 불가능, 난이도만 높임
+- 키는 .ini 파일에 저장되므로 별도 보호 필요</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. UnrealPak 커맨드라인</h2>
+            <div class="q">수동으로 Pak 만들고 싶으면?</div>
+            <div class="a">
+                <p><span class="highlight">UnrealPak.exe</span>로 직접 생성/추출 가능</p>
+            </div>
+            <div class="code-block"><span style="color:#9CA3AF;">// Pak 파일 생성</span>
+UnrealPak.exe MyContent.pak -Create=FileList.txt
+
+<span style="color:#9CA3AF;">// FileList.txt 형식:</span>
+"D:\Content\Characters\*.*" "../../../Content/Characters/"
+"D:\Content\Maps\*.*" "../../../Content/Maps/"
+
+<span style="color:#9CA3AF;">// Pak 파일 내용 목록 보기</span>
+UnrealPak.exe MyContent.pak -List
+
+<span style="color:#9CA3AF;">// Pak 파일 추출</span>
+UnrealPak.exe MyContent.pak -Extract D:\Extracted\
+
+<span style="color:#9CA3AF;">// 압축 옵션 (Oodle 사용)</span>
+UnrealPak.exe MyContent.pak -Create=FileList.txt -compress
+
+<span style="color:#9CA3AF;">// 암호화 옵션</span>
+UnrealPak.exe MyContent.pak -Create=FileList.txt -encrypt -encryptindex
+
+<span style="color:#9CA3AF;">// IoStore 포맷 (UE5+)</span>
+UnrealPak.exe MyContent.pak -Create=FileList.txt -IoStore</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. IoStore (UE5 신기능)</h2>
+            <div class="q">UE5에서 바뀐 게 있어?</div>
+            <div class="a">
+                <p>UE5의 <span class="highlight">IoStore</span>: 더 빠른 I/O 최적화 포맷</p>
+            </div>
+            <div class="diagram">Pak vs IoStore:
+
+기존 Pak:
+┌──────────────────────────────────────────┐
+│ MyGame.pak                               │
+│ └── 순차적 파일 배치                     │
+│     → HDD에 최적화                       │
+│     → 랜덤 접근 시 느림                  │
+└──────────────────────────────────────────┘
+
+IoStore (UE5):
+┌──────────────────────────────────────────┐
+│ MyGame.utoc  (Table of Contents)         │
+│ └── 에셋 메타데이터, 압축 정보           │
+│                                          │
+│ MyGame.ucas  (Content Archive Storage)   │
+│ └── 실제 에셋 데이터                     │
+│     → 64KB 블록 단위 압축               │
+│     → 병렬 압축 해제                     │
+│     → <span class="key-point">SSD/NVMe에 최적화</span>               │
+└──────────────────────────────────────────┘
+
+IoStore 장점:
+- 비동기 I/O 친화적
+- DirectStorage 연계 가능
+- 블록 단위 압축/해제
+- 더 빠른 로딩 속도</div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>Unreal Pak 파일 구조</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>.pak</strong>: 언리얼의 에셋 아카이브 포맷</li>
+                <li><strong>구조</strong>: 데이터 + 인덱스 + 푸터</li>
+                <li><strong>마운트 포인트</strong>: 가상 루트 경로 매핑</li>
+                <li><strong>청킹</strong>: DLC/패치를 위한 콘텐츠 분리</li>
+                <li><strong>암호화</strong>: AES 256-bit로 콘텐츠 보호</li>
+                <li><strong>IoStore</strong>: UE5의 SSD 최적화 포맷</li>
             </ul>
         </div>
 
