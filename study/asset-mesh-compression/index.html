@@ -4,37 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>메시 압축과 Quantization - 에셋 관리 - MSH Portfolio</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
-        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
-        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
-        .a p { margin-bottom: 12px; }
-        .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
-        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
-        .summary-box ul { list-style: none; }
-        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
-        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
-        .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
-    </style>
+    <link rel="stylesheet" href="../common/styles.css">
 </head>
 <body>
     <div class="container">
@@ -42,42 +12,756 @@
 
         <div class="header">
             <h1>메시 압축과 Quantization</h1>
-            <p>버텍스 데이터 압축</p>
+            <p>버텍스 데이터를 압축하여 메모리와 대역폭 절약</p>
         </div>
 
+        <!-- Part 1 -->
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">메시 압축과 Quantization이(가) 뭐야?</div>
+            <h2>Part 1. 개념: 메시 압축이란?</h2>
+
+            <div class="q">메시 압축이 뭐야?</div>
             <div class="a">
-                <p><span class="highlight">버텍스 데이터 압축</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p><span class="highlight">3D 메시의 버텍스 데이터를 더 작은 용량으로 저장하는 기술</span>입니다.</p>
+                <p>일반적인 메시는 버텍스당 위치(12B), 노말(12B), UV(8B), 탄젠트(16B) 등 <span class="key-point">40~60바이트</span>를 사용합니다. 압축을 통해 이를 절반 이하로 줄일 수 있습니다.</p>
+            </div>
+
+            <div class="q">Quantization은 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">연속적인 값(float)을 이산적인 값(정수)으로 변환</span>하는 것입니다.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                     Quantization 개념                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [원본 데이터 - Float32]                                        │
+│                                                                 │
+│    Position: (1.234567f, -0.987654f, 2.345678f)  = 12바이트     │
+│    Normal:   (0.577350f, 0.577350f, 0.577350f)   = 12바이트     │
+│                                                                 │
+│  [Quantization 후 - Int16]                                      │
+│                                                                 │
+│    Position: (40210, -32178, 76395) → 역변환 가능  = 6바이트    │
+│    Normal:   (18918, 18918, 18918)  → 역변환 가능  = 6바이트    │
+│                                                                 │
+│  변환 공식:                                                     │
+│    quantized = round((value - min) / (max - min) * 65535)       │
+│    restored  = quantized / 65535 * (max - min) + min            │
+│                                                                 │
+│  결과: 24바이트 → 12바이트 (50% 절약)                           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+                </pre></div>
+                <p>정밀도가 약간 손실되지만, 시각적으로 구분하기 어려운 수준입니다.</p>
+            </div>
+
+            <div class="q">버텍스 데이터 구조는 어떻게 돼?</div>
+            <div class="a">
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                  일반적인 버텍스 구조 (풀 정밀도)                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  struct Vertex {                                                │
+│      Vector3 position;    // 12 bytes (float × 3)               │
+│      Vector3 normal;      // 12 bytes (float × 3)               │
+│      Vector4 tangent;     // 16 bytes (float × 4)               │
+│      Vector2 uv0;         //  8 bytes (float × 2)               │
+│      Vector2 uv1;         //  8 bytes (float × 2) - 라이트맵    │
+│      Color32 color;       //  4 bytes (byte × 4)                │
+│      // ─────────────────────────────────                       │
+│      // Total: 60 bytes per vertex                              │
+│  };                                                             │
+│                                                                 │
+│  스키닝 메시 추가:                                              │
+│      BoneWeight weights;  // 16 bytes (4 weight + 4 index)      │
+│      // ─────────────────────────────────                       │
+│      // Total: 76 bytes per vertex                              │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│  예시: 10,000 버텍스 캐릭터                                     │
+│    압축 전: 10,000 × 76 = 760KB                                 │
+│    압축 후: 10,000 × 32 = 320KB (58% 절약)                      │
+└─────────────────────────────────────────────────────────────────┘
+                </pre></div>
             </div>
         </div>
 
+        <!-- Part 2 -->
         <div class="conversation">
             <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+
+            <div class="q">메시 압축 없으면 어떤 문제가 생겨?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <div class="highlight-box">
+                    <p><strong>📦 메모리 부담</strong></p>
+                    <ul>
+                        <li>캐릭터 1개 메시: 500KB ~ 2MB</li>
+                        <li>화면에 50개 캐릭터 → 최대 100MB</li>
+                        <li>배경 메시, UI 메시 추가 → 메모리 초과</li>
+                    </ul>
+                </div>
+                <div class="highlight-box">
+                    <p><strong>🔄 대역폭 병목</strong></p>
+                    <ul>
+                        <li>CPU → GPU 데이터 전송 병목</li>
+                        <li>버텍스 버퍼가 크면 Draw Call 비용 증가</li>
+                        <li>모바일 GPU는 메모리 대역폭이 제한적</li>
+                    </ul>
+                </div>
+                <div class="highlight-box">
+                    <p><strong>⏱️ 로딩 시간</strong></p>
+                    <ul>
+                        <li>디스크에서 읽는 시간 증가</li>
+                        <li>압축 해제 후 GPU 업로드 지연</li>
+                        <li>스트리밍 로딩 시 버퍼링 문제</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="q">어떤 상황에서 특히 중요해?</div>
+            <div class="a">
+                <p><strong>1. 모바일 게임</strong></p>
+                <ul>
+                    <li>메모리 제한이 엄격함 (1~2GB 전체)</li>
+                    <li>발열/배터리 → 대역폭 줄여야 함</li>
+                </ul>
+
+                <p><strong>2. 오픈월드 게임</strong></p>
+                <ul>
+                    <li>동시 로드 메시가 수천 개</li>
+                    <li>스트리밍 시스템 효율 필수</li>
+                </ul>
+
+                <p><strong>3. VR/AR</strong></p>
+                <ul>
+                    <li>90Hz+ 유지해야 함 → 대역폭 여유 필요</li>
+                    <li>양안 렌더링으로 Draw Call 2배</li>
+                </ul>
+
+                <p><strong>4. 군중 시뮬레이션</strong></p>
+                <ul>
+                    <li>수백~수천 캐릭터 동시 렌더</li>
+                    <li>인스턴싱과 함께 압축 필수</li>
+                </ul>
             </div>
         </div>
 
+        <!-- Part 3 -->
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. Unity 메시 압축 옵션</h2>
+
+            <div class="q">Unity의 Mesh Compression 옵션은?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                 Unity Mesh Compression 레벨                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [Model Import Settings > Mesh Compression]                     │
+│                                                                 │
+│  ┌──────────┬───────────────┬────────────────────────────────┐  │
+│  │  레벨    │  압축률       │  설명                          │  │
+│  ├──────────┼───────────────┼────────────────────────────────┤  │
+│  │  Off     │  0%           │  원본 그대로 (float32)         │  │
+│  ├──────────┼───────────────┼────────────────────────────────┤  │
+│  │  Low     │  ~25%         │  약한 양자화, 품질 유지        │  │
+│  ├──────────┼───────────────┼────────────────────────────────┤  │
+│  │  Medium  │  ~40%         │  중간 양자화                   │  │
+│  ├──────────┼───────────────┼────────────────────────────────┤  │
+│  │  High    │  ~60%         │  강한 양자화, 아티팩트 가능    │  │
+│  └──────────┴───────────────┴────────────────────────────────┘  │
+│                                                                 │
+│  ⚠️ 주의: "Mesh Compression"은 디스크 저장 크기에만 영향        │
+│           런타임 메모리는 여전히 압축 해제된 상태!              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+                </pre></div>
+                <p><span class="warning">중요</span>: Unity의 Mesh Compression은 <strong>번들/디스크 저장</strong>에만 영향을 줍니다. GPU 메모리에서는 항상 압축 해제됩니다.</p>
+            </div>
+
+            <div class="q">런타임 메모리도 줄이려면?</div>
+            <div class="a">
+                <p><span class="highlight">Vertex Compression</span> 설정을 사용합니다:</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                   Unity Vertex Compression                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [Project Settings > Player > Other Settings]                   │
+│                                                                 │
+│    Vertex Compression:                                          │
+│    ☑ Position        ← 위치 데이터 압축 (float32 → float16)    │
+│    ☑ Normal          ← 노말 데이터 압축                         │
+│    ☑ Tangent         ← 탄젠트 데이터 압축                       │
+│    ☑ UV0             ← UV 데이터 압축                           │
+│    ☑ UV1                                                        │
+│    ☐ Color           ← 이미 4바이트라 효과 적음                 │
+│                                                                 │
+│  효과: 런타임 GPU 메모리에서 실제로 압축된 상태 유지            │
+│                                                                 │
+│  ⚠️ 제한:                                                       │
+│    • Dynamic Batching과 호환 안 될 수 있음                      │
+│    • 일부 셰이더에서 정밀도 문제 발생 가능                      │
+│    • 애니메이션 스키닝 시 Position 압축 주의                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+                </pre></div>
+            </div>
+
+            <div class="q">스크립트로 버텍스 포맷 제어하려면?</div>
+            <div class="a">
+                <div class="code-block"><span class="keyword">using</span> UnityEngine;
+<span class="keyword">using</span> UnityEngine.Rendering;
+
+<span class="keyword">public class</span> <span class="type">OptimizedMeshCreator</span>
+{
+    <span class="keyword">public static</span> <span class="type">Mesh</span> CreateCompressedMesh(<span class="type">Mesh</span> sourceMesh)
+    {
+        <span class="keyword">var</span> optimizedMesh = <span class="keyword">new</span> <span class="type">Mesh</span>();
+        optimizedMesh.name = sourceMesh.name + <span class="string">"_Compressed"</span>;
+
+        <span class="comment">// 버텍스 어트리뷰트 정의 (압축 포맷 지정)</span>
+        <span class="keyword">var</span> attributes = <span class="keyword">new</span>[]
+        {
+            <span class="comment">// Position: Float32 → Float16 (정밀도 필요 시 유지)</span>
+            <span class="keyword">new</span> <span class="type">VertexAttributeDescriptor</span>(
+                <span class="type">VertexAttribute</span>.Position,
+                <span class="type">VertexAttributeFormat</span>.Float16,
+                <span class="number">3</span>  <span class="comment">// dimension</span>
+            ),
+            <span class="comment">// Normal: Float32 → SNorm8 (8비트 정규화)</span>
+            <span class="keyword">new</span> <span class="type">VertexAttributeDescriptor</span>(
+                <span class="type">VertexAttribute</span>.Normal,
+                <span class="type">VertexAttributeFormat</span>.SNorm8,
+                <span class="number">4</span>  <span class="comment">// 4바이트 정렬</span>
+            ),
+            <span class="comment">// UV0: Float32 → Float16</span>
+            <span class="keyword">new</span> <span class="type">VertexAttributeDescriptor</span>(
+                <span class="type">VertexAttribute</span>.TexCoord0,
+                <span class="type">VertexAttributeFormat</span>.Float16,
+                <span class="number">2</span>
+            ),
+            <span class="comment">// Tangent: Float32 → SNorm8</span>
+            <span class="keyword">new</span> <span class="type">VertexAttributeDescriptor</span>(
+                <span class="type">VertexAttribute</span>.Tangent,
+                <span class="type">VertexAttributeFormat</span>.SNorm8,
+                <span class="number">4</span>
+            )
+        };
+
+        <span class="comment">// 버텍스 버퍼 설정</span>
+        optimizedMesh.SetVertexBufferParams(sourceMesh.vertexCount, attributes);
+
+        <span class="comment">// 데이터 복사 (자동 변환)</span>
+        optimizedMesh.vertices = sourceMesh.vertices;
+        optimizedMesh.normals = sourceMesh.normals;
+        optimizedMesh.uv = sourceMesh.uv;
+        optimizedMesh.tangents = sourceMesh.tangents;
+        optimizedMesh.triangles = sourceMesh.triangles;
+
+        <span class="comment">// 바운드 계산</span>
+        optimizedMesh.RecalculateBounds();
+
+        <span class="keyword">return</span> optimizedMesh;
+    }
+}</div>
+            </div>
+
+            <div class="q">인덱스 버퍼도 최적화할 수 있어?</div>
+            <div class="a">
+                <p>네. <span class="highlight">16비트 vs 32비트 인덱스</span>를 선택할 수 있습니다:</p>
+                <div class="code-block"><span class="keyword">public static void</span> OptimizeIndexBuffer(<span class="type">Mesh</span> mesh)
+{
+    <span class="comment">// 버텍스 수가 65535 이하면 16비트 인덱스 사용 가능</span>
+    <span class="keyword">if</span> (mesh.vertexCount <= <span class="number">65535</span>)
+    {
+        <span class="comment">// 32비트 → 16비트로 변환 (메모리 50% 절약)</span>
+        mesh.indexFormat = <span class="type">IndexFormat</span>.UInt16;
+    }
+    <span class="keyword">else</span>
+    {
+        <span class="comment">// 65535 초과 시 32비트 필수</span>
+        mesh.indexFormat = <span class="type">IndexFormat</span>.UInt32;
+    }
+
+    <span class="type">Debug</span>.Log($<span class="string">"Index format: {mesh.indexFormat}, Triangles: {mesh.triangles.Length / 3}"</span>);
+}
+
+<span class="comment">/*
+예시: 10,000 삼각형 메시 (30,000 인덱스)
+  32비트: 30,000 × 4 = 120KB
+  16비트: 30,000 × 2 = 60KB (50% 절약)
+*/</span></div>
+                <div class="warning-box">
+                    <p><strong>⚠️ 16비트 인덱스 주의</strong></p>
+                    <ul>
+                        <li>버텍스 수가 65,535개 초과 시 사용 불가</li>
+                        <li>서브메시(재질별 분할) 시에도 합산하여 체크</li>
+                        <li>LOD0 메시는 초과하기 쉬우니 확인 필요</li>
+                    </ul>
+                </div>
             </div>
         </div>
+
+        <!-- Part 4 -->
+        <div class="conversation">
+            <h2>Part 4. 고급 압축 기법</h2>
+
+            <div class="q">노말 압축의 다양한 방법은?</div>
+            <div class="a">
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                    노말 벡터 압축 방법                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [1. 원본 - Float32 × 3]                                        │
+│     크기: 12 bytes                                              │
+│     정밀도: 최고                                                │
+│                                                                 │
+│  [2. SNorm8 × 4 (Unity 기본)]                                   │
+│     크기: 4 bytes (66% 절약)                                    │
+│     정밀도: 중                                                  │
+│     방법: [-1, 1] 범위를 [-128, 127]로 매핑                     │
+│                                                                 │
+│  [3. Octahedron Normal]                                         │
+│     크기: 2~4 bytes (83% 절약)                                  │
+│     정밀도: 중~상                                               │
+│     방법: 단위 구 → 팔면체 → 2D 전개                            │
+│                                                                 │
+│       y                    전개                                 │
+│       │   /                                                     │
+│       │ /     ───────▶    ┌───┬───┐                            │
+│       ●─── x              │ ╲ │ ╱ │                            │
+│      /                    ├───┼───┤                            │
+│    /                      │ ╱ │ ╲ │                            │
+│  z                        └───┴───┘                            │
+│                                                                 │
+│  [4. Spheremap Normal]                                          │
+│     크기: 2 bytes (83% 절약)                                    │
+│     정밀도: 중                                                  │
+│     방법: 구면 좌표계로 변환 후 2개 각도만 저장                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+                </pre></div>
+            </div>
+
+            <div class="q">Octahedron Normal 구현은?</div>
+            <div class="a">
+                <div class="code-block"><span class="comment">// 인코딩: 3D 노말 → 2D 옥타헤드론</span>
+<span class="type">Vector2</span> EncodeOctahedronNormal(<span class="type">Vector3</span> n)
+{
+    <span class="comment">// 옥타헤드론으로 투영</span>
+    n /= (<span class="type">Mathf</span>.Abs(n.x) + <span class="type">Mathf</span>.Abs(n.y) + <span class="type">Mathf</span>.Abs(n.z));
+
+    <span class="comment">// 하반구 처리 (z < 0)</span>
+    <span class="keyword">if</span> (n.z < <span class="number">0</span>)
+    {
+        <span class="keyword">float</span> tx = n.x;
+        n.x = (<span class="number">1</span> - <span class="type">Mathf</span>.Abs(n.y)) * (tx >= <span class="number">0</span> ? <span class="number">1</span> : -<span class="number">1</span>);
+        n.y = (<span class="number">1</span> - <span class="type">Mathf</span>.Abs(tx)) * (n.y >= <span class="number">0</span> ? <span class="number">1</span> : -<span class="number">1</span>);
+    }
+
+    <span class="comment">// [-1, 1] → [0, 1] 정규화</span>
+    <span class="keyword">return new</span> <span class="type">Vector2</span>(n.x * <span class="number">0.5f</span> + <span class="number">0.5f</span>, n.y * <span class="number">0.5f</span> + <span class="number">0.5f</span>);
+}
+
+<span class="comment">// 디코딩: 2D 옥타헤드론 → 3D 노말 (셰이더에서)</span>
+<span class="comment">/*
+half3 DecodeOctahedronNormal(half2 f)
+{
+    f = f * 2.0 - 1.0;
+    half3 n = half3(f.x, f.y, 1.0 - abs(f.x) - abs(f.y));
+    half t = saturate(-n.z);
+    n.xy += n.xy >= 0.0 ? -t : t;
+    return normalize(n);
+}
+*/</span></div>
+            </div>
+
+            <div class="q">탄젠트 공간 압축은?</div>
+            <div class="a">
+                <p><span class="highlight">탄젠트 재계산</span>으로 저장 자체를 없앨 수 있습니다:</p>
+                <div class="code-block"><span class="comment">// 버텍스 셰이더에서 탄젠트 재계산</span>
+<span class="comment">// 저장: 노말만 (탄젠트 저장 안 함)</span>
+<span class="comment">// 재계산: 노말 + UV 기울기로 탄젠트 유도</span>
+
+<span class="comment">/*
+HLSL 셰이더 코드:
+
+// 월드 공간에서 탄젠트 재계산
+float3 CalculateTangent(float3 worldNormal, float2 uv, float3 worldPos)
+{
+    // 스크린 공간 편미분 사용
+    float3 dp1 = ddx(worldPos);
+    float3 dp2 = ddy(worldPos);
+    float2 duv1 = ddx(uv);
+    float2 duv2 = ddy(uv);
+
+    float3 tangent = dp1 * duv2.y - dp2 * duv1.y;
+    tangent = normalize(tangent - worldNormal * dot(worldNormal, tangent));
+
+    return tangent;
+}
+*/</span>
+
+<span class="comment">// Unity에서 런타임 탄젠트 재계산</span>
+<span class="keyword">public static void</span> RecalculateTangentsAtRuntime(<span class="type">Mesh</span> mesh)
+{
+    <span class="comment">// 탄젠트 데이터 제거하여 메모리 절약</span>
+    mesh.tangents = <span class="keyword">null</span>;
+
+    <span class="comment">// 셰이더에서 ddx/ddy로 재계산하도록 설정</span>
+    <span class="comment">// → 버텍스당 16바이트 절약</span>
+}</div>
+                <div class="warning-box">
+                    <p><strong>⚠️ 탄젠트 재계산 주의</strong></p>
+                    <ul>
+                        <li>ddx/ddy는 삼각형 단위로 동일 → 노말맵 seam에서 아티팩트</li>
+                        <li>UV가 미러링된 메시에서 문제 발생 가능</li>
+                        <li>고품질 캐릭터에는 사전 계산된 탄젠트 사용 권장</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5 -->
+        <div class="conversation">
+            <h2>Part 5. Draco 압축</h2>
+
+            <div class="q">Draco 압축이 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">Google에서 개발한 3D 메시 압축 라이브러리</span>입니다. 매우 높은 압축률을 제공합니다.</p>
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                      Draco 압축 특징                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [압축률]                                                       │
+│    • 일반 압축: 50~70% 절약                                     │
+│    • Draco: 80~95% 절약                                         │
+│                                                                 │
+│  [작동 원리]                                                    │
+│    1. 예측 인코딩: 인접 버텍스로부터 값 예측                    │
+│    2. 엔트로피 코딩: 예측 오차를 효율적으로 저장                │
+│    3. 토폴로지 압축: 삼각형 연결 정보 압축                      │
+│                                                                 │
+│  [장점]                                                         │
+│    • glTF 2.0 표준에 포함 (KHR_draco_mesh_compression)          │
+│    • WebGL/브라우저에서 표준 지원                               │
+│    • 오픈소스, 상용 무료                                        │
+│                                                                 │
+│  [단점]                                                         │
+│    • 압축 해제 시간 필요 (CPU 비용)                             │
+│    • 손실 압축 (품질 설정 가능)                                 │
+│    • Unity 네이티브 미지원 (플러그인 필요)                      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+                </pre></div>
+            </div>
+
+            <div class="q">Unity에서 Draco 사용하려면?</div>
+            <div class="a">
+                <div class="code-block"><span class="comment">// Unity Draco 패키지 설치 필요</span>
+<span class="comment">// Package Manager: com.unity.cloud.draco</span>
+
+<span class="keyword">using</span> Draco;
+<span class="keyword">using</span> UnityEngine;
+
+<span class="keyword">public class</span> <span class="type">DracoMeshLoader</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">public</span> <span class="type">TextAsset</span> dracoFile;  <span class="comment">// .drc 파일</span>
+
+    <span class="keyword">async void</span> Start()
+    {
+        <span class="comment">// Draco 데이터 로드 및 디코드</span>
+        <span class="keyword">var</span> dracoLoader = <span class="keyword">new</span> <span class="type">DracoMeshLoader</span>();
+        <span class="keyword">var</span> mesh = <span class="keyword">await</span> dracoLoader.ConvertDracoMeshToUnity(
+            dracoFile.bytes
+        );
+
+        <span class="keyword">if</span> (mesh != <span class="keyword">null</span>)
+        {
+            GetComponent&lt;<span class="type">MeshFilter</span>&gt;().mesh = mesh;
+        }
+    }
+}
+
+<span class="comment">// glTF Draco 로드 (glTFast 패키지 사용)</span>
+<span class="keyword">using</span> GLTFast;
+
+<span class="keyword">public class</span> <span class="type">GltfDracoLoader</span> : <span class="type">MonoBehaviour</span>
+{
+    <span class="keyword">public string</span> gltfUrl;
+
+    <span class="keyword">async void</span> Start()
+    {
+        <span class="keyword">var</span> gltf = <span class="keyword">new</span> <span class="type">GltfImport</span>();
+
+        <span class="comment">// Draco 확장 자동 처리</span>
+        <span class="keyword">var</span> success = <span class="keyword">await</span> gltf.Load(gltfUrl);
+
+        <span class="keyword">if</span> (success)
+        {
+            gltf.InstantiateMainScene(transform);
+        }
+    }
+}</div>
+            </div>
+
+            <div class="q">Draco 압축 품질 설정은?</div>
+            <div class="a">
+                <div class="code-block"><span class="comment">// Draco 인코딩 시 품질 설정 (glTF-Pipeline 또는 Blender)</span>
+
+<span class="comment">/*
+Blender Export 설정:
+  - Compression Level: 0~10 (높을수록 작은 파일, 느린 압축)
+  - Quantization Bits:
+    - Position: 11~14 bits (기본 14)
+    - Normal: 8~10 bits (기본 10)
+    - UV: 10~12 bits (기본 12)
+    - Color: 8~10 bits (기본 10)
+
+권장 설정:
+  - 캐릭터/주요 오브젝트: Position 14, Normal 10
+  - 배경/소품: Position 11, Normal 8
+  - 멀리 있는 LOD: Position 8, Normal 8
+*/</span>
+
+<span class="comment">// 명령줄 도구 (gltf-pipeline)</span>
+<span class="comment">/*
+gltf-pipeline -i model.gltf -o model_draco.gltf -d \
+  --draco.quantizePositionBits 14 \
+  --draco.quantizeNormalBits 10 \
+  --draco.quantizeTexcoordBits 12 \
+  --draco.compressionLevel 7
+*/</span></div>
+            </div>
+        </div>
+
+        <!-- Part 6 -->
+        <div class="conversation">
+            <h2>Part 6. LOD와 함께 활용</h2>
+
+            <div class="q">LOD별로 압축 전략을 다르게?</div>
+            <div class="a">
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                   LOD별 압축 전략                                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  [LOD 0 - 가까운 거리]                                          │
+│    • 버텍스: 10,000개                                           │
+│    • Position: Float32 (정밀도 유지)                            │
+│    • Normal: SNorm16 또는 Octahedron                            │
+│    • 탄젠트: 저장 (노말맵 품질)                                 │
+│    • 총 크기: ~400KB                                            │
+│                                                                 │
+│  [LOD 1 - 중간 거리]                                            │
+│    • 버텍스: 3,000개 (70% 감소)                                 │
+│    • Position: Float16                                          │
+│    • Normal: SNorm8                                             │
+│    • 탄젠트: 셰이더 재계산                                      │
+│    • 총 크기: ~50KB                                             │
+│                                                                 │
+│  [LOD 2 - 먼 거리]                                              │
+│    • 버텍스: 500개 (95% 감소)                                   │
+│    • Position: Float16                                          │
+│    • Normal: SNorm8                                             │
+│    • 탄젠트: 없음 (플랫 셰이딩)                                 │
+│    • UV: 제거 또는 저해상도                                     │
+│    • 총 크기: ~8KB                                              │
+│                                                                 │
+│  [빌보드 LOD - 매우 먼 거리]                                    │
+│    • 2D 스프라이트 대체                                         │
+│    • 메시 데이터 0                                              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+                </pre></div>
+            </div>
+
+            <div class="q">LOD 생성과 압축 자동화는?</div>
+            <div class="a">
+                <div class="code-block"><span class="preprocessor">#if UNITY_EDITOR</span>
+<span class="keyword">using</span> UnityEditor;
+
+<span class="keyword">public class</span> <span class="type">LODMeshOptimizer</span>
+{
+    [<span class="type">MenuItem</span>(<span class="string">"Assets/Optimize LOD Meshes"</span>)]
+    <span class="keyword">public static void</span> OptimizeSelectedLODs()
+    {
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> obj <span class="keyword">in</span> <span class="type">Selection</span>.gameObjects)
+        {
+            <span class="keyword">var</span> lodGroup = obj.GetComponent&lt;<span class="type">LODGroup</span>&gt;();
+            <span class="keyword">if</span> (lodGroup == <span class="keyword">null</span>) <span class="keyword">continue</span>;
+
+            <span class="keyword">var</span> lods = lodGroup.GetLODs();
+            <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i < lods.Length; i++)
+            {
+                OptimizeLODLevel(lods[i], i, lods.Length);
+            }
+        }
+
+        <span class="type">AssetDatabase</span>.SaveAssets();
+    }
+
+    <span class="keyword">private static void</span> OptimizeLODLevel(<span class="type">LOD</span> lod, <span class="keyword">int</span> level, <span class="keyword">int</span> totalLevels)
+    {
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> renderer <span class="keyword">in</span> lod.renderers)
+        {
+            <span class="keyword">var</span> meshFilter = renderer.GetComponent&lt;<span class="type">MeshFilter</span>&gt;();
+            <span class="keyword">if</span> (meshFilter == <span class="keyword">null</span> || meshFilter.sharedMesh == <span class="keyword">null</span>) <span class="keyword">continue</span>;
+
+            <span class="keyword">var</span> mesh = meshFilter.sharedMesh;
+            <span class="keyword">var</span> assetPath = <span class="type">AssetDatabase</span>.GetAssetPath(mesh);
+
+            <span class="comment">// ModelImporter 설정 변경</span>
+            <span class="keyword">var</span> importer = <span class="type">AssetImporter</span>.GetAtPath(assetPath) <span class="keyword">as</span> <span class="type">ModelImporter</span>;
+            <span class="keyword">if</span> (importer == <span class="keyword">null</span>) <span class="keyword">continue</span>;
+
+            <span class="comment">// LOD 레벨에 따른 압축 설정</span>
+            <span class="keyword">float</span> lodRatio = (<span class="keyword">float</span>)level / (totalLevels - <span class="number">1</span>);
+
+            <span class="keyword">if</span> (lodRatio < <span class="number">0.3f</span>)  <span class="comment">// LOD 0</span>
+            {
+                importer.meshCompression = <span class="type">ModelImporterMeshCompression</span>.Low;
+            }
+            <span class="keyword">else if</span> (lodRatio < <span class="number">0.7f</span>)  <span class="comment">// 중간 LOD</span>
+            {
+                importer.meshCompression = <span class="type">ModelImporterMeshCompression</span>.Medium;
+                importer.importTangents = <span class="type">ModelImporterTangents</span>.None;
+            }
+            <span class="keyword">else</span>  <span class="comment">// 먼 LOD</span>
+            {
+                importer.meshCompression = <span class="type">ModelImporterMeshCompression</span>.High;
+                importer.importTangents = <span class="type">ModelImporterTangents</span>.None;
+                importer.importNormals = <span class="type">ModelImporterNormals</span>.Calculate;
+            }
+
+            importer.SaveAndReimport();
+
+            <span class="type">Debug</span>.Log($<span class="string">"Optimized LOD {level}: {mesh.name}"</span>);
+        }
+    }
+}
+<span class="preprocessor">#endif</span></div>
+            </div>
+        </div>
+
+        <!-- Part 7 -->
+        <div class="conversation">
+            <h2>Part 7. 실전 체크리스트</h2>
+
+            <div class="q">메시 압축 적용 시 체크리스트는?</div>
+            <div class="a">
+                <div class="warning-box">
+                    <p><strong>⚠️ 압축 전 확인</strong></p>
+                    <ul>
+                        <li>[ ] 원본 메시 백업 (FBX/원본 유지)</li>
+                        <li>[ ] 타겟 플랫폼별 테스트 환경 준비</li>
+                        <li>[ ] 비주얼 품질 비교 기준 설정</li>
+                        <li>[ ] 스키닝/애니메이션 호환성 확인</li>
+                    </ul>
+                </div>
+
+                <div class="highlight-box">
+                    <p><strong>📋 적용 체크리스트</strong></p>
+                    <ul>
+                        <li>[ ] <strong>인덱스 포맷</strong>: 65535 이하면 16비트</li>
+                        <li>[ ] <strong>Position</strong>: Float16 (작은 오브젝트) 또는 Float32 (큰 환경)</li>
+                        <li>[ ] <strong>Normal</strong>: SNorm8 또는 Octahedron</li>
+                        <li>[ ] <strong>Tangent</strong>: 필요 시만 저장, 아니면 셰이더 계산</li>
+                        <li>[ ] <strong>UV</strong>: Float16 (대부분 충분)</li>
+                        <li>[ ] <strong>Color</strong>: 이미 압축됨, 필요 없으면 제거</li>
+                        <li>[ ] <strong>LOD별</strong>: 멀수록 더 강한 압축</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="q">흔한 실수와 해결책은?</div>
+            <div class="a">
+                <div class="diagram-box"><pre>
+┌─────────────────────────────────────────────────────────────────┐
+│                    흔한 실수와 해결책                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ❌ 실수 1: Mesh Compression = 런타임 메모리 절약               │
+│     → Unity의 Mesh Compression은 디스크만 압축                  │
+│  ✅ 해결: Vertex Compression 또는 커스텀 버텍스 포맷 사용       │
+│                                                                 │
+│  ❌ 실수 2: 모든 메시에 동일한 압축 적용                        │
+│     → 캐릭터 vs 배경 vs UI 요구사항 다름                        │
+│  ✅ 해결: 카테고리별 프리셋 정의 후 자동 적용                   │
+│                                                                 │
+│  ❌ 실수 3: Position Float16으로 큰 월드 메시 압축              │
+│     → 정밀도 부족으로 버텍스 떨림(Z-fighting 유사)              │
+│  ✅ 해결: 큰 환경 메시는 Float32 유지                           │
+│          또는 청크로 분할 후 로컬 좌표계 사용                   │
+│                                                                 │
+│  ❌ 실수 4: 탄젠트 제거 후 노말맵 품질 저하 무시                │
+│     → UV seam에서 라이팅 아티팩트 발생                          │
+│  ✅ 해결: 주요 캐릭터는 탄젠트 유지                             │
+│          배경/소품에서만 탄젠트 생략                            │
+│                                                                 │
+│  ❌ 실수 5: 압축 후 GPU 인스턴싱 호환 안 됨                     │
+│     → 버텍스 포맷이 다르면 배칭 불가                            │
+│  ✅ 해결: 같이 배칭될 메시들은 동일 버텍스 포맷 사용            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+                </pre></div>
+            </div>
+
+            <div class="q">압축 효과 측정은 어떻게?</div>
+            <div class="a">
+                <div class="code-block"><span class="preprocessor">#if UNITY_EDITOR</span>
+<span class="keyword">public class</span> <span class="type">MeshCompressionAnalyzer</span>
+{
+    [<span class="type">MenuItem</span>(<span class="string">"Assets/Analyze Mesh Memory"</span>)]
+    <span class="keyword">public static void</span> AnalyzeSelectedMeshes()
+    {
+        <span class="keyword">var</span> report = <span class="keyword">new</span> <span class="type">StringBuilder</span>();
+        report.AppendLine(<span class="string">"=== Mesh Memory Analysis ==="</span>);
+
+        <span class="keyword">foreach</span> (<span class="keyword">var</span> obj <span class="keyword">in</span> <span class="type">Selection</span>.objects)
+        {
+            <span class="keyword">var</span> mesh = obj <span class="keyword">as</span> <span class="type">Mesh</span>;
+            <span class="keyword">if</span> (mesh == <span class="keyword">null</span>) <span class="keyword">continue</span>;
+
+            <span class="keyword">long</span> memorySize = <span class="type">Profiler</span>.GetRuntimeMemorySizeLong(mesh);
+
+            report.AppendLine($<span class="string">"\n{mesh.name}:"</span>);
+            report.AppendLine($<span class="string">"  Vertices: {mesh.vertexCount:N0}"</span>);
+            report.AppendLine($<span class="string">"  Triangles: {mesh.triangles.Length / 3:N0}"</span>);
+            report.AppendLine($<span class="string">"  Memory: {memorySize / 1024f:F1} KB"</span>);
+            report.AppendLine($<span class="string">"  Bytes/Vertex: {(float)memorySize / mesh.vertexCount:F1}"</span>);
+            report.AppendLine($<span class="string">"  Index Format: {mesh.indexFormat}"</span>);
+
+            <span class="comment">// 버텍스 어트리뷰트 분석</span>
+            <span class="keyword">var</span> attributes = mesh.GetVertexAttributes();
+            report.AppendLine(<span class="string">"  Attributes:"</span>);
+            <span class="keyword">foreach</span> (<span class="keyword">var</span> attr <span class="keyword">in</span> attributes)
+            {
+                report.AppendLine($<span class="string">"    - {attr.attribute}: {attr.format} x{attr.dimension}"</span>);
+            }
+        }
+
+        <span class="type">Debug</span>.Log(report.ToString());
+    }
+}
+<span class="preprocessor">#endif</span></div>
+            </div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>메시 압축과 Quantization</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>Quantization</strong> = Float32 → 더 작은 정수형으로 변환 (정밀도 손실 감수)</li>
+                <li><strong>Unity Mesh Compression</strong>은 디스크 크기만 줄임 (런타임 X)</li>
+                <li><strong>Vertex Compression</strong>으로 런타임 메모리 절약</li>
+                <li><strong>인덱스 버퍼</strong>: 버텍스 65535 이하면 16비트 사용</li>
+                <li><strong>노말 압축</strong>: SNorm8 또는 Octahedron 인코딩</li>
+                <li><strong>탄젠트</strong>: 필요 없으면 제거, 셰이더에서 재계산</li>
+                <li><strong>Draco</strong>: 80~95% 압축률, 디코딩 비용 있음</li>
+                <li><strong>LOD별 전략</strong>: 먼 거리일수록 더 강한 압축</li>
             </ul>
         </div>
 
@@ -86,5 +770,6 @@
             <a href="../asset-audio-compression/">오디오 압축의 선택 &rarr;</a>
         </div>
     </div>
+    <script src="../common/script.js"></script>
 </body>
 </html>
