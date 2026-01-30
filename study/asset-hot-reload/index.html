@@ -33,7 +33,6 @@
         .nav-links a { color: #0891B2; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
     </style>
 </head>
 <body>
@@ -42,42 +41,365 @@
 
         <div class="header">
             <h1>개발 중 핫 리로드</h1>
-            <p>게임 끄지 않고 교체</p>
+            <p>게임 끄지 않고 에셋 교체하기</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">개발 중 핫 리로드이(가) 뭐야?</div>
+            <h2>Part 1. 핫 리로드가 없으면?</h2>
+            <div class="q">텍스처 하나 수정하면 어떻게 돼?</div>
             <div class="a">
-                <p><span class="highlight">게임 끄지 않고 교체</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p>전통적인 개발 방식에서의 작업 루프를 보겠습니다:</p>
+                <div class="diagram">
+기존 개발 사이클:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   에셋 수정  →  게임 종료  →  리빌드  →  게임 재시작  →  확인   │
+│   (10초)       (5초)        (30초~2분)   (1분)         (30초) │
+│                                                             │
+│   총 소요: 2분 30초 ~ 4분 (한 번 확인에!)                     │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+하루에 텍스처 50번 수정한다면?
+→ 50 × 3분 = 150분 = <span class="warning">2시간 30분 낭비</span></div>
+                <p>아티스트가 색상 하나 바꿔보려면 <span class="highlight">매번 게임을 끄고 켜야</span> 합니다. 이터레이션 속도가 개발 생산성을 좌우합니다.</p>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. 핫 리로드의 원리</h2>
+            <div class="q">게임 켜둔 채로 어떻게 교체해?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>핵심은 <span class="highlight">에셋 참조와 실제 데이터의 분리</span>입니다:</p>
+                <div class="diagram">
+핫 리로드 구조:
+┌───────────────────────────────────────────────────────────┐
+│                                                           │
+│  게임 코드                 에셋 매니저                    │
+│  ┌─────────┐              ┌─────────────┐                │
+│  │ 캐릭터   │──참조──────▶│ Handle: 42  │                │
+│  │ 렌더러   │              │             │                │
+│  └─────────┘              │   ↓ 포인터   │                │
+│                           │             │                │
+│                           │ ┌─────────┐ │     디스크     │
+│                           │ │텍스처   │ │◀───로드────    │
+│                           │ │ 데이터  │ │    /textures/  │
+│                           │ └─────────┘ │    hero.png    │
+│                           └─────────────┘                │
+│                                                           │
+└───────────────────────────────────────────────────────────┘
+
+핫 리로드 시:
+1. 파일 변경 감지
+2. 새 텍스처 로드 (별도 메모리)
+3. Handle 42의 포인터만 교체
+4. 기존 텍스처 메모리 해제
+
+→ 게임 코드는 Handle 42만 알고 있음
+→ <span class="key-point">실제 데이터가 바뀌어도 참조는 유효</span></div>
+            </div>
+
+            <div class="q">파일 변경은 어떻게 감지해?</div>
+            <div class="a">
+                <p>OS의 <span class="highlight">File System Watcher</span>를 사용합니다:</p>
+                <div class="code-block">
+// Windows: ReadDirectoryChangesW
+// macOS: FSEvents
+// Linux: inotify
+
+class FileWatcher {
+    void StartWatching(const std::string& directory) {
+        #ifdef _WIN32
+        HANDLE hDir = CreateFile(
+            directory.c_str(),
+            FILE_LIST_DIRECTORY,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            NULL, OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+            NULL
+        );
+
+        // 비동기로 변경 감지
+        ReadDirectoryChangesW(
+            hDir, buffer, sizeof(buffer), TRUE,
+            FILE_NOTIFY_CHANGE_LAST_WRITE,  // 파일 수정 감지
+            &bytesReturned, &overlapped, NULL
+        );
+        #endif
+    }
+
+    void OnFileChanged(const std::string& path) {
+        // Debounce: 연속 수정 대기 (저장 중 여러 번 호출됨)
+        ScheduleReload(path, 100ms);  // 100ms 후 리로드
+    }
+};</div>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 에셋 종류별 리로드 전략</h2>
+            <div class="q">모든 에셋이 같은 방식으로 리로드돼?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p>아닙니다. 에셋 종류에 따라 <span class="highlight">복잡도가 다릅니다</span>:</p>
+                <div class="diagram">
+에셋별 핫 리로드 난이도:
+┌────────────────┬─────────┬────────────────────────────────┐
+│ 에셋 종류       │ 난이도   │ 주의사항                        │
+├────────────────┼─────────┼────────────────────────────────┤
+│ 텍스처          │ ★☆☆☆☆ │ GPU 메모리만 교체               │
+│ 오디오          │ ★★☆☆☆ │ 재생 중이면 fade out 필요       │
+│ 머티리얼        │ ★★★☆☆ │ 셰이더 재컴파일 가능성          │
+│ 메시            │ ★★★★☆ │ 버텍스 버퍼 재생성, 바운딩박스   │
+│ 프리팹/블루프린트│ ★★★★★ │ 인스턴스 업데이트, 참조 유지    │
+│ 코드 (스크립트) │ ★★★★★ │ 상태 직렬화/복원 필요           │
+└────────────────┴─────────┴────────────────────────────────┘</div>
+                <p><span class="key-point">텍스처가 가장 쉽고</span>, 코드가 가장 어렵습니다.</p>
+            </div>
+
+            <div class="q">메시 리로드가 왜 복잡해?</div>
+            <div class="a">
+                <p>메시는 <span class="warning">여러 리소스에 연결</span>되어 있기 때문입니다:</p>
+                <div class="code-block">
+// 메시 핫 리로드 시 갱신해야 할 것들
+void ReloadMesh(MeshHandle handle, const MeshData& newData) {
+    Mesh* mesh = GetMesh(handle);
+
+    // 1. GPU 버텍스/인덱스 버퍼 재생성
+    mesh->ReleaseGPUBuffers();
+    mesh->CreateGPUBuffers(newData.vertices, newData.indices);
+
+    // 2. 바운딩 박스/스피어 재계산
+    mesh->bounds = CalculateBounds(newData.vertices);
+
+    // 3. 컬리전 메시 갱신 (물리 엔진)
+    if (mesh->hasCollision) {
+        PhysicsWorld::UpdateCollisionMesh(mesh);
+    }
+
+    // 4. LOD 체인 갱신
+    for (auto& lod : mesh->lodChain) {
+        lod.RecalculateScreenSize(mesh->bounds);
+    }
+
+    // 5. 스켈레탈 메시면 본 매핑도 갱신
+    if (mesh->isSkeletal) {
+        mesh->RemapBoneIndices(newData.boneNames);
+    }
+
+    // 6. 모든 인스턴스에 알림
+    NotifyMeshInstances(handle, "MeshReloaded");
+}</div>
             </div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 4. 코드 핫 리로드</h2>
+            <div class="q">코드도 게임 켜둔 채로 바꿀 수 있어?</div>
+            <div class="a">
+                <p>가능하지만 <span class="warning">매우 복잡</span>합니다. 핵심은 <span class="highlight">상태 보존</span>입니다:</p>
+                <div class="diagram">
+코드 핫 리로드 과정:
+┌────────────────────────────────────────────────────────┐
+│                                                        │
+│  1. 상태 직렬화                                         │
+│     Player.HP = 100  ──serialize──▶  { "HP": 100 }     │
+│     Player.Pos = (x,y)               { "Pos": [x,y] }  │
+│                                                        │
+│  2. 코드 교체                                           │
+│     ┌──────────┐          ┌──────────┐                │
+│     │ 기존 DLL │   교체   │ 새 DLL   │                │
+│     │ Player.cs│ ──────▶ │ Player.cs│                │
+│     │ v1       │          │ v2       │                │
+│     └──────────┘          └──────────┘                │
+│                                                        │
+│  3. 상태 복원                                           │
+│     { "HP": 100 }  ──deserialize──▶  Player.HP = 100   │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+
+<span class="warning">문제: 새 버전에서 필드가 바뀌면?</span>
+v1: int HP;
+v2: float Health;  // 이름 변경됨
+→ 매핑 실패! 수동 마이그레이션 코드 필요</div>
+            </div>
+
+            <div class="q">Unity는 어떻게 해결해?</div>
+            <div class="a">
+                <div class="code-block">
+// Unity의 Enter Play Mode Options
+// Edit > Project Settings > Editor > Enter Play Mode Settings
+
+[ExecuteAlways]
+public class HotReloadExample : MonoBehaviour {
+    // SerializeField는 핫 리로드 시 보존됨
+    [SerializeField] private int health = 100;
+
+    // NonSerialized는 리로드 시 초기화됨
+    [NonSerialized] private int cachedDamage;
+
+    // 리로드 후 복구 로직
+    void OnAfterDeserialize() {
+        // 캐시 재계산
+        cachedDamage = CalculateDamage();
+    }
+
+    // Domain Reload 발생 시
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void OnDomainReload() {
+        // static 변수 초기화
+        StaticManager.Reset();
+    }
+}</div>
+                <p>Unity 2019.3+에서는 <span class="key-point">Domain Reload 비활성화</span> 옵션으로 플레이 모드 진입 속도를 크게 향상시킬 수 있습니다.</p>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. Unreal의 핫 리로드</h2>
+            <div class="q">Unreal은 어떻게 다뤄?</div>
+            <div class="a">
+                <p>Unreal은 <span class="highlight">Live Coding</span>과 <span class="highlight">Hot Reload</span> 두 가지를 제공합니다:</p>
+                <div class="diagram">
+Unreal 핫 리로드 방식:
+┌──────────────────────────────────────────────────────────┐
+│                                                          │
+│  Hot Reload (구방식)               Live Coding (5.0+)    │
+│  ─────────────────                ──────────────────     │
+│  - DLL 전체 교체                  - 함수 단위 패치       │
+│  - 에디터 불안정 가능             - 안정적               │
+│  - CDO 문제 발생                  - 증분 링크            │
+│  - 느림                           - 빠름 (1-3초)         │
+│                                                          │
+│  <span class="warning">권장: Live Coding 사용</span>                              │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+
+Live Coding 단축키: Ctrl + Alt + F11</div>
+                <div class="code-block">
+// Unreal에서 핫 리로드 친화적 코드 작성
+
+// 1. 초기화 로직은 OnConstruction에
+void AMyActor::OnConstruction(const FTransform& Transform) {
+    Super::OnConstruction(Transform);
+    // 에디터에서 값 변경 시 호출됨
+    UpdateVisuals();
+}
+
+// 2. UPROPERTY로 상태 보존
+UPROPERTY(EditAnywhere, BlueprintReadWrite)
+int32 Health = 100;  // 핫 리로드 시 보존
+
+// 3. PostEditChangeProperty로 에디터 변경 대응
+#if WITH_EDITOR
+void AMyActor::PostEditChangeProperty(FPropertyChangedEvent& Event) {
+    Super::PostEditChangeProperty(Event);
+
+    if (Event.Property->GetName() == "Health") {
+        OnHealthChanged();
+    }
+}
+#endif</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 에셋 의존성 처리</h2>
+            <div class="q">머티리얼이 참조하는 텍스처가 바뀌면?</div>
+            <div class="a">
+                <p><span class="highlight">의존성 그래프</span>를 따라 연쇄 갱신이 필요합니다:</p>
+                <div class="diagram">
+의존성 전파 예시:
+
+  hero_diffuse.png 변경
+         │
+         ▼
+  ┌──────────────┐
+  │ M_Hero       │ (머티리얼)
+  │ Diffuse: ●───┼──▶ 텍스처 참조 갱신
+  │ Normal: ...  │
+  └──────┬───────┘
+         │
+         ▼
+  ┌──────────────┐
+  │ SK_Hero      │ (스켈레탈 메시)
+  │ Material: ●──┼──▶ 머티리얼 슬롯 더티 마킹
+  └──────┬───────┘
+         │
+         ▼
+  ┌──────────────┐
+  │ BP_Hero      │ (블루프린트)
+  │ Mesh: ●──────┼──▶ 렌더 커맨드 재생성
+  └──────────────┘
+
+<span class="key-point">역방향 의존성 그래프가 필요!</span>
+"이 텍스처를 쓰는 머티리얼은?" 쿼리 가능해야 함</div>
+                <div class="code-block">
+// 의존성 추적 시스템
+class AssetDependencyTracker {
+    // 정방향: Asset → Dependencies
+    std::unordered_map<AssetID, std::set<AssetID>> dependencies;
+
+    // 역방향: Asset → Dependents (누가 나를 참조?)
+    std::unordered_map<AssetID, std::set<AssetID>> reverseDeps;
+
+    void OnAssetReloaded(AssetID id) {
+        // 이 에셋을 참조하는 모든 에셋에 알림
+        for (AssetID dependent : reverseDeps[id]) {
+            MarkDirty(dependent);
+            OnAssetReloaded(dependent);  // 재귀적 전파
+        }
+    }
+
+    void RegisterDependency(AssetID user, AssetID used) {
+        dependencies[user].insert(used);
+        reverseDeps[used].insert(user);
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 핫 리로드의 한계</h2>
+            <div class="q">핫 리로드로 못하는 건 뭐야?</div>
+            <div class="a">
+                <p>몇 가지 <span class="warning">근본적 한계</span>가 있습니다:</p>
+                <div class="diagram">
+핫 리로드의 한계:
+┌───────────────────────────────────────────────────────────┐
+│                                                           │
+│  <span class="warning">1. 구조적 변경 불가</span>                                    │
+│     - 클래스 상속 구조 변경                                │
+│     - 새 컴포넌트 추가 (기존 인스턴스에)                   │
+│     - enum 값 순서 변경                                   │
+│                                                           │
+│  <span class="warning">2. 네이티브 코드</span>                                       │
+│     - C++ 코드는 제한적 (Unreal Live Coding 예외)          │
+│     - 셰이더 코드는 가능하나 재컴파일 필요                 │
+│                                                           │
+│  <span class="warning">3. 초기화 의존 상태</span>                                    │
+│     - 생성자에서만 설정되는 값                             │
+│     - 레벨 로드 시에만 계산되는 데이터                     │
+│                                                           │
+│  <span class="warning">4. 외부 리소스</span>                                         │
+│     - 네트워크 연결 상태                                   │
+│     - 파일 핸들                                           │
+│     - 하드웨어 리소스 (오디오 디바이스 등)                 │
+│                                                           │
+└───────────────────────────────────────────────────────────┘</div>
+                <p>이런 경우는 <span class="key-point">게임 재시작이 불가피</span>합니다.</p>
+            </div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>개발 중 핫 리로드</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>핫 리로드</strong>는 에셋 참조(Handle)와 실제 데이터를 분리하여 구현</li>
+                <li><strong>File Watcher</strong>로 파일 변경 감지, OS별 API 다름</li>
+                <li><strong>텍스처</strong>가 가장 쉽고, <strong>코드</strong>가 가장 복잡</li>
+                <li>코드 핫 리로드는 <strong>상태 직렬화/복원</strong>이 핵심</li>
+                <li>Unreal은 <strong>Live Coding</strong>, Unity는 <strong>Domain Reload 설정</strong> 활용</li>
+                <li><strong>의존성 그래프</strong>로 연쇄 갱신 처리</li>
+                <li>구조적 변경은 <strong>재시작 필요</strong></li>
             </ul>
         </div>
 

@@ -33,7 +33,6 @@
         .nav-links a { color: #0891B2; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
     </style>
 </head>
 <body>
@@ -41,57 +40,418 @@
         <a href="../asset-management/" class="back-link">&larr; 에셋 관리</a>
 
         <div class="header">
-            <h1>RTXIO / DirectStorage</h1>
-            <p>GPU 직접 로딩</p>
+            <h1>DirectStorage / RTXIO</h1>
+            <p>GPU 직접 로딩으로 로딩 시간 혁신</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. DirectStorage란?</h2>
-            <div class="q">DirectStorage가 뭐야?</div>
+            <h2>Part 1. 기존 I/O의 병목</h2>
+            <div class="q">SSD가 빠른데 왜 로딩이 느려?</div>
             <div class="a">
-                <p><span class="highlight">GPU가 SSD에서 직접 읽기</span></p>
-                <p>CPU를 우회해서 로딩 속도 극대화</p>
-                <p>Windows 11 + NVMe SSD 필요</p>
+                <p>NVMe SSD는 7GB/s를 낼 수 있지만, <span class="warning">기존 I/O 경로가 병목</span>입니다:</p>
+                <div class="diagram">
+기존 I/O 파이프라인의 문제:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  NVMe SSD (7GB/s 가능)                                     │
+│      │                                                     │
+│      ▼                                                     │
+│  ┌────────────────────────────────────────────────┐       │
+│  │ OS 파일 시스템 (NTFS)                           │       │
+│  │ - 파일 열기/닫기 오버헤드                       │       │
+│  │ - 작은 파일 수천 개 = 수천 번 시스템 콜         │       │
+│  └────────────────────────────────────────────────┘       │
+│      │ <span class="warning">~3GB/s로 제한</span>                                     │
+│      ▼                                                     │
+│  ┌────────────────────────────────────────────────┐       │
+│  │ CPU 메인 메모리 (RAM)                           │       │
+│  │ - 압축 해제 (CPU 부하, 최대 2-3GB/s)            │       │
+│  │ - 포맷 변환                                     │       │
+│  └────────────────────────────────────────────────┘       │
+│      │ <span class="warning">CPU가 병목</span>                                        │
+│      ▼                                                     │
+│  ┌────────────────────────────────────────────────┐       │
+│  │ PCIe 버스 → GPU VRAM                            │       │
+│  │ - RAM→VRAM 복사 (추가 시간)                    │       │
+│  └────────────────────────────────────────────────┘       │
+│                                                            │
+│  결과: 7GB/s SSD인데 <span class="warning">실제 2-3GB/s</span> 밖에 안 나옴           │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
             </div>
-            <div class="diagram">기존 방식:
-┌─────┐    ┌─────┐    ┌─────┐    ┌─────┐
-│ SSD │ → │ CPU │ → │ RAM │ → │ GPU │
-└─────┘    └─────┘    └─────┘    └─────┘
-           압축해제     복사      VRAM전송
-
-DirectStorage:
-┌─────┐              ┌─────┐
-│ SSD │ ──────────→ │ GPU │
-└─────┘   직접!     └─────┘
-          GPU가 압축해제</div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 성능 차이</h2>
-            <div class="q">얼마나 빨라?</div>
+            <h2>Part 2. DirectStorage의 혁신</h2>
+            <div class="q">DirectStorage는 어떻게 해결해?</div>
             <div class="a">
-                <p>기존: CPU 병목으로 <span class="warning">~3GB/s</span></p>
-                <p>DirectStorage: <span class="key-point">~7GB/s+</span></p>
-                <p>로딩 시간 2~3배 단축!</p>
+                <p><span class="highlight">GPU가 SSD에서 직접 읽고 압축 해제</span>합니다:</p>
+                <div class="diagram">
+DirectStorage 파이프라인:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  <span class="key-point">핵심: CPU 우회, GPU 직접 처리</span>                            │
+│                                                            │
+│  기존:                                                     │
+│  SSD → CPU → RAM → CPU(압축해제) → RAM → GPU              │
+│        ↑       ↑         ↑                                │
+│       병목    병목       병목                              │
+│                                                            │
+│  DirectStorage:                                            │
+│  ┌─────────────────────────────────────────────────┐      │
+│  │                                                 │      │
+│  │  SSD ──────────────────────────────────▶ GPU   │      │
+│  │       NVMe 직접 접근     GPU 압축 해제          │      │
+│  │                                                 │      │
+│  └─────────────────────────────────────────────────┘      │
+│                                                            │
+│  CPU는 "명령"만 내리고, 실제 데이터 이동은 GPU+DMA        │
+│                                                            │
+│  속도 비교:                                                │
+│  ┌──────────────────┬────────────────┬────────────┐      │
+│  │ 구분              │ 기존           │ DirectStorage │    │
+│  ├──────────────────┼────────────────┼────────────┤      │
+│  │ 처리량            │ ~3GB/s         │ <span class="key-point">~7GB/s+</span>     │      │
+│  │ CPU 사용률        │ 높음 (100%)    │ <span class="key-point">낮음 (5%)</span>   │      │
+│  │ 압축해제 속도     │ 2GB/s (CPU)    │ <span class="key-point">24GB/s (GPU)</span>│      │
+│  └──────────────────┴────────────────┴────────────┘      │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">GPU가 압축 푸는 게 왜 빨라?</div>
+            <div class="a">
+                <p>GPU는 <span class="highlight">수천 개 코어로 병렬 처리</span>합니다:</p>
+                <div class="diagram">
+CPU vs GPU 압축 해제:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  CPU (8코어 가정):                                         │
+│  ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐                        │
+│  │1│ │2│ │3│ │4│ │5│ │6│ │7│ │8│   8개 블록 동시 처리    │
+│  └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘                        │
+│                                                            │
+│  → 100MB 압축 해제 = 약 50ms                              │
+│                                                            │
+│  GPU (10,000+ 코어):                                       │
+│  ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─...            │
+│  │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │              │
+│  └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─...            │
+│  10,000+ 블록 동시 처리                                    │
+│                                                            │
+│  → 100MB 압축 해제 = 약 <span class="key-point">4ms</span>                            │
+│                                                            │
+│  <span class="key-point">GDeflate</span>: GPU 최적화 압축 포맷 (DirectStorage 1.2+)     │
+│  - 기존 zlib/gzip과 호환                                   │
+│  - GPU에서 24GB/s 이상 디코딩 가능                         │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. GPU 압축 해제</h2>
-            <div class="q">GPU가 압축 푸는 게 빨라?</div>
+            <h2>Part 3. DirectStorage API 구조</h2>
+            <div class="q">코드에서 어떻게 사용해?</div>
             <div class="a">
-                <p>GPU는 <span class="highlight">대규모 병렬 처리</span> 특화</p>
-                <p>수천 개 코어로 동시에 압축 해제</p>
-                <p>CPU보다 훨씬 빠름</p>
+                <p>DirectStorage는 <span class="highlight">비동기 요청 큐</span> 기반입니다:</p>
+                <div class="code-block">
+// DirectStorage 기본 사용 패턴
+
+// 1. 초기화
+IDStorageFactory* factory;
+DStorageGetFactory(IID_PPV_ARGS(&factory));
+
+IDStorageQueue* queue;
+DSTORAGE_QUEUE_DESC queueDesc = {};
+queueDesc.Capacity = DSTORAGE_MAX_QUEUE_CAPACITY;
+queueDesc.Priority = DSTORAGE_PRIORITY_NORMAL;
+queueDesc.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
+queueDesc.Device = d3d12Device;  // GPU 디바이스
+factory->CreateQueue(&queueDesc, IID_PPV_ARGS(&queue));
+
+// 2. 파일 열기
+IDStorageFile* file;
+factory->OpenFile(L"textures.pak", IID_PPV_ARGS(&file));
+
+// 3. 읽기 요청 생성
+DSTORAGE_REQUEST request = {};
+request.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
+request.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_TEXTURE_REGION;
+request.Source.File.Source = file;
+request.Source.File.Offset = textureOffset;
+request.Source.File.Size = compressedSize;
+
+// GPU 텍스처로 직접 전송!
+request.Destination.Texture.Resource = gpuTexture;
+request.Destination.Texture.SubresourceIndex = 0;
+request.Destination.Texture.Region = { 0, 0, 0, width, height, 1 };
+
+// GPU 압축 해제 설정
+request.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_GDEFLATE;
+request.UncompressedSize = uncompressedSize;
+
+// 4. 큐에 요청 추가
+queue->EnqueueRequest(&request);
+
+// 5. 제출 (비동기 실행)
+queue->Submit();
+
+// 6. 완료 대기 (선택적)
+IDStorageStatusArray* status;
+factory->CreateStatusArray(1, &status);
+queue->EnqueueStatus(status, 0);
+queue->Submit();
+status->GetHResult(0);  // 완료 확인</div>
             </div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 4. 배칭과 최적화</h2>
+            <div class="q">요청을 어떻게 효율적으로 처리해?</div>
+            <div class="a">
+                <p><span class="highlight">배칭</span>이 핵심입니다. 수백 개 요청을 한 번에 제출합니다:</p>
+                <div class="diagram">
+DirectStorage 배칭 전략:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  나쁜 패턴 (매 요청마다 Submit):                            │
+│  ┌────────────────────────────────────────────────┐       │
+│  │ Enqueue → Submit → Wait                        │       │
+│  │ Enqueue → Submit → Wait                        │       │
+│  │ Enqueue → Submit → Wait                        │ <span class="warning">느림</span>  │
+│  │ ...                                            │       │
+│  └────────────────────────────────────────────────┘       │
+│                                                            │
+│  좋은 패턴 (배칭):                                          │
+│  ┌────────────────────────────────────────────────┐       │
+│  │ Enqueue(텍스처1)                               │       │
+│  │ Enqueue(텍스처2)                               │       │
+│  │ Enqueue(텍스처3)                               │       │
+│  │ ...                                            │       │
+│  │ Enqueue(텍스처100)                             │       │
+│  │ Submit()  ← 한 번에 제출!                      │ <span class="key-point">빠름</span>  │
+│  │ (다른 작업 수행...)                            │       │
+│  │ Wait()    ← 나중에 완료 확인                   │       │
+│  └────────────────────────────────────────────────┘       │
+│                                                            │
+│  <span class="key-point">권장</span>: 프레임당 1-2회 Submit, 수백 개 요청 배칭           │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 게임 루프에서의 DirectStorage 배칭 패턴
+
+class StreamingManager {
+    std::vector<DSTORAGE_REQUEST> pendingRequests;
+
+    void RequestTexture(const TextureInfo& info) {
+        DSTORAGE_REQUEST request = {};
+        // ... 요청 설정
+        pendingRequests.push_back(request);
+    }
+
+    void FlushRequests() {
+        if (pendingRequests.empty()) return;
+
+        // 모든 요청을 한 번에 큐에 추가
+        for (auto& req : pendingRequests) {
+            queue->EnqueueRequest(&req);
+        }
+
+        // 한 번에 제출
+        queue->EnqueueStatus(statusArray, frameIndex);
+        queue->Submit();
+
+        pendingRequests.clear();
+    }
+
+    void OnFrameEnd() {
+        // 프레임 끝에 배치된 요청 제출
+        FlushRequests();
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 플랫폼별 구현</h2>
+            <div class="q">PS5나 Xbox는 어떻게 구현해?</div>
+            <div class="a">
+                <p>각 플랫폼마다 유사한 기술이 있습니다:</p>
+                <div class="diagram">
+플랫폼별 GPU 직접 로딩 기술:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │ PC (Windows)                                        │  │
+│  │ ─────────────────────────────────────────────────── │  │
+│  │ DirectStorage 1.0: GPU 직접 로딩                    │  │
+│  │ DirectStorage 1.1: GPU 압축 해제 (GDeflate)         │  │
+│  │ DirectStorage 1.2: 메타데이터 스테이징 개선         │  │
+│  │                                                     │  │
+│  │ 요구사항: Windows 10/11, NVMe SSD, DX12 GPU        │  │
+│  └─────────────────────────────────────────────────────┘  │
+│                                                            │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │ PlayStation 5                                       │  │
+│  │ ─────────────────────────────────────────────────── │  │
+│  │ 전용 I/O 컴플렉스:                                   │  │
+│  │ - 커스텀 SSD 컨트롤러 (5.5GB/s raw, 9GB/s 압축)     │  │
+│  │ - 전용 압축 해제 하드웨어 (Kraken)                  │  │
+│  │ - <span class="key-point">제로 CPU 오버헤드</span>                               │  │
+│  │                                                     │  │
+│  │ "PS5의 SSD는 PC의 5년 후 기술" - Mark Cerny         │  │
+│  └─────────────────────────────────────────────────────┘  │
+│                                                            │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │ Xbox Series X/S                                     │  │
+│  │ ─────────────────────────────────────────────────── │  │
+│  │ Xbox Velocity Architecture:                         │  │
+│  │ - DirectStorage (PC와 동일 API)                     │  │
+│  │ - Sampler Feedback Streaming                        │  │
+│  │ - Hardware Decompression Block                      │  │
+│  │                                                     │  │
+│  │ 2.4GB/s raw, 4.8GB/s 압축                          │  │
+│  └─────────────────────────────────────────────────────┘  │
+│                                                            │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │ NVIDIA RTX IO                                       │  │
+│  │ ─────────────────────────────────────────────────── │  │
+│  │ DirectStorage 위에 추가 최적화:                      │  │
+│  │ - RTX GPU 전용 경로                                 │  │
+│  │ - GDeflate 가속                                     │  │
+│  │ - 14GB/s 이상 달성 가능                             │  │
+│  └─────────────────────────────────────────────────────┘  │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 게임 엔진 통합</h2>
+            <div class="q">Unreal이나 Unity에서는 어떻게 써?</div>
+            <div class="a">
+                <div class="code-block">
+// Unreal Engine 5 DirectStorage 설정
+
+// 1. 프로젝트 설정에서 활성화
+// Project Settings > Platforms > Windows > Use DirectStorage
+
+// Config/DefaultEngine.ini
+[/Script/Engine.StreamingSettings]
+s.UseDirectStorage=True
+s.DirectStorageQueueDepth=512
+s.DirectStorageBatchSize=64
+
+// 2. 패키징 시 압축 설정
+// GDeflate 압축 사용
+[/Script/UnrealEd.ProjectPackagingSettings]
+bCompressedDirectStorage=True
+
+// 3. 런타임 확인
+if (FPlatformMisc::SupportsDirectStorage())
+{
+    UE_LOG(LogStreaming, Log, TEXT("DirectStorage available"));
+}
+
+// Unity (2023.1+)
+// 1. Player Settings > DirectStorage 활성화
+// 2. Addressables에서 자동 지원
+// 3. 또는 직접 API 사용:
+
+#if UNITY_STANDALONE_WIN
+using Unity.IO.DirectStorage;
+
+var request = DirectStorage.CreateReadRequest(
+    filePath,
+    offset,
+    size,
+    destinationBuffer,
+    CompressionFormat.GDeflate
+);
+
+request.Submit();
+await request.WaitAsync();
+#endif</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 설계 고려사항</h2>
+            <div class="q">DirectStorage 사용 시 주의점은?</div>
+            <div class="a">
+                <div class="diagram">
+DirectStorage 설계 체크리스트:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  <span class="key-point">✅ DO (권장)</span>                                            │
+│  ────────────────────────────────────────────────────────  │
+│  • 대용량 에셋을 PAK/번들로 통합 (파일 수 줄이기)          │
+│  • GDeflate 압축 사용 (GPU 디코딩 최적)                    │
+│  • 요청 배칭 (수백 개씩 한 번에 Submit)                    │
+│  • 읽기 크기 정렬 (4KB/64KB 배수)                         │
+│  • 비동기 패턴 사용 (Submit 후 다른 작업)                  │
+│                                                            │
+│  <span class="warning">❌ DON'T (피해야 할 것)</span>                                    │
+│  ────────────────────────────────────────────────────────  │
+│  • 작은 파일 수천 개 (오버헤드 증가)                       │
+│  • 매 요청마다 Wait (동기 패턴)                            │
+│  • HDD에서 DirectStorage 사용 (효과 없음)                  │
+│  • CPU 압축 포맷 (zlib 등) 사용                            │
+│                                                            │
+│  <span class="warning">Fallback 필수</span>                                             │
+│  ────────────────────────────────────────────────────────  │
+│  • DirectStorage 미지원 시스템 대비                        │
+│  • HDD 사용자를 위한 기존 I/O 경로 유지                    │
+│  • 런타임 감지: IsDirectStorageSupported()                 │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 런타임 DirectStorage 지원 확인 및 Fallback
+
+class AdaptiveAssetLoader {
+    enum class LoaderType { DirectStorage, Legacy };
+    LoaderType activeLoader;
+
+    void Initialize() {
+        // DirectStorage 지원 확인
+        DSTORAGE_CONFIGURATION config = {};
+        DStorageGetFactory(IID_PPV_ARGS(&factory));
+
+        bool dsSupported =
+            factory != nullptr &&
+            IsNVMeSSD() &&  // SSD 타입 확인
+            IsGPUCapable(); // GPU 기능 확인
+
+        activeLoader = dsSupported
+            ? LoaderType::DirectStorage
+            : LoaderType::Legacy;
+
+        if (activeLoader == LoaderType::Legacy) {
+            Log("DirectStorage unavailable, using legacy I/O");
+        }
+    }
+
+    void LoadAsset(const char* path, void* dest) {
+        if (activeLoader == LoaderType::DirectStorage) {
+            LoadWithDirectStorage(path, dest);
+        } else {
+            LoadWithLegacyIO(path, dest);  // 기존 방식 fallback
+        }
+    }
+};</div>
+            </div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li>DirectStorage = <strong>GPU 직접 SSD 접근</strong></li>
-                <li>CPU 우회로 <strong>7GB/s+</strong> 달성</li>
-                <li><strong>GPU 압축해제</strong>가 핵심</li>
-                <li>PS5 방식을 PC에 적용</li>
+                <li><strong>DirectStorage</strong>는 GPU가 SSD에서 직접 읽고 압축 해제</li>
+                <li>기존 3GB/s → <strong>7GB/s+</strong> 달성, CPU 부하 제거</li>
+                <li><strong>GDeflate</strong>: GPU 최적화 압축 포맷 (24GB/s 디코딩)</li>
+                <li><strong>배칭</strong>이 핵심 - 수백 개 요청을 한 번에 Submit</li>
+                <li>PS5 I/O 컴플렉스, Xbox Velocity Architecture도 동일 개념</li>
+                <li>Unreal/Unity에서 <strong>설정으로 활성화</strong> 가능</li>
+                <li><strong>Fallback</strong> 필수 - HDD/구형 시스템 대비</li>
             </ul>
         </div>
 

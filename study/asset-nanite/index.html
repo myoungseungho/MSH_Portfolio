@@ -33,7 +33,6 @@
         .nav-links a { color: #0891B2; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
     </style>
 </head>
 <body>
@@ -42,72 +41,318 @@
 
         <div class="header">
             <h1>Nanite - 폴리곤 무제한 시대</h1>
-            <p>Unreal 5 가상화 지오메트리</p>
+            <p>Unreal Engine 5의 가상화 지오메트리</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. Nanite란?</h2>
-            <div class="q">나나이트가 뭐야?</div>
+            <h2>Part 1. 기존 LOD 시스템의 문제</h2>
+            <div class="q">왜 폴리곤 수에 제한이 있었어?</div>
             <div class="a">
-                <p>Unreal Engine 5의 <span class="highlight">가상화 지오메트리</span> 시스템</p>
-                <p><span class="key-point">폴리곤 수 제한 없음!</span></p>
-                <p>수십억 폴리곤도 실시간 렌더링</p>
+                <p>전통적인 LOD 시스템은 <span class="warning">아티스트의 수작업</span>이 필요했습니다:</p>
+                <div class="diagram">
+기존 LOD 제작 과정:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  원본 스캔 모델: 1억 폴리곤 (영화 품질)                      │
+│                     │                                      │
+│                     ▼                                      │
+│  아티스트가 <span class="warning">수동으로</span> LOD 제작 (2-3일 작업):               │
+│                                                            │
+│  LOD0: 100,000 폴리 (10m 이내)  ← 원본에서 디테일 손실     │
+│  LOD1:  30,000 폴리 (30m 이내)                             │
+│  LOD2:  10,000 폴리 (50m 이내)                             │
+│  LOD3:   3,000 폴리 (100m 이상)                            │
+│                                                            │
+│  <span class="warning">문제점:</span>                                                  │
+│  1. LOD 전환 시 "팝핑" 현상 (갑자기 바뀜)                   │
+│  2. 원본 대비 품질 대폭 저하                               │
+│  3. 각 에셋마다 LOD 제작 → 대규모 프로젝트에서 병목        │
+│  4. Draw Call 폭발 (오브젝트 많으면 CPU 병목)              │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+
+AAA 게임의 현실:
+- 환경 에셋 10,000개 × LOD 4단계 × 제작 시간
+= <span class="warning">아티스트 인건비 + 시간 폭발</span></div>
             </div>
-            <div class="diagram">기존 방식 vs Nanite:
-
-기존:
-원본 모델 (1억 폴리곤)
-    ↓ 아티스트가 수동으로
-LOD0: 10만 폴리
-LOD1: 1만 폴리
-LOD2: 1천 폴리
-    ↓
-거리에 따라 LOD 전환 (팝핑 현상)
-
-Nanite:
-원본 모델 (1억 폴리곤)
-    ↓ 자동 처리
-클러스터로 분할 → GPU가 실시간으로
-필요한 디테일만 렌더링
-    ↓
-부드러운 전환, LOD 팝핑 없음!</div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 동작 원리</h2>
-            <div class="q">어떻게 가능해?</div>
+            <h2>Part 2. Nanite의 핵심 원리</h2>
+            <div class="q">Nanite는 어떻게 다르게 작동해?</div>
             <div class="a">
-                <p>1. 메시를 작은 <span class="highlight">클러스터</span>로 분할</p>
-                <p>2. 클러스터별 <span class="highlight">계층적 LOD</span> 생성</p>
-                <p>3. GPU가 화면에 보이는 것만 선택</p>
+                <p>Nanite의 핵심은 <span class="highlight">클러스터 기반 계층적 LOD</span>입니다:</p>
+                <div class="diagram">
+Nanite 클러스터 구조:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  1. 메시를 클러스터로 분할 (각 128 삼각형)                   │
+│                                                            │
+│     원본 메시                    클러스터 분할              │
+│     ┌─────────────┐              ┌──┬──┬──┬──┐            │
+│     │             │              │C1│C2│C3│C4│            │
+│     │  1억 폴리곤  │    ───▶    ├──┼──┼──┼──┤            │
+│     │             │              │C5│C6│C7│C8│            │
+│     └─────────────┘              └──┴──┴──┴──┘            │
+│                                  약 80만 클러스터          │
+│                                                            │
+│  2. 클러스터별 DAG (Directed Acyclic Graph) 생성           │
+│                                                            │
+│        Root (가장 저해상도)                                 │
+│            /    \                                          │
+│         Parent  Parent                                     │
+│         / \      / \                                       │
+│       C1  C2   C3  C4   (원본 해상도)                       │
+│                                                            │
+│  <span class="key-point">핵심: 각 클러스터는 부모 클러스터로 "병합"될 수 있음</span>       │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
             </div>
-            <div class="code-block">Nanite 파이프라인:
 
-1. 메시 → 클러스터 분할 (128 삼각형 단위)
-2. 클러스터 → BVH 트리 구성
-3. 렌더링 시:
-   - GPU가 화면 픽셀별로
-   - 필요한 클러스터 LOD 선택
-   - 픽셀 크기에 맞는 디테일만 렌더링</div>
+            <div class="q">GPU에서 어떻게 렌더링해?</div>
+            <div class="a">
+                <p>GPU가 <span class="highlight">픽셀 단위로 필요한 LOD를 결정</span>합니다:</p>
+                <div class="diagram">
+Nanite GPU 렌더링 파이프라인:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  프레임 렌더링 시:                                          │
+│                                                            │
+│  1단계: Instance Culling (GPU Compute)                     │
+│  ┌─────────────────────────────────────────────┐          │
+│  │ 화면에 보이는 Nanite 메시 인스턴스 선별      │          │
+│  │ - View Frustum Culling                      │          │
+│  │ - Occlusion Culling (HZB)                   │          │
+│  └─────────────────────────────────────────────┘          │
+│                         ↓                                  │
+│  2단계: Cluster Culling & LOD Selection                    │
+│  ┌─────────────────────────────────────────────┐          │
+│  │ 각 클러스터마다:                             │          │
+│  │ - 화면 픽셀 크기 계산                        │          │
+│  │ - 클러스터가 1픽셀보다 작으면? → 부모 사용   │          │
+│  │ - 그렇지 않으면? → 현재 레벨 사용            │          │
+│  │                                             │          │
+│  │ <span class="key-point">픽셀 단위 LOD = 팝핑 없음!</span>                    │          │
+│  └─────────────────────────────────────────────┘          │
+│                         ↓                                  │
+│  3단계: Rasterization (Software Rasterizer)                │
+│  ┌─────────────────────────────────────────────┐          │
+│  │ GPU Compute로 삼각형 래스터라이즈            │          │
+│  │ - 하드웨어 래스터라이저보다 유연             │          │
+│  │ - 작은 삼각형에 최적화                       │          │
+│  └─────────────────────────────────────────────┘          │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+            </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 장점</h2>
-            <div class="q">뭐가 좋아?</div>
+            <h2>Part 3. 메모리와 스트리밍</h2>
+            <div class="q">1억 폴리곤 메시가 메모리에 다 들어가?</div>
             <div class="a">
-                <p>• <span class="key-point">LOD 수동 제작 불필요</span></p>
-                <p>• <span class="key-point">폴리곤 팝핑 없음</span></p>
-                <p>• <span class="key-point">영화 수준 에셋</span> 바로 사용</p>
-                <p>• 메모리 자동 스트리밍</p>
+                <p>아닙니다! Nanite는 <span class="highlight">디스크 스트리밍</span>을 사용합니다:</p>
+                <div class="diagram">
+Nanite 메모리 관리:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  디스크 (수십 GB)          GPU 메모리 (수백 MB 풀)         │
+│  ┌─────────────────┐      ┌─────────────────────────┐     │
+│  │ 전체 클러스터    │      │ Streaming Pool         │     │
+│  │ DAG 데이터      │──────▶│                         │     │
+│  │ + 압축된 버텍스  │      │ [현재 프레임에 필요한    │     │
+│  │                 │      │  클러스터만 로드]        │     │
+│  └─────────────────┘      └─────────────────────────┘     │
+│                                                            │
+│  스트리밍 우선순위:                                        │
+│  1. 화면 중앙 / 카메라 근처 클러스터 → 즉시 로드           │
+│  2. 주변 클러스터 → 미리 로드 (예측)                       │
+│  3. 사용 안 되는 클러스터 → 캐시에서 제거                  │
+│                                                            │
+│  <span class="key-point">결과: 256MB 풀로 수십억 폴리곤 씬 렌더링 가능</span>           │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// Unreal Engine에서 Nanite 스트리밍 풀 설정
+
+// DefaultEngine.ini
+[/Script/Engine.RendererSettings]
+r.Nanite.Streaming.MaxPagesPerFrame=128   // 프레임당 최대 스트리밍 페이지
+r.Nanite.Streaming.PoolSize=512           // 스트리밍 풀 크기 (MB)
+
+// 런타임에서 모니터링
+// stat Nanite
+// - Streaming Bytes: 현재 스트리밍 중인 데이터량
+// - Pool Usage: 메모리 풀 사용률</div>
             </div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 4. Nanite의 제약사항</h2>
+            <div class="q">Nanite를 못 쓰는 경우가 있어?</div>
+            <div class="a">
+                <p><span class="warning">모든 메시에 Nanite를 쓸 수 있는 건 아닙니다</span>:</p>
+                <div class="diagram">
+Nanite 지원 여부:
+┌────────────────┬───────────┬──────────────────────────────┐
+│ 메시 타입       │ 지원 여부  │ 이유                         │
+├────────────────┼───────────┼──────────────────────────────┤
+│ Static Mesh    │ ✅        │ 완벽 지원                    │
+│ Skeletal Mesh  │ ❌        │ 본 변형 시 클러스터 깨짐      │
+│ Foliage        │ ✅ (5.1+) │ 나무, 풀 등 대량 배치        │
+│ World Partition│ ✅        │ 오픈월드 필수                 │
+│ 투명 머티리얼  │ ❌        │ Deferred 렌더링 제약         │
+│ 마스크 머티리얼│ ⚠️ (5.3+) │ Programmable Raster로 가능   │
+│ WPO (버텍스변형)│ ❌        │ 런타임 버텍스 이동 불가      │
+│ 폴리곤 10개 미만│ ❌        │ 클러스터 오버헤드가 더 큼    │
+└────────────────┴───────────┴──────────────────────────────┘
+
+<span class="warning">Nanite 적합하지 않은 경우:</span>
+- 캐릭터, 동물 (Skeletal Mesh)
+- 물, 유리 (투명)
+- 깃발, 나뭇잎 흔들림 (WPO)
+- 매우 단순한 오브젝트 (박스 등)</div>
+            </div>
+
+            <div class="q">Nanite 사용 시 주의점은?</div>
+            <div class="a">
+                <div class="code-block">
+// Nanite 최적화 체크리스트
+
+// 1. Nanite 활성화 확인
+StaticMesh->SetNaniteEnabled(true);
+
+// 2. 적절한 Fallback 설정 (Nanite 미지원 하드웨어용)
+StaticMesh->SetFallbackRelativeCameraDistance(1.0f);
+
+// 3. 머티리얼 제약 확인
+// - Masked 머티리얼: UE 5.3+ 필요
+// - 투명: Nanite 불가, 별도 메시 필요
+// - WPO: 사용 불가
+
+// 4. 디버깅: Nanite Visualize 모드
+// 에디터에서 View Mode > Nanite Visualization
+// - Clusters: 클러스터 분할 상태
+// - Triangles: 실제 렌더링되는 삼각형
+// - Overdraw: 오버드로우 확인
+
+// 5. 콘솔 명령어
+// r.Nanite.ShowStats 1   // 통계 표시
+// r.Nanite.MaxPixelsPerEdge 1  // LOD 민감도 조절</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. Virtual Shadow Maps 연동</h2>
+            <div class="q">Nanite가 그림자에도 영향을 줘?</div>
+            <div class="a">
+                <p>Nanite는 <span class="highlight">Virtual Shadow Maps (VSM)</span>과 함께 사용됩니다:</p>
+                <div class="diagram">
+Virtual Shadow Maps + Nanite:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  기존 Shadow Maps의 문제:                                   │
+│  - 해상도 고정 (4096×4096 등)                              │
+│  - 넓은 영역 = 그림자 뭉개짐                               │
+│  - Nanite의 디테일을 담지 못함                             │
+│                                                            │
+│  Virtual Shadow Maps:                                      │
+│  ┌─────────────────────────────────────────────────┐      │
+│  │                                                 │      │
+│  │    ┌───┬───┬───┬───┐                           │      │
+│  │    │ 16K 가상 해상도  │                           │      │
+│  │    ├───┼───┼───┼───┤                           │      │
+│  │    │   │   │   │   │                           │      │
+│  │    └───┴───┴───┴───┘                           │      │
+│  │         │                                       │      │
+│  │         ▼                                       │      │
+│  │    필요한 타일만 실제 렌더링                     │      │
+│  │    (Nanite와 동일한 스트리밍 철학)              │      │
+│  │                                                 │      │
+│  └─────────────────────────────────────────────────┘      │
+│                                                            │
+│  <span class="key-point">결과: Nanite 디테일 + 선명한 그림자</span>                    │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 성능 분석</h2>
+            <div class="q">Nanite가 항상 빠른 거야?</div>
+            <div class="a">
+                <p><span class="warning">항상은 아닙니다</span>. 상황에 따라 오버헤드가 있습니다:</p>
+                <div class="diagram">
+Nanite 성능 트레이드오프:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  <span class="key-point">Nanite가 빠른 경우:</span>                                     │
+│  - 고폴리곤 메시 대량 배치 (수천 개)                        │
+│  - 오픈월드, 대규모 환경                                   │
+│  - 오클루전이 많은 장면 (건물 내부 등)                      │
+│                                                            │
+│  <span class="warning">기존 LOD가 나은 경우:</span>                                    │
+│  - 단순 메시 소량 (박스 몇 개)                             │
+│  - 모바일/저사양 하드웨어                                  │
+│  - 이미 최적화된 게임플레이 메시                           │
+│                                                            │
+│  성능 비교 (동일 씬):                                       │
+│  ┌───────────────────┬──────────────┬──────────────┐      │
+│  │ 메트릭            │ 전통 LOD     │ Nanite       │      │
+│  ├───────────────────┼──────────────┼──────────────┤      │
+│  │ 10K 오브젝트      │ 8ms (CPU)    │ <span class="key-point">2ms (GPU)</span>    │      │
+│  │ Draw Calls        │ 10,000       │ <span class="key-point">1 (간접)</span>     │      │
+│  │ GPU 메모리        │ 2GB          │ 256MB 풀    │      │
+│  │ 디스크 사용       │ 1GB          │ <span class="warning">10GB</span>         │      │
+│  └───────────────────┴──────────────┴──────────────┘      │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. Nanite 워크플로우</h2>
+            <div class="q">실제로 어떻게 사용해?</div>
+            <div class="a">
+                <div class="code-block">
+// Nanite 적용 워크플로우
+
+// 1. 임포트 시 Nanite 활성화
+// Import Options > Mesh > Build Nanite ✅
+
+// 2. 또는 기존 메시에 Nanite 활성화
+// Static Mesh Editor > Details > Nanite > Enable Nanite ✅
+
+// 3. Nanite 설정 조절
+UPROPERTY(EditAnywhere, Category = "Nanite")
+FMeshNaniteSettings NaniteSettings;
+
+NaniteSettings.bEnabled = true;
+NaniteSettings.FallbackPercentTriangles = 1.0f;  // Fallback LOD 삼각형 비율
+NaniteSettings.FallbackRelativeError = 1.0f;     // Fallback 품질
+
+// 4. 프로파일링
+// Console: stat Nanite
+// - Visible Clusters: 렌더링된 클러스터 수
+// - Visible Triangles: 렌더링된 삼각형 수
+// - Streaming: 스트리밍 상태
+
+// 5. 최적화 팁
+// - 큰 메시는 여러 개로 분할 (오클루전 효율)
+// - UV 밀도 일관성 유지
+// - 과도하게 얇은 지오메트리 피하기</div>
+            </div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li>Nanite = <strong>가상화 지오메트리</strong></li>
-                <li><strong>폴리곤 제한 없음</strong> (수십억 OK)</li>
-                <li><strong>자동 LOD</strong>, 팝핑 없음</li>
-                <li>UE5의 핵심 기술</li>
+                <li><strong>Nanite</strong>는 클러스터 기반 계층적 LOD로 폴리곤 제한 제거</li>
+                <li><strong>픽셀 단위 LOD 선택</strong>으로 팝핑 없는 부드러운 전환</li>
+                <li><strong>GPU Compute</strong>로 렌더링, Draw Call 1개로 통합</li>
+                <li><strong>디스크 스트리밍</strong>으로 수백MB 메모리로 수십억 폴리곤 처리</li>
+                <li>Static Mesh만 지원, <strong>Skeletal/투명/WPO 불가</strong></li>
+                <li><strong>Virtual Shadow Maps</strong>과 함께 사용해야 최적</li>
+                <li>대규모 환경에서 효과적, <strong>단순 씬에서는 오버헤드</strong> 가능</li>
             </ul>
         </div>
 

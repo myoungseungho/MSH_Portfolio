@@ -33,7 +33,6 @@
         .nav-links a { color: #0891B2; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
     </style>
 </head>
 <body>
@@ -42,42 +41,378 @@
 
         <div class="header">
             <h1>텍스처 압축 포맷 전쟁</h1>
-            <p>DXT, BC7, ASTC, ETC2</p>
+            <p>DXT, BC7, ASTC, ETC2 - 누가 승자인가?</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">텍스처 압축 포맷 전쟁이(가) 뭐야?</div>
+            <h2>Part 1. 왜 GPU 전용 압축이 필요한가?</h2>
+            <div class="q">PNG나 JPEG 쓰면 안 돼?</div>
             <div class="a">
-                <p><span class="highlight">DXT, BC7, ASTC, ETC2</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p>GPU는 <span class="warning">PNG, JPEG를 직접 읽을 수 없습니다</span>. 압축 해제가 필요합니다:</p>
+                <div class="diagram">
+일반 이미지 포맷의 문제:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  hero_diffuse.png (2048×2048)                              │
+│                                                            │
+│  디스크: 4MB (PNG 압축)                                     │
+│      ↓                                                     │
+│  CPU에서 압축 해제                                          │
+│      ↓                                                     │
+│  GPU 메모리: <span class="warning">16MB</span> (RGBA, 4 bytes × 2048 × 2048)          │
+│                                                            │
+│  게임 텍스처 1000장이면:                                    │
+│  디스크: 4GB (압축)                                         │
+│  GPU 메모리: <span class="warning">16GB</span> (해제 후) → GPU 메모리 초과!           │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+
+GPU 압축 텍스처 (DXT/BC):
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  hero_diffuse.dds (BC7 압축)                               │
+│                                                            │
+│  디스크: 4MB                                                │
+│      ↓                                                     │
+│  CPU 처리 없이 그대로 GPU로                                 │
+│      ↓                                                     │
+│  GPU 메모리: <span class="key-point">4MB</span> (압축된 채로 사용!)                     │
+│                                                            │
+│  <span class="key-point">GPU가 셰이더에서 실시간 디코딩</span> (하드웨어 지원)           │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. 블록 압축의 원리</h2>
+            <div class="q">어떻게 GPU에서 실시간 압축해제가 가능해?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p>모든 GPU 텍스처 압축은 <span class="highlight">4×4 픽셀 블록 단위</span>로 작동합니다:</p>
+                <div class="diagram">
+BC1 (DXT1) 압축 원리:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  원본 4×4 블록 (16 픽셀):                                   │
+│  ┌───┬───┬───┬───┐                                        │
+│  │ R │ R │ G │ G │   각 픽셀 = RGBA = 4 bytes             │
+│  ├───┼───┼───┼───┤   16 × 4 = <span class="warning">64 bytes</span>                     │
+│  │ R │ Y │ Y │ G │                                        │
+│  ├───┼───┼───┼───┤                                        │
+│  │ B │ B │ Y │ G │                                        │
+│  ├───┼───┼───┼───┤                                        │
+│  │ B │ B │ B │ G │                                        │
+│  └───┴───┴───┴───┘                                        │
+│                                                            │
+│  BC1 압축 후 (<span class="key-point">8 bytes</span>):                                    │
+│  ┌─────────────────────────────────────────┐              │
+│  │ Color0: RGB565 (2 bytes) = 빨강         │              │
+│  │ Color1: RGB565 (2 bytes) = 초록         │              │
+│  │ Indices: 2bit × 16픽셀 (4 bytes)        │              │
+│  └─────────────────────────────────────────┘              │
+│                                                            │
+│  각 픽셀은 4가지 색 중 하나:                                │
+│  - Color0 (빨강)                                           │
+│  - Color1 (초록)                                           │
+│  - 1/3 Color0 + 2/3 Color1 (주황)                         │
+│  - 2/3 Color0 + 1/3 Color1 (노랑)                         │
+│                                                            │
+│  압축률: 64 / 8 = <span class="key-point">8:1</span>                                     │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+                <p>GPU는 <span class="key-point">하드웨어 디코더</span>가 있어서 이 8바이트를 실시간으로 16픽셀로 복원합니다.</p>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 압축 포맷 전쟁</h2>
+            <div class="q">BC, ASTC, ETC 뭐가 달라?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p><span class="highlight">플랫폼마다 지원하는 포맷이 다릅니다</span>. 이게 "전쟁"의 원인입니다:</p>
+                <div class="diagram">
+텍스처 압축 포맷 지원 현황:
+┌────────────┬───────────┬───────────┬───────────┬───────────┐
+│ 포맷       │ PC/Xbox   │ PlayStation│ iOS       │ Android   │
+├────────────┼───────────┼───────────┼───────────┼───────────┤
+│ BC1 (DXT1) │ ✅        │ ✅        │ ❌        │ ❌        │
+│ BC3 (DXT5) │ ✅        │ ✅        │ ❌        │ ❌        │
+│ BC7        │ ✅        │ ✅        │ ❌        │ ❌        │
+│ ETC1       │ ❌        │ ❌        │ ❌        │ ✅ (구형) │
+│ ETC2       │ ❌        │ ❌        │ ✅        │ ✅        │
+│ PVRTC      │ ❌        │ ❌        │ ✅ (구형) │ ❌        │
+│ ASTC       │ ❌        │ ✅ (PS5)  │ ✅        │ ✅ (일부) │
+└────────────┴───────────┴───────────┴───────────┴───────────┘
+
+<span class="key-point">결론:</span>
+- PC/콘솔: BC7 (최고 품질) 또는 BC1/BC3 (호환성)
+- iOS: ASTC (신형) 또는 ETC2 (구형 지원)
+- Android: ETC2 (범용) 또는 ASTC (고사양)</div>
+            </div>
+
+            <div class="q">각 포맷의 장단점은?</div>
+            <div class="a">
+                <div class="diagram">
+포맷별 상세 비교:
+┌────────────┬─────────┬─────────┬──────────┬──────────────────┐
+│ 포맷       │ 압축률   │ 품질    │ 알파     │ 특징              │
+├────────────┼─────────┼─────────┼──────────┼──────────────────┤
+│ BC1        │ 8:1     │ ★★☆   │ 1bit     │ 가장 작음, 저품질 │
+│ BC3        │ 4:1     │ ★★★   │ 8bit     │ 알파 있는 텍스처  │
+│ BC4        │ 8:1     │ ★★★★  │ (없음)   │ 단일 채널 (노멀Y) │
+│ BC5        │ 4:1     │ ★★★★  │ (없음)   │ 2채널 (노멀맵)    │
+│ BC7        │ 4:1     │ ★★★★★│ 8bit     │ 최고 품질, 느린압축│
+├────────────┼─────────┼─────────┼──────────┼──────────────────┤
+│ ETC1       │ 8:1     │ ★★☆   │ 없음     │ 구형 안드로이드   │
+│ ETC2       │ 4~8:1   │ ★★★   │ 있음     │ 모바일 표준       │
+├────────────┼─────────┼─────────┼──────────┼──────────────────┤
+│ ASTC 4×4   │ 4:1     │ ★★★★★│ 있음     │ 최고 품질         │
+│ ASTC 8×8   │ 16:1    │ ★★★   │ 있음     │ 초경량 (먼 배경)  │
+│ ASTC 12×12 │ 36:1    │ ★★☆   │ 있음     │ 극한 압축         │
+└────────────┴─────────┴─────────┴──────────┴──────────────────┘
+
+<span class="key-point">ASTC의 장점</span>: 블록 크기를 4×4 ~ 12×12까지 선택 가능
+→ 품질과 용량을 용도별로 조절!</div>
             </div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 4. 용도별 포맷 선택</h2>
+            <div class="q">어떤 텍스처에 어떤 포맷을 써야 해?</div>
+            <div class="a">
+                <p>텍스처 종류에 따라 <span class="highlight">최적의 포맷이 다릅니다</span>:</p>
+                <div class="diagram">
+텍스처 종류별 권장 포맷:
+┌──────────────────┬─────────────┬─────────────┬─────────────┐
+│ 텍스처 종류       │ PC/콘솔     │ 모바일       │ 이유        │
+├──────────────────┼─────────────┼─────────────┼─────────────┤
+│ Diffuse (컬러)   │ BC7         │ ASTC 4×4    │ 품질 중요   │
+│ Normal Map       │ BC5         │ ETC2 RG     │ 2채널만 필요│
+│ Roughness/Metal  │ BC4         │ ETC2 R      │ 1채널       │
+│ Mask (R+G+B+A)   │ BC3         │ ASTC 4×4    │ 4채널 필요  │
+│ UI               │ BC7         │ ASTC 4×4    │ 선명도 중요 │
+│ Skybox           │ BC1         │ ASTC 8×8    │ 품질 덜 중요│
+│ 먼 배경          │ BC1         │ ASTC 12×12  │ 어차피 작음 │
+└──────────────────┴─────────────┴─────────────┴─────────────┘
+
+<span class="warning">주의</span>: 노멀맵에 BC3 쓰면 품질 손실 심함!
+→ 노멀맵은 반드시 BC5 또는 전용 포맷 사용</div>
+                <div class="code-block">
+// Unity 텍스처 임포터 설정 예시
+
+// 1. Diffuse 텍스처
+textureImporter.textureCompression = TextureImporterCompression.CompressedHQ;
+textureImporter.SetPlatformTextureSettings(new TextureImporterPlatformSettings {
+    name = "Standalone",
+    format = TextureImporterFormat.BC7,
+    maxTextureSize = 2048
+});
+textureImporter.SetPlatformTextureSettings(new TextureImporterPlatformSettings {
+    name = "Android",
+    format = TextureImporterFormat.ASTC_4x4,
+    maxTextureSize = 1024
+});
+
+// 2. 노멀맵
+textureImporter.textureType = TextureImporterType.NormalMap;
+textureImporter.SetPlatformTextureSettings(new TextureImporterPlatformSettings {
+    name = "Standalone",
+    format = TextureImporterFormat.BC5,  // 2채널 전용
+});
+
+// 3. 단일 채널 (Roughness 등)
+textureImporter.SetPlatformTextureSettings(new TextureImporterPlatformSettings {
+    name = "Standalone",
+    format = TextureImporterFormat.BC4,  // 1채널 전용
+});</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 압축 품질 vs 속도</h2>
+            <div class="q">BC7 압축이 느리다는데?</div>
+            <div class="a">
+                <p>고품질 포맷일수록 <span class="warning">압축 시간이 기하급수적으로 증가</span>합니다:</p>
+                <div class="diagram">
+압축 시간 비교 (4K 텍스처 기준):
+┌────────────┬─────────────┬─────────────┬──────────────────┐
+│ 포맷       │ 압축 시간   │ 품질        │ 빌드 영향         │
+├────────────┼─────────────┼─────────────┼──────────────────┤
+│ BC1        │ 0.5초       │ ★★☆       │ 무시 가능         │
+│ BC3        │ 1초         │ ★★★       │ 무시 가능         │
+│ BC7 (fast) │ 5초         │ ★★★★☆    │ 텍스처 1000장 = 1.4시간 │
+│ BC7 (best) │ 60초        │ ★★★★★    │ 텍스처 1000장 = <span class="warning">16시간</span> │
+│ ASTC 4×4   │ 10초        │ ★★★★★    │ 모바일 빌드 병목  │
+└────────────┴─────────────┴─────────────┴──────────────────┘
+
+<span class="key-point">해결책</span>:
+1. 개발 중: BC7 fast 또는 BC3
+2. 릴리즈: BC7 best (CI/CD에서 밤새 빌드)
+3. 텍스처 캐시: 이미 압축된 결과 재사용</div>
+                <div class="code-block">
+// Unreal Engine 텍스처 압축 설정
+
+// Config/DefaultEngine.ini
+[/Script/UnrealEd.CookerSettings]
+; 개발 중: 빠른 압축
+DefaultTextureCompression=DeveloperQuality
+
+; 릴리즈: 최고 품질
+; DefaultTextureCompression=BestQuality
+
+// 또는 텍스처별 설정
+UCLASS()
+class UMyTexture : public UTexture2D
+{
+    UPROPERTY(EditAnywhere)
+    TextureCompressionSettings CompressionSettings = TC_BC7;
+
+    // LOD Bias: 먼 거리에서 낮은 mip 사용
+    UPROPERTY(EditAnywhere)
+    int32 LODBias = 0;
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 크로스 플랫폼 전략</h2>
+            <div class="q">PC, 모바일, 콘솔 다 지원하려면?</div>
+            <div class="a">
+                <p><span class="highlight">플랫폼별로 다른 텍스처 빌드</span>를 생성해야 합니다:</p>
+                <div class="diagram">
+크로스 플랫폼 텍스처 파이프라인:
+┌───────────────────────────────────────────────────────────┐
+│                                                           │
+│  마스터 텍스처 (TGA/PSD, 무손실)                           │
+│  hero_diffuse.tga (4K, 무압축)                            │
+│                     │                                     │
+│    ┌────────────────┼─────────────────┐                   │
+│    ▼                ▼                 ▼                   │
+│  ┌──────┐       ┌──────┐         ┌──────┐               │
+│  │ PC   │       │ iOS  │         │Android│               │
+│  │ BC7  │       │ASTC  │         │ ETC2  │               │
+│  │ 4K   │       │ 2K   │         │ 1K    │               │
+│  └──────┘       └──────┘         └──────┘               │
+│                                                           │
+│  각 플랫폼별 Asset Bundle로 분리 배포                      │
+│                                                           │
+└───────────────────────────────────────────────────────────┘
+
+Unity Addressables 예시:
+┌───────────────────────────────────────────────────────────┐
+│  textures_standalone_bc7.bundle    (PC용)                 │
+│  textures_ios_astc.bundle          (iOS용)                │
+│  textures_android_etc2.bundle      (Android용)            │
+└───────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// Unity 빌드 스크립트 - 플랫폼별 텍스처 설정
+
+public class TexturePlatformSettings : AssetPostprocessor
+{
+    void OnPreprocessTexture()
+    {
+        TextureImporter importer = (TextureImporter)assetImporter;
+
+        // PC: BC7 4K
+        importer.SetPlatformTextureSettings(new TextureImporterPlatformSettings {
+            name = "Standalone",
+            overridden = true,
+            format = TextureImporterFormat.BC7,
+            maxTextureSize = 4096,
+            compressionQuality = 100
+        });
+
+        // iOS: ASTC 2K
+        importer.SetPlatformTextureSettings(new TextureImporterPlatformSettings {
+            name = "iPhone",
+            overridden = true,
+            format = TextureImporterFormat.ASTC_4x4,
+            maxTextureSize = 2048,
+            compressionQuality = 50
+        });
+
+        // Android: ETC2 1K (저사양 기기 대응)
+        importer.SetPlatformTextureSettings(new TextureImporterPlatformSettings {
+            name = "Android",
+            overridden = true,
+            format = TextureImporterFormat.ETC2_RGBA8,
+            maxTextureSize = 1024,
+            compressionQuality = 50
+        });
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 미래: 유니버설 포맷</h2>
+            <div class="q">언제쯤 하나의 포맷으로 통일돼?</div>
+            <div class="a">
+                <p><span class="highlight">ASTC가 사실상 승자</span>가 되어가고 있지만, 레거시 호환 문제가 있습니다:</p>
+                <div class="diagram">
+텍스처 포맷의 미래:
+┌───────────────────────────────────────────────────────────┐
+│                                                           │
+│  과거 (2010년대)                                          │
+│  - PC: DXT (S3TC)                                        │
+│  - Mobile: 파편화 (PVRTC, ETC, ATC...)                   │
+│                                                           │
+│  현재 (2020년대)                                          │
+│  - PC/콘솔: BC7 (고품질) / BC1,3,5 (호환)                 │
+│  - Mobile: ASTC (신형) / ETC2 (범용)                      │
+│                                                           │
+│  미래 (2025년~)                                           │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ <span class="key-point">ASTC 통일 가능성</span>                                  │  │
+│  │                                                    │  │
+│  │ - PC: GPU 드라이버에서 ASTC 지원 확대              │  │
+│  │ - 콘솔: PS5/Xbox Series 모두 ASTC 지원            │  │
+│  │ - Mobile: ASTC가 이미 표준                         │  │
+│  │                                                    │  │
+│  │ <span class="warning">단, 구형 PC GPU는 여전히 BC만 지원</span>                  │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                           │
+│  새로운 도전: <span class="highlight">Basis Universal</span>                          │
+│  - 중간 포맷으로 저장                                     │
+│  - 런타임에 플랫폼별 포맷으로 변환 (GPU 가속)             │
+│  - 용량 절감 + 단일 빌드 가능                             │
+│                                                           │
+└───────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// Basis Universal 사용 예시
+
+// 1. 빌드 시: Basis 포맷으로 압축 (.basis 파일)
+basisu hero_diffuse.png -output_file hero_diffuse.basis
+
+// 2. 런타임에: 플랫폼에 맞게 트랜스코딩
+BasisDecoder decoder;
+decoder.Load("hero_diffuse.basis");
+
+// GPU가 지원하는 포맷 확인
+TextureFormat targetFormat;
+if (GPU.Supports(ASTC)) {
+    targetFormat = ASTC_4x4;
+} else if (GPU.Supports(BC7)) {
+    targetFormat = BC7;
+} else if (GPU.Supports(ETC2)) {
+    targetFormat = ETC2;
+}
+
+// 트랜스코딩 (매우 빠름, GPU 가속)
+decoder.Transcode(targetFormat);
+Texture2D texture = decoder.CreateTexture();</div>
+            </div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>텍스처 압축 포맷 전쟁</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>GPU 텍스처 압축</strong>은 메모리에 압축된 채로 유지 (JPEG/PNG와 다름)</li>
+                <li>모든 포맷은 <strong>4×4 블록 단위</strong> 압축, GPU 하드웨어 디코딩</li>
+                <li>PC/콘솔은 <strong>BC7</strong>, 모바일은 <strong>ASTC/ETC2</strong></li>
+                <li>노멀맵은 <strong>BC5</strong>, 단일 채널은 <strong>BC4</strong> 사용</li>
+                <li>고품질 압축은 <strong>빌드 시간 증가</strong> → 개발/릴리즈 분리</li>
+                <li><strong>크로스 플랫폼</strong>은 플랫폼별 다른 번들 생성</li>
+                <li>미래: <strong>ASTC 통일</strong> 또는 <strong>Basis Universal</strong></li>
             </ul>
         </div>
 
