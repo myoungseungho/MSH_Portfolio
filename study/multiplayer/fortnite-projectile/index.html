@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>총알 하나하나 다 서버로 보내요? - Projectile Replication</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #0EA5E9;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            color: #0284C7;
+            transform: translateX(-5px);
+        }
+
+        h1 {
+            color: #0EA5E9;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            border-bottom: 4px solid #0EA5E9;
+            padding-bottom: 15px;
+        }
+
+        .subtitle {
+            color: #0284C7;
+            font-size: 1.3em;
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        h2 {
+            color: #0284C7;
+            font-size: 1.8em;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-left: 15px;
+            border-left: 5px solid #0EA5E9;
+        }
+
+        .qa-block {
+            background: #E0F2FE;
+            padding: 25px;
+            border-radius: 12px;
+            margin: 25px 0;
+            border-left: 5px solid #0EA5E9;
+        }
+
+        .question {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #0284C7;
+            margin-bottom: 15px;
+        }
+
+        .answer {
+            color: #444;
+            line-height: 1.9;
+        }
+
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .ascii-diagram {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            overflow-x: auto;
+            border: 2px solid #0EA5E9;
+            margin: 20px 0;
+            line-height: 1.4;
+        }
+
+        .key-point {
+            background: #BAE6FD;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 5px solid #0284C7;
+        }
+
+        .key-point strong {
+            color: #0284C7;
+            font-size: 1.1em;
+        }
+
+        .highlight {
+            background: #E0F2FE;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #0284C7;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin: 30px 0;
+        }
+
+        .summary-box h3 {
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+
+        .summary-box ul {
+            margin-left: 20px;
+        }
+
+        .summary-box li {
+            margin: 8px 0;
+        }
+
+        ul, ol {
+            margin-left: 30px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        strong {
+            color: #0284C7;
+        }
+
+        h3 {
+            color: #0284C7;
+            margin-top: 20px;
+            font-size: 1.3em;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">← 멀티플레이어 목록으로</a>
+
+        <h1>총알 하나하나 다 서버로 보내요?</h1>
+        <p class="subtitle">Projectile Replication 전략</p>
+
+        <h2>Part 1: 히트스캔 vs 투사체</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "총알이랑 로켓이랑 뭐가 다른가요?"</div>
+            <div class="answer">
+                <p>A: <strong>히트스캔은 즉시 판정, 투사체는 날아가는 물리 객체입니다.</strong></p>
+            </div>
+        </div>
+
+        <div class="ascii-diagram">
+히트스캔 (Assault Rifle, Pistol):
+━━━━━━━━━━━━━━━━━━━━━💥
+발사 즉시 레이캐스트 → 즉시 판정
+빛의 속도 (무한대)
+물리 객체 없음
+
+투사체 (Rocket, Grenade):
+●─────→─────→─────→💥
+발사 → 비행 → 충돌 → 폭발
+실제 속도 (예: 100m/s)
+물리 객체 존재 (중력, 공기저항 영향)
+        </div>
+
+        <div class="code-block">
+// 히트스캔 - 간단
+OnPlayerFireHitscan():
+    ray = CreateRay(player.position, player.aimDirection)
+    hit = RaycastWorld(ray, maxDistance=1000m)
+
+    if hit.isPlayer:
+        ApplyDamage(hit.player, weapon.damage)
+
+    // 끝! (물리 시뮬레이션 없음)
+
+// 투사체 - 복잡
+OnPlayerFireProjectile():
+    projectile = CreateProjectile()
+    projectile.position = player.gunMuzzle
+    projectile.velocity = player.aimDirection * projectileSpeed
+
+    // 매 프레임 업데이트 필요!
+    AddToPhysicsSimulation(projectile)
+        </div>
+
+        <div class="key-point">
+            <strong>왜 구분하나요?</strong>
+            <br>히트스캔: 네트워크 부하 낮음 (판정 결과만 전송)
+            <br>투사체: 네트워크 부하 높음 (위치를 계속 업데이트)
+            <br>→ 투사체는 특별한 최적화가 필요!
+        </div>
+
+        <h2>Part 2: 투사체 동기화의 문제</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "100명이 로켓을 쏘면 서버가 터지지 않나요?"</div>
+            <div class="answer">
+                <p>A: <strong>네, 순진하게 구현하면 터집니다. 계산해볼까요?</strong></p>
+            </div>
+        </div>
+
+        <div class="warning-box">
+            <strong>⚠️ 투사체 폭발 시나리오:</strong>
+            <br>100명 × 초당 10발 = 초당 1000개 투사체 생성
+            <br>투사체 수명: 평균 3초 (폭발/충돌까지)
+            <br>동시 존재 투사체: 1000 × 3 = 3000개
+            <br><br>
+            매 틱마다 (초당 30틱):
+            <br>• 3000개 위치 업데이트
+            <br>• 3000개 × 100명 = 300,000 네트워크 메시지
+            <br>• 초당 9,000,000 메시지!
+            <br><br>
+            대역폭: 9M × 100바이트 = 900MB/초 💥 서버 폭발!
+        </div>
+
+        <div class="ascii-diagram">
+순진한 투사체 동기화:
+
+서버:
+  ├─ Rocket #1: 위치 업데이트 → 100명에게 브로드캐스트
+  ├─ Rocket #2: 위치 업데이트 → 100명에게 브로드캐스트
+  ├─ ... (3000개)
+  └─ Rocket #3000: 위치 업데이트 → 100명에게
+
+초당 전송량:
+  3000 투사체 × 30 틱 × 100 플레이어 = 9,000,000 메시지
+  ❌ 현실적으로 불가능
+        </div>
+
+        <h2>Part 3: 서버 사이드 투사체 (권위 있는 판정)</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "그럼 어떻게 해야 하나요?"</div>
+            <div class="answer">
+                <p>A: <strong>서버가 투사체를 시뮬레이션하되, 최적화 기법을 여러 개 조합합니다.</strong></p>
+            </div>
+        </div>
+
+        <h3>전략 1: 관심 영역(AOI) 필터링</h3>
+        <div class="code-block">
+// 가까운 투사체만 전송
+OnProjectileUpdate(projectile):
+    for player in allPlayers:
+        distance = Distance(player.position, projectile.position)
+
+        // 100m 이내 플레이어에게만 전송
+        if distance < 100m:
+            SendProjectileUpdate(player, projectile)
+
+        // 멀리 있는 투사체는 무시
+        </div>
+
+        <h3>전략 2: 업데이트 빈도 조절</h3>
+        <div class="code-block">
+// 거리에 따라 업데이트 빈도 차등
+GetUpdateFrequency(player, projectile):
+    distance = Distance(player.position, projectile.position)
+
+    if distance < 20m:
+        return 30  // 매 틱 (30Hz)
+    elif distance < 50m:
+        return 10  // 3틱마다 (10Hz)
+    elif distance < 100m:
+        return 3   // 10틱마다 (3Hz)
+    else:
+        return 0   // 업데이트 안 함
+        </div>
+
+        <div class="ascii-diagram">
+거리별 업데이트 빈도:
+
+플레이어 ●
+    ├─ 20m 이내: 🚀 30Hz (매우 정확)
+    ├─ 50m 이내: 🚀 10Hz (적당히 정확)
+    ├─ 100m 이내: 🚀 3Hz (대략적)
+    └─ 100m 초과: 🚀 0Hz (업데이트 안 함)
+
+절감 효과:
+  전체 업데이트: 3000 투사체 × 30Hz = 90,000/초
+  최적화 후: 평균 300 투사체 × 15Hz = 4,500/초
+  절감률: 95% 🎉
+        </div>
+
+        <h2>Part 4: 클라이언트 예측 투사체 (반응성)</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "서버에서만 시뮬레이션하면 발사가 느리지 않나요?"</div>
+            <div class="answer">
+                <p>A: <strong>클라이언트도 로컬 투사체를 만들어서 즉시 보여줍니다.</strong></p>
+            </div>
+        </div>
+
+        <div class="code-block">
+// 클라이언트: 로컬 예측 투사체
+OnPlayerFireProjectile():
+    // 1. 즉시 로컬 투사체 생성 (예측)
+    localProjectile = CreateProjectile()
+    localProjectile.position = gunMuzzle
+    localProjectile.velocity = aimDirection * speed
+    localProjectile.isPredicted = true  // 서버 확인 전
+
+    // 2. 로컬 물리 시뮬레이션
+    AddToLocalPhysics(localProjectile)
+
+    // 3. 서버에 발사 요청
+    SendToServer(FIRE_PROJECTILE, {
+        position: gunMuzzle,
+        direction: aimDirection,
+        timestamp: currentTime
+    })
+
+// 서버 투사체 도착 시
+OnServerProjectileCreated(netID, position, velocity):
+    // 로컬 예측 투사체를 서버 버전으로 교체
+    if localProjectile.exists:
+        // 위치 차이 계산
+        posError = Distance(localProjectile.position, position)
+
+        if posError < 1m:
+            // 오차 작음: 부드럽게 보정
+            localProjectile.netID = netID
+            localProjectile.isPredicted = false
+            SmoothCorrect(localProjectile, position, velocity)
+        else:
+            // 오차 큼: 즉시 교체 (덜컥거림)
+            Destroy(localProjectile)
+            CreateServerProjectile(netID, position, velocity)
+        </div>
+
+        <div class="ascii-diagram">
+클라이언트 예측 + 서버 동기화:
+
+T=0ms: 플레이어 발사
+  클라: 로컬 투사체 생성 🚀 (즉시!)
+       ●─→─→
+  클라: 서버에 요청 전송
+
+T=50ms: 서버 수신
+  서버: 투사체 생성 (권위)
+       ●─→
+  서버: 브로드캐스트
+
+T=100ms: 응답 도착
+  클라: 로컬 투사체 위치
+       ─→─→●─→ (예측)
+  서버: 서버 투사체 위치
+       ─→●─→ (권위)
+  클라: 오차 보정 (부드럽게)
+       ─→●─→ (보정 완료)
+        </div>
+
+        <h2>Part 5: 하이브리드 접근 (로켓 vs 총알)</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "모든 투사체를 똑같이 처리하나요?"</div>
+            <div class="answer">
+                <p>A: <strong>아니요. 중요도와 속도에 따라 다르게 처리합니다.</strong></p>
+            </div>
+        </div>
+
+        <h3>타입 1: 중요 투사체 (로켓, 유탄)</h3>
+        <div class="code-block">
+중요 투사체 = 서버 시뮬레이션 + 전체 리플리케이션
+
+특징:
+  • 느림 (100m/s)
+  • 큰 데미지 (100+ HP)
+  • 적은 개수 (동시 50개 이하)
+  • AOE 효과
+
+처리 방식:
+  ✅ 서버가 물리 시뮬레이션
+  ✅ 모든 클라이언트에 위치 브로드캐스트 (AOI 필터)
+  ✅ 충돌 판정도 서버에서
+  ✅ 클라이언트는 예측 + 보정
+
+이유: 정확성 최우선 (한 방이 게임 바꿀 수 있음)
+        </div>
+
+        <h3>타입 2: 일반 투사체 (총알)</h3>
+        <div class="code-block">
+일반 투사체 = 클라이언트 시뮬레이션 + 히트만 서버
+
+특징:
+  • 빠름 (800m/s)
+  • 작은 데미지 (10~20 HP)
+  • 많은 개수 (동시 500개+)
+  • 단일 타겟
+
+처리 방식:
+  ✅ 클라이언트가 물리 시뮬레이션 (로컬)
+  ❌ 서버에 위치 전송 안 함
+  ✅ 충돌 시에만 서버에 보고 (히트 검증)
+  ✅ 다른 클라이언트는 안 봄 (너무 빠름)
+
+이유: 대역폭 절약 (너무 많고 빠름)
+        </div>
+
+        <div class="ascii-diagram">
+로켓 vs 총알 처리 차이:
+
+[로켓 - 서버 시뮬레이션]
+클라: 🚀 발사
+서버: ●─→─→─→ (서버가 시뮬레이션)
+       ↓
+모든 클라: 🚀 (위치 계속 동기화)
+
+[총알 - 클라이언트만]
+클라: ━━━━💥 (로컬만 보임)
+서버: (위치 모름, 히트만 받음)
+       ↓
+서버: "히트 맞나?" 검증만
+        </div>
+
+        <h2>Part 6: 대역폭 최적화 (스냅샷, 델타 압축)</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "투사체 위치를 계속 보내는 게 부담스러운데, 더 줄일 수 없나요?"</div>
+            <div class="answer">
+                <p>A: <strong>델타 압축과 스냅샷 압축으로 대역폭을 줄입니다.</strong></p>
+            </div>
+        </div>
+
+        <h3>최적화 1: 델타 인코딩</h3>
+        <div class="code-block">
+// ❌ 전체 상태 전송 (비효율)
+SendProjectileUpdate(projectile):
+    Send({
+        netID: 12345,           // 8 bytes
+        position: (100.5, 50.2, 30.1),  // 12 bytes (float × 3)
+        velocity: (10.0, 5.0, 0.0),     // 12 bytes
+        rotation: (0, 45, 0)            // 12 bytes
+    })
+    // 총 44 bytes
+
+// ✅ 델타만 전송 (효율적)
+SendProjectileDelta(projectile):
+    // 이전 상태와의 차이만 전송
+    deltaPos = currentPos - lastSentPos
+
+    Send({
+        netID: 12345,           // 8 bytes
+        deltaX: +0.5,           // 2 bytes (int16, cm 단위)
+        deltaY: +0.2,           // 2 bytes
+        deltaZ: +0.1            // 2 bytes
+    })
+    // 총 14 bytes (68% 절감)
+        </div>
+
+        <h3>최적화 2: 예측 가능한 투사체는 생략</h3>
+        <div class="code-block">
+// 직선으로 날아가는 투사체는 중간 업데이트 생략
+OnProjectileFire(projectile):
+    // 초기 상태만 전송
+    Send({
+        netID: projectile.netID,
+        startPos: projectile.position,
+        velocity: projectile.velocity,
+        gravity: projectile.gravity,
+        fireTime: currentTime
+    })
+
+    // 클라이언트가 알아서 계산
+    // position = startPos + velocity * t + 0.5 * gravity * t^2
+
+// 충돌 시에만 업데이트
+OnProjectileHit(projectile, hitPos):
+    Send({
+        netID: projectile.netID,
+        EVENT: "HIT",
+        hitPos: hitPos
+    })
+        </div>
+
+        <div class="key-point">
+            <strong>예측 가능성 활용:</strong>
+            <br>투사체는 물리 법칙을 따르므로 예측 가능!
+            <br>→ 초기 상태(위치, 속도, 중력)만 알면 경로 계산 가능
+            <br>→ 중간 업데이트 대부분 생략
+            <br>→ 충돌/폭발 같은 이벤트만 전송
+            <br><br>
+            절감 효과: 초당 30개 업데이트 → 2개 업데이트 (93% 절감)
+        </div>
+
+        <div class="ascii-diagram">
+예측 기반 투사체 동기화:
+
+서버 → 클라이언트:
+
+T=0: [SPAWN] 로켓 생성
+     {pos: (0,0,0), vel: (100,0,0), gravity: (0,-9.8,0)}
+     ↓
+클라: "알았어, 내가 계산할게"
+     T=1: pos = (100, -4.9, 0)   ← 로컬 계산
+     T=2: pos = (200, -19.6, 0)  ← 로컬 계산
+     T=3: pos = (300, -44.1, 0)  ← 로컬 계산
+     ...
+     ↓
+T=5: [HIT] 충돌!
+     {hitPos: (500, -122.5, 0)}
+     ↓
+클라: "폭발 이펙트 재생!"
+
+전송량: 2개 메시지 (SPAWN + HIT)
+        vs
+순진한 방법: 150개 메시지 (30Hz × 5초)
+        </div>
+
+        <h3>최적화 3: 중요도 기반 압축</h3>
+        <div class="code-block">
+// 가까운 투사체 = 높은 정밀도
+// 먼 투사체 = 낮은 정밀도
+
+EncodeProjectilePosition(projectile, playerDistance):
+    if playerDistance < 20m:
+        // 높은 정밀도 (float, 12 bytes)
+        return {
+            x: projectile.x,  // float32
+            y: projectile.y,
+            z: projectile.z
+        }
+
+    elif playerDistance < 100m:
+        // 중간 정밀도 (int16, 6 bytes)
+        return {
+            x: int16(projectile.x / 0.1),  // 10cm 단위
+            y: int16(projectile.y / 0.1),
+            z: int16(projectile.z / 0.1)
+        }
+
+    else:
+        // 낮은 정밀도 (int8, 3 bytes)
+        return {
+            x: int8(projectile.x / 1.0),   // 1m 단위
+            y: int8(projectile.y / 1.0),
+            z: int8(projectile.z / 1.0)
+        }
+        </div>
+
+        <div class="summary-box">
+            <h3>📚 핵심 요약</h3>
+            <ul>
+                <li><strong>히트스캔 vs 투사체:</strong> 히트스캔은 즉시 판정, 투사체는 물리 시뮬레이션 필요</li>
+                <li><strong>문제:</strong> 100명 × 10발/초 = 초당 9백만 메시지 (폭발!)</li>
+                <li><strong>해결 1:</strong> AOI 필터링 (가까운 투사체만 전송) → 95% 절감</li>
+                <li><strong>해결 2:</strong> 거리별 업데이트 빈도 조절 (가까울수록 자주)</li>
+                <li><strong>해결 3:</strong> 클라이언트 예측 (즉시 반응) + 서버 보정</li>
+                <li><strong>하이브리드:</strong> 로켓은 서버 시뮬레이션, 총알은 클라이언트만</li>
+                <li><strong>압축:</strong> 델타 인코딩 + 예측 기반 생략 + 거리별 정밀도</li>
+            </ul>
+            <p style="margin-top: 15px;">
+                <strong>핵심 트레이드오프:</strong>
+                정확성 vs 대역폭
+                <br>포트나이트는 투사체 중요도에 따라 차등 처리하여 균형을 맞췄습니다.
+                <br>로켓: 정확성 우선 | 총알: 대역폭 우선
+            </p>
+        </div>
+
+        <a href="../" class="back-link" style="margin-top: 30px; display: inline-block;">← 멀티플레이어 목록으로</a>
+    </div>
+</body>
+</html>
