@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>128틱 서버가 뭐길래 난리예요? | Tickrate와 히트박스 정확도</title>
+    <style>
+        :root {
+            --main-color: #0EA5E9;
+            --light-color: #E0F2FE;
+            --dark-color: #0284C7;
+            --key-point-bg: #BAE6FD;
+            --highlight-bg: #E0F2FE;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background-color: #f9fafb;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--dark-color), var(--main-color));
+            color: white;
+            padding: 60px 20px;
+            text-align: center;
+            border-radius: 12px;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1.3em;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: var(--main-color);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .back-link:hover {
+            color: var(--dark-color);
+        }
+
+        .back-link::before {
+            content: "← ";
+        }
+
+        .content-section {
+            background: white;
+            padding: 40px;
+            margin-bottom: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        h2 {
+            color: var(--main-color);
+            font-size: 2em;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid var(--light-color);
+        }
+
+        h3 {
+            color: var(--dark-color);
+            font-size: 1.5em;
+            margin: 30px 0 15px 0;
+        }
+
+        .q {
+            background: var(--highlight-bg);
+            border-left: 4px solid var(--main-color);
+            padding: 20px 25px;
+            margin: 25px 0;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .q::before {
+            content: "Q. ";
+            color: var(--main-color);
+            font-weight: 700;
+        }
+
+        .a {
+            padding: 20px 25px;
+            margin: 15px 0 25px 0;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+
+        .a::before {
+            content: "A. ";
+            color: var(--dark-color);
+            font-weight: 700;
+        }
+
+        .diagram {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 25px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 25px 0;
+            line-height: 1.6;
+            font-size: 0.95em;
+        }
+
+        .code-block {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+            overflow-x: auto;
+        }
+
+        .code-block pre {
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        .summary-box {
+            background: var(--key-point-bg);
+            border: 2px solid var(--main-color);
+            border-radius: 12px;
+            padding: 30px;
+            margin: 30px 0;
+        }
+
+        .summary-box h3 {
+            color: var(--dark-color);
+            margin-top: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        th {
+            background: var(--main-color);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        tr:hover {
+            background: var(--light-color);
+        }
+
+        .key-point {
+            background: var(--key-point-bg);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid var(--main-color);
+        }
+
+        ul, ol {
+            margin: 15px 0 15px 30px;
+        }
+
+        li {
+            margin: 10px 0;
+        }
+
+        strong {
+            color: var(--dark-color);
+        }
+
+        .highlight {
+            background: var(--highlight-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">멀티플레이어 게임 네트워킹으로 돌아가기</a>
+
+        <header>
+            <h1>128틱 서버가 뭐길래 난리예요?</h1>
+            <p class="subtitle">Tickrate와 히트박스 정확도</p>
+        </header>
+
+        <div class="content-section">
+            <h2>Part 1: Tickrate란? - 서버의 초당 업데이트 횟수</h2>
+
+            <div class="q">게이머들이 "128틱 서버 없으면 안 한다"고 하는데, 틱이 뭔가요?</div>
+
+            <div class="a">
+                <p><strong>Tick(틱)</strong>은 서버가 게임 상태를 업데이트하는 최소 단위예요. <span class="highlight">Tickrate(틱레이트)</span>는 초당 몇 번 업데이트하는지를 나타내요.</p>
+            </div>
+
+            <h3>Tickrate 기본 개념</h3>
+
+            <div class="diagram">
+64 Tick Server (64Hz):
+═══════════════════════════════════════════════════════
+1초를 64개로 나눔 → 1틱 = 15.625ms
+
+Time: 0ms    15.6ms   31.2ms   46.9ms   62.5ms ...
+Tick: │─────►│─────►│─────►│─────►│
+      Tick 0  Tick 1  Tick 2  Tick 3  Tick 4
+
+각 틱마다:
+- 플레이어 위치 업데이트
+- 총알 발사 계산
+- 히트박스 충돌 감지
+- 게임 로직 처리
+
+128 Tick Server (128Hz):
+═══════════════════════════════════════════════════════
+1초를 128개로 나눔 → 1틱 = 7.8125ms
+
+Time: 0ms    7.8ms   15.6ms   23.4ms   31.2ms ...
+Tick: │──►│──►│──►│──►│──►│──►│──►│──►│
+      Tick 0~7 (64틱 서버의 Tick 0~1 구간)
+
+같은 시간에 2배 더 많이 계산!
+            </diagram>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tickrate</th>
+                        <th>틱 간격 (ms)</th>
+                        <th>초당 업데이트</th>
+                        <th>느낌</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>20 Tick</strong></td>
+                        <td>50ms</td>
+                        <td>20회</td>
+                        <td>매우 느림 (옛날 게임)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>30 Tick</strong></td>
+                        <td>33.3ms</td>
+                        <td>30회</td>
+                        <td>MOBA (LoL, Dota 2)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>64 Tick</strong></td>
+                        <td>15.6ms</td>
+                        <td>64회</td>
+                        <td>CS:GO MM, Overwatch</td>
+                    </tr>
+                    <tr>
+                        <td><strong>128 Tick</strong></td>
+                        <td>7.8ms</td>
+                        <td>128회</td>
+                        <td>CS:GO 프로, Valorant</td>
+                    </tr>
+                    <tr>
+                        <td><strong>256 Tick</strong></td>
+                        <td>3.9ms</td>
+                        <td>256회</td>
+                        <td>실험적 (비용 너무 높음)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="key-point">
+                <strong>핵심:</strong> Tickrate가 높을수록 게임 상태가 더 자주 업데이트되어 <strong>정확하고 반응성 좋은</strong> 게임플레이가 가능해요!
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Part 2: 64틱 vs 128틱 차이 - 15.6ms vs 7.8ms</h2>
+
+            <div class="q">7.8ms 차이가 그렇게 중요한가요? 사람이 느낄 수 있나요?</div>
+
+            <div class="a">
+                <p>일반인은 못 느낄 수 있지만, <strong>프로 게이머나 고수</strong>들은 확실히 느껴요. 특히 <strong>피킹, 헤드샷, 정밀 에임</strong>에서 큰 차이가 나요!</p>
+            </div>
+
+            <h3>실제 시나리오: 코너 피킹</h3>
+
+            <div class="diagram">
+64 Tick Server 상황:
+════════════════════════════════════════════════════
+Time 0ms:    Player A가 코너에서 튀어나옴 👤
+             (서버는 아직 모름, 다음 틱 대기)
+
+Time 7ms:    Player A가 헤드샷 조준 완료 🎯
+             (서버는 여전히 모름)
+
+Time 12ms:   Player A가 발사! 💥
+             (서버는 여전히 모름!)
+
+Time 15.6ms: ← 서버 틱 발생!
+             서버가 이제야 "A가 나왔구나" 인지
+             총알 계산 시작
+
+Player B 시점: "어? 내가 본 건 벽 뒤인데 죽었어?"
+
+128 Tick Server 상황:
+════════════════════════════════════════════════════
+Time 0ms:    Player A가 코너에서 튀어나옴 👤
+
+Time 7.8ms:  ← 서버 틱 발생! (첫 번째)
+             서버가 즉시 인지, 위치 업데이트
+
+Time 12ms:   Player A가 발사! 💥
+
+Time 15.6ms: ← 서버 틱 발생! (두 번째)
+             총알 계산 즉시 처리
+
+Player B 시점: "아 정확히 내가 본 순간에 맞았네"
+
+차이: 128틱은 반응이 2배 빠름!
+            </diagram>
+
+            <h3>히트박스 정확도 차이</h3>
+
+            <div class="code-block">
+<pre>
+// 64틱 서버의 히트 감지
+function detectHit_64Tick() {
+    const TICK_INTERVAL = 15.6ms;
+
+    // Tick 0 (0ms): Player 위치 A
+    playerPosition = (100, 200);
+
+    // ... 15.6ms 동안 서버는 모름
+    // 실제로는 player가 (120, 200)으로 이동 중
+
+    // Player가 (115, 200)에서 총 발사 (Time 8ms)
+    shoot(target);
+
+    // Tick 1 (15.6ms): 이제야 계산
+    // 하지만 player는 이미 (120, 200)
+    // → 히트박스가 뒤쳐짐!
+
+    hitDetection(
+        shooterPos: (100, 200),  // 구 위치 사용
+        targetPos: enemyPosition  // 최대 15.6ms 지연
+    );
+}
+
+// 128틱 서버의 히트 감지
+function detectHit_128Tick() {
+    const TICK_INTERVAL = 7.8ms;
+
+    // Tick 0 (0ms): Player 위치 A
+    playerPosition = (100, 200);
+
+    // Tick 1 (7.8ms): 업데이트!
+    playerPosition = (110, 200);  // 중간 위치 캐치
+
+    // Player가 (115, 200)에서 총 발사 (Time 8ms)
+    shoot(target);
+
+    // 서버가 거의 실시간으로 인지
+    // → 히트박스가 정확함!
+
+    hitDetection(
+        shooterPos: (110, 200),  // 최신 위치
+        targetPos: enemyPosition  // 최대 7.8ms 지연
+    );
+}
+</pre>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>상황</th>
+                        <th>64 Tick</th>
+                        <th>128 Tick</th>
+                        <th>영향</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>빠른 피킹</strong></td>
+                        <td>히트박스 뒤쳐짐</td>
+                        <td>정확한 위치</td>
+                        <td>매우 큼</td>
+                    </tr>
+                    <tr>
+                        <td><strong>헤드샷</strong></td>
+                        <td>가끔 안 맞음</td>
+                        <td>대부분 맞음</td>
+                        <td>큼</td>
+                    </tr>
+                    <tr>
+                        <td><strong>스트레이프 슛</strong></td>
+                        <td>정확도 낮음</td>
+                        <td>정확도 높음</td>
+                        <td>보통</td>
+                    </tr>
+                    <tr>
+                        <td><strong>스모크 투척</strong></td>
+                        <td>타이밍 애매</td>
+                        <td>정밀 타이밍</td>
+                        <td>보통</td>
+                    </tr>
+                    <tr>
+                        <td><strong>움직이는 적</strong></td>
+                        <td>리드샷 필요</td>
+                        <td>정확히 조준 가능</td>
+                        <td>큼</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="key-point">
+                <strong>프로의 차이:</strong> 프로 게이머들은 반응속도가 150~200ms예요. 7.8ms 차이는 작아 보이지만, 수백 번의 교전에서 <strong>승률 5~10% 차이</strong>를 만들어요!
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Part 3: FPS 게임에서 왜 중요한가? - 피킹과 헤드샷</h2>
+
+            <div class="q">MOBA는 30틱인데 FPS는 왜 128틱이 필요한가요?</div>
+
+            <div class="a">
+                <p>FPS는 <strong>밀리초 단위의 정밀함</strong>이 승패를 가르는 장르예요. 특히 <strong>피킹(Peeking)</strong>과 <strong>헤드샷</strong>에서 틱레이트가 생사를 결정해요.</p>
+            </div>
+
+            <h3>피킹의 물리학</h3>
+
+            <div class="diagram">
+피킹 속도 분석:
+
+프로 게이머의 피킹:
+┌────────────────────────────────────────────────┐
+│ 벽 뒤 → 코너 노출 → 조준 → 발사 → 벽 뒤 복귀 │
+│ 0ms    100ms      150ms   180ms   280ms       │
+│                                                │
+│ 노출 시간: ~180ms (0.18초)                    │
+└────────────────────────────────────────────────┘
+
+64틱 서버의 감지:
+┌────────────────────────────────────────────────┐
+│ Tick 간격: 15.6ms                              │
+│                                                │
+│ Time 0ms:    벽 뒤 (Tick 발생, 위치 기록)     │
+│ Time 100ms:  노출됨 (서버 모름, 다음 틱 대기) │
+│ Time 109ms:  ← Tick 발생! "노출 인지"         │
+│ Time 180ms:  발사 (서버 모름)                  │
+│ Time 187ms:  ← Tick 발생! "발사 인지"         │
+│                                                │
+│ 지연: 최대 15.6ms × 2 = 31.2ms                │
+└────────────────────────────────────────────────┘
+
+128틱 서버의 감지:
+┌────────────────────────────────────────────────┐
+│ Tick 간격: 7.8ms                               │
+│                                                │
+│ Time 0ms:    벽 뒤 (Tick)                      │
+│ Time 100ms:  노출됨                            │
+│ Time 104ms:  ← Tick! "노출 인지" (4ms 지연)   │
+│ Time 180ms:  발사                              │
+│ Time 183ms:  ← Tick! "발사 인지" (3ms 지연)   │
+│                                                │
+│ 지연: 최대 7.8ms × 2 = 15.6ms                 │
+└────────────────────────────────────────────────┘
+
+차이: 128틱이 31.2ms → 15.6ms로 절반!
+      피킹 플레이에서 엄청난 어드밴티지!
+            </diagram>
+
+            <h3>헤드샷 판정의 정밀도</h3>
+
+            <div class="code-block">
+<pre>
+// 헤드샷 히트박스 크기 (Valorant 기준)
+const HEAD_HITBOX = {
+    width: 15,   // 픽셀 (화면 기준)
+    height: 20,
+    depth: 15
+};
+
+// 플레이어 이동 속도
+const MOVE_SPEED = 5.5;  // 유닛/초
+
+// 64틱에서의 이동 거리
+distance_64tick = MOVE_SPEED * 0.0156 = 0.0858 유닛
+
+// 128틱에서의 이동 거리
+distance_128tick = MOVE_SPEED * 0.0078 = 0.0429 유닛
+
+// 헤드샷 판정
+function checkHeadshot(bulletPos, targetHead) {
+    // 64틱: 타겟이 최대 0.0858 유닛 틀어짐
+    if (distance(bulletPos, targetHead) > 0.0858) {
+        // 헤드 옆을 스쳐지나감 (Miss)
+        return false;
+    }
+
+    // 128틱: 오차 절반
+    if (distance(bulletPos, targetHead) > 0.0429) {
+        return false;
+    }
+
+    return true;  // Hit!
+}
+
+// 실제 영향:
+// - 64틱: 헤드샷 판정 정확도 ~85%
+// - 128틱: 헤드샷 판정 정확도 ~95%
+// → 10% 차이는 프로에게 엄청남!
+</pre>
+            </div>
+
+            <div class="key-point">
+                <strong>실제 사례:</strong> CS:GO 프로들이 매치메이킹(64틱)을 안 하고 FACEIT/ESEA(128틱)만 하는 이유가 바로 이거예요. "감이 달라서" 연습이 안 된다고 해요.
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Part 4: 서버 비용과 트레이드오프</h2>
+
+            <div class="q">그럼 왜 모든 게임이 128틱을 안 쓰나요?</div>
+
+            <div class="a">
+                <p><strong>비용</strong>이 문제예요. 128틱은 64틱보다 <span class="highlight">2배 이상의 서버 자원</span>을 소모해요!</p>
+            </div>
+
+            <h3>서버 비용 비교</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>64 Tick</th>
+                        <th>128 Tick</th>
+                        <th>비용 증가</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>CPU 사용량</strong></td>
+                        <td>100%</td>
+                        <td>200%</td>
+                        <td>2배</td>
+                    </tr>
+                    <tr>
+                        <td><strong>메모리</strong></td>
+                        <td>2GB</td>
+                        <td>3.5GB</td>
+                        <td>1.75배</td>
+                    </tr>
+                    <tr>
+                        <td><strong>네트워크 대역폭</strong></td>
+                        <td>128 kbps</td>
+                        <td>196 kbps</td>
+                        <td>1.5배</td>
+                    </tr>
+                    <tr>
+                        <td><strong>서버 대수</strong></td>
+                        <td>1,000대</td>
+                        <td>2,200대</td>
+                        <td>2.2배</td>
+                    </tr>
+                    <tr>
+                        <td><strong>월 운영비 (전 세계)</strong></td>
+                        <td>$500만</td>
+                        <td>$1,100만</td>
+                        <td>2.2배</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+<pre>
+// 서버 부하 계산 (의사코드)
+function serverLoad(tickrate) {
+    // 1. 플레이어 위치 업데이트
+    updatePositions(10 players);  // O(n)
+
+    // 2. 히트 감지 (모든 총알 vs 모든 플레이어)
+    checkHits(bullets, players);  // O(n * m)
+
+    // 3. 물리 시뮬레이션 (유탄, 스모크 등)
+    physicsSimulation();
+
+    // 4. 게임 로직 (스킬 쿨다운, 버프 등)
+    gameLogic();
+
+    // 틱레이트 2배 = 위 모든 계산을 2배 많이!
+    totalCost = baseCost * (tickrate / 64);
+
+    return totalCost;
+}
+
+// 글로벌 게임의 비용
+globalCost = {
+    servers: 5000,         // 전 세계 서버 개수
+    regions: 20,           // 리전 개수
+    playersPerServer: 50,  // 서버당 동시 플레이어
+
+    costPer64Tick: 5000000,  // $500만/월
+    costPer128Tick: 11000000  // $1,100만/월
+};
+
+annualIncrease = (11000000 - 5000000) * 12
+               = $7,200만 / 년 추가 비용!
+</pre>
+            </div>
+
+            <h3>게임사의 선택</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>게임</th>
+                        <th>Tickrate</th>
+                        <th>이유</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Valorant</strong></td>
+                        <td>128 Tick</td>
+                        <td>Riot의 투자, 경쟁력 확보</td>
+                    </tr>
+                    <tr>
+                        <td><strong>CS2 (2023)</strong></td>
+                        <td>64→128 Tick</td>
+                        <td>커뮤니티 압박, Sub-tick 도입</td>
+                    </tr>
+                    <tr>
+                        <td><strong>CS:GO MM</strong></td>
+                        <td>64 Tick</td>
+                        <td>비용 절감 (프로는 서드파티)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Overwatch 2</strong></td>
+                        <td>63 Tick</td>
+                        <td>캐주얼 중심, 비용 고려</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Apex Legends</strong></td>
+                        <td>20→60 Tick</td>
+                        <td>배틀로얄이라 낮아도 됨</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="key-point">
+                <strong>Riot의 전략:</strong> Valorant는 출시부터 128틱을 제공해서 <strong>"CS:GO보다 정밀하다"</strong>는 이미지로 시장 공략. 연간 수천만 달러 투자지만 마케팅 효과로 회수!
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Part 5: 클라이언트 보간과의 관계</h2>
+
+            <div class="q">틱레이트가 높아도 내 모니터는 60Hz인데 의미 있나요?</div>
+
+            <div class="a">
+                <p>네! <strong>클라이언트 보간(Interpolation)</strong> 때문에 차이가 나요. 서버 틱이 높을수록 보간이 정확해져요.</p>
+            </div>
+
+            <h3>보간의 원리</h3>
+
+            <div class="diagram">
+64틱 서버 + 60Hz 모니터:
+════════════════════════════════════════════════════
+서버 틱:  │─────15.6ms─────│─────15.6ms─────│
+          Tick 0          Tick 1          Tick 2
+          Pos: (0, 0)     Pos: (10, 0)    Pos: (20, 0)
+
+화면 프레임: │──16.6ms──│──16.6ms──│──16.6ms──│
+            Frame 0     Frame 1     Frame 2
+
+클라이언트가 해야 할 일:
+- Tick 0과 Tick 1 사이를 부드럽게 연결
+- 하지만 15.6ms 사이에 무슨 일이? (모름!)
+- → 선형 보간으로 추정
+
+보간 오차: ±7.8ms (틱 간격의 절반)
+
+128틱 서버 + 60Hz 모니터:
+════════════════════════════════════════════════════
+서버 틱:  │─7.8ms─│─7.8ms─│─7.8ms─│─7.8ms─│
+          Tick 0  Tick 1  Tick 2  Tick 3  Tick 4
+          (0,0)   (5,0)   (10,0)  (15,0)  (20,0)
+
+화면 프레임: │──16.6ms──│──16.6ms──│──16.6ms──│
+            Frame 0     Frame 1     Frame 2
+
+클라이언트:
+- 더 많은 정보로 보간 가능
+- Tick 0, 1, 2를 활용해서 Frame 1 그림
+
+보간 오차: ±3.9ms (틱 간격의 절반)
+
+결과: 128틱이 화면이 더 부드럽고 정확함!
+            </diagram>
+
+            <div class="code-block">
+<pre>
+// 클라이언트 보간 코드
+class ClientInterpolation {
+    List<ServerState> stateBuffer;
+    const INTERPOLATION_DELAY = 100ms;  // 안정성
+
+    function renderFrame() {
+        currentTime = now();
+
+        // 현재 시간 - 100ms 위치를 렌더링
+        targetTime = currentTime - INTERPOLATION_DELAY;
+
+        // 버퍼에서 targetTime 전후의 틱 찾기
+        beforeState = findState(targetTime - 10ms);
+        afterState = findState(targetTime + 10ms);
+
+        // 64틱: 15.6ms 간격, 보간 범위 넓음
+        // 128틱: 7.8ms 간격, 보간 범위 좁음
+
+        // 선형 보간
+        ratio = (targetTime - beforeState.time)
+              / (afterState.time - beforeState.time);
+
+        interpolatedPos = lerp(
+            beforeState.position,
+            afterState.position,
+            ratio
+        );
+
+        // 렌더링
+        drawPlayer(interpolatedPos);
+    }
+}
+
+// 고프레임 모니터 (144Hz, 240Hz)의 이점
+// 240Hz = 4.16ms per frame
+// 128틱 = 7.8ms per tick
+// → 1틱에 ~2프레임씩 그림
+// → 매우 부드러운 움직임 + 낮은 입력 지연
+</pre>
+            </div>
+
+            <div class="key-point">
+                <strong>프로의 설정:</strong> 240Hz 모니터 + 128틱 서버 + 300fps = 최적 조합. 입력 지연 ~10ms 이하로 만들 수 있어요!
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Part 6: CS2와 Sub-tick 시스템</h2>
+
+            <div class="q">CS2가 "Sub-tick"이라는 걸 도입했다는데, 뭔가요?</div>
+
+            <div class="a">
+                <p>Valve의 혁신적인 해결책이에요! <span class="highlight">틱 사이에 발생한 이벤트의 정확한 시간을 기록</span>해서, 64틱으로도 128틱처럼 정밀하게 만드는 기술이에요.</p>
+            </div>
+
+            <h3>전통적인 틱 vs Sub-tick</h3>
+
+            <div class="diagram">
+전통적인 64틱:
+════════════════════════════════════════════════════
+Tick 0 (0ms)           Tick 1 (15.6ms)
+│                      │
+│  Time 5ms: 플레이어 발사 💥
+│  Time 12ms: 플레이어 이동 👣
+│                      │
+└──────────────────────┘
+                       ↓
+                  Tick 1에서 일괄 처리
+                  "어느 게 먼저였는지 모름"
+                  → 부정확!
+
+CS2 Sub-tick:
+════════════════════════════════════════════════════
+Tick 0 (0ms)           Tick 1 (15.6ms)
+│                      │
+│  Event 1: 발사 💥 (Time 5ms, offset +5ms)
+│  Event 2: 이동 👣 (Time 12ms, offset +12ms)
+│                      │
+└──────────────────────┘
+                       ↓
+                  Tick 1에서 처리하되
+                  각 이벤트의 정확한 시간 고려
+                  순서: 발사 → 이동
+                  → 정확!
+
+저장 데이터:
+{
+  tickId: 1,
+  events: [
+    { type: "SHOOT", time: 5.0ms, player: 1 },
+    { type: "MOVE", time: 12.0ms, player: 1 }
+  ]
+}
+            </diagram>
+
+            <div class="code-block">
+<pre>
+// CS2 Sub-tick 구현 (의사코드)
+class SubTickSystem {
+    const TICK_RATE = 64;
+    const TICK_DURATION = 15.625ms;
+
+    List<SubTickEvent> eventBuffer;
+
+    function onPlayerAction(action, player) {
+        currentTime = getHighPrecisionTime();  // μs 단위
+        currentTick = floor(currentTime / TICK_DURATION);
+        offset = currentTime % TICK_DURATION;
+
+        // Sub-tick 이벤트 기록
+        event = {
+            tick: currentTick,
+            offset: offset,  // 틱 내 정확한 위치!
+            type: action.type,
+            player: player,
+            data: action.data
+        };
+
+        eventBuffer.add(event);
+    }
+
+    function processTick(tickId) {
+        // 이 틱에 속한 모든 이벤트 수집
+        events = eventBuffer.filter(e => e.tick == tickId);
+
+        // offset 순서대로 정렬 (시간순)
+        events.sortBy(e => e.offset);
+
+        // 순서대로 처리
+        foreach (event in events) {
+            // 정확한 시간에 발생한 것으로 계산
+            exactTime = tickId * TICK_DURATION + event.offset;
+            processEvent(event, exactTime);
+        }
+    }
+}
+
+// 효과:
+// - 64틱이지만 이벤트 순서는 μs 단위로 정확
+// - 히트 감지도 정밀해짐
+// - 128틱 수준의 정확도, 64틱의 비용!
+</pre>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>전통 64틱</th>
+                        <th>전통 128틱</th>
+                        <th>CS2 Sub-tick</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>시간 정밀도</strong></td>
+                        <td>15.6ms</td>
+                        <td>7.8ms</td>
+                        <td>~0.1ms</td>
+                    </tr>
+                    <tr>
+                        <td><strong>서버 부하</strong></td>
+                        <td>낮음</td>
+                        <td>높음 (2배)</td>
+                        <td>낮음 (1.2배)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>히트 정확도</strong></td>
+                        <td>85%</td>
+                        <td>95%</td>
+                        <td>~93%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>비용</strong></td>
+                        <td>$</td>
+                        <td>$$$</td>
+                        <td>$$</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="key-point">
+                <strong>Valve의 혁신:</strong> "128틱 비용은 못 내겠고, 64틱 품질은 불만족스럽다" → Sub-tick으로 둘 다 해결! 2023년 게임 개발 업계에서 큰 화제가 됐어요.
+            </div>
+        </div>
+
+        <div class="content-section">
+            <div class="summary-box">
+                <h3>💡 핵심 정리</h3>
+
+                <p><strong>Tickrate란?</strong></p>
+                <p>서버가 <span class="highlight">초당 몇 번 게임 상태를 업데이트</span>하는지를 나타내는 수치. 높을수록 정확하고 반응성 좋은 게임플레이 가능!</p>
+
+                <div class="diagram">
+Tickrate의 영향:
+
+30 Tick (MOBA):
+│────33ms────│────33ms────│
+느리지만 전략 게임엔 충분
+
+64 Tick (캐주얼 FPS):
+│──15.6ms──│──15.6ms──│
+일반 유저에겐 OK
+
+128 Tick (경쟁 FPS):
+│─7.8ms─│─7.8ms─│
+프로 수준 정밀도
+                </div>
+
+                <p><strong>64틱 vs 128틱 실질 차이</strong></p>
+                <ul>
+                    <li><strong>히트박스 정확도:</strong> 85% → 95% (10% 향상)</li>
+                    <li><strong>피킹 지연:</strong> 31ms → 16ms (절반으로 감소)</li>
+                    <li><strong>입력 반응:</strong> 더 정밀한 타이밍 가능</li>
+                    <li><strong>프로 승률:</strong> 5~10% 차이 (누적 효과)</li>
+                </ul>
+
+                <p><strong>왜 모두 128틱을 안 쓰나?</strong></p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>이유</th>
+                            <th>설명</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>비용</strong></td>
+                            <td>서버 비용 2배 이상 증가</td>
+                        </tr>
+                        <tr>
+                            <td><strong>대역폭</strong></td>
+                            <td>네트워크 사용량 1.5배</td>
+                        </tr>
+                        <tr>
+                            <td><strong>유저 PC</strong></td>
+                            <td>저사양 PC는 체감 못 함</td>
+                        </tr>
+                        <tr>
+                            <td><strong>장르</strong></td>
+                            <td>MOBA, 배틀로얄은 불필요</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <p><strong>게임별 선택</strong></p>
+                <ul>
+                    <li><strong>Valorant:</strong> 128틱 - 경쟁력 확보, Riot의 투자</li>
+                    <li><strong>CS2:</strong> Sub-tick - 혁신적 해결책</li>
+                    <li><strong>CS:GO:</strong> 64틱 MM - 비용 절감, 프로는 서드파티</li>
+                    <li><strong>Overwatch:</strong> 63틱 - 캐주얼 지향</li>
+                    <li><strong>LoL:</strong> 30틱 - 장르 특성상 충분</li>
+                </ul>
+
+                <p><strong>미래: Sub-tick의 의미</strong></p>
+                <div class="key-point">
+                    CS2의 Sub-tick 시스템은 "틱레이트 전쟁"의 게임 체인저예요. 64틱으로도 128틱 수준 정밀도를 내니, 다른 게임들도 따라할 가능성이 높아요!
+                </div>
+
+                <p><strong>프로 게이머에게 중요한 이유</strong></p>
+                <ul>
+                    <li>반응속도 150~200ms 수준에서 7.8ms 차이는 5% 영향</li>
+                    <li>수백 번의 교전에서 누적되면 승률 차이</li>
+                    <li>근육기억 훈련에 일관성 필요 (64틱과 128틱은 감이 다름)</li>
+                    <li>e스포츠 대회 = 128틱 표준, 연습도 128틱 필요</li>
+                </ul>
+
+                <div class="key-point">
+                    <strong>결론:</strong> "128틱은 프로와 고수의 영역. 일반 유저는 64틱도 충분하지만, 정밀한 FPS를 추구한다면 128틱의 차이를 분명히 느낄 수 있다."
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
