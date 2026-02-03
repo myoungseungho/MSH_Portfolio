@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>디버깅 도구 설계 - UX/DX - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #FF5722; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FBE9E7; }
+        .q { background: #FBE9E7; border-left: 4px solid #FF5722; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #E64A19; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #FBE9E7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #E64A19; }
+        .key-point { background: #FFCCBC; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #BF360C; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #FF5722 0%, #E64A19 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #FF5722; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">&larr; UX / DX</a>
+
+        <div class="header">
+            <h1>디버깅 도구 설계</h1>
+            <p>디버깅 시간을 절반으로 줄이는 도구 설계</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 재현 도구 (Replay)</h2>
+            <div class="q">버그가 랜덤하게 발생하면 어떻게 재현해?</div>
+            <div class="a">
+                <p><span class="highlight">리플레이 시스템</span>으로 게임 상태를 녹화하고 재생합니다:</p>
+                <div class="diagram">
+리플레이 시스템 개념:
++----------------------------------------------------------+
+|                                                          |
+|  녹화:                                                    |
+|  +----------------------------------------------------+ |
+|  | Frame 1: 입력(W키), 랜덤시드(12345), 서버응답(...)   | |
+|  | Frame 2: 입력(W키+공격), 랜덤시드(12346), ...        | |
+|  | Frame 3: 입력(스킬1), 랜덤시드(12347), ...          | |
+|  | ...                                                 | |
+|  | Frame 5847: <span class="warning">버그 발생!</span>                            | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  재생:                                                    |
+|  +----------------------------------------------------+ |
+|  | 초기 상태 로드                                       | |
+|  | Frame 1 입력 주입 -> 랜덤시드 동일 -> 같은 결과      | |
+|  | Frame 2 입력 주입 -> ...                            | |
+|  | ...                                                 | |
+|  | Frame 5847: <span class="key-point">버그 100% 재현!</span>                       | |
+|  +----------------------------------------------------+ |
+|                                                          |
++----------------------------------------------------------+
+
+결정론적 재현을 위한 필수 요소:
+- 모든 입력 (키보드, 마우스, 터치)
+- 랜덤 시드 (동일 시드 = 동일 결과)
+- 서버 응답 (네트워크 게임의 경우)
+- 타이밍 정보 (프레임 번호 또는 시간)</div>
+                <div class="code-block">
+// 리플레이 녹화 시스템
+class ReplayRecorder {
+    std::vector&lt;FrameRecord&gt; m_frames;
+    uint64_t m_currentFrame = 0;
+
+    struct FrameRecord {
+        uint64_t frameNumber;
+        InputState input;
+        uint32_t randomSeed;
+        std::vector&lt;NetworkPacket&gt; serverResponses;
+    };
+
+public:
+    void StartRecording() {
+        m_frames.clear();
+        m_currentFrame = 0;
+    }
+
+    void RecordFrame(const InputState& input) {
+        FrameRecord record;
+        record.frameNumber = m_currentFrame++;
+        record.input = input;
+        record.randomSeed = Random::GetSeed();
+        record.serverResponses = Network::GetPendingPackets();
+
+        m_frames.push_back(record);
+    }
+
+    void Save(const std::string& path) {
+        // 압축해서 저장
+        auto compressed = Compress(Serialize(m_frames));
+        WriteFile(path, compressed);
+    }
+};
+
+// 리플레이 재생 시스템
+class ReplayPlayer {
+    std::vector&lt;FrameRecord&gt; m_frames;
+    size_t m_playbackIndex = 0;
+
+public:
+    void Load(const std::string& path) {
+        auto data = ReadFile(path);
+        m_frames = Deserialize(Decompress(data));
+    }
+
+    void SetPlaybackSpeed(float speed) {
+        m_playbackSpeed = speed;  // 0.25x ~ 4x
+    }
+
+    InputState GetNextInput() {
+        if (m_playbackIndex >= m_frames.size()) {
+            return {};  // 재생 끝
+        }
+
+        const auto& record = m_frames[m_playbackIndex++];
+
+        // 랜덤 시드 복원 (결정론적 재현)
+        Random::SetSeed(record.randomSeed);
+
+        // 서버 응답 주입
+        for (const auto& packet : record.serverResponses) {
+            Network::InjectPacket(packet);
+        }
+
+        return record.input;
+    }
+};</div>
+            </div>
+
+            <div class="q">버그 발생 직전까지 빨리 감기하려면?</div>
+            <div class="a">
+                <p><span class="highlight">체크포인트 시스템</span>으로 중간 저장합니다:</p>
+                <div class="diagram">
+체크포인트 기반 빠른 재현:
++----------------------------------------------------------+
+|                                                          |
+|  체크포인트 없이:                                          |
+|  [시작] -------- 5847프레임 -------- [버그]               |
+|         (처음부터 재생, 10분 소요)                        |
+|                                                          |
+|  체크포인트 있으면:                                        |
+|  [시작] --[CP1]--[CP2]--[CP3]--[CP4]-- [버그]             |
+|    ^        ^      ^      ^      ^       ^               |
+|  1000f   2000f  3000f  4000f  5000f   5847f              |
+|                                                          |
+|  Frame 5847 버그 재현:                                    |
+|  1. CP4 (5000프레임)에서 게임 상태 복원                   |
+|  2. 847프레임만 재생                                      |
+|  3. <span class="key-point">1분 만에 버그 도달!</span>                                  |
+|                                                          |
++----------------------------------------------------------+</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 시각화 도구</h2>
+            <div class="q">눈에 안 보이는 것들을 어떻게 디버깅해?</div>
+            <div class="a">
+                <p><span class="highlight">디버그 시각화</span>로 보이게 만듭니다:</p>
+                <div class="diagram">
+디버그 시각화 종류:
++----------------------------------------------------------+
+|                                                          |
+|  1. 충돌체 시각화                                          |
+|  +----------------------------------------------------+ |
+|  | 히트박스 와이어프레임 표시                           | |
+|  | 충돌 감지 영역 하이라이트                            | |
+|  | 충돌 지점에 마커 표시                                | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  2. 경로 시각화                                            |
+|  +----------------------------------------------------+ |
+|  | AI 이동 경로 선으로 표시                             | |
+|  | 웨이포인트 구체로 표시                               | |
+|  | 내비게이션 메시 렌더링                               | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  3. 상태 시각화                                            |
+|  +----------------------------------------------------+ |
+|  | 오브젝트 위에 상태 텍스트 표시                       | |
+|  | HP 바, 스탯 수치                                    | |
+|  | AI 상태 (IDLE, CHASE, ATTACK)                       | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  4. 성능 시각화                                            |
+|  +----------------------------------------------------+ |
+|  | 프레임 그래프                                        | |
+|  | CPU/GPU 시간 바                                      | |
+|  | 메모리 사용량 그래프                                 | |
+|  +----------------------------------------------------+ |
+|                                                          |
++----------------------------------------------------------+</div>
+                <div class="code-block">
+// 디버그 시각화 시스템
+class DebugDraw {
+public:
+    // 기본 도형
+    static void Line(Vector3 start, Vector3 end, Color color, float duration = 0) {
+        AddPrimitive({PRIMITIVE_LINE, start, end, color, duration});
+    }
+
+    static void Sphere(Vector3 center, float radius, Color color, float duration = 0) {
+        AddPrimitive({PRIMITIVE_SPHERE, center, {radius, 0, 0}, color, duration});
+    }
+
+    static void Box(Vector3 center, Vector3 size, Color color, float duration = 0) {
+        AddPrimitive({PRIMITIVE_BOX, center, size, color, duration});
+    }
+
+    // 텍스트
+    static void Text(Vector3 worldPos, const std::string& text, Color color) {
+        AddText({worldPos, text, color});
+    }
+
+    // 월드 오버레이
+    static void Path(const std::vector&lt;Vector3&gt;& points, Color color) {
+        for (size_t i = 0; i + 1 < points.size(); i++) {
+            Line(points[i], points[i + 1], color);
+            Sphere(points[i], 0.2f, color);
+        }
+    }
+};
+
+// AI 디버깅 시각화 예시
+class AIDebugVisualizer {
+    void Visualize(Monster* monster) {
+        // 현재 상태 표시
+        DebugDraw::Text(monster->GetPos() + Vector3(0, 2, 0),
+            Format("State: %s", GetStateName(monster->GetState())),
+            COLOR_WHITE);
+
+        // HP 바
+        float hpRatio = monster->GetHP() / (float)monster->GetMaxHP();
+        DebugDraw::Box(monster->GetPos() + Vector3(0, 2.5f, 0),
+            Vector3(hpRatio, 0.1f, 0.1f),
+            hpRatio > 0.3f ? COLOR_GREEN : COLOR_RED);
+
+        // 이동 경로
+        if (monster->HasPath()) {
+            DebugDraw::Path(monster->GetPath(), COLOR_YELLOW);
+        }
+
+        // 공격 범위
+        DebugDraw::Sphere(monster->GetPos(),
+            monster->GetAttackRange(),
+            Color(1, 0, 0, 0.2f));
+
+        // 타겟 연결선
+        if (monster->GetTarget()) {
+            DebugDraw::Line(monster->GetPos(),
+                monster->GetTarget()->GetPos(),
+                COLOR_RED);
+        }
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 자동 크래시 보고</h2>
+            <div class="q">라이브에서 크래시가 발생하면?</div>
+            <div class="a">
+                <p><span class="highlight">자동 크래시 보고 시스템</span>으로 원인을 분석합니다:</p>
+                <div class="diagram">
+크래시 보고 시스템:
++----------------------------------------------------------+
+|                                                          |
+|  크래시 발생!                                             |
+|       ↓                                                  |
+|  +----------------------------------------------------+ |
+|  | 1. 예외 핸들러가 크래시 감지                         | |
+|  | 2. 미니덤프 생성 (스택, 레지스터, 메모리 일부)        | |
+|  | 3. 게임 상태 스냅샷 (플레이어, 맵, 퀘스트 등)         | |
+|  | 4. 최근 로그 수집 (마지막 100줄)                     | |
+|  | 5. 시스템 정보 (OS, GPU, 드라이버)                   | |
+|  | 6. 리플레이 버퍼 (최근 30초)                         | |
+|  +----------------------------------------------------+ |
+|       ↓                                                  |
+|  서버로 전송                                              |
+|       ↓                                                  |
+|  +----------------------------------------------------+ |
+|  | 크래시 분석 대시보드                                 | |
+|  |                                                     | |
+|  | 크래시 #12345                                       | |
+|  | 발생: 523회 / 영향 유저: 312명                       | |
+|  | 스택: Player::Attack() -> Skill::Cast() -> <span class="warning">NULL</span>   | |
+|  |                                                     | |
+|  | 공통점:                                              | |
+|  | - 모두 스킬 #52 사용 중                              | |
+|  | - 타겟이 사망 직후                                   | |
+|  | - 멀티 타겟 스킬                                     | |
+|  +----------------------------------------------------+ |
+|                                                          |
++----------------------------------------------------------+</div>
+                <div class="code-block">
+// 크래시 핸들러
+class CrashHandler {
+public:
+    static void Install() {
+        // Windows 예외 핸들러 등록
+        SetUnhandledExceptionFilter(ExceptionHandler);
+    }
+
+    static LONG WINAPI ExceptionHandler(EXCEPTION_POINTERS* ep) {
+        // 1. 미니덤프 생성
+        std::string dumpPath = GenerateMinidump(ep);
+
+        // 2. 크래시 정보 수집
+        CrashReport report;
+        report.timestamp = GetCurrentTime();
+        report.exceptionCode = ep->ExceptionRecord->ExceptionCode;
+        report.exceptionAddress = ep->ExceptionRecord->ExceptionAddress;
+
+        // 스택 트레이스
+        report.stackTrace = CaptureStackTrace(ep->ContextRecord);
+
+        // 게임 상태
+        report.gameState = CaptureGameState();
+
+        // 최근 로그
+        report.recentLogs = Logger::GetRecentLogs(100);
+
+        // 시스템 정보
+        report.systemInfo = GetSystemInfo();
+
+        // 3. 서버 전송
+        SendCrashReport(report, dumpPath);
+
+        // 4. 유저에게 알림
+        ShowCrashDialog(
+            "예기치 않은 오류가 발생했습니다.\n"
+            "문제 해결을 위해 오류 보고서가 전송되었습니다.\n"
+            "보고서 ID: " + report.id
+        );
+
+        return EXCEPTION_EXECUTE_HANDLER;
+    }
+};
+
+// 크래시 분석 서버
+class CrashAnalyzer {
+    void AnalyzeCrash(const CrashReport& report) {
+        // 스택 해싱으로 동일 크래시 그룹화
+        std::string stackHash = HashStackTrace(report.stackTrace);
+
+        auto& group = m_crashGroups[stackHash];
+        group.count++;
+        group.affectedUsers.insert(report.userId);
+        group.reports.push_back(report);
+
+        // 패턴 분석
+        if (group.count > 10) {
+            AnalyzeCommonPatterns(group);
+        }
+
+        // 심각도 판단
+        if (group.count > 100 || group.affectedUsers.size() > 50) {
+            SendUrgentAlert(group);
+        }
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 원격 디버깅</h2>
+            <div class="q">라이브 서버를 어떻게 디버깅해?</div>
+            <div class="a">
+                <p><span class="highlight">원격 디버깅</span> 도구가 필요합니다:</p>
+                <div class="diagram">
+원격 디버깅 방법:
++----------------------------------------------------------+
+|                                                          |
+|  1. 원격 콘솔                                              |
+|  +----------------------------------------------------+ |
+|  | 개발자 PC에서 라이브 서버에 명령 전송                | |
+|  | - 상태 조회 (접속자, 메모리, 성능)                   | |
+|  | - 로그 레벨 조정                                    | |
+|  | - 특정 유저 추적 활성화                              | |
+|  | - 설정 값 변경 (핫픽스 없이)                         | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  2. 실시간 로그 스트리밍                                   |
+|  +----------------------------------------------------+ |
+|  | 특정 유저의 로그만 실시간으로 확인                    | |
+|  | - tail -f 같은 라이브 로그                          | |
+|  | - 필터링 (유저 ID, 에러 레벨 등)                     | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  3. 메트릭 대시보드                                        |
+|  +----------------------------------------------------+ |
+|  | 실시간 서버 상태 모니터링                            | |
+|  | - 접속자 수, TPS                                    | |
+|  | - 메모리, CPU 사용량                                | |
+|  | - 에러 발생률                                        | |
+|  | - 응답 시간 분포                                     | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  4. 프로파일링                                             |
+|  +----------------------------------------------------+ |
+|  | 원격 프로파일링 세션                                 | |
+|  | - 함수별 CPU 시간                                   | |
+|  | - 메모리 할당 추적                                  | |
+|  | - 핫스팟 분석                                        | |
+|  +----------------------------------------------------+ |
+|                                                          |
++----------------------------------------------------------+</div>
+                <div class="code-block">
+// 원격 디버깅 서버
+class RemoteDebugServer {
+    void HandleCommand(const std::string& cmd, const Args& args) {
+        if (cmd == "status") {
+            // 서버 상태 반환
+            Reply(Format(
+                "Players: %d\n"
+                "Memory: %d MB\n"
+                "CPU: %.1f%%\n"
+                "TPS: %.1f",
+                GetPlayerCount(),
+                GetMemoryUsage() / 1024 / 1024,
+                GetCPUUsage(),
+                GetTPS()
+            ));
+        }
+        else if (cmd == "trace") {
+            // 특정 유저 로그 추적 시작
+            int userId = args.GetInt("user");
+            Logger::EnableUserTrace(userId);
+            Reply(Format("Tracing user %d", userId));
+        }
+        else if (cmd == "loglevel") {
+            // 로그 레벨 변경
+            LogLevel level = ParseLogLevel(args.GetString("level"));
+            Logger::SetLevel(level);
+            Reply(Format("Log level set to %s", args.GetString("level")));
+        }
+        else if (cmd == "config") {
+            // 설정 값 변경
+            std::string key = args.GetString("key");
+            std::string value = args.GetString("value");
+            Config::Set(key, value);
+            Reply(Format("Config %s = %s", key, value));
+        }
+    }
+};
+
+// 클라이언트 (개발자 도구)
+class RemoteDebugClient {
+    void Connect(const std::string& serverAddress) {
+        m_socket.Connect(serverAddress, 9999);
+    }
+
+    void SendCommand(const std::string& cmd) {
+        m_socket.Send(cmd);
+        std::string response = m_socket.Receive();
+        Print(response);
+    }
+};
+
+// 사용 예시 (명령줄)
+// > debug connect live-server-1
+// > debug status
+// Players: 1234
+// Memory: 2048 MB
+// CPU: 45.2%
+// TPS: 58.3
+// > debug trace --user 12345
+// Tracing user 12345
+// > debug loglevel --level DEBUG
+// Log level set to DEBUG</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 디버깅 도구 설계 원칙</h2>
+            <div class="q">좋은 디버깅 도구의 공통점이 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">디버깅 시간을 줄이는</span> 설계 원칙들:</p>
+                <div class="diagram">
+디버깅 도구 설계 원칙:
++----------------------------------------------------------+
+|                                                          |
+|  1. 즉시성 (Immediacy)                                     |
+|  +----------------------------------------------------+ |
+|  | 문제 발생 -> 원인 파악까지 시간 최소화               | |
+|  | 빌드/재시작 없이 디버깅 가능                         | |
+|  | 실시간 피드백                                        | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  2. 컨텍스트 보존 (Context Preservation)                   |
+|  +----------------------------------------------------+ |
+|  | 버그 발생 시점의 모든 정보 저장                      | |
+|  | 스택, 변수, 히스토리                                 | |
+|  | "그때 어땠는지" 다시 볼 수 있게                      | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  3. 재현성 (Reproducibility)                               |
+|  +----------------------------------------------------+ |
+|  | 동일 입력 = 동일 결과                               | |
+|  | 결정론적 시스템                                      | |
+|  | 리플레이 기능                                        | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  4. 가시성 (Visibility)                                    |
+|  +----------------------------------------------------+ |
+|  | 내부 상태를 눈으로 볼 수 있게                        | |
+|  | 시각화 도구                                          | |
+|  | 로그, 그래프, 오버레이                               | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  5. 비침습성 (Non-Invasiveness)                            |
+|  +----------------------------------------------------+ |
+|  | 디버깅 도구가 동작에 영향 안 줌                      | |
+|  | 끄고 켜기 쉬움                                       | |
+|  | 성능 오버헤드 최소화                                 | |
+|  +----------------------------------------------------+ |
+|                                                          |
++----------------------------------------------------------+</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>리플레이 시스템</strong>: 입력/랜덤시드 녹화로 100% 버그 재현</li>
+                <li><strong>체크포인트</strong>: 중간 저장으로 빠른 재현</li>
+                <li><strong>시각화 도구</strong>: 충돌체, 경로, 상태, 성능 시각화</li>
+                <li><strong>크래시 보고</strong>: 미니덤프 + 게임 상태 + 로그 자동 수집</li>
+                <li><strong>원격 디버깅</strong>: 콘솔, 로그 스트리밍, 메트릭 대시보드</li>
+                <li><strong>설계 원칙</strong>: 즉시성, 컨텍스트 보존, 재현성, 가시성, 비침습성</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../ide-features/">&larr; IDE 기능</a>
+            <a href="../">UX / DX 목록 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

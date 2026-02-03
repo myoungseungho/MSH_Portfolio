@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hair 렌더링 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #7B1FA2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #F3E5F5; }
+        .q { background: #F3E5F5; border-left: 4px solid #9C27B0; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #7B1FA2; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #F3E5F5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #7B1FA2; }
+        .key-point { background: #E1BEE7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #4A148C; }
+        .warning { background: #FFCDD2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B71C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+        .summary-box { background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #9C27B0; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-gpu/" class="back-link">&larr; GPU / 그래픽스</a>
+
+        <div class="header">
+            <h1>Hair 렌더링</h1>
+            <p>캐릭터 머리카락이 한 올 한 올 움직이는 법</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. Hair 렌더링이 어려운 이유</h2>
+            <div class="q">왜 머리카락이 그래픽에서 어려워?</div>
+            <div class="a">
+                <p>머리카락은 <span class="warning">수만~수십만 개의 가느다란 실린더</span>입니다.</p>
+                <div class="diagram">
+Hair 렌더링의 도전:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  1. 지오메트리 복잡도                                        │
+│                                                             │
+│     실제 머리카락: ~100,000개                               │
+│     각 가닥당 버텍스: 20~50개                               │
+│     총 버텍스: <span class="warning">수백만 개!</span>                                │
+│                                                             │
+│     +                                                       │
+│     |\                                                      │
+│     | \  각 가닥 = 여러 세그먼트로 구성                     │
+│     |  \                                                    │
+│     |   \                                                   │
+│     +    +                                                  │
+│                                                             │
+│  2. 투명도/소팅                                              │
+│                                                             │
+│     머리카락은 반투명 -> 앞뒤 정렬 필요                     │
+│     수만 개 가닥을 정렬? <span class="warning">불가능에 가까움</span>                  │
+│                                                             │
+│     ~~~\~~~\~~~  여러 겹의 머리카락                         │
+│        X        어디가 앞인지?                              │
+│     ~~~\~~~\~~~                                             │
+│                                                             │
+│  3. 독특한 광학 특성                                         │
+│                                                             │
+│     머리카락 = 원통형 섬유                                  │
+│     - 일반 표면과 다른 반사 특성                            │
+│     - 2개의 스펙큘러 하이라이트                             │
+│     - 빛이 내부를 통과 (투과)                               │
+│                                                             │
+│  4. 물리 시뮬레이션                                          │
+│                                                             │
+│     - 중력, 바람에 반응                                     │
+│     - 머리카락끼리 충돌                                     │
+│     - 머리/어깨와 충돌                                      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 카지야-케이 모델 (Kajiya-Kay)</h2>
+            <div class="q">머리카락의 반사는 어떻게 계산해?</div>
+            <div class="a">
+                <p><span class="highlight">카지야-케이 모델</span>은 머리카락의 원통 형태를 고려한 셰이딩입니다.</p>
+                <div class="diagram">
+카지야-케이 모델:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [일반 표면 vs 머리카락]                                     │
+│                                                             │
+│  일반 표면:                                                  │
+│       L    N    V                                           │
+│        \   |   /                                            │
+│         \  |  /                                             │
+│  --------[*]--------  평면 -> 노말 N 사용                   │
+│                                                             │
+│  머리카락 (원통):                                            │
+│           T (Tangent)                                       │
+│           |                                                 │
+│       L   |    V                                            │
+│        \  |   /                                             │
+│         \ |  /                                              │
+│    ======[|]======  원통 -> 탄젠트 T 사용                   │
+│                                                             │
+│  노말이 원통 전체에 걸쳐 있음 -> 탄젠트 기반 계산!          │
+│                                                             │
+│  [이중 스펙큘러]                                             │
+│                                                             │
+│    1차 하이라이트 (R)     2차 하이라이트 (TRT)              │
+│    - 표면 반사            - 내부 투과 후 반사               │
+│    - 흰색/회색            - 색상 있음 (머리카락 색)         │
+│    - 날카로움             - 부드러움                        │
+│                                                             │
+│         *                      *                            │
+│        /|\                    /|\                           │
+│       / | \                  / | \                          │
+│    __/__R__\__           __/___TRT\__                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 카지야-케이 Hair 셰이딩
+
+float3 ShiftTangent(float3 T, float3 N, float shift) {
+    // 탄젠트를 노말 방향으로 이동 (스펙큘러 위치 조절)
+    return normalize(T + N * shift);
+}
+
+float HairSpecular(float3 T, float3 V, float3 L, float exponent) {
+    float3 H = normalize(L + V);
+
+    // 탄젠트와 하프벡터의 내적
+    float TdotH = dot(T, H);
+    float sinTH = sqrt(1.0 - TdotH * TdotH);
+
+    // 스펙큘러 계산
+    return pow(sinTH, exponent);
+}
+
+float3 KajiyaKayHair(
+    float3 tangent,
+    float3 normal,
+    float3 lightDir,
+    float3 viewDir,
+    float3 baseColor,
+    float specPower1,
+    float specPower2,
+    float shift1,
+    float shift2
+) {
+    // 디퓨즈 (Wrapped Lambert)
+    float NdotL = dot(normal, lightDir);
+    float diffuse = saturate(NdotL * 0.5 + 0.5);
+
+    // 1차 스펙큘러 (R - 표면 반사)
+    float3 T1 = ShiftTangent(tangent, normal, shift1);
+    float spec1 = HairSpecular(T1, viewDir, lightDir, specPower1);
+
+    // 2차 스펙큘러 (TRT - 내부 반사)
+    float3 T2 = ShiftTangent(tangent, normal, shift2);
+    float spec2 = HairSpecular(T2, viewDir, lightDir, specPower2);
+
+    // 최종 색상
+    float3 finalColor = baseColor * diffuse;
+    finalColor += float3(1, 1, 1) * spec1 * 0.5;       // 1차: 흰색
+    finalColor += baseColor * spec2 * 0.3;             // 2차: 머리 색상
+
+    return finalColor;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. Marschner 모델</h2>
+            <div class="q">더 정확한 모델은 없어?</div>
+            <div class="a">
+                <p><span class="highlight">Marschner 모델</span>은 빛의 경로를 물리적으로 시뮬레이션합니다.</p>
+                <div class="diagram">
+Marschner 모델의 3가지 빛 경로:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  머리카락 단면 (원통형 섬유)                                 │
+│                                                             │
+│  [R 경로] - 표면 반사                                        │
+│                                                             │
+│       빛 -->  +--+  --> 반사                                │
+│               |  |                                          │
+│               +--+                                          │
+│       표면에서 바로 반사 (광택)                              │
+│                                                             │
+│  [TT 경로] - 투과-투과                                       │
+│                                                             │
+│       빛 -->  +--+                                          │
+│              /|  |  --> 투과                                │
+│             / +--+                                          │
+│       내부를 통과하며 색 흡수                                │
+│       (밝은 머리카락에서 눈에 띔)                           │
+│                                                             │
+│  [TRT 경로] - 투과-반사-투과                                 │
+│                                                             │
+│       빛 -->  +--+                                          │
+│              /|##|\  --> 반사 후 다시 투과                  │
+│             / +--+ \                                        │
+│       내부에서 반사되어 나옴                                 │
+│       (2차 하이라이트, 색상 있음)                           │
+│                                                             │
+│  [결과]                                                      │
+│                                                             │
+│  실제 머리카락 하이라이트:                                   │
+│                                                             │
+│    ===== R =====  1차 하이라이트 (흰색, 날카로움)           │
+│                   ^                                         │
+│    ~ ~ TRT ~ ~ ~  2차 하이라이트 (색상, 부드러움)           │
+│        약간 아래에 위치                                     │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// Marschner 모델 (간략화)
+
+struct HairLobeParams {
+    float alpha;        // 스케일 각도 오프셋
+    float beta;         // 종방향 폭
+    float3 absorption;  // 흡수 계수 (색상)
+};
+
+float3 MarschnerHair(
+    float3 T,           // 탄젠트
+    float3 V,           // 뷰 방향
+    float3 L,           // 라이트 방향
+    float3 baseColor,   // 머리 색상
+    float roughness
+) {
+    // 입사/출사 각도 계산 (탄젠트 기준)
+    float sinThetaI = dot(T, L);
+    float sinThetaO = dot(T, V);
+    float cosThetaI = sqrt(1 - sinThetaI * sinThetaI);
+    float cosThetaO = sqrt(1 - sinThetaO * sinThetaO);
+
+    // 방위각 차이
+    float3 Lperp = L - sinThetaI * T;
+    float3 Vperp = V - sinThetaO * T;
+    float cosPhi = dot(normalize(Lperp), normalize(Vperp));
+    float phi = acos(cosPhi);
+
+    float3 result = float3(0, 0, 0);
+
+    // R lobe (표면 반사)
+    {
+        float M_R = GaussianDetector(sinThetaI + sinThetaO, roughness);
+        float N_R = CosineLobe(phi, 0.25);
+        result += float3(1, 1, 1) * M_R * N_R * 0.1;
+    }
+
+    // TT lobe (투과-투과)
+    {
+        float3 T_TT = pow(baseColor, 0.5);  // 색상 흡수
+        float M_TT = GaussianDetector(sinThetaI + sinThetaO, roughness * 0.5);
+        float N_TT = CosineLobe(phi - PI, 0.5);
+        result += T_TT * M_TT * N_TT * 0.8;
+    }
+
+    // TRT lobe (투과-반사-투과)
+    {
+        float3 T_TRT = pow(baseColor, 0.8);  // 더 많이 흡수
+        float M_TRT = GaussianDetector(sinThetaI + sinThetaO + 0.1, roughness);
+        float N_TRT = CosineLobe(phi, 1.0);
+        result += T_TRT * M_TRT * N_TRT * 0.6;
+    }
+
+    return result;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. TressFX와 HairWorks</h2>
+            <div class="q">실제 게임에서는 어떤 기술 써?</div>
+            <div class="a">
+                <p>AMD <span class="highlight">TressFX</span>와 NVIDIA <span class="highlight">HairWorks</span>가 대표적입니다.</p>
+                <div class="diagram">
+Hair 미들웨어 비교:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [AMD TressFX]                                               │
+│                                                             │
+│  특징:                                                      │
+│  - 오픈소스 (GPUOpen)                                       │
+│  - DirectX 11/12 Compute Shader                            │
+│  - PPLL (Per-Pixel Linked List) 소팅                       │
+│  - 물리 시뮬레이션 내장                                     │
+│                                                             │
+│  사용 게임: 툼레이더, Deus Ex                               │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  [NVIDIA HairWorks]                                          │
+│                                                             │
+│  특징:                                                      │
+│  - Tessellation 기반 (지오메트리 증폭)                      │
+│  - Multi-Strand 시뮬레이션                                  │
+│  - LOD 시스템 내장                                          │
+│  - NVIDIA GPU 최적화                                        │
+│                                                             │
+│  사용 게임: 위쳐 3, FFXV                                    │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  [공통 파이프라인]                                           │
+│                                                             │
+│  1. Guide Hair 정의 (수백~수천 가닥)                        │
+│        |                                                    │
+│        v                                                    │
+│  2. Tessellation/Interpolation (수만 가닥으로 증폭)        │
+│        |                                                    │
+│        v                                                    │
+│  3. 물리 시뮬레이션 (Compute Shader)                        │
+│        |                                                    │
+│        v                                                    │
+│  4. 렌더링 (OIT 또는 MSAA)                                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// TressFX 스타일 Hair 파이프라인 (간략화)
+
+// 1. Hair Strand 구조체
+struct HairVertex {
+    float3 position;
+    float3 tangent;
+    float2 texCoord;
+    uint strandIndex;
+};
+
+// 2. 물리 시뮬레이션 (Compute Shader)
+[numthreads(64, 1, 1)]
+void CS_SimulateHair(uint3 id : SV_DispatchThreadID) {
+    uint vertexIndex = id.x;
+    HairVertex v = HairVertices[vertexIndex];
+
+    // 중력
+    float3 gravity = float3(0, -9.8, 0) * DeltaTime * DeltaTime;
+    v.position += gravity;
+
+    // 바람
+    float3 wind = WindForce * sin(Time + v.position.x) * DeltaTime;
+    v.position += wind;
+
+    // 길이 제약 (가닥 형태 유지)
+    uint prevIndex = GetPrevVertex(vertexIndex);
+    if (prevIndex != INVALID) {
+        float3 prevPos = HairVertices[prevIndex].position;
+        float3 dir = v.position - prevPos;
+        float len = length(dir);
+        float restLength = GetRestLength(vertexIndex);
+
+        if (len > restLength) {
+            v.position = prevPos + normalize(dir) * restLength;
+        }
+    }
+
+    // 두피 충돌
+    float3 headCenter = GetHeadPosition();
+    float headRadius = GetHeadRadius();
+    float3 toVertex = v.position - headCenter;
+    if (length(toVertex) < headRadius) {
+        v.position = headCenter + normalize(toVertex) * headRadius;
+    }
+
+    HairVertices[vertexIndex] = v;
+}
+
+// 3. OIT (Order-Independent Transparency) 렌더링
+// Per-Pixel Linked List 방식
+
+RWStructuredBuffer<uint> StartOffsetBuffer;
+RWStructuredBuffer<HairFragment> FragmentBuffer;
+
+void PS_HairOIT(VS_OUTPUT input) {
+    // 픽셀 위치
+    uint2 pixelCoord = uint2(input.Position.xy);
+    uint pixelIndex = pixelCoord.y * ScreenWidth + pixelCoord.x;
+
+    // 새 프래그먼트 할당
+    uint newIndex;
+    InterlockedAdd(FragmentCounter, 1, newIndex);
+
+    // 프래그먼트 저장
+    HairFragment frag;
+    frag.color = CalculateHairLighting(input);
+    frag.depth = input.Position.z;
+    frag.next = StartOffsetBuffer[pixelIndex];
+
+    FragmentBuffer[newIndex] = frag;
+
+    // 링크드 리스트 헤드 갱신
+    InterlockedExchange(StartOffsetBuffer[pixelIndex], newIndex, frag.next);
+}
+
+// 4. 최종 합성 (프래그먼트 정렬 후 블렌딩)
+float4 PS_ResolveHair(float2 uv : TEXCOORD) : SV_Target {
+    uint pixelIndex = GetPixelIndex(uv);
+    uint index = StartOffsetBuffer[pixelIndex];
+
+    // 프래그먼트 수집
+    HairFragment fragments[MAX_FRAGMENTS];
+    int count = 0;
+
+    while (index != INVALID && count < MAX_FRAGMENTS) {
+        fragments[count++] = FragmentBuffer[index];
+        index = FragmentBuffer[index].next;
+    }
+
+    // 깊이순 정렬
+    SortFragments(fragments, count);
+
+    // 앞에서 뒤로 블렌딩
+    float4 result = float4(0, 0, 0, 0);
+    for (int i = 0; i < count; i++) {
+        float4 c = fragments[i].color;
+        result.rgb = result.rgb * (1 - c.a) + c.rgb * c.a;
+        result.a = result.a * (1 - c.a) + c.a;
+    }
+
+    return result;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 모바일 최적화</h2>
+            <div class="q">모바일에서는 어떻게 해?</div>
+            <div class="a">
+                <p>모바일은 <span class="highlight">텍스처 기반 근사</span>나 <span class="highlight">메시 헤어</span>를 사용합니다.</p>
+                <div class="diagram">
+모바일 Hair 기법:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [1. Shell 기반 헤어]                                        │
+│                                                             │
+│     여러 겹의 반투명 메시를 쌓음                             │
+│                                                             │
+│        ~~~~  Shell 4 (바깥)                                 │
+│       ~~~~~~  Shell 3                                       │
+│      ~~~~~~~~  Shell 2                                      │
+│     ~~~~~~~~~~  Shell 1 (안쪽)                              │
+│     +--------+  두피 메시                                   │
+│                                                             │
+│     장점: 간단, 모바일 호환                                  │
+│     단점: 가닥 표현 한계                                     │
+│                                                             │
+│  [2. 카드 기반 헤어]                                         │
+│                                                             │
+│     머리카락 텍스처가 그려진 평면 메시                       │
+│                                                             │
+│     +-------+                                               │
+│     |~~~~~~~|  알파 텍스처로 가닥 표현                      │
+│     |~~~~~~~|  여러 장의 카드를 배치                        │
+│     +-------+                                               │
+│                                                             │
+│     장점: 아티스트 제어 용이, 저비용                        │
+│     단점: 옆면에서 얇아 보임                                │
+│                                                             │
+│  [3. 하이브리드]                                             │
+│                                                             │
+│     주요 가닥: 실제 지오메트리 (100~500개)                  │
+│     나머지: 카드/셸로 채움                                  │
+│                                                             │
+│     현대 모바일 게임에서 많이 사용                          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+LOD 전략:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  거리        가닥 수       기법          비용               │
+│  ─────────────────────────────────────────────────────────  │
+│  가까움      50,000        TressFX       높음              │
+│  중간        5,000         Tessellation  중간              │
+│  멀리        500           Mesh Hair     낮음              │
+│  아주 멀리   -             카드/임포스터 최저              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Hair의 어려움</strong> = 수만 가닥, 반투명 소팅, 독특한 광학 특성</li>
+                <li><strong>카지야-케이</strong> = 탄젠트 기반 셰이딩, 이중 스펙큘러</li>
+                <li><strong>Marschner</strong> = R/TT/TRT 3가지 빛 경로 물리 시뮬레이션</li>
+                <li><strong>TressFX/HairWorks</strong> = Guide Hair + Tessellation + 물리 + OIT</li>
+                <li><strong>OIT</strong> = Per-Pixel Linked List로 투명도 소팅</li>
+                <li><strong>모바일</strong> = Shell/Card 기반, LOD 전환으로 최적화</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../realtime-gi/">&larr; 실시간 GI</a>
+            <a href="../category-gpu/">GPU / 그래픽스 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

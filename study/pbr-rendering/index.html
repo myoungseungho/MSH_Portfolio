@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PBR 렌더링 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #7B1FA2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #F3E5F5; }
+        .q { background: #F3E5F5; border-left: 4px solid #9C27B0; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #7B1FA2; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #F3E5F5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #7B1FA2; }
+        .key-point { background: #E1BEE7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #4A148C; }
+        .warning { background: #FFCDD2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B71C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+        .summary-box { background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #9C27B0; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-gpu/" class="back-link">&larr; GPU / 그래픽스</a>
+
+        <div class="header">
+            <h1>PBR 렌더링</h1>
+            <p>피직스 기반 렌더링(PBR)이 뭐길래 이렇게 사실적일까?</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. PBR이란?</h2>
+            <div class="q">왜 요즘 게임은 다 PBR이야?</div>
+            <div class="a">
+                <p><span class="highlight">Physically Based Rendering</span> - 물리 법칙을 따르는 렌더링입니다.</p>
+                <p>빛과 재질의 상호작용을 현실에 가깝게 시뮬레이션합니다.</p>
+                <div class="diagram">
+전통적 렌더링 vs PBR:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [전통적 방식 (Phong/Blinn-Phong)]                          │
+│                                                             │
+│  - 아티스트가 "느낌"으로 수치 조절                          │
+│  - Ambient + Diffuse + Specular                             │
+│  - 조명 환경 바뀌면 다시 조절 필요                          │
+│  - <span class="warning">에너지 보존 안 됨</span> (비현실적)                         │
+│                                                             │
+│  예: 금속 표현하려면...                                      │
+│      Specular = 0.8, Power = 128, Metallic Color = ???      │
+│      -> 다른 조명에서 이상해 보임                           │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  [PBR 방식]                                                  │
+│                                                             │
+│  - 물리 기반 파라미터 사용                                  │
+│  - Metallic, Roughness, Base Color                          │
+│  - <span class="key-point">어떤 조명에서도 일관되게 보임</span>                        │
+│  - 에너지 보존 (들어온 빛 <= 나가는 빛)                     │
+│                                                             │
+│  예: 금속 표현                                               │
+│      Metallic = 1.0, Roughness = 0.2                        │
+│      -> 모든 조명 환경에서 금속처럼 보임!                   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. PBR의 물리적 원리</h2>
+            <div class="q">어떤 물리 법칙을 따르는 거야?</div>
+            <div class="a">
+                <p>크게 <span class="key-point">3가지 원칙</span>을 따릅니다.</p>
+                <div class="diagram">
+PBR의 3대 원칙:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  1. 에너지 보존 (Energy Conservation)                       │
+│                                                             │
+│     들어온 빛 = 반사된 빛 + 흡수된 빛                       │
+│                                                             │
+│     입사광 100%                                              │
+│         |                                                   │
+│         v                                                   │
+│     [  재질  ]                                               │
+│        / \                                                  │
+│       /   \                                                 │
+│    반사   흡수                                              │
+│    60%    40%    (총합 = 100%)                              │
+│                                                             │
+│     <span class="warning">반사가 100% 넘으면 비현실적!</span>                         │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  2. 프레넬 효과 (Fresnel Effect)                            │
+│                                                             │
+│     시야 각도에 따라 반사량이 달라짐                         │
+│                                                             │
+│     정면 (0도)     측면 (90도)                              │
+│        |              \                                     │
+│        v               \                                    │
+│     [표면]          [표면]                                  │
+│                                                             │
+│     반사 약함        반사 강함                              │
+│     (투과 많음)      (거의 100% 반사)                       │
+│                                                             │
+│     -> 물, 유리 표면에서 잘 보임                            │
+│     -> 거의 모든 재질에서 발생!                             │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  3. 미세면 이론 (Microfacet Theory)                         │
+│                                                             │
+│     표면은 미세한 거울들의 집합                              │
+│                                                             │
+│     매끄러운 표면 (Low Roughness)                           │
+│     ___________  -> 정반사 (Sharp Highlight)               │
+│                                                             │
+│     거친 표면 (High Roughness)                              │
+│     /\/\/\/\/\/  -> 난반사 (Blurry Highlight)              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. Metallic-Roughness 워크플로우</h2>
+            <div class="q">PBR 텍스처는 어떤 게 있어?</div>
+            <div class="a">
+                <p>가장 널리 쓰이는 <span class="highlight">Metallic-Roughness</span> 워크플로우입니다.</p>
+                <div class="diagram">
+Metallic-Roughness 텍스처 세트:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  1. Base Color (Albedo)                                     │
+│     - RGB: 재질의 고유 색상                                 │
+│     - 금속: 반사 색상 (금 = 노랑, 구리 = 주황)              │
+│     - 비금속: 확산 반사 색상                                │
+│                                                             │
+│  2. Metallic                                                │
+│     - 흑백 (0 or 1, 중간값 드묾)                            │
+│     - 0 = 비금속 (플라스틱, 나무, 피부)                     │
+│     - 1 = 금속 (철, 금, 구리)                               │
+│                                                             │
+│  3. Roughness                                               │
+│     - 흑백 (0~1 연속)                                       │
+│     - 0 = 완전 매끄러움 (거울)                              │
+│     - 1 = 완전 거침 (분필)                                  │
+│                                                             │
+│  4. Normal Map                                              │
+│     - RGB: 표면 굴곡 정보                                   │
+│     - 디테일 추가 (볼트, 스크래치)                          │
+│                                                             │
+│  5. Ambient Occlusion (AO)                                  │
+│     - 흑백: 틈새의 그림자                                   │
+│     - 간접광 차폐 정보                                      │
+│                                                             │
+│  [Channel Packing 예시]                                      │
+│  - R: AO, G: Roughness, B: Metallic                        │
+│  - 텍스처 수 절약!                                          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">금속과 비금속이 왜 다르게 처리돼?</div>
+            <div class="a">
+                <p>빛과의 상호작용 방식이 완전히 다르기 때문입니다.</p>
+                <div class="diagram">
+금속 vs 비금속의 차이:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [비금속 (Dielectric)]                                       │
+│                                                             │
+│       빛                                                    │
+│        \                                                    │
+│         \  -> 일부 반사 (4% 정도, 흰색)                     │
+│          \                                                  │
+│  ---------*---------                                        │
+│           |\                                                │
+│           | \  -> 내부 산란 후 확산 반사 (색상 있음)        │
+│           |  \                                              │
+│                                                             │
+│  - F0 (정면 반사율) = 약 0.04 (4%)                          │
+│  - Diffuse 있음 (Base Color 적용)                           │
+│  - 예: 플라스틱, 나무, 돌, 피부                             │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  [금속 (Conductor)]                                          │
+│                                                             │
+│       빛                                                    │
+│        \                                                    │
+│         \  -> 대부분 반사 (70~100%, 색상 있음)              │
+│          \                                                  │
+│  ---------*---------                                        │
+│           X  -> 내부 흡수 (Diffuse 없음!)                   │
+│                                                             │
+│  - F0 = 0.7~1.0 (Base Color가 반사색)                      │
+│  - Diffuse 없음                                             │
+│  - 예: 철, 금, 구리, 알루미늄                               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. BRDF 구현</h2>
+            <div class="q">실제 셰이더 코드는 어떻게 생겼어?</div>
+            <div class="a">
+                <p><span class="highlight">Cook-Torrance BRDF</span>가 가장 널리 사용됩니다.</p>
+                <div class="code-block">
+// PBR BRDF 구현 (Cook-Torrance)
+
+// Fresnel - Schlick 근사
+float3 FresnelSchlick(float cosTheta, float3 F0) {
+    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+// Normal Distribution Function (NDF) - GGX/Trowbridge-Reitz
+float DistributionGGX(float3 N, float3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return a2 / denom;
+}
+
+// Geometry Function - Smith's method with Schlick-GGX
+float GeometrySchlickGGX(float NdotV, float roughness) {
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+
+    return NdotV / (NdotV * (1.0 - k) + k);
+}
+
+float GeometrySmith(float3 N, float3 V, float3 L, float roughness) {
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+
+    float ggx1 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx2 = GeometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+// 최종 PBR 계산
+float3 CalculatePBR(
+    float3 albedo,
+    float metallic,
+    float roughness,
+    float3 N, float3 V, float3 L,
+    float3 lightColor
+) {
+    float3 H = normalize(V + L);
+
+    // F0: 정면 반사율
+    // 비금속 = 0.04, 금속 = albedo
+    float3 F0 = float3(0.04, 0.04, 0.04);
+    F0 = lerp(F0, albedo, metallic);
+
+    // Cook-Torrance BRDF
+    float D = DistributionGGX(N, H, roughness);
+    float G = GeometrySmith(N, V, L, roughness);
+    float3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+
+    // Specular
+    float3 numerator = D * G * F;
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+    float3 specular = numerator / denominator;
+
+    // Diffuse (금속은 없음)
+    float3 kS = F;  // 반사 비율
+    float3 kD = (1.0 - kS) * (1.0 - metallic);  // 확산 비율
+
+    float3 diffuse = kD * albedo / PI;
+
+    // 최종 결과
+    float NdotL = max(dot(N, L), 0.0);
+    return (diffuse + specular) * lightColor * NdotL;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. IBL (Image-Based Lighting)</h2>
+            <div class="q">주변 환경이 반사되는 건 어떻게 해?</div>
+            <div class="a">
+                <p><span class="highlight">IBL</span>로 환경 맵에서 조명을 가져옵니다.</p>
+                <div class="diagram">
+IBL 구성:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  1. Diffuse IBL (Irradiance Map)                            │
+│                                                             │
+│     +--------+                                              │
+│     |  환경  |  -> 블러된 환경맵 (Convolution)              │
+│     | 큐브맵 |     각 방향의 평균 조도 저장                 │
+│     +--------+                                              │
+│                                                             │
+│     용도: 비금속의 Ambient 색상                             │
+│                                                             │
+│  2. Specular IBL (Pre-filtered Environment Map)             │
+│                                                             │
+│     Mip Level 0: Sharp (Roughness 0)                        │
+│     Mip Level 1: Slightly Blurry                            │
+│     Mip Level 2: More Blurry                                │
+│     ...                                                     │
+│     Mip Level N: Very Blurry (Roughness 1)                  │
+│                                                             │
+│     용도: 금속/광택면의 환경 반사                           │
+│                                                             │
+│  3. BRDF LUT                                                 │
+│     +--------+                                              │
+│     | x=NdotV|  -> 미리 계산된 BRDF 적분 결과               │
+│     | y=rough|                                              │
+│     +--------+                                              │
+│                                                             │
+│     용도: Fresnel 항과 기하 항 근사                         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// IBL 적용
+
+float3 CalculateIBL(
+    float3 albedo,
+    float metallic,
+    float roughness,
+    float3 N, float3 V,
+    float ao
+) {
+    float3 R = reflect(-V, N);
+    float NdotV = max(dot(N, V), 0.0);
+
+    // F0
+    float3 F0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);
+
+    // Fresnel (Roughness 보정)
+    float3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+
+    // kS, kD
+    float3 kS = F;
+    float3 kD = (1.0 - kS) * (1.0 - metallic);
+
+    // Diffuse IBL
+    float3 irradiance = IrradianceMap.Sample(sampler, N).rgb;
+    float3 diffuseIBL = irradiance * albedo;
+
+    // Specular IBL
+    float maxMipLevel = 5.0;
+    float mipLevel = roughness * maxMipLevel;
+    float3 prefilteredColor = PrefilteredEnvMap.SampleLevel(sampler, R, mipLevel).rgb;
+
+    // BRDF LUT 샘플링
+    float2 brdf = BRDF_LUT.Sample(sampler, float2(NdotV, roughness)).rg;
+    float3 specularIBL = prefilteredColor * (F * brdf.x + brdf.y);
+
+    // 최종 Ambient
+    float3 ambient = (kD * diffuseIBL + specularIBL) * ao;
+
+    return ambient;
+}
+
+// 전체 PBR 라이팅
+float3 PS_PBR(VS_OUTPUT input) : SV_Target {
+    // 텍스처 샘플링
+    float3 albedo = AlbedoTex.Sample(sampler, input.UV).rgb;
+    float metallic = MetallicTex.Sample(sampler, input.UV).r;
+    float roughness = RoughnessTex.Sample(sampler, input.UV).r;
+    float ao = AOTex.Sample(sampler, input.UV).r;
+    float3 N = GetNormalFromMap(input);
+    float3 V = normalize(CameraPos - input.WorldPos);
+
+    // 직접광 (Direct Lighting)
+    float3 Lo = float3(0, 0, 0);
+    for (int i = 0; i < LightCount; i++) {
+        float3 L = GetLightDirection(i, input.WorldPos);
+        float3 lightColor = GetLightColor(i) * GetAttenuation(i, input.WorldPos);
+        Lo += CalculatePBR(albedo, metallic, roughness, N, V, L, lightColor);
+    }
+
+    // 간접광 (IBL)
+    float3 ambient = CalculateIBL(albedo, metallic, roughness, N, V, ao);
+
+    return ambient + Lo;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. Disney BRDF</h2>
+            <div class="q">Disney/Principled BRDF는 뭐가 달라?</div>
+            <div class="a">
+                <p>아티스트 친화적인 파라미터들이 추가됩니다.</p>
+                <div class="diagram">
+Disney BRDF 추가 파라미터:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  기본 Cook-Torrance에 추가되는 것들:                        │
+│                                                             │
+│  - Subsurface: 피부처럼 빛이 투과                           │
+│  - Specular: 비금속의 F0 조절                               │
+│  - SpecularTint: 스펙큘러에 Base Color 반영                 │
+│  - Anisotropic: 머리카락/브러시 금속 방향성                 │
+│  - Sheen: 천/벨벳의 가장자리 밝기                           │
+│  - SheenTint: Sheen 색상                                    │
+│  - Clearcoat: 자동차 도장 같은 이중 코팅                    │
+│  - ClearcoatGloss: Clearcoat의 광택도                       │
+│                                                             │
+│  [자동차 도장 예시]                                          │
+│                                                             │
+│       +------------------+  Clearcoat Layer (투명 코팅)     │
+│       |                  |  -> 추가 스펙큘러 반사           │
+│       +------------------+                                  │
+│       |    Base Paint    |  Base Layer (메탈릭 페인트)      │
+│       |   Metal Flakes   |  -> 메인 컬러 + 플레이크 반짝임  │
+│       +------------------+                                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>PBR</strong> = 물리 법칙(에너지 보존, 프레넬, 미세면)을 따르는 렌더링</li>
+                <li><strong>Metallic-Roughness</strong> = Base Color + Metallic + Roughness + Normal + AO</li>
+                <li><strong>금속 vs 비금속</strong> = 금속은 Diffuse 없음, 반사색 = Base Color</li>
+                <li><strong>Cook-Torrance BRDF</strong> = D(NDF) * G(Geometry) * F(Fresnel)</li>
+                <li><strong>IBL</strong> = 환경맵으로 Ambient/Reflection 계산 (Irradiance + Prefiltered)</li>
+                <li><strong>Disney BRDF</strong> = 아티스트 친화적 추가 파라미터 (Clearcoat, Sheen 등)</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../dynamic-weather/">&larr; 동적 날씨 시스템</a>
+            <a href="../realtime-gi/">실시간 GI &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

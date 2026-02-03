@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스켈레톤 공유 - 게임 애니메이션 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #7B1FA2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #F3E5F5; }
+        .q { background: #F3E5F5; border-left: 4px solid #9C27B0; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #7B1FA2; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #F3E5F5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #7B1FA2; }
+        .key-point { background: #E1BEE7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #4A148C; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #9C27B0; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-animation/" class="back-link">&larr; 게임 애니메이션</a>
+
+        <div class="header">
+            <h1>스켈레톤 공유</h1>
+            <p>스켈레톤 공유로 메모리 아끼는 법</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 스켈레톤 데이터 구조</h2>
+            <div class="q">스켈레톤 데이터가 뭐야?</div>
+            <div class="a">
+                <p>캐릭터의 <span class="highlight">뼈대 구조</span>를 정의한 데이터야:</p>
+                <div class="diagram">
+스켈레톤(Skeleton) 데이터:
+
+┌─────────────────────────────────────────────┐
+│ 스켈레톤 = 뼈대들의 계층 구조               │
+│                                             │
+│              [Root]                         │
+│                 │                           │
+│              [Hips]                         │
+│            /    │    \                      │
+│      [L.Leg] [Spine] [R.Leg]               │
+│         │       │       │                   │
+│     [L.Knee] [Chest] [R.Knee]              │
+│         │       │       │                   │
+│                ...                          │
+│                                             │
+│ 각 뼈대(Bone)에 저장되는 정보:              │
+│ - 이름 (string)                             │
+│ - 부모 인덱스 (int)                         │
+│ - 바인드 포즈 (Transform)                   │
+│ - 역바인드 행렬 (Matrix4x4)                 │
+└─────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 스켈레톤 데이터 구조
+struct Bone {
+    std::string name;           // "LeftUpperArm"
+    int parentIndex;            // 부모 뼈대 인덱스 (-1이면 루트)
+
+    Transform bindPose;         // T-Pose에서의 변환
+    Matrix4x4 inverseBindMatrix; // 스키닝용 역행렬
+};
+
+struct Skeleton {
+    std::vector&lt;Bone&gt; bones;    // 약 50~150개 뼈대
+    std::vector&lt;int&gt; hierarchy;  // 부모-자식 관계
+
+    // 추가 데이터
+    std::vector&lt;std::string&gt; boneNames;  // 빠른 이름 검색용
+    std::map&lt;std::string, int&gt; nameToIndex;  // 이름 → 인덱스 맵
+};
+
+// 메모리 크기 계산
+// 70개 뼈대 기준:
+// - Bone 구조체: ~200 bytes × 70 = 14KB
+// - 인덱스 테이블: ~1KB
+// - 이름 데이터: ~2KB
+// Total: 약 17KB / 스켈레톤</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 왜 공유해야 해?</h2>
+            <div class="q">17KB면 별로 안 큰 거 아냐?</div>
+            <div class="a">
+                <p><span class="warning">인스턴스가 많아지면 커져!</span> 그리고 진짜 문제는 따로 있어:</p>
+                <div class="diagram">
+스켈레톤 공유 안 할 때의 문제:
+
+문제 1: 메모리 중복
+┌─────────────────────────────────────────────┐
+│ 같은 "인간형" 스켈레톤:                      │
+│                                             │
+│ 플레이어: 17KB (스켈레톤 정의)              │
+│ NPC 1:    17KB (똑같은 구조 복사)           │
+│ NPC 2:    17KB (똑같은 구조 복사)           │
+│ ...                                         │
+│ NPC 100:  17KB (똑같은 구조 복사)           │
+│                                             │
+│ Total: 17KB × 101 = <span class="warning">1.7MB</span> (중복!)          │
+│                                             │
+│ <span class="key-point">공유하면: 17KB × 1 = 17KB</span>                  │
+└─────────────────────────────────────────────┘
+
+문제 2: 애니메이션 호환성
+┌─────────────────────────────────────────────┐
+│ 같은 스켈레톤을 공유해야 같은 애니메이션 사용│
+│                                             │
+│ 인간형 스켈레톤 공유 → 걷기 애니메이션 1개로│
+│                        100명 NPC 재생 가능  │
+│                                             │
+│ 각자 다른 스켈레톤 → 각각 애니메이션 필요   │
+│                      (100개 × 25MB...)      │
+└─────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">그럼 어떻게 공유해?</div>
+            <div class="a">
+                <p><span class="highlight">정의(Definition)</span>와 <span class="highlight">인스턴스(Instance)</span>를 분리해:</p>
+                <div class="diagram">
+스켈레톤 공유 구조:
+
+<span class="key-point">공유 데이터 (1개만 존재):</span>
+┌─────────────────────────────────────────────┐
+│ SkeletonDefinition "HumanSkeleton"          │
+│ ─────────────────────────────────           │
+│ - 뼈대 이름, 계층 구조                       │
+│ - 바인드 포즈                                │
+│ - 역바인드 행렬                              │
+│                                             │
+│ 메모리: 17KB (단 1개!)                       │
+└─────────────────────────────────────────────┘
+            ↓ 참조
+<span class="key-point">인스턴스 데이터 (캐릭터마다):</span>
+┌─────────────────────────────────────────────┐
+│ SkeletonInstance (플레이어)                 │
+│ ─────────────────────────────               │
+│ - 포인터 → HumanSkeleton                    │
+│ - 현재 뼈대 변환값 (Transform[70])          │
+│                                             │
+│ 메모리: 8 + (40 × 70) = <span class="key-point">2.8KB</span>              │
+└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│ SkeletonInstance (NPC 1)                    │
+│ - 포인터 → HumanSkeleton (같은 것 참조)     │
+│ - 현재 뼈대 변환값                          │
+│ 메모리: 2.8KB                               │
+└─────────────────────────────────────────────┘
+
+100명 기준:
+- 공유 전: 17KB × 100 = 1.7MB
+- 공유 후: 17KB + 2.8KB × 100 = <span class="key-point">297KB</span>
+- <span class="key-point">82% 절감!</span></div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 구현 방법</h2>
+            <div class="q">코드로 어떻게 구현해?</div>
+            <div class="a">
+                <div class="code-block">
+// 공유 스켈레톤 정의 (싱글턴처럼 관리)
+class SkeletonDefinition {
+public:
+    std::string name;                      // "HumanSkeleton"
+    std::vector&lt;BoneDefinition&gt; bones;     // 뼈대 정의들
+    std::vector&lt;int&gt; parentIndices;        // 계층 구조
+
+    // 바인드 포즈 데이터 (불변)
+    std::vector&lt;Transform&gt; bindPoses;
+    std::vector&lt;Matrix4x4&gt; inverseBindMatrices;
+
+    // 이름으로 인덱스 찾기
+    int FindBoneIndex(const std::string& name) const {
+        auto it = nameToIndex.find(name);
+        return (it != nameToIndex.end()) ? it-&gt;second : -1;
+    }
+
+private:
+    std::map&lt;std::string, int&gt; nameToIndex;
+};
+
+// 스켈레톤 인스턴스 (캐릭터마다 1개)
+class SkeletonInstance {
+public:
+    const SkeletonDefinition* definition;  // 공유 정의 참조 (8 bytes)
+
+    // 현재 포즈 (애니메이션으로 업데이트됨)
+    std::vector&lt;Transform&gt; localPose;      // 뼈대별 로컬 변환
+    std::vector&lt;Matrix4x4&gt; worldMatrices;  // 월드 변환 (스키닝용)
+
+    SkeletonInstance(const SkeletonDefinition* def) : definition(def) {
+        int boneCount = def-&gt;bones.size();
+        localPose.resize(boneCount);
+        worldMatrices.resize(boneCount);
+
+        // 바인드 포즈로 초기화
+        for (int i = 0; i &lt; boneCount; i++) {
+            localPose[i] = def-&gt;bindPoses[i];
+        }
+    }
+
+    void UpdateWorldMatrices() {
+        // 루트부터 순회하며 월드 행렬 계산
+        for (int i = 0; i &lt; definition-&gt;bones.size(); i++) {
+            int parent = definition-&gt;parentIndices[i];
+
+            if (parent == -1) {
+                worldMatrices[i] = localPose[i].ToMatrix();
+            } else {
+                worldMatrices[i] = worldMatrices[parent] * localPose[i].ToMatrix();
+            }
+        }
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 스켈레톤 매니저</h2>
+            <div class="q">여러 종류의 스켈레톤은 어떻게 관리해?</div>
+            <div class="a">
+                <p><span class="highlight">스켈레톤 매니저</span>로 중앙 관리:</p>
+                <div class="diagram">
+스켈레톤 매니저:
+
+┌─────────────────────────────────────────────┐
+│ SkeletonManager (싱글턴)                    │
+│                                             │
+│ 등록된 스켈레톤 정의:                        │
+│ ├─ "HumanSkeleton"     → 인간형 (70 뼈대)  │
+│ ├─ "HumanSkeleton_LOD" → 인간형 간소화     │
+│ ├─ "DragonSkeleton"    → 드래곤 (150 뼈대) │
+│ ├─ "HorseSkeleton"     → 말 (60 뼈대)      │
+│ └─ "SpiderSkeleton"    → 거미 (40 뼈대)    │
+│                                             │
+│ 참조 카운트로 메모리 관리                    │
+│ 더 이상 사용 안 하면 자동 해제               │
+└─────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 스켈레톤 매니저
+class SkeletonManager {
+    static SkeletonManager& Instance() {
+        static SkeletonManager instance;
+        return instance;
+    }
+
+    // 스켈레톤 로드/가져오기
+    const SkeletonDefinition* GetSkeleton(const std::string& name) {
+        auto it = skeletons.find(name);
+        if (it != skeletons.end()) {
+            it-&gt;second.refCount++;
+            return it-&gt;second.definition;
+        }
+
+        // 없으면 로드
+        SkeletonDefinition* def = LoadFromFile(name + ".skeleton");
+        skeletons[name] = {def, 1};
+        return def;
+    }
+
+    // 해제
+    void ReleaseSkeleton(const SkeletonDefinition* def) {
+        for (auto& [name, entry] : skeletons) {
+            if (entry.definition == def) {
+                entry.refCount--;
+                if (entry.refCount == 0) {
+                    delete entry.definition;
+                    skeletons.erase(name);
+                }
+                break;
+            }
+        }
+    }
+
+private:
+    struct SkeletonEntry {
+        SkeletonDefinition* definition;
+        int refCount;
+    };
+    std::map&lt;std::string, SkeletonEntry&gt; skeletons;
+};
+
+// 사용 예시
+void CreateCharacter(const std::string& skeletonType) {
+    // 스켈레톤 정의 가져오기 (공유됨)
+    const SkeletonDefinition* def = SkeletonManager::Instance().GetSkeleton(skeletonType);
+
+    // 인스턴스 생성 (캐릭터별)
+    character-&gt;skeleton = new SkeletonInstance(def);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. LOD 스켈레톤</h2>
+            <div class="q">멀리 있는 캐릭터도 70개 뼈대가 필요해?</div>
+            <div class="a">
+                <p><span class="key-point">아니!</span> <span class="highlight">LOD 스켈레톤</span>으로 뼈대 수를 줄여:</p>
+                <div class="diagram">
+스켈레톤 LOD:
+
+LOD 0 (가까움): 70개 뼈대 - Full Detail
+┌─────────────────────────────────────────────┐
+│ 모든 손가락 (15개)                          │
+│ 모든 얼굴 뼈대 (20개)                       │
+│ 모든 척추 (5개)                             │
+│ ... 전체 70개                               │
+└─────────────────────────────────────────────┘
+
+LOD 1 (중간): 35개 뼈대 - Medium Detail
+┌─────────────────────────────────────────────┐
+│ 손가락 통합 (5개 → 1개)                     │
+│ 얼굴 생략                                    │
+│ 척추 통합 (5개 → 2개)                       │
+│ ... 35개                                    │
+└─────────────────────────────────────────────┘
+
+LOD 2 (멀리): 15개 뼈대 - Low Detail
+┌─────────────────────────────────────────────┐
+│ 손 통째로 1개                               │
+│ 팔 1개, 다리 1개                            │
+│ 몸통 1개                                    │
+│ ... 15개                                    │
+└─────────────────────────────────────────────┘
+
+메모리 절약:
+가까운 10명:  70뼈대 × 40byte × 10 = 28KB
+중간 30명:   35뼈대 × 40byte × 30 = 42KB
+먼 100명:    15뼈대 × 40byte × 100 = 60KB
+─────────────────────────────────────────
+Total: <span class="key-point">130KB</span>
+
+vs 모두 70뼈대: 70 × 40 × 140 = <span class="warning">392KB</span></div>
+                <div class="code-block">
+// LOD 스켈레톤 시스템
+class SkeletonLODSystem {
+    struct LODSkeleton {
+        const SkeletonDefinition* skeleton;
+        float maxDistance;  // 이 거리까지 사용
+    };
+
+    std::vector&lt;LODSkeleton&gt; lodLevels = {
+        { GetSkeleton("Human_LOD0"), 10.0f },   // 0~10m
+        { GetSkeleton("Human_LOD1"), 30.0f },   // 10~30m
+        { GetSkeleton("Human_LOD2"), 100.0f },  // 30~100m
+    };
+
+    // 뼈대 매핑 (LOD 간 전환용)
+    // LOD0의 "LeftIndex1,2,3" → LOD1의 "LeftHand"
+    std::map&lt;int, int&gt; lod0ToLod1;
+    std::map&lt;int, int&gt; lod1ToLod2;
+
+    void UpdateLOD(Character* character) {
+        float distance = DistanceToCamera(character);
+
+        for (auto& lod : lodLevels) {
+            if (distance &lt; lod.maxDistance) {
+                if (character-&gt;currentLOD != lod.skeleton) {
+                    // LOD 전환
+                    TransitionToLOD(character, lod.skeleton);
+                }
+                break;
+            }
+        }
+    }
+
+    void TransitionToLOD(Character* character, const SkeletonDefinition* newSkeleton) {
+        // 1. 현재 포즈 저장
+        auto currentPose = character-&gt;skeleton-&gt;localPose;
+
+        // 2. 새 스켈레톤으로 교체
+        delete character-&gt;skeleton;
+        character-&gt;skeleton = new SkeletonInstance(newSkeleton);
+
+        // 3. 포즈 매핑 (뼈대 수가 다르므로)
+        MapPose(currentPose, character-&gt;skeleton-&gt;localPose, newSkeleton);
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 메모리 최적화 기법</h2>
+            <div class="q">더 줄일 수 있는 방법 없어?</div>
+            <div class="a">
+                <div class="diagram">
+추가 메모리 최적화:
+
+1. 행렬 공유 (같은 포즈의 캐릭터)
+┌─────────────────────────────────────────────┐
+│ Idle 상태 NPC 50명 → 같은 포즈              │
+│ 행렬 계산 1번만 하고 공유!                  │
+│                                             │
+│ 50명 × 70뼈대 × 64byte = 224KB              │
+│ → 1 × 70 × 64byte = <span class="key-point">4.5KB</span>                 │
+└─────────────────────────────────────────────┘
+
+2. 인스턴스 풀링
+┌─────────────────────────────────────────────┐
+│ 화면에 안 보이는 캐릭터 = 스켈레톤 해제     │
+│ 다시 보이면 풀에서 재사용                   │
+│                                             │
+│ 멀리 있는 1000명 → 메모리 0                 │
+│ 가까운 100명만 → 실제 메모리 사용           │
+└─────────────────────────────────────────────┘
+
+3. SoA (Structure of Arrays)
+┌─────────────────────────────────────────────┐
+│ AoS (일반): Bone { pos, rot, scale }[70]    │
+│ SoA:        Positions[70], Rotations[70]... │
+│                                             │
+│ SIMD 최적화에 유리, 캐시 효율 증가          │
+└─────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 행렬 공유 시스템
+class SharedPoseManager {
+    struct SharedPose {
+        const SkeletonDefinition* skeleton;
+        std::string animationName;
+        float normalizedTime;
+
+        std::vector&lt;Matrix4x4&gt; worldMatrices;  // 계산된 행렬
+        int refCount;
+    };
+
+    std::vector&lt;SharedPose&gt; sharedPoses;
+
+    // 같은 포즈를 쓰는지 확인
+    const Matrix4x4* GetSharedMatrices(
+        const SkeletonDefinition* skeleton,
+        const std::string& anim,
+        float time
+    ) {
+        // 같은 스켈레톤 + 같은 애니메이션 + 비슷한 시간이면 공유
+        for (auto& pose : sharedPoses) {
+            if (pose.skeleton == skeleton &&
+                pose.animationName == anim &&
+                std::abs(pose.normalizedTime - time) &lt; 0.01f) {
+                pose.refCount++;
+                return pose.worldMatrices.data();
+            }
+        }
+
+        // 없으면 새로 계산
+        SharedPose newPose;
+        newPose.skeleton = skeleton;
+        newPose.animationName = anim;
+        newPose.normalizedTime = time;
+        newPose.refCount = 1;
+        CalculateMatrices(skeleton, anim, time, newPose.worldMatrices);
+
+        sharedPoses.push_back(newPose);
+        return sharedPoses.back().worldMatrices.data();
+    }
+};
+
+// 인스턴스 풀링
+class SkeletonPool {
+    std::queue&lt;SkeletonInstance*&gt; available[LOD_COUNT];
+
+    SkeletonInstance* Acquire(int lodLevel) {
+        if (!available[lodLevel].empty()) {
+            auto* instance = available[lodLevel].front();
+            available[lodLevel].pop();
+            return instance;
+        }
+        return new SkeletonInstance(lodSkeletons[lodLevel]);
+    }
+
+    void Release(SkeletonInstance* instance, int lodLevel) {
+        instance-&gt;Reset();
+        available[lodLevel].push(instance);
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>스켈레톤 데이터</strong>: 뼈대 이름, 계층, 바인드 포즈, 역행렬</li>
+                <li><strong>Definition/Instance 분리</strong>: 정의는 공유, 상태만 개별</li>
+                <li>같은 스켈레톤 공유 → <strong>80% 이상</strong> 메모리 절감</li>
+                <li><strong>스켈레톤 매니저</strong>: 참조 카운트로 중앙 관리</li>
+                <li><strong>LOD 스켈레톤</strong>: 거리에 따라 뼈대 수 줄임 (70 → 35 → 15)</li>
+                <li><strong>행렬 공유</strong>: 같은 포즈면 계산 결과도 공유</li>
+                <li><strong>인스턴스 풀링</strong>: 안 보이는 캐릭터는 풀로 반환</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../animation-variation/">&larr; 애니메이션 변형</a>
+            <a href="../category-animation/">목록으로 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

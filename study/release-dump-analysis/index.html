@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>릴리즈 덤프 분석 - 디버깅 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #B91C1C; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEE2E2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .key-point { background: #FECACA; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #991B1B; }
+        .warning { background: #FEF3C7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #92400E; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #FEF2F2; border: 2px solid #FECACA; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #7F1D1D; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+
+        <div class="header">
+            <h1>릴리즈 덤프 분석</h1>
+            <p>최적화된 코드에서 변수 값 찾는 법</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 릴리즈 빌드의 어려움</h2>
+            <div class="q">릴리즈 빌드 덤프는 왜 분석하기 어려워?</div>
+            <div class="a">
+                <p>컴파일러 <span class="highlight">최적화</span>가 코드를 완전히 바꿔버리기 때문입니다:</p>
+                <div class="diagram">
+디버그 vs 릴리즈 빌드 차이:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  원본 코드:                                                     │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  int CalcDamage(int atk, int def) {                     │   │
+│  │      int base = atk - def;                              │   │
+│  │      int bonus = base * 0.1;                            │   │
+│  │      int final = base + bonus;                          │   │
+│  │      return final;                                      │   │
+│  │  }                                                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  디버그 빌드 (-Od):                                             │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  ; base = atk - def                                     │   │
+│  │  mov  eax, [atk]                                        │   │
+│  │  sub  eax, [def]                                        │   │
+│  │  mov  [base], eax     ← <span class="key-point">base 변수 메모리에 저장</span>       │   │
+│  │  ; bonus = base * 0.1                                   │   │
+│  │  mov  eax, [base]                                       │   │
+│  │  imul eax, 0.1                                          │   │
+│  │  mov  [bonus], eax    ← <span class="key-point">bonus 변수 저장</span>               │   │
+│  │  ; final = base + bonus                                 │   │
+│  │  mov  eax, [base]                                       │   │
+│  │  add  eax, [bonus]                                      │   │
+│  │  mov  [final], eax    ← <span class="key-point">final 변수 저장</span>               │   │
+│  │                                                         │   │
+│  │  → 모든 지역 변수가 스택에 있음 (디버거로 볼 수 있음)   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  릴리즈 빌드 (-O2):                                             │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  mov  eax, ecx        ; atk                             │   │
+│  │  sub  eax, edx        ; atk - def                       │   │
+│  │  lea  eax, [eax+eax*0.1]  ; base * 1.1 (한 번에!)      │   │
+│  │  ret                                                    │   │
+│  │                                                         │   │
+│  │  → <span class="warning">base, bonus, final 변수 전부 사라짐!</span>               │   │
+│  │  → 레지스터(eax)만 사용, 메모리 저장 안 함              │   │
+│  │  → 디버거에서 "optimized away" 표시                    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 심볼 매칭</h2>
+            <div class="q">덤프 열었는데 심볼이 안 맞아요</div>
+            <div class="a">
+                <p>덤프와 <span class="highlight">정확히 같은 빌드의 PDB</span>가 필요합니다:</p>
+                <div class="diagram">
+심볼 매칭 체크리스트:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  덤프 파일: crash_2024_01_15.dmp                                │
+│  EXE 정보: GameServer.exe (타임스탬프: 65A12345)                │
+│                                                                 │
+│  Step 1: EXE 타임스탬프 확인                                    │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  WinDbg> lm v m GameServer                              │   │
+│  │                                                         │   │
+│  │  GameServer                                             │   │
+│  │      Image path: C:\Game\GameServer.exe                 │   │
+│  │      Timestamp:  <span class="key-point">65A12345</span> (2024-01-15 10:30:00)         │   │
+│  │      Checksum:   00123ABC                               │   │
+│  │                                                         │   │
+│  │  <span class="warning">이 타임스탬프와 일치하는 PDB 필요!</span>                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Step 2: PDB 경로 설정                                          │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  방법 1: 심볼 서버 사용                                 │   │
+│  │  .sympath srv*C:\Symbols*https://your-symbol-server     │   │
+│  │                                                         │   │
+│  │  방법 2: 로컬 경로 직접 지정                            │   │
+│  │  .sympath C:\Build_2024_01_15\GameServer.pdb           │   │
+│  │                                                         │   │
+│  │  방법 3: Visual Studio에서                              │   │
+│  │  Debug > Options > Symbols > Symbol file locations     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Step 3: 심볼 로드 확인                                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  WinDbg> .reload /f GameServer.exe                      │   │
+│  │  WinDbg> lm m GameServer                                │   │
+│  │                                                         │   │
+│  │  <span class="key-point">✓</span> GameServer  (pdb symbols) C:\Symbols\GameServer.pdb  │   │
+│  │       └── "pdb symbols" = 심볼 로드 성공!              │   │
+│  │                                                         │   │
+│  │  <span class="warning">✗</span> GameServer  (export symbols only)                    │   │
+│  │       └── 심볼 없음, PDB 경로 확인 필요                │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 심볼 서버 구축 (빌드 시 자동 업로드)
+
+// build_and_archive.bat
+/*
+@echo off
+set BUILD_ID=%DATE:~0,4%%DATE:~5,2%%DATE:~8,2%_%TIME:~0,2%%TIME:~3,2%
+set SYMBOL_SERVER=\\server\symbols
+
+:: 빌드
+msbuild GameServer.sln /p:Configuration=Release
+
+:: 심볼 서버에 PDB 업로드
+symstore add /r /f bin\Release\*.pdb /s %SYMBOL_SERVER% /t "GameServer" /v "%BUILD_ID%"
+
+:: EXE와 PDB 함께 아카이브
+mkdir archive\%BUILD_ID%
+copy bin\Release\GameServer.exe archive\%BUILD_ID%\
+copy bin\Release\GameServer.pdb archive\%BUILD_ID%\
+
+echo Build archived: %BUILD_ID%
+*/
+
+// 덤프 분석 시 심볼 경로 설정
+/*
+WinDbg 명령어:
+
+:: Microsoft 심볼 서버 + 로컬 심볼 서버
+.sympath srv*C:\LocalSymbols*https://msdl.microsoft.com/download/symbols
+.sympath+ srv*C:\LocalSymbols*\\our-server\symbols
+
+:: 심볼 새로고침
+.reload /f
+
+:: 심볼 상태 확인
+!sym noisy  ; 상세 로그 켜기
+lm         ; 로드된 모듈 목록
+*/</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 레지스터에서 변수 찾기</h2>
+            <div class="q">변수가 "optimized away"래요</div>
+            <div class="a">
+                <p>변수가 메모리에 없으면 <span class="highlight">레지스터</span>나 <span class="highlight">디스어셈블리</span>에서 찾아야 합니다:</p>
+                <div class="diagram">
+레지스터에서 변수 찾기:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  크래시 지점:                                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  void ProcessPlayer(Player* pPlayer) {                  │   │
+│  │      int level = pPlayer->GetLevel();  ← <span class="warning">여기서 크래시</span>   │   │
+│  │      // pPlayer가 nullptr?                              │   │
+│  │  }                                                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  WinDbg에서 레지스터 확인:                                      │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  0:000> r                                               │   │
+│  │  rax=0000000000000000  rbx=00007ff6abc12340             │   │
+│  │  <span class="key-point">rcx=0000000000000000</span>  rdx=00000000000000a5             │   │
+│  │  rsi=00007ff6def45678  rdi=0000000000000001             │   │
+│  │  rip=00007ff6abc54321  rsp=000000c912345678             │   │
+│  │                                                         │   │
+│  │  x64 호출 규약: 첫 번째 인자 = rcx                      │   │
+│  │  → <span class="highlight">rcx = 0 = pPlayer가 nullptr였음!</span>                   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  x64 Windows 호출 규약 정리:                                    │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  인자 1: RCX (또는 XMM0 for float)                      │   │
+│  │  인자 2: RDX (또는 XMM1)                                │   │
+│  │  인자 3: R8  (또는 XMM2)                                │   │
+│  │  인자 4: R9  (또는 XMM3)                                │   │
+│  │  인자 5+: 스택                                          │   │
+│  │  반환값: RAX                                            │   │
+│  │  this 포인터 (멤버 함수): RCX                           │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// WinDbg에서 레지스터 기반 변수 추적
+
+/*
+1. 현재 레지스터 값 확인
+0:000> r
+rax=00000000deadbeef  rcx=00007ff6abc12340  ...
+
+2. 특정 레지스터 값 해석 (포인터인 경우)
+0:000> dt Player @rcx
+   +0x000 m_id             : 12345
+   +0x004 m_level          : 50
+   +0x008 m_name           : "TestPlayer"
+
+3. 레지스터가 가리키는 메모리 덤프
+0:000> dq @rcx L4
+00007ff6`abc12340  00000000`00003039  00000000`00000032
+                   (id=12345)          (level=50)
+
+4. 디스어셈블리에서 변수 위치 추적
+0:000> uf ProcessPlayer
+GameServer!ProcessPlayer:
+00007ff6`abc54310  mov  rcx, [rsp+28h]    ; pPlayer = 스택에서 로드
+00007ff6`abc54315  test rcx, rcx          ; nullptr 체크
+00007ff6`abc54318  je   GameServer!ProcessPlayer+0x30  ; nullptr이면 점프
+00007ff6`abc5431a  mov  eax, [rcx+4]      ; level = pPlayer->m_level
+                                          ; offset 4 = m_level 멤버
+
+→ [rsp+28h]에 pPlayer가 있었음!
+0:000> dq @rsp+28 L1
+000000c9`12345678  00000000`00000000  ← nullptr 확인!
+*/
+
+// 릴리즈 빌드에서도 변수 보존하는 트릭
+void ProcessPlayer_Debuggable(Player* pPlayer) {
+    // volatile로 최적화 방지
+    volatile Player* pDbg = pPlayer;
+
+    // 또는 asm으로 레지스터 강제 사용
+    __asm {
+        mov rax, pPlayer  // rax에 저장됨
+    }
+
+    // 실제 로직
+    if (pPlayer) {
+        int level = pPlayer->GetLevel();
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 최적화된 코드 분석</h2>
+            <div class="q">디스어셈블리가 원본이랑 너무 달라요</div>
+            <div class="a">
+                <p>최적화된 코드를 읽는 패턴을 익혀야 합니다:</p>
+                <div class="diagram">
+흔한 최적화 패턴들:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  1. 인라인 확장 (Inlining)                                      │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  원본:                                                  │   │
+│  │  int GetLevel() { return m_level; }                     │   │
+│  │  void Process() {                                       │   │
+│  │      int lvl = player->GetLevel();  // 함수 호출       │   │
+│  │  }                                                      │   │
+│  │                                                         │   │
+│  │  최적화 후:                                             │   │
+│  │  void Process() {                                       │   │
+│  │      int lvl = player->m_level;  // <span class="key-point">직접 접근</span>         │   │
+│  │  }                                                      │   │
+│  │                                                         │   │
+│  │  → GetLevel() 콜스택에 안 나타남!                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  2. 루프 언롤링 (Loop Unrolling)                                │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  원본:                                                  │   │
+│  │  for (int i = 0; i < 4; i++) {                          │   │
+│  │      sum += arr[i];                                     │   │
+│  │  }                                                      │   │
+│  │                                                         │   │
+│  │  최적화 후:                                             │   │
+│  │  sum = arr[0] + arr[1] + arr[2] + arr[3];  // <span class="key-point">펼쳐짐</span>  │   │
+│  │                                                         │   │
+│  │  → 루프 변수 i가 사라짐!                               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  3. 상수 전파 (Constant Propagation)                            │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  원본:                                                  │   │
+│  │  int x = 10;                                            │   │
+│  │  int y = x * 2;                                         │   │
+│  │  int z = y + 5;                                         │   │
+│  │  return z;                                              │   │
+│  │                                                         │   │
+│  │  최적화 후:                                             │   │
+│  │  return 25;  // <span class="key-point">컴파일 타임에 계산 완료</span>               │   │
+│  │                                                         │   │
+│  │  → x, y, z 전부 사라짐!                                │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  4. 테일 콜 최적화 (Tail Call)                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  원본:                                                  │   │
+│  │  int Factorial(int n) {                                 │   │
+│  │      if (n <= 1) return 1;                              │   │
+│  │      return n * Factorial(n-1);  // 재귀               │   │
+│  │  }                                                      │   │
+│  │                                                         │   │
+│  │  최적화 후:                                             │   │
+│  │  → <span class="key-point">jmp로 변환</span>, 콜스택 안 쌓임                        │   │
+│  │  → 콜스택에 Factorial 1개만 보임!                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 최적화된 디스어셈블리 읽기 예시
+
+/*
+원본 C++ 코드:
+bool Player::CanAttack(Monster* pTarget) {
+    if (!pTarget) return false;
+    if (this->m_hp <= 0) return false;
+    if (Distance(this->m_pos, pTarget->m_pos) > m_attackRange) return false;
+    return true;
+}
+
+최적화된 어셈블리 (x64):
+GameServer!Player::CanAttack:
+00007ff6`abc10000  test rdx, rdx              ; pTarget != nullptr?
+00007ff6`abc10003  je   short ret_false       ; nullptr이면 false
+00007ff6`abc10005  mov  eax, [rcx+0x10]       ; this->m_hp (offset 0x10)
+00007ff6`abc10008  test eax, eax              ; m_hp > 0?
+00007ff6`abc1000a  jle  short ret_false       ; 0 이하면 false
+00007ff6`abc1000c  movss xmm0, [rcx+0x20]     ; this->m_pos.x
+00007ff6`abc10011  subss xmm0, [rdx+0x20]     ; pTarget->m_pos.x
+00007ff6`abc10016  mulss xmm0, xmm0           ; dx^2
+00007ff6`abc1001a  movss xmm1, [rcx+0x24]     ; this->m_pos.y
+00007ff6`abc1001f  subss xmm1, [rdx+0x24]     ; pTarget->m_pos.y
+00007ff6`abc10024  mulss xmm1, xmm1           ; dy^2
+00007ff6`abc10028  addss xmm0, xmm1           ; dx^2 + dy^2
+00007ff6`abc1002c  sqrtss xmm0, xmm0          ; sqrt = distance
+00007ff6`abc10030  comiss xmm0, [rcx+0x30]    ; vs m_attackRange
+00007ff6`abc10034  ja   short ret_false       ; distance > range면 false
+00007ff6`abc10036  mov  al, 1                 ; return true
+00007ff6`abc10038  ret
+ret_false:
+00007ff6`abc10039  xor  al, al                ; return false
+00007ff6`abc1003b  ret
+
+해석:
+- rcx = this (Player*)
+- rdx = pTarget (Monster*)
+- [rcx+0x10] = m_hp
+- [rcx+0x20] = m_pos.x
+- [rcx+0x24] = m_pos.y
+- [rcx+0x30] = m_attackRange
+- Distance() 함수가 인라인됨
+*/
+
+// WinDbg에서 구조체 오프셋 확인
+/*
+0:000> dt Player
+   +0x000 m_id       : Int4B
+   +0x004 m_level    : Int4B
+   +0x008 m_name     : Ptr64 Char
+   +0x010 m_hp       : Int4B
+   +0x014 m_maxHp    : Int4B
+   +0x018 m_mp       : Int4B
+   +0x01c m_maxMp    : Int4B
+   +0x020 m_pos      : Vector3
+   +0x02c m_rotation : Float
+   +0x030 m_attackRange : Float
+*/</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 실전 분석 절차</h2>
+            <div class="q">릴리즈 덤프 분석 순서가 있어?</div>
+            <div class="a">
+                <p>체계적인 분석 절차를 따르세요:</p>
+                <div class="diagram">
+릴리즈 덤프 분석 절차:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  Step 1: 기본 정보 수집                                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  !analyze -v         ; 자동 분석 (크래시 원인 추정)     │   │
+│  │  .ecxr              ; 예외 컨텍스트로 전환              │   │
+│  │  r                  ; 레지스터 확인                     │   │
+│  │  k                  ; 콜스택                            │   │
+│  │  lm v m GameServer  ; 모듈 정보 (빌드 타임스탬프)       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Step 2: 크래시 지점 분석                                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  u @rip L10         ; 크래시 지점 디스어셈블리          │   │
+│  │  ub @rip L10        ; 크래시 직전 코드                  │   │
+│  │  .frame X           ; 콜스택 프레임 이동                │   │
+│  │  dv                 ; 현재 프레임 지역 변수             │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Step 3: 변수 값 추적                                           │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  "optimized away" 변수:                                 │   │
+│  │  1. 레지스터에서 찾기 (rcx, rdx, r8, r9)               │   │
+│  │  2. 스택에서 찾기 (dq @rsp+XX)                         │   │
+│  │  3. 디스어셈블리에서 오프셋 계산                       │   │
+│  │                                                         │   │
+│  │  dt TypeName @address   ; 구조체 해석                   │   │
+│  │  dq @address L10        ; 메모리 덤프                   │   │
+│  │  da @address            ; ASCII 문자열                  │   │
+│  │  du @address            ; 유니코드 문자열               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Step 4: 원인 추정                                              │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  흔한 크래시 패턴:                                      │   │
+│  │  - 0x00000000 접근 = <span class="highlight">nullptr dereference</span>              │   │
+│  │  - 0xCCCCCCCC 접근 = <span class="highlight">초기화 안된 포인터</span>               │   │
+│  │  - 0xDDDDDDDD 접근 = <span class="highlight">해제된 메모리</span>                    │   │
+│  │  - 0xFEEEFEEE 접근 = <span class="highlight">힙 free 후 접근</span>                  │   │
+│  │  - 스택 끝 주소 접근 = <span class="highlight">스택 오버플로우</span>                │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// WinDbg 실전 명령어 모음
+
+/*
+=== 초기 분석 ===
+!analyze -v                    ; 자동 분석
+.ecxr                          ; 예외 컨텍스트
+vertarget                      ; OS/아키텍처 정보
+
+=== 콜스택 ===
+k                              ; 기본 콜스택
+kP                             ; 파라미터 포함
+kv                             ; 로컬 변수 포함
+.frame 3                       ; 3번째 프레임으로 이동
+
+=== 레지스터/메모리 ===
+r                              ; 모든 레지스터
+r rcx                          ; 특정 레지스터
+dq @rcx L4                     ; rcx가 가리키는 메모리 (8바이트 * 4)
+dd @rsp L10                    ; 스택 덤프 (4바이트 * 16)
+db @rax L20                    ; 바이트 덤프
+da @rsi                        ; ASCII 문자열
+du @rdi                        ; 유니코드 문자열
+
+=== 구조체 해석 ===
+dt Player                      ; Player 구조체 정의
+dt Player @rcx                 ; rcx 주소를 Player로 해석
+dt Player @rcx m_name          ; 특정 멤버만
+
+=== 디스어셈블리 ===
+u @rip L20                     ; 현재 위치부터 20줄
+ub @rip L10                    ; 현재 위치 이전 10줄
+uf GameServer!Player::Attack   ; 함수 전체
+
+=== 검색 ===
+s -a 0 L?80000000 "Player"     ; 메모리에서 문자열 검색
+!address @rax                  ; 주소가 어느 영역인지
+
+=== 힙 분석 ===
+!heap -s                       ; 힙 요약
+!heap -p -a @rax               ; 특정 주소의 힙 정보
+
+=== 스레드 ===
+~                              ; 스레드 목록
+~0s                            ; 0번 스레드로 전환
+~*k                            ; 모든 스레드 콜스택
+*/
+
+// 자동화 스크립트 예시 (WinDbg)
+/*
+$$ 크래시 덤프 자동 분석 스크립트
+$$ 사용: .scriptrun analyze_crash.wds
+
+.logopen crash_report.txt
+.echo === Crash Analysis Report ===
+.echo
+
+.echo [System Info]
+vertarget
+.echo
+
+.echo [Modules]
+lm
+.echo
+
+.echo [Exception Context]
+.ecxr
+.echo
+
+.echo [Registers]
+r
+.echo
+
+.echo [Call Stack]
+kP
+.echo
+
+.echo [Disassembly at crash]
+u @rip L15
+.echo
+
+.echo [Memory at crash address]
+!address @rax
+.echo
+
+.logclose
+*/</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 릴리즈 디버깅 팁</h2>
+            <div class="q">릴리즈에서도 디버깅 편하게 하는 방법 있어?</div>
+            <div class="a">
+                <p>빌드 설정을 조정하면 릴리즈에서도 어느 정도 디버깅이 가능합니다:</p>
+                <div class="code-block">
+// 릴리즈 빌드에서도 디버깅 정보 유지하기
+
+// 1. PDB 생성 (기본적으로 해야 함)
+// Visual Studio: /DEBUG 링커 옵션
+// CMake:
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF")
+
+// 2. 프레임 포인터 유지 (콜스택 정확도 향상)
+// /Oy- 옵션: 프레임 포인터 생략 비활성화
+// 단점: 약간의 성능 저하 (레지스터 하나 사용)
+
+// 3. 특정 함수만 최적화 비활성화
+#pragma optimize("", off)
+void CriticalFunction() {
+    // 이 함수는 최적화 안됨 → 디버깅 쉬움
+}
+#pragma optimize("", on)
+
+// 4. 중요 변수 volatile 선언
+void ProcessPlayer(Player* pPlayer) {
+    volatile Player* pDbg = pPlayer;  // 최적화로 사라지지 않음
+
+    // 로직...
+}
+
+// 5. 사전 디버깅용 매크로
+#ifdef ENABLE_RELEASE_DEBUG
+    #define DBG_VAR(x) volatile auto _dbg_##x = x
+    #define DBG_LOG(fmt, ...) OutputDebugStringF(fmt, __VA_ARGS__)
+#else
+    #define DBG_VAR(x)
+    #define DBG_LOG(fmt, ...)
+#endif
+
+void Attack(Player* attacker, Monster* target) {
+    DBG_VAR(attacker);  // 릴리즈에서도 attacker 값 보존
+    DBG_VAR(target);
+
+    int damage = CalcDamage(attacker, target);
+    DBG_LOG("Damage: %d", damage);
+
+    // ...
+}
+
+// 6. 크래시 시 컨텍스트 저장
+void SaveDebugContext(const char* context) {
+    // 전역 변수에 저장 (덤프에서 읽을 수 있음)
+    static char g_LastContext[256];
+    strncpy(g_LastContext, context, sizeof(g_LastContext));
+}
+
+void ProcessPlayer(Player* p) {
+    SaveDebugContext("ProcessPlayer: checking player");
+    if (!p) { /*crash*/ }
+
+    SaveDebugContext("ProcessPlayer: getting level");
+    int level = p->GetLevel();
+
+    // 덤프에서: da GameServer!g_LastContext
+    // → "ProcessPlayer: getting level" 확인 가능
+}</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>심볼 매칭</strong>: 덤프 EXE 타임스탬프와 일치하는 PDB 필수</li>
+                <li><strong>레지스터 확인</strong>: x64는 RCX, RDX, R8, R9가 인자</li>
+                <li><strong>최적화 패턴</strong>: 인라인, 루프 언롤링, 상수 전파 이해</li>
+                <li><strong>분석 순서</strong>: !analyze -v → .ecxr → k → u @rip</li>
+                <li><strong>메모리 패턴</strong>: 0xCCCC=초기화X, 0xDDDD=해제됨, 0xFEEE=힙free</li>
+                <li><strong>릴리즈 디버깅</strong>: /Zi, /Oy-, volatile, 컨텍스트 저장</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../code-coverage/">&larr; 코드 커버리지</a>
+            <a href="../debugging/">디버깅 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

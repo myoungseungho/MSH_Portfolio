@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>코드 커버리지 - 디버깅 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #B91C1C; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEE2E2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .key-point { background: #FECACA; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #991B1B; }
+        .warning { background: #FEF3C7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #92400E; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #FEF2F2; border: 2px solid #FECACA; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #7F1D1D; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+
+        <div class="header">
+            <h1>코드 커버리지</h1>
+            <p>테스트 안 된 코드를 찾는 법</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 코드 커버리지란</h2>
+            <div class="q">코드 커버리지가 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">코드 커버리지</span>는 "테스트가 코드의 몇 %를 실행했는가"를 측정합니다:</p>
+                <div class="diagram">
+코드 커버리지의 의미:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  전체 코드                                                      │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                                                         │   │
+│  │  int CalcDamage(int atk, int def) {                     │   │
+│  │      <span class="key-point">if (atk <= 0) return 0;</span>          // 라인 A        │   │
+│  │      <span class="key-point">if (def < 0) def = 0;</span>            // 라인 B        │   │
+│  │      int damage = atk - def;           // 라인 C        │   │
+│  │      <span class="warning">if (damage < 1) damage = 1;</span>        // 라인 D        │   │
+│  │      return damage;                     // 라인 E        │   │
+│  │  }                                                      │   │
+│  │                                                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  테스트 케이스: CalcDamage(100, 30)                             │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  라인 A: atk=100 > 0  → 조건 false, <span class="warning">return 0 실행 안됨</span>   │   │
+│  │  라인 B: def=30 >= 0 → 조건 false, <span class="warning">def=0 실행 안됨</span>       │   │
+│  │  라인 C: 실행됨 (damage = 70)                           │   │
+│  │  라인 D: damage=70 >= 1 → 조건 false, <span class="warning">실행 안됨</span>          │   │
+│  │  라인 E: 실행됨 (return 70)                             │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  커버리지 결과:                                                 │
+│  - 라인 커버리지: 3/5 = <span class="warning">60%</span>                                   │
+│  - 분기 커버리지: 3/6 = <span class="warning">50%</span> (if의 true/false 각각 카운트)     │
+│                                                                 │
+│  <span class="highlight">테스트 안 된 부분에서 버그가 숨어있을 수 있다!</span>                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 커버리지 종류</h2>
+            <div class="q">커버리지 종류가 뭐가 있어?</div>
+            <div class="a">
+                <p>측정 수준에 따라 여러 종류가 있습니다:</p>
+                <div class="diagram">
+커버리지 종류 비교:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  1. <span class="key-point">라인 커버리지 (Line Coverage)</span>                             │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  "몇 줄이 실행되었나?"                                  │   │
+│  │                                                         │   │
+│  │  <span class="key-point">✓</span> if (x > 0) {          // 실행됨                   │   │
+│  │  <span class="key-point">✓</span>     DoSomething();     // 실행됨                   │   │
+│  │  <span class="warning">✗</span> } else {                // 실행 안됨                 │   │
+│  │  <span class="warning">✗</span>     DoOther();          // 실행 안됨                 │   │
+│  │    }                                                    │   │
+│  │                                                         │   │
+│  │  라인 커버리지: 2/4 = 50%                               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  2. <span class="key-point">분기 커버리지 (Branch Coverage)</span>                           │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  "모든 분기(true/false)를 실행했나?"                    │   │
+│  │                                                         │   │
+│  │  if (x > 0) {...}                                       │   │
+│  │      ├── true 분기:  <span class="key-point">✓ 실행됨</span>                        │   │
+│  │      └── false 분기: <span class="warning">✗ 실행 안됨</span>                      │   │
+│  │                                                         │   │
+│  │  분기 커버리지: 1/2 = 50%                               │   │
+│  │                                                         │   │
+│  │  <span class="highlight">라인 100%여도 분기는 50%일 수 있음!</span>                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  3. <span class="key-point">함수 커버리지 (Function Coverage)</span>                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  "몇 개의 함수가 호출되었나?"                           │   │
+│  │                                                         │   │
+│  │  <span class="key-point">✓</span> void FuncA() {...}    // 호출됨                   │   │
+│  │  <span class="key-point">✓</span> void FuncB() {...}    // 호출됨                   │   │
+│  │  <span class="warning">✗</span> void FuncC() {...}    // 호출 안됨                 │   │
+│  │                                                         │   │
+│  │  함수 커버리지: 2/3 = 67%                               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  4. <span class="key-point">조건 커버리지 (Condition Coverage)</span>                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  "복합 조건의 각 부분이 true/false 되었나?"             │   │
+│  │                                                         │   │
+│  │  if (a > 0 && b > 0) {...}                              │   │
+│  │      ├── a > 0: true<span class="key-point">✓</span> / false<span class="warning">✗</span>                        │   │
+│  │      └── b > 0: true<span class="key-point">✓</span> / false<span class="warning">✗</span>                        │   │
+│  │                                                         │   │
+│  │  조건 커버리지: 2/4 = 50%                               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  중요도 순서: 조건 > 분기 > 라인 > 함수                         │
+│  (조건 커버리지가 가장 엄격)                                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 측정 도구</h2>
+            <div class="q">C++에서 커버리지 어떻게 측정해?</div>
+            <div class="a">
+                <p><span class="highlight">OpenCppCoverage</span>가 Windows C++에서 가장 쉽게 사용할 수 있습니다:</p>
+                <div class="diagram">
+C++ 커버리지 도구 비교:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  <span class="key-point">OpenCppCoverage</span> (Windows, 추천!)                             │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  장점:                                                  │   │
+│  │  - 별도 빌드 불필요 (디버그 빌드면 OK)                  │   │
+│  │  - Visual Studio 통합 가능                              │   │
+│  │  - HTML 리포트 생성                                     │   │
+│  │  - 무료, 오픈소스                                       │   │
+│  │                                                         │   │
+│  │  단점:                                                  │   │
+│  │  - Windows 전용                                         │   │
+│  │  - 분기 커버리지 제한적                                 │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  <span class="key-point">gcov/lcov</span> (Linux, GCC)                                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  장점:                                                  │   │
+│  │  - GCC 내장 (별도 설치 불필요)                          │   │
+│  │  - 분기 커버리지 지원                                   │   │
+│  │  - lcov로 HTML 리포트                                   │   │
+│  │                                                         │   │
+│  │  단점:                                                  │   │
+│  │  - 컴파일 옵션 필요 (-coverage)                         │   │
+│  │  - MSVC 미지원                                          │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  <span class="key-point">Visual Studio Enterprise</span>                                     │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  장점:                                                  │   │
+│  │  - IDE 완전 통합                                        │   │
+│  │  - 코드에 색상 표시                                     │   │
+│  │  - 분기 커버리지 지원                                   │   │
+│  │                                                         │   │
+│  │  단점:                                                  │   │
+│  │  - Enterprise 라이선스 필요 (비쌈)                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// OpenCppCoverage 사용법
+
+// 1. 설치
+// choco install opencppcoverage
+// 또는 GitHub에서 다운로드
+
+// 2. 테스트 실행 (커버리지 측정)
+// 명령 프롬프트:
+// OpenCppCoverage.exe --sources MyProject\src --export_type=html:coverage_report -- MyTest.exe
+
+// 3. Visual Studio 확장 사용 시
+// Test > Analyze Code Coverage for All Tests
+
+// 예시 BAT 파일
+/*
+@echo off
+set PROJECT_DIR=E:\MyGame\src
+set TEST_EXE=E:\MyGame\bin\Debug\GameTests.exe
+set OUTPUT_DIR=E:\MyGame\coverage
+
+OpenCppCoverage.exe ^
+    --sources %PROJECT_DIR% ^
+    --excluded_sources *\test\* ^
+    --export_type=html:%OUTPUT_DIR% ^
+    -- %TEST_EXE%
+
+start %OUTPUT_DIR%\index.html
+*/
+
+// 특정 모듈만 측정
+/*
+OpenCppCoverage.exe ^
+    --modules GameServer.exe ^
+    --sources server_Game ^
+    --export_type=html:coverage ^
+    -- GameServer.exe --test-mode
+*/</div>
+            </div>
+
+            <div class="q">gcov는 어떻게 써?</div>
+            <div class="a">
+                <div class="code-block">
+// gcov + lcov 사용법 (Linux/GCC)
+
+// 1. 커버리지 옵션으로 컴파일
+// g++ -coverage -g -O0 main.cpp -o main
+
+// 2. 프로그램 실행 (테스트 수행)
+// ./main
+
+// 3. gcov로 커버리지 파일 생성
+// gcov main.cpp
+
+// 4. lcov로 HTML 리포트 생성
+// lcov --capture --directory . --output-file coverage.info
+// genhtml coverage.info --output-directory coverage_html
+
+// CMake에서 설정
+/*
+cmake_minimum_required(VERSION 3.10)
+project(MyProject)
+
+option(ENABLE_COVERAGE "Enable coverage" OFF)
+
+if(ENABLE_COVERAGE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -coverage -g -O0")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -coverage")
+endif()
+
+add_executable(mytests tests/main.cpp src/game.cpp)
+*/
+
+// 사용
+// mkdir build && cd build
+// cmake -DENABLE_COVERAGE=ON ..
+// make
+// ./mytests
+// lcov --capture --directory . --output-file coverage.info
+// genhtml coverage.info --output-directory html</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 리포트 해석</h2>
+            <div class="q">리포트 보는 법은?</div>
+            <div class="a">
+                <p>커버리지 리포트에서 <span class="highlight">빨간색(미실행)</span> 부분을 찾으세요:</p>
+                <div class="diagram">
+커버리지 리포트 해석:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  File: DamageCalculator.cpp                                     │
+│  Line Coverage: <span class="warning">72%</span>  Branch Coverage: <span class="warning">58%</span>                     │
+│                                                                 │
+│  ┌───┬─────────────────────────────────────────────────────┐   │
+│  │   │ Code                                                │   │
+│  ├───┼─────────────────────────────────────────────────────┤   │
+│  │<span class="key-point">10x</span>│ int CalcDamage(int atk, int def, bool crit) {     │   │
+│  │<span class="key-point"> 2x</span>│     if (atk <= 0) {                              │   │
+│  │<span class="warning"> 0x</span>│         LOG("Invalid attack value");             │   │
+│  │<span class="warning"> 0x</span>│         return 0;  ← <span class="warning">테스트 안됨!</span>                 │   │
+│  │   │     }                                              │   │
+│  │<span class="key-point">10x</span>│     int dmg = atk - def;                         │   │
+│  │<span class="key-point"> 3x</span>│     if (crit) {                                  │   │
+│  │<span class="key-point"> 3x</span>│         dmg *= 2;                                │   │
+│  │   │     }                                              │   │
+│  │<span class="key-point"> 1x</span>│     if (dmg < 1) {                               │   │
+│  │<span class="key-point"> 1x</span>│         dmg = 1;                                 │   │
+│  │   │     }                                              │   │
+│  │<span class="key-point">10x</span>│     return dmg;                                  │   │
+│  │   │ }                                                  │   │
+│  └───┴─────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  <span class="key-point">초록색/숫자</span>: 실행된 횟수                                        │
+│  <span class="warning">빨간색/0x</span>: 한 번도 실행 안됨 ← <span class="highlight">여기에 버그 있을 수 있음!</span>       │
+│                                                                 │
+│  이 예시에서 atk <= 0인 경우가 테스트 안됨                      │
+│  → 테스트 케이스 추가: CalcDamage(-5, 10, false)               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 커버리지가 낮은 부분 = 위험 지역
+
+// 커버리지 리포트 분석 스크립트
+void AnalyzeCoverageReport(const CoverageReport& report) {
+    for (auto& file : report.files) {
+        // 1. 커버리지가 특히 낮은 파일 찾기
+        if (file.lineCoverage < 50.0f) {
+            Log("<span class="warning">LOW COVERAGE</span>: %s (%.1f%%)",
+                file.name.c_str(), file.lineCoverage);
+        }
+
+        // 2. 테스트 안 된 함수 찾기
+        for (auto& func : file.functions) {
+            if (func.hitCount == 0) {
+                Log("<span class="warning">UNTESTED FUNCTION</span>: %s::%s",
+                    file.name.c_str(), func.name.c_str());
+            }
+        }
+
+        // 3. 에러 핸들링 코드가 테스트됐는지 확인
+        for (auto& line : file.lines) {
+            if (line.hitCount == 0) {
+                if (ContainsKeyword(line.code, {"error", "fail", "exception", "return nullptr"})) {
+                    Log("<span class="highlight">UNTESTED ERROR PATH</span>: %s:%d %s",
+                        file.name.c_str(), line.number, line.code.c_str());
+                }
+            }
+        }
+    }
+}
+
+// 커버리지 목표 설정
+struct CoverageThreshold {
+    float minLineCoverage = 80.0f;
+    float minBranchCoverage = 70.0f;
+    float minFunctionCoverage = 90.0f;
+};
+
+bool CheckCoverageThreshold(const CoverageReport& report, const CoverageThreshold& threshold) {
+    bool passed = true;
+
+    if (report.totalLineCoverage < threshold.minLineCoverage) {
+        Log("Line coverage %.1f%% < %.1f%% threshold",
+            report.totalLineCoverage, threshold.minLineCoverage);
+        passed = false;
+    }
+
+    // CI/CD에서 커버리지 기준 미달 시 빌드 실패 처리 가능
+    return passed;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 게임에서의 활용</h2>
+            <div class="q">게임 개발에서 커버리지를 어떻게 활용해?</div>
+            <div class="a">
+                <p>게임은 <span class="highlight">자동 테스트 + 수동 플레이</span>를 조합합니다:</p>
+                <div class="diagram">
+게임 커버리지 전략:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  1. 단위 테스트 (자동화 가능)                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  - 데미지 계산                                          │   │
+│  │  - 아이템 드롭 확률                                     │   │
+│  │  - 경험치/레벨업 공식                                   │   │
+│  │  - 충돌 판정 (유닛 테스트)                              │   │
+│  │  - 패킷 직렬화/역직렬화                                 │   │
+│  │                                                         │   │
+│  │  <span class="key-point">목표: 80% 커버리지</span>                                    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  2. 통합 테스트 (봇 플레이)                                     │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  - 더미 클라이언트로 자동 플레이                        │   │
+│  │  - 모든 맵 이동                                         │   │
+│  │  - 모든 퀘스트 수행                                     │   │
+│  │  - 모든 스킬 사용                                       │   │
+│  │                                                         │   │
+│  │  <span class="key-point">컨텐츠 커버리지</span> 측정 가능                             │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  3. 런타임 커버리지 (실제 플레이)                               │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  - QA 플레이 중 코드 커버리지 수집                      │   │
+│  │  - 내부 테스트 서버에서 측정                            │   │
+│  │  - "아무도 안 가본 맵" 발견                             │   │
+│  │  - "아무도 안 쓴 스킬" 발견                             │   │
+│  │                                                         │   │
+│  │  <span class="warning">주의: 성능 오버헤드 있음</span>                               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 게임 컨텐츠 커버리지 추적
+
+class ContentCoverageTracker {
+    set&lt;int&gt; visitedMaps;
+    set&lt;int&gt; usedSkills;
+    set&lt;int&gt; completedQuests;
+    set&lt;int&gt; acquiredItems;
+
+public:
+    void OnMapEnter(int mapId) {
+        visitedMaps.insert(mapId);
+    }
+
+    void OnSkillUse(int skillId) {
+        usedSkills.insert(skillId);
+    }
+
+    void OnQuestComplete(int questId) {
+        completedQuests.insert(questId);
+    }
+
+    void PrintCoverageReport() {
+        int totalMaps = GetTotalMapCount();
+        int totalSkills = GetTotalSkillCount();
+        int totalQuests = GetTotalQuestCount();
+
+        Log("=== Content Coverage Report ===");
+        Log("Maps: %d/%d (%.1f%%)",
+            visitedMaps.size(), totalMaps,
+            100.0f * visitedMaps.size() / totalMaps);
+        Log("Skills: %d/%d (%.1f%%)",
+            usedSkills.size(), totalSkills,
+            100.0f * usedSkills.size() / totalSkills);
+        Log("Quests: %d/%d (%.1f%%)",
+            completedQuests.size(), totalQuests,
+            100.0f * completedQuests.size() / totalQuests);
+
+        // 테스트 안 된 컨텐츠 목록
+        Log("\n=== Untested Content ===");
+        for (int i = 1; i <= totalMaps; i++) {
+            if (visitedMaps.find(i) == visitedMaps.end()) {
+                Log("Map not visited: %d (%s)", i, GetMapName(i));
+            }
+        }
+    }
+};
+
+// 코드 커버리지 + 컨텐츠 커버리지 조합
+void GenerateFullCoverageReport() {
+    // 1. 코드 커버리지 (OpenCppCoverage)
+    auto codeCov = LoadCodeCoverageReport("coverage.xml");
+
+    // 2. 컨텐츠 커버리지
+    auto contentCov = g_ContentTracker.GetReport();
+
+    // 3. 조합 분석
+    Log("=== Combined Analysis ===");
+
+    // 방문 안 한 맵의 코드 커버리지 확인
+    for (auto mapId : contentCov.unvisitedMaps) {
+        string mapCode = "Map_" + to_string(mapId) + ".cpp";
+        auto fileCov = codeCov.GetFileCoverage(mapCode);
+
+        if (fileCov.lineCoverage < 50) {
+            Log("<span class="warning">WARNING</span>: Map %d not visited AND low code coverage (%.1f%%)",
+                mapId, fileCov.lineCoverage);
+        }
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 커버리지의 함정</h2>
+            <div class="q">커버리지 100%면 버그 없는 거야?</div>
+            <div class="a">
+                <p><span class="warning">아닙니다!</span> 커버리지는 "실행 여부"만 측정합니다:</p>
+                <div class="diagram">
+커버리지의 한계:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  커버리지 100%지만 버그 있는 예:                                │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                                                         │   │
+│  │  int Divide(int a, int b) {                             │   │
+│  │      return a / b;  // <span class="warning">b=0이면 크래시!</span>                 │   │
+│  │  }                                                      │   │
+│  │                                                         │   │
+│  │  TEST: Divide(10, 2) == 5  ✓                           │   │
+│  │  커버리지: 100% (모든 라인 실행)                        │   │
+│  │                                                         │   │
+│  │  <span class="highlight">하지만 b=0 케이스 테스트 안됨 → 버그 존재</span>              │   │
+│  │                                                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  커버리지가 측정하지 못하는 것:                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  ✗ 경계값 테스트 (0, -1, MAX_INT)                      │   │
+│  │  ✗ 입력 조합 테스트                                    │   │
+│  │  ✗ 동시성 문제 (Race Condition)                        │   │
+│  │  ✗ 성능 문제                                           │   │
+│  │  ✗ 비즈니스 로직 정확성                                │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  올바른 사용법:                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  <span class="key-point">커버리지 = 최소한의 필요조건</span>                          │   │
+│  │                                                         │   │
+│  │  - 커버리지 낮음 → 확실히 테스트 부족                   │   │
+│  │  - 커버리지 높음 → 테스트 부족 "아닐 수도" 있음        │   │
+│  │                                                         │   │
+│  │  커버리지 + 경계값 테스트 + 통합 테스트 조합 필요       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 커버리지를 보완하는 테스트 전략
+
+// 1. 경계값 테스트 (커버리지에 안 잡힘)
+TEST(DivideTest, BoundaryValues) {
+    EXPECT_THROW(Divide(10, 0), DivideByZeroException);  // 0
+    EXPECT_EQ(Divide(0, 10), 0);                          // 분자 0
+    EXPECT_EQ(Divide(INT_MAX, 1), INT_MAX);               // 최대값
+    EXPECT_EQ(Divide(INT_MIN, -1), ???);                  // 오버플로우!
+}
+
+// 2. 동등 분할 테스트
+TEST(DamageTest, EquivalencePartitions) {
+    // 양수 구간
+    EXPECT_GT(CalcDamage(100, 30), 0);
+
+    // 0 구간
+    EXPECT_EQ(CalcDamage(0, 30), 0);
+
+    // 음수 구간
+    EXPECT_EQ(CalcDamage(-10, 30), 0);
+
+    // 경계값
+    EXPECT_EQ(CalcDamage(1, 0), 1);    // 최소 데미지
+    EXPECT_EQ(CalcDamage(1, 1), 1);    // 데미지 = 방어
+}
+
+// 3. 커버리지 + 뮤테이션 테스트 조합
+// (코드를 일부러 망가뜨려서 테스트가 실패하는지 확인)
+// 원본: if (damage < 1) damage = 1;
+// 뮤턴트: if (damage < 1) damage = 0;  // 망가진 코드
+// → 테스트가 이 차이를 잡아내야 함</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>코드 커버리지</strong>: 테스트가 코드의 몇 %를 실행했는지 측정</li>
+                <li><strong>종류</strong>: 라인 < 분기 < 조건 (조건이 가장 엄격)</li>
+                <li><strong>도구</strong>: OpenCppCoverage (Windows), gcov/lcov (Linux)</li>
+                <li><strong>리포트</strong>: 빨간색(0x) 부분이 테스트 안 된 위험 지역</li>
+                <li><strong>게임</strong>: 코드 커버리지 + 컨텐츠 커버리지 조합</li>
+                <li><strong>주의</strong>: 100% 커버리지 != 버그 없음 (경계값 테스트 별도 필요)</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../network-vs-logic-debug/">&larr; 네트워크 vs 로직 구별</a>
+            <a href="../release-dump-analysis/">릴리즈 덤프 분석 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

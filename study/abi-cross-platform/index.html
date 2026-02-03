@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABI와 크로스 플랫폼 - CS 기초 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #455A64;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #ECEFF1;
+        }
+
+        .q {
+            background: #ECEFF1;
+            border-left: 4px solid #607D8B;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #455A64;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #ECEFF1;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #455A64;
+        }
+        .key-point {
+            background: #CFD8DC;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #37474F;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .diagram {
+            background: #F8FAFC;
+            border: 2px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            overflow-x: auto;
+            white-space: pre;
+            color: #334155;
+        }
+
+        .code-block {
+            background: #1E293B;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            color: #E2E8F0;
+            overflow-x: auto;
+            line-height: 1.7;
+            white-space: pre;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #607D8B 0%, #455A64 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul { list-style: none; }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #B0BEC5;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #607D8B;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">< CS 기초</a>
+
+        <header class="header">
+            <h1>왜 같은 코드가 Windows랑 Linux에서 다르게 동작할까?</h1>
+            <p>ABI(Application Binary Interface)와 크로스 플랫폼 개발</p>
+        </header>
+
+        <div class="conversation">
+            <h2>Part 1. ABI가 뭐야?</h2>
+
+            <div class="q">API는 아는데, ABI는 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">API</span>는 소스 코드 수준의 인터페이스고,</p>
+                <p><span class="highlight">ABI</span>는 컴파일된 바이너리 수준의 인터페이스야!</p>
+            </div>
+
+            <div class="diagram">
+API vs ABI:
+
+API (Application Programming Interface):
++------------------------------------------------------------+
+| // 소스 코드 수준                                           |
+|                                                            |
+| int add(int a, int b);  // 함수 시그니처                   |
+|                                                            |
+| "add 함수는 int 두 개를 받아서 int를 반환한다"             |
+| -> 개발자가 코드를 작성할 때 사용하는 약속                  |
++------------------------------------------------------------+
+
+ABI (Application Binary Interface):
++------------------------------------------------------------+
+| // 컴파일된 바이너리 수준                                   |
+|                                                            |
+| - a는 어디에 전달? (레지스터? 스택?)                       |
+| - b는 어디에 전달?                                         |
+| - 반환값은 어디에?                                         |
+| - 스택은 누가 정리?                                        |
+| - 구조체 멤버는 어떻게 정렬?                               |
+|                                                            |
+| -> 컴파일러와 OS가 바이너리를 만들 때 사용하는 약속        |
++------------------------------------------------------------+
+
+<span class="key-point">API가 같아도 ABI가 다르면 바이너리 호환 안 됨!</span></div>
+
+            <div class="q">왜 ABI가 중요해?</div>
+            <div class="a">
+                <p>ABI가 다르면 <span class="warning">같은 소스 코드라도 서로 호출할 수 없어!</span></p>
+            </div>
+
+            <div class="diagram">
+ABI 불일치 문제:
+
+상황: Windows DLL을 Linux에서 사용하고 싶다
+
++------------------------------------------------------------+
+| Windows에서 컴파일된 math.dll                               |
+|                                                            |
+| add 함수:                                                  |
+| - 인자: ECX, EDX 레지스터로 전달 (Windows x64 ABI)         |
+| - 반환: RAX                                                |
+| - 호출자가 스택 정리                                       |
++------------------------------------------------------------+
+                           |
+                           v
++------------------------------------------------------------+
+| Linux 프로그램에서 호출 시도                                |
+|                                                            |
+| add(1, 2) 호출:                                            |
+| - 인자: RDI, RSI 레지스터로 전달 (System V AMD64 ABI)      |
+|                                                            |
+| <span class="warning">레지스터가 다름 -> 함수가 엉뚱한 값을 받음!</span>              |
+| <span class="warning">스택 정리 규칙이 다름 -> 스택 손상!</span>                     |
+| <span class="warning">결과: 크래시 또는 잘못된 결과</span>                           |
++------------------------------------------------------------+</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 호출 규약 (Calling Convention)</h2>
+
+            <div class="q">호출 규약이 뭐야?</div>
+            <div class="a">
+                <p>함수를 호출할 때 <span class="highlight">인자 전달 방법</span>과 <span class="highlight">스택 정리 책임</span>을 정하는 규칙이야.</p>
+            </div>
+
+            <div class="diagram">
+주요 호출 규약 (32비트 x86):
+
++----------+----------------+----------------+------------------+
+| 규약     | 인자 전달      | 스택 정리      | 사용처           |
++----------+----------------+----------------+------------------+
+| cdecl    | 스택 (역순)    | <span class="key-point">호출자</span>         | C 기본           |
+| stdcall  | 스택 (역순)    | <span class="key-point">피호출자</span>       | Windows API      |
+| fastcall | ECX, EDX+스택  | 피호출자       | 최적화           |
+| thiscall | ECX=this+스택  | 피호출자       | C++ 멤버 함수    |
++----------+----------------+----------------+------------------+
+
+cdecl 예시: add(1, 2, 3)
++------------------------------------------------------------+
+| 호출자:                                                     |
+|   push 3          ; 인자 역순으로 스택에                   |
+|   push 2                                                   |
+|   push 1                                                   |
+|   call add                                                 |
+|   add esp, 12     ; <span class="key-point">호출자가 스택 정리 (인자 3개 * 4바이트)</span>|
++------------------------------------------------------------+
+
+stdcall 예시: MessageBox(...)
++------------------------------------------------------------+
+| 호출자:                                                     |
+|   push 인자들...                                           |
+|   call MessageBox                                          |
+|   ; 스택 정리 안 함! (<span class="key-point">MessageBox 내부에서 정리</span>)          |
++------------------------------------------------------------+</div>
+
+            <div class="q">64비트는 다르다고?</div>
+            <div class="a">
+                <p>64비트에서는 <span class="highlight">레지스터로 인자를 전달</span>하는 게 기본이야!</p>
+            </div>
+
+            <div class="diagram">
+64비트 호출 규약:
+
+<span class="key-point">Windows x64 ABI:</span>
++------------------------------------------------------------+
+| 정수/포인터 인자: RCX, RDX, R8, R9 (4개까지)               |
+| 실수 인자: XMM0, XMM1, XMM2, XMM3                          |
+| 5번째 이후: 스택                                           |
+| 반환값: RAX (정수), XMM0 (실수)                            |
+|                                                            |
+| 특이점: "Shadow Space" - 스택에 32바이트 예약 필수!        |
++------------------------------------------------------------+
+
+<span class="key-point">System V AMD64 ABI (Linux/macOS):</span>
++------------------------------------------------------------+
+| 정수/포인터 인자: RDI, RSI, RDX, RCX, R8, R9 (6개까지)     |
+| 실수 인자: XMM0~XMM7 (8개까지)                             |
+| 7번째 이후: 스택                                           |
+| 반환값: RAX (정수), XMM0 (실수)                            |
+|                                                            |
+| 특이점: Red Zone - 스택 아래 128바이트 사용 가능           |
++------------------------------------------------------------+
+
+비교: add(1, 2, 3, 4) 호출 시
+
+Windows x64:          |  Linux x64:
+mov rcx, 1            |  mov rdi, 1
+mov rdx, 2            |  mov rsi, 2
+mov r8, 3             |  mov rdx, 3
+mov r9, 4             |  mov rcx, 4
+call add              |  call add
+
+<span class="warning">레지스터 배치가 완전히 다름!</span></div>
+
+            <div class="code-block">
+// 호출 규약 지정하기 (Windows)
+
+// cdecl (기본)
+int __cdecl add_cdecl(int a, int b);
+
+// stdcall (Windows API 스타일)
+int __stdcall add_stdcall(int a, int b);
+
+// fastcall
+int __fastcall add_fastcall(int a, int b);
+
+// DLL Export 시 주의!
+// 규약이 다르면 호출자와 피호출자가 다른 방식으로 동작
+// -> 스택 손상, 크래시
+
+// 안전한 DLL 인터페이스
+extern "C" __declspec(dllexport)
+int __stdcall SafeAdd(int a, int b) {
+    return a + b;
+}
+// extern "C": 이름 맹글링 방지
+// __stdcall: Windows 표준 규약</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 구조체 정렬 (Struct Alignment)</h2>
+
+            <div class="q">구조체 크기가 왜 예상과 달라?</div>
+            <div class="a">
+                <p><span class="highlight">메모리 정렬(Alignment)</span> 때문이야! CPU가 정렬된 주소에서 더 빠르게 읽어.</p>
+            </div>
+
+            <div class="diagram">
+구조체 정렬 예시:
+
+struct Example {
+    char  a;    // 1바이트
+    int   b;    // 4바이트
+    char  c;    // 1바이트
+};
+
+예상 크기: 1 + 4 + 1 = 6바이트
+실제 크기: <span class="warning">12바이트!</span>
+
+메모리 레이아웃:
++----+----+----+----+----+----+----+----+----+----+----+----+
+| a  | P  | P  | P  | b  | b  | b  | b  | c  | P  | P  | P  |
++----+----+----+----+----+----+----+----+----+----+----+----+
+  0    1    2    3    4    5    6    7    8    9   10   11
+
+P = Padding (패딩)
+
+<span class="key-point">정렬 규칙:</span>
+- 각 멤버는 자신의 크기에 맞게 정렬
+- int(4바이트)는 4의 배수 주소에 위치
+- 구조체 전체는 가장 큰 멤버 크기로 정렬</div>
+
+            <div class="q">플랫폼마다 정렬이 다를 수 있어?</div>
+            <div class="a">
+                <p>맞아! 컴파일러와 플랫폼에 따라 <span class="warning">정렬 규칙이 다를 수 있어!</span></p>
+            </div>
+
+            <div class="code-block">
+// 구조체 정렬 문제 - 네트워크/파일 저장 시 주의!
+
+// 위험한 코드
+struct PlayerData {
+    char name[20];     // 20바이트
+    int level;         // 4바이트, 정렬 필요
+    short hp;          // 2바이트
+};
+// Windows MSVC: 28바이트
+// GCC 기본: 28바이트
+// GCC -fpack-struct: 26바이트
+// -> 바이너리 호환 안 됨!
+
+// 해결 1: 패킹 지정
+#pragma pack(push, 1)  // 1바이트 정렬로 강제
+struct PlayerDataPacked {
+    char name[20];
+    int level;
+    short hp;
+};
+#pragma pack(pop)
+// 크기: 정확히 26바이트
+
+// 해결 2: 명시적 패딩
+struct PlayerDataExplicit {
+    char name[20];
+    char _padding1[4];  // 수동 패딩
+    int level;
+    short hp;
+    char _padding2[2];  // 수동 패딩
+};
+// 모든 플랫폼에서 32바이트
+
+// 해결 3: 직렬화 라이브러리 사용
+// Protocol Buffers, FlatBuffers, MessagePack 등</div>
+
+            <div class="diagram">
+플랫폼별 기본 정렬:
+
++------------------+------------+------------+------------+
+| 타입             | Windows    | Linux x64  | macOS      |
++------------------+------------+------------+------------+
+| char             | 1          | 1          | 1          |
+| short            | 2          | 2          | 2          |
+| int              | 4          | 4          | 4          |
+| long             | <span class="warning">4</span>          | <span class="key-point">8</span>          | <span class="key-point">8</span>          |
+| long long        | 8          | 8          | 8          |
+| pointer          | 4/8        | 8          | 8          |
+| double           | 8          | 8          | 8          |
++------------------+------------+------------+------------+
+
+<span class="warning">long이 Windows에서 4바이트, Linux에서 8바이트!</span>
+
+// 안전한 코드
+#include &lt;stdint.h&gt;
+int32_t  // 항상 4바이트
+int64_t  // 항상 8바이트</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 이름 맹글링 (Name Mangling)</h2>
+
+            <div class="q">C++에서 왜 extern "C"를 써야 해?</div>
+            <div class="a">
+                <p>C++은 함수 오버로딩 때문에 <span class="highlight">함수 이름을 변형</span>해서 저장해!</p>
+            </div>
+
+            <div class="diagram">
+이름 맹글링 (Name Mangling):
+
+C++ 소스:
++------------------------------------------------------------+
+| int add(int a, int b);                                     |
+| int add(double a, double b);     // 오버로딩               |
+| int add(int a, int b, int c);    // 오버로딩               |
++------------------------------------------------------------+
+
+컴파일 후 심볼 이름:
++------------------------------------------------------------+
+| MSVC:                        | GCC:                        |
+| ?add@@YAHHH@Z                | _Z3addii                    |
+| ?add@@YANNN@Z                | _Z3adddd                    |
+| ?add@@YAHHHH@Z               | _Z3addiii                   |
++------------------------------------------------------------+
+
+<span class="warning">컴파일러마다 맹글링 방식이 다름!</span>
+
+문제:
+- MSVC로 빌드한 DLL을 GCC 프로그램에서 사용 불가
+- DLL에서 심볼 이름으로 함수를 찾을 수 없음</div>
+
+            <div class="code-block">
+// extern "C"로 해결
+
+// 헤더 파일 (mylibrary.h)
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// C 링키지로 선언 -> 이름 맹글링 없음
+__declspec(dllexport) int add(int a, int b);
+__declspec(dllexport) int multiply(int a, int b);
+
+#ifdef __cplusplus
+}
+#endif
+
+// 결과:
+// 심볼 이름이 그대로 "add", "multiply"
+// 다른 언어(C, Python, C#)에서도 호출 가능!
+
+// 주의: extern "C"는 오버로딩 불가
+// extern "C" int add(int a, int b);
+// extern "C" int add(double a, double b);  // 에러!</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 크로스 플랫폼 개발 팁</h2>
+
+            <div class="q">플랫폼 독립적인 코드 작성법은?</div>
+            <div class="a">
+                <p>몇 가지 핵심 원칙을 지키면 돼!</p>
+            </div>
+
+            <div class="code-block">
+// 1. 고정 크기 정수 타입 사용
+#include &lt;stdint.h&gt;
+
+// 나쁜 예
+int value;        // 플랫폼마다 다를 수 있음
+long timestamp;   // Windows 4B, Linux 8B
+
+// 좋은 예
+int32_t value;      // 항상 4바이트
+int64_t timestamp;  // 항상 8바이트
+size_t length;      // 플랫폼에 맞는 크기
+
+
+// 2. 엔디안 처리
+// Big Endian: 0x12345678 -> 12 34 56 78
+// Little Endian: 0x12345678 -> 78 56 34 12
+
+uint32_t to_network_order(uint32_t value) {
+#if defined(_WIN32)
+    return htonl(value);  // Windows
+#else
+    return htobe32(value); // POSIX
+#endif
+}
+
+// 또는 수동 변환 (이식성 높음)
+uint32_t to_big_endian(uint32_t value) {
+    return ((value >> 24) & 0xFF) |
+           ((value >> 8) & 0xFF00) |
+           ((value << 8) & 0xFF0000) |
+           ((value << 24) & 0xFF000000);
+}
+
+
+// 3. 플랫폼 감지 매크로
+#if defined(_WIN32) || defined(_WIN64)
+    #define PLATFORM_WINDOWS
+#elif defined(__linux__)
+    #define PLATFORM_LINUX
+#elif defined(__APPLE__)
+    #define PLATFORM_MACOS
+#endif
+
+#ifdef PLATFORM_WINDOWS
+    #include &lt;windows.h&gt;
+    void sleep_ms(int ms) { Sleep(ms); }
+#else
+    #include &lt;unistd.h&gt;
+    void sleep_ms(int ms) { usleep(ms * 1000); }
+#endif
+
+
+// 4. 구조체 패킹 통일
+#if defined(_MSC_VER)
+    #pragma pack(push, 1)
+#elif defined(__GNUC__)
+    #define PACKED __attribute__((packed))
+#endif
+
+struct NetworkPacket {
+    uint32_t type;
+    uint32_t length;
+    char data[256];
+}
+#if defined(__GNUC__)
+    PACKED
+#endif
+;
+
+#if defined(_MSC_VER)
+    #pragma pack(pop)
+#endif</div>
+
+            <div class="diagram">
+크로스 플랫폼 체크리스트:
+
++------------------------------------------------------------+
+| 항목                    | 해결책                           |
++------------------------------------------------------------+
+| 기본 타입 크기          | stdint.h (int32_t, int64_t)      |
+| 엔디안                  | hton/ntoh 또는 수동 변환         |
+| 구조체 정렬             | pragma pack 또는 명시적 패딩     |
+| 이름 맹글링             | extern "C"                       |
+| 호출 규약               | __cdecl 또는 표준 규약 사용      |
+| 파일 경로               | / 사용 (Windows도 지원)          |
+| 줄바꿈 문자             | \n (텍스트 모드) 또는 바이너리   |
+| 문자 인코딩             | UTF-8 통일                       |
++------------------------------------------------------------+
+
+<span class="key-point">라이브러리 활용:</span>
+- Boost: 크로스 플랫폼 유틸리티
+- SDL/SFML: 크로스 플랫폼 게임 개발
+- CMake: 크로스 플랫폼 빌드 시스템</div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>ABI</strong> - 바이너리 수준의 인터페이스 (호출 규약, 정렬, 이름 등)</li>
+                <li><strong>호출 규약</strong> - cdecl, stdcall, fastcall / Windows x64 vs System V</li>
+                <li><strong>구조체 정렬</strong> - 플랫폼마다 패딩이 다름 -> pragma pack 사용</li>
+                <li><strong>long 타입</strong> - Windows 4B, Linux/macOS 8B -> int64_t 사용</li>
+                <li><strong>이름 맹글링</strong> - C++ 심볼 변형 -> extern "C"로 방지</li>
+                <li><strong>고정 크기 타입</strong> - stdint.h의 int32_t, int64_t 사용</li>
+                <li><strong>엔디안</strong> - 네트워크/파일 저장 시 명시적 변환 필요</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../pe-format/">< PE 포맷</a>
+            <a href="../process-priority/">프로세스 우선순위 ></a>
+        </div>
+    </div>
+</body>
+</html>

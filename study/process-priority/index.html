@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프로세스 우선순위 - CS 기초 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #455A64;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #ECEFF1;
+        }
+
+        .q {
+            background: #ECEFF1;
+            border-left: 4px solid #607D8B;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #455A64;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #ECEFF1;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #455A64;
+        }
+        .key-point {
+            background: #CFD8DC;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #37474F;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .diagram {
+            background: #F8FAFC;
+            border: 2px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            overflow-x: auto;
+            white-space: pre;
+            color: #334155;
+        }
+
+        .code-block {
+            background: #1E293B;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            color: #E2E8F0;
+            overflow-x: auto;
+            line-height: 1.7;
+            white-space: pre;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #607D8B 0%, #455A64 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul { list-style: none; }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #B0BEC5;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #607D8B;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">< CS 기초</a>
+
+        <header class="header">
+            <h1>게임이 백그라운드로 가면 왜 느려질까?</h1>
+            <p>프로세스 우선순위와 CPU 스케줄링</p>
+        </header>
+
+        <div class="conversation">
+            <h2>Part 1. 백그라운드에서 느려지는 이유</h2>
+
+            <div class="q">게임 중에 Alt+Tab 하면 왜 프레임이 떨어져?</div>
+            <div class="a">
+                <p>Windows가 <span class="highlight">포그라운드 프로세스에 더 많은 CPU 시간을 할당</span>하기 때문이야!</p>
+            </div>
+
+            <div class="diagram">
+포그라운드 vs 백그라운드:
+
++------------------------------------------------------------+
+| 포그라운드 프로세스 (게임이 활성화)                         |
+|                                                            |
+| CPU 타임 슬라이스: <span class="key-point">더 김 (3배 정도)</span>                       |
+| 우선순위 부스트: 있음                                      |
+| 타이머 정밀도: 높음 (1ms)                                  |
+|                                                            |
+| -> 60 FPS 유지 가능!                                       |
++------------------------------------------------------------+
+
+Alt+Tab 후:
+
++------------------------------------------------------------+
+| 백그라운드 프로세스 (게임이 최소화)                         |
+|                                                            |
+| CPU 타임 슬라이스: <span class="warning">짧음 (기본값)</span>                          |
+| 우선순위 부스트: 없음                                      |
+| 타이머 정밀도: 낮음 (15.6ms)                               |
+|                                                            |
+| -> FPS 급락! (10~30 FPS)                                   |
++------------------------------------------------------------+
+
+<span class="key-point">Windows의 설계 의도:</span>
+- 사용자가 보고 있는 앱에 리소스 집중
+- 백그라운드 앱은 최소한만 동작
+- 배터리/발열 관리 (노트북)</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. Windows 우선순위 시스템</h2>
+
+            <div class="q">프로세스 우선순위가 뭐야?</div>
+            <div class="a">
+                <p>OS가 CPU 시간을 배분할 때 <span class="highlight">어떤 프로세스를 먼저 실행할지</span> 결정하는 기준이야.</p>
+            </div>
+
+            <div class="diagram">
+Windows 우선순위 클래스 (프로세스):
+
++--------------------+--------+--------------------------------+
+| 클래스             | 기본값 | 용도                           |
++--------------------+--------+--------------------------------+
+| REALTIME           | 24     | <span class="warning">시스템 위험! 커널보다 높음</span>     |
+| HIGH               | 13     | 게임, 미디어 플레이어          |
+| ABOVE_NORMAL       | 10     | 중요한 백그라운드 작업         |
+| <span class="key-point">NORMAL</span>             | <span class="key-point">8</span>      | 대부분의 앱 (기본값)           |
+| BELOW_NORMAL       | 6      | 백그라운드 다운로드            |
+| IDLE               | 4      | 화면 보호기, 인덱싱            |
++--------------------+--------+--------------------------------+
+
+스레드 우선순위 (프로세스 클래스 기준으로 조정):
+
++--------------------+----------+
+| 스레드 우선순위    | 조정값   |
++--------------------+----------+
+| TIME_CRITICAL      | +15      |
+| HIGHEST            | +2       |
+| ABOVE_NORMAL       | +1       |
+| NORMAL             | 0        |
+| BELOW_NORMAL       | -1       |
+| LOWEST             | -2       |
+| IDLE               | -15      |
++--------------------+----------+
+
+최종 우선순위 = 프로세스 클래스 기본값 + 스레드 조정값
+
+예: NORMAL 프로세스의 HIGHEST 스레드 = 8 + 2 = 10</div>
+
+            <div class="q">우선순위가 높으면 무조건 빨라?</div>
+            <div class="a">
+                <p>항상 그런 건 아니야. <span class="warning">우선순위 역전</span>이나 <span class="warning">기아 상태</span>가 발생할 수 있어!</p>
+            </div>
+
+            <div class="diagram">
+우선순위의 함정들:
+
+1. <span class="warning">우선순위 역전 (Priority Inversion)</span>
++------------------------------------------------------------+
+| 상황:                                                      |
+| - 낮은 우선순위 스레드 L이 락 획득                         |
+| - 높은 우선순위 스레드 H가 같은 락 대기                    |
+| - 중간 우선순위 스레드 M이 CPU 점유                        |
+|                                                            |
+| 결과: H가 M보다 늦게 실행됨! (역전)                        |
+|                                                            |
+| 해결: 우선순위 상속 (L의 우선순위를 H로 임시 상승)         |
++------------------------------------------------------------+
+
+2. <span class="warning">기아 상태 (Starvation)</span>
++------------------------------------------------------------+
+| 상황:                                                      |
+| - 높은 우선순위 스레드들이 계속 실행                       |
+| - 낮은 우선순위 스레드가 영원히 대기                       |
+|                                                            |
+| 해결: Windows의 "우선순위 부스트"                          |
+|      - 오래 대기한 스레드 우선순위 임시 상승               |
+|      - I/O 완료 시 우선순위 상승                           |
++------------------------------------------------------------+
+
+3. <span class="warning">REALTIME 클래스의 위험</span>
++------------------------------------------------------------+
+| - 커널 스레드보다 높은 우선순위                            |
+| - 시스템 응답 불가 상태 유발 가능                          |
+| - 마우스, 키보드 입력 처리 지연                            |
+|                                                            |
+| <span class="warning">게임에서 REALTIME 사용 금지!</span>                             |
++------------------------------------------------------------+</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 게임에서 우선순위 설정하기</h2>
+
+            <div class="q">게임 성능을 위해 어떻게 설정해야 해?</div>
+            <div class="a">
+                <p><span class="highlight">HIGH</span> 우선순위가 적절해. 코드로 설정하는 방법을 보여줄게.</p>
+            </div>
+
+            <div class="code-block">
+// 프로세스 우선순위 설정
+
+#include &lt;windows.h&gt;
+
+void SetGamePriority() {
+    // 현재 프로세스 핸들 얻기
+    HANDLE hProcess = GetCurrentProcess();
+
+    // HIGH 우선순위 설정 (게임에 적합)
+    SetPriorityClass(hProcess, HIGH_PRIORITY_CLASS);
+
+    // 확인
+    DWORD priority = GetPriorityClass(hProcess);
+    printf("Priority: %d\n", priority);  // 0x80 = HIGH
+}
+
+// 스레드 우선순위 설정
+void SetThreadPriorities() {
+    // 메인 스레드 (게임 로직): 높음
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+
+    // 렌더링 스레드: 높음
+    SetThreadPriority(hRenderThread, THREAD_PRIORITY_HIGHEST);
+
+    // 오디오 스레드: 타임 크리티컬 (끊김 방지)
+    SetThreadPriority(hAudioThread, THREAD_PRIORITY_TIME_CRITICAL);
+
+    // 백그라운드 로딩 스레드: 낮음 (게임 성능 영향 최소화)
+    SetThreadPriority(hLoadingThread, THREAD_PRIORITY_BELOW_NORMAL);
+
+    // 네트워크 스레드: 보통 이상
+    SetThreadPriority(hNetworkThread, THREAD_PRIORITY_ABOVE_NORMAL);
+}</div>
+
+            <div class="diagram">
+게임 스레드별 권장 우선순위:
+
++--------------------+--------------------+----------------------+
+| 스레드             | 우선순위           | 이유                 |
++--------------------+--------------------+----------------------+
+| 메인 (게임 로직)   | <span class="key-point">HIGHEST</span>            | 프레임 유지          |
+| 렌더링             | <span class="key-point">HIGHEST</span>            | 화면 끊김 방지       |
+| 오디오             | <span class="key-point">TIME_CRITICAL</span>      | 소리 끊김 방지       |
+| 물리 시뮬레이션    | ABOVE_NORMAL       | 안정적 업데이트      |
+| 네트워크           | ABOVE_NORMAL       | 지연 최소화          |
+| AI 계산            | NORMAL             | 기본                 |
+| 리소스 로딩        | <span class="warning">BELOW_NORMAL</span>        | 프레임 영향 최소화   |
+| 로그 기록          | <span class="warning">LOWEST</span>              | 필요할 때만          |
++--------------------+--------------------+----------------------+</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 백그라운드에서도 성능 유지하기</h2>
+
+            <div class="q">게임이 백그라운드여도 서버는 돌아가야 하는데?</div>
+            <div class="a">
+                <p>몇 가지 방법이 있어!</p>
+            </div>
+
+            <div class="code-block">
+// 1. 타이머 정밀도 유지
+// 백그라운드에서 타이머 정밀도가 15.6ms로 떨어지는 것 방지
+
+#include &lt;timeapi.h&gt;
+#pragma comment(lib, "winmm.lib")
+
+void KeepHighTimerResolution() {
+    // 1ms 타이머 정밀도 요청
+    timeBeginPeriod(1);
+
+    // 게임 종료 시 반드시 해제!
+    // timeEndPeriod(1);
+}
+
+
+// 2. 백그라운드 감지 및 대응
+HWND g_hWnd;
+bool g_isBackground = false;
+
+LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM w, LPARAM l) {
+    switch (msg) {
+    case WM_ACTIVATEAPP:
+        g_isBackground = (w == FALSE);
+        if (g_isBackground) {
+            // 백그라운드 진입: FPS 제한으로 CPU 사용량 감소
+            SetTargetFPS(30);
+            // 또는 일시정지
+            // PauseGame();
+        } else {
+            // 포그라운드 복귀: 원래 FPS로
+            SetTargetFPS(60);
+        }
+        break;
+    }
+    return DefWindowProc(hWnd, msg, w, l);
+}
+
+
+// 3. "백그라운드에서도 실행" 옵션 구현
+void GameLoop() {
+    while (running) {
+        if (g_isBackground && !g_runInBackground) {
+            // 백그라운드 + 옵션 꺼짐 = 최소 동작
+            Sleep(100);  // CPU 쉬게 함
+            ProcessNetworkOnly();  // 네트워크만 처리
+        } else {
+            // 정상 실행
+            Update();
+            Render();
+        }
+    }
+}</div>
+
+            <div class="diagram">
+게임 백그라운드 처리 전략:
+
++------------------------------------------------------------+
+| 전략 1: 일시정지                                           |
++------------------------------------------------------------+
+| - 싱글플레이어 게임에 적합                                 |
+| - CPU/GPU 사용량 0에 가까움                                |
+| - 복귀 시 바로 재개                                        |
++------------------------------------------------------------+
+
++------------------------------------------------------------+
+| 전략 2: FPS 제한                                           |
++------------------------------------------------------------+
+| - 멀티플레이어 게임에 적합                                 |
+| - 30 FPS 또는 그 이하로 제한                               |
+| - 네트워크, AI는 계속 동작                                 |
+| - CPU 사용량 50% 이상 감소                                 |
++------------------------------------------------------------+
+
++------------------------------------------------------------+
+| 전략 3: 선택적 처리                                        |
++------------------------------------------------------------+
+| - 네트워크만 처리 (연결 유지)                              |
+| - 중요 타이머만 동작 (경매 종료 등)                        |
+| - 렌더링 완전 중지                                         |
+| - 게임 서버에 적합                                         |
++------------------------------------------------------------+
+
+<span class="key-point">전문 MMO의 선택:</span>
+- 포그라운드: 60 FPS 풀 렌더링
+- 백그라운드: 렌더링 중지, 로직만 10 FPS
+- 최소화: 네트워크만 유지, 1초 간격 처리</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. CPU 친화도 (Affinity)</h2>
+
+            <div class="q">특정 코어에서만 실행하게 할 수 있어?</div>
+            <div class="a">
+                <p><span class="highlight">CPU 친화도(Affinity)</span>를 설정하면 돼!</p>
+            </div>
+
+            <div class="code-block">
+// CPU 친화도 설정
+
+void SetCPUAffinity() {
+    // 현재 시스템의 CPU 정보
+    SYSTEM_INFO sysInfo;
+    GetSystemInfo(&sysInfo);
+    printf("CPU 코어 수: %d\n", sysInfo.dwNumberOfProcessors);
+
+    // 프로세스를 특정 코어에 고정
+    HANDLE hProcess = GetCurrentProcess();
+
+    // 비트마스크: 코어 0, 1만 사용
+    // 0b0011 = 0x3 = 코어 0, 1
+    DWORD_PTR affinityMask = 0x3;
+    SetProcessAffinityMask(hProcess, affinityMask);
+
+    // 스레드별로 다른 코어 지정
+    // 렌더링: 코어 0
+    SetThreadAffinityMask(hRenderThread, 0x1);
+
+    // 게임 로직: 코어 1
+    SetThreadAffinityMask(hGameThread, 0x2);
+
+    // 오디오: 코어 2
+    SetThreadAffinityMask(hAudioThread, 0x4);
+
+    // 로딩: 코어 3, 4, 5, 6, 7 (나머지 코어)
+    SetThreadAffinityMask(hLoadingThread, 0xF8);
+}
+
+
+// 이상적인 코어 지정 (OS 추천)
+void UseIdealProcessor() {
+    // OS가 추천하는 최적의 코어
+    DWORD ideal = SetThreadIdealProcessor(
+        GetCurrentThread(),
+        MAXIMUM_PROCESSORS  // OS가 선택
+    );
+    printf("추천 코어: %d\n", ideal);
+}</div>
+
+            <div class="diagram">
+CPU 친화도 활용 예시:
+
+8코어 CPU에서 게임 최적화:
+
++------+------+------+------+------+------+------+------+
+| C0   | C1   | C2   | C3   | C4   | C5   | C6   | C7   |
++------+------+------+------+------+------+------+------+
+| Game | Rend | Audi | Phys | Load | Load | AI   | Net  |
+| Loop | er   | o    | ics  | er1  | er2  |      | work |
++------+------+------+------+------+------+------+------+
+   ^                    ^
+   |                    |
+ <span class="key-point">P-코어</span>              <span class="warning">E-코어 (효율코어)</span>
+ (성능코어)           (저전력 작업용)
+
+<span class="key-point">인텔 12세대+ 하이브리드 CPU 팁:</span>
+- 게임 로직, 렌더링 -> P-코어 고정
+- 백그라운드 로딩, 네트워크 -> E-코어
+- Windows 11이 자동 최적화하지만, 수동 설정이 더 효과적일 수 있음
+
+<span class="warning">주의:</span>
+- 친화도 고정하면 OS 자동 최적화 무시됨
+- 다른 프로그램과 충돌 가능
+- 대부분의 경우 OS에 맡기는 게 나음</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 게임 최적화 설정</h2>
+
+            <div class="q">Windows 게임 모드가 뭐야?</div>
+            <div class="a">
+                <p>Windows 10 이상에서 제공하는 <span class="highlight">게임 전용 최적화 모드</span>야!</p>
+            </div>
+
+            <div class="diagram">
+Windows 게임 모드 효과:
+
++------------------------------------------------------------+
+| 게임 모드 활성화 시:                                        |
+|                                                            |
+| 1. Windows Update 일시 중지                                 |
+| 2. 드라이버 설치 중지                                       |
+| 3. 알림 최소화                                              |
+| 4. 백그라운드 앱 리소스 제한                                |
+| 5. 게임에 더 많은 CPU/GPU 리소스 할당                       |
++------------------------------------------------------------+
+
+설정 방법:
+- 설정 > 게임 > 게임 모드 > 켬
+- Win+G > 게임 바 > 성능 위젯
+
+<span class="key-point">추가 최적화 (수동):</span>
++------------------------------------------------------------+
+| 1. 고성능 전원 관리                                        |
+|    제어판 > 전원 옵션 > 고성능                             |
+|                                                            |
+| 2. 하드웨어 가속 GPU 스케줄링                              |
+|    설정 > 시스템 > 디스플레이 > 그래픽 > 켬               |
+|                                                            |
+| 3. 가변 새로 고침 빈도 (VRR)                               |
+|    G-Sync / FreeSync 모니터 필요                           |
+|                                                            |
+| 4. 게임 전용 GPU 지정                                      |
+|    설정 > 시스템 > 디스플레이 > 그래픽 > 앱 추가          |
++------------------------------------------------------------+</div>
+
+            <div class="code-block">
+// 게임에서 권장하는 초기화 코드
+
+void InitializeForGaming() {
+    // 1. 프로세스 우선순위 설정
+    SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+
+    // 2. 타이머 정밀도 설정
+    timeBeginPeriod(1);
+
+    // 3. 스레드 우선순위 설정
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+
+    // 4. 전원 관리 (노트북 배터리에서도 성능 유지)
+    // GUID_MIN_POWER_SAVINGS = 고성능
+    // PowerSetActiveScheme()로 설정 가능
+
+    // 5. DPI 인식 설정 (고해상도 모니터)
+    SetProcessDpiAwarenessContext(
+        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+    // 6. 멀티미디어 클래스 스케줄러 (오디오 끊김 방지)
+    // MMCSS API 사용
+    DWORD taskIndex = 0;
+    HANDLE hTask = AvSetMmThreadCharacteristics(L"Games", &taskIndex);
+}
+
+void CleanupGaming() {
+    // 타이머 정밀도 복원
+    timeEndPeriod(1);
+
+    // 기타 리소스 해제...
+}</div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>포그라운드 부스트</strong> - Windows가 활성 창에 더 많은 CPU 시간 할당</li>
+                <li><strong>우선순위 클래스</strong> - REALTIME > HIGH > ABOVE_NORMAL > NORMAL > BELOW_NORMAL > IDLE</li>
+                <li><strong>게임 권장</strong> - HIGH 클래스, 중요 스레드는 HIGHEST</li>
+                <li><strong>REALTIME 금지</strong> - 시스템 불안정 유발, 게임에서 사용하지 말 것</li>
+                <li><strong>백그라운드 대응</strong> - FPS 제한, 선택적 처리, 타이머 정밀도 유지</li>
+                <li><strong>CPU 친화도</strong> - 특정 코어에 스레드 고정 가능, 대부분 OS에 맡기는 게 나음</li>
+                <li><strong>Windows 게임 모드</strong> - 백그라운드 앱 제한, 알림 최소화</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../abi-cross-platform/">< ABI와 크로스 플랫폼</a>
+            <a href="../category-cs/">CS 기초 목록 ></a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>고해상도 타이머 - 멀티스레드 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #FF9800; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FFF3E0; }
+        .q { background: #FFF3E0; border-left: 4px solid #FF9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #E65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #FFF3E0; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #E65100; }
+        .key-point { background: #FFE0B2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #E65100; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #FF9800 0%, #E65100 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #FF9800; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-thread/" class="back-link">&larr; 멀티스레드</a>
+
+        <div class="header">
+            <h1>고해상도 타이머</h1>
+            <p>왜 게임 타이머는 정확하지 않을까?</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 시스템 타이머의 한계</h2>
+            <div class="q">Sleep(1)은 정말 1밀리초 동안 잠들까?</div>
+            <div class="a">
+                <p><span class="warning">아니요.</span> Windows 기본 타이머 해상도는 약 <span class="highlight">15.625ms</span>입니다:</p>
+                <div class="diagram">
+Windows 기본 타이머 해상도:
++------------------------------------------------------------------+
+|                                                                  |
+|  Sleep(1) 호출 시 실제 대기 시간:                                |
+|                                                                  |
+|  기대값: |--1ms--|                                               |
+|                                                                  |
+|  실제값: |----------- 15.625ms ----------|  (15배 지연!)         |
+|                                                                  |
+|  왜?                                                             |
+|  +------------------------------------------------------------+  |
+|  | Windows 시스템 타이머 틱 간격: 64 Hz (= 15.625ms/tick)     |  |
+|  | Sleep()은 다음 틱까지 대기                                 |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  타이머 인터럽트:                                                |
+|                                                                  |
+|  Tick 0        Tick 1        Tick 2        Tick 3               |
+|    |             |             |             |                   |
+|    v             v             v             v                   |
+|  --|-------------|-------------|-------------|----> time        |
+|       15.625ms      15.625ms      15.625ms                       |
+|         ^                                                        |
+|         |                                                        |
+|    Sleep(1) 호출 시점                                            |
+|    -> 다음 Tick 1까지 대기 = 최대 15.625ms                       |
+|                                                                  |
++------------------------------------------------------------------+</div>
+            </div>
+
+            <div class="q">GetTickCount()는 왜 부정확해?</div>
+            <div class="a">
+                <p>GetTickCount()도 <span class="warning">같은 15.625ms 해상도</span> 문제가 있습니다:</p>
+                <div class="code-block">
+// GetTickCount 테스트
+
+void TestGetTickCount() {
+    DWORD start = GetTickCount();
+
+    // 정확히 5ms 작업을 한다고 가정
+    BusyWait(5);  // 5ms 바쁜 대기
+
+    DWORD end = GetTickCount();
+    DWORD elapsed = end - start;
+
+    // 기대: 5
+    // 실제: 0 또는 15 또는 16 (타이밍에 따라 다름)
+    printf("Elapsed: %d ms\n", elapsed);
+}
+
+// 결과 예시:
+// Elapsed: 0 ms   <- 측정 불가!
+// Elapsed: 15 ms  <- 3배 오차
+// Elapsed: 16 ms  <- 3배 오차</div>
+                <div class="diagram">
+GetTickCount() 문제:
++------------------------------------------------------------------+
+|                                                                  |
+|  실제 작업 시간: 5ms                                             |
+|                                                                  |
+|  GetTickCount 타임라인:                                          |
+|                                                                  |
+|     0ms       15ms      31ms      47ms                           |
+|      |         |         |         |                             |
+|  값: 0    ->   15   ->   31   ->   47                            |
+|                                                                  |
+|  케이스 1: 0~15ms 구간 내에서 시작/종료                          |
+|     start=0, end=0, elapsed=<span class="warning">0</span> (실제 5ms인데!)                 |
+|                                                                  |
+|  케이스 2: 틱 경계를 넘어감                                      |
+|     start=0, end=15, elapsed=<span class="warning">15</span> (실제 5ms인데!)                |
+|                                                                  |
++------------------------------------------------------------------+</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. QueryPerformanceCounter - 해결책</h2>
+            <div class="q">고해상도 타이머는 뭐가 다른 거야?</div>
+            <div class="a">
+                <p><span class="key-point">QueryPerformanceCounter (QPC)</span>는 하드웨어 타이머를 직접 읽습니다:</p>
+                <div class="diagram">
+고해상도 타이머 비교:
++------------------------------------------------------------------+
+|                                                                  |
+|  방식              해상도         정밀도         용도            |
+|  ----------------------------------------------------------------|
+|  GetTickCount()   15.625ms       낮음          간단한 시간 측정  |
+|  timeGetTime()    1ms            중간          멀티미디어       |
+|  QPC              <span class="key-point">0.0001ms</span>      <span class="key-point">높음</span>          <span class="key-point">게임/프로파일링</span> |
+|  RDTSC            ~0.3ns         매우 높음     CPU 사이클 측정  |
+|                                                                  |
+|  QPC의 원리:                                                     |
+|  +------------------------------------------------------------+  |
+|  | CPU의 고주파 카운터 (HPET, TSC, ACPI PM Timer 등)         |  |
+|  | -> OS가 하드웨어 직접 접근                                 |  |
+|  | -> 10MHz 이상 주파수 = 0.1us(마이크로초) 이하 정밀도      |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
++------------------------------------------------------------------+</div>
+                <div class="code-block">
+// QueryPerformanceCounter 사용법
+
+class HighResTimer {
+private:
+    LARGE_INTEGER m_frequency;  // 타이머 주파수
+    LARGE_INTEGER m_startCount; // 시작 카운트
+
+public:
+    HighResTimer() {
+        // 주파수는 시스템 부팅 후 고정 (한 번만 호출)
+        QueryPerformanceFrequency(&m_frequency);
+    }
+
+    void Start() {
+        QueryPerformanceCounter(&m_startCount);
+    }
+
+    double GetElapsedMs() {
+        LARGE_INTEGER currentCount;
+        QueryPerformanceCounter(&currentCount);
+
+        // (현재 - 시작) / 주파수 = 초
+        // * 1000 = 밀리초
+        return (double)(currentCount.QuadPart - m_startCount.QuadPart)
+               * 1000.0 / m_frequency.QuadPart;
+    }
+
+    double GetElapsedUs() {
+        LARGE_INTEGER currentCount;
+        QueryPerformanceCounter(&currentCount);
+
+        // 마이크로초 단위
+        return (double)(currentCount.QuadPart - m_startCount.QuadPart)
+               * 1000000.0 / m_frequency.QuadPart;
+    }
+};
+
+// 사용 예시
+void ProfileFunction() {
+    HighResTimer timer;
+    timer.Start();
+
+    SomeExpensiveFunction();
+
+    printf("Elapsed: %.3f ms (%.1f us)\n",
+           timer.GetElapsedMs(),
+           timer.GetElapsedUs());
+    // 출력: Elapsed: 5.234 ms (5234.1 us)
+}</div>
+            </div>
+
+            <div class="q">QPC 주파수는 어떻게 확인해?</div>
+            <div class="a">
+                <div class="code-block">
+// QPC 주파수 확인
+
+void CheckQPCFrequency() {
+    LARGE_INTEGER frequency;
+    QueryPerformanceFrequency(&frequency);
+
+    printf("QPC Frequency: %lld Hz\n", frequency.QuadPart);
+    printf("Resolution: %.4f nanoseconds\n",
+           1000000000.0 / frequency.QuadPart);
+
+    // 일반적인 결과:
+    // QPC Frequency: 10000000 Hz (10 MHz)
+    // Resolution: 100.0000 nanoseconds
+    //
+    // 또는:
+    // QPC Frequency: 3410065408 Hz (3.4 GHz - TSC 기반)
+    // Resolution: 0.2933 nanoseconds
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 타이머 드리프트 문제</h2>
+            <div class="q">오래 실행하면 시간이 틀어진다던데?</div>
+            <div class="a">
+                <p><span class="highlight">타이머 드리프트</span>는 장시간 누적되는 미세한 오차입니다:</p>
+                <div class="diagram">
+타이머 드리프트 문제:
++------------------------------------------------------------------+
+|                                                                  |
+|  이상적인 60 FPS 게임 루프 (16.666ms per frame):                 |
+|                                                                  |
+|  Frame:   1      2      3      4      ...    3600 (1분)         |
+|  Time:  16.67  33.33  50.00  66.67   ...   60000.0 ms           |
+|                                                                  |
+|  실제 (약간의 오차 누적):                                        |
+|                                                                  |
+|  Frame:   1      2      3      4      ...    3600               |
+|  Time:  16.67  33.34  50.02  66.70   ...   <span class="warning">60050.0 ms</span>           |
+|                                                                  |
+|  1분 후 50ms 오차! (프레임 3개 분량)                             |
+|                                                                  |
+|  원인:                                                           |
+|  +------------------------------------------------------------+  |
+|  | 1. CPU 주파수 변동 (터보 부스트, 절전 모드)                |  |
+|  | 2. 온도에 따른 크리스탈 발진기 변화                        |  |
+|  | 3. 부동소수점 누적 오차                                    |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
++------------------------------------------------------------------+</div>
+            </div>
+
+            <div class="q">드리프트를 어떻게 보정해?</div>
+            <div class="a">
+                <p><span class="key-point">절대 시간 동기화</span>와 <span class="key-point">델타 타임 방식</span>을 조합합니다:</p>
+                <div class="code-block">
+// 드리프트 보정 게임 루프
+
+class GameLoop {
+private:
+    HighResTimer m_timer;
+    double m_accumulator = 0.0;
+    double m_lastTime = 0.0;
+
+    const double FIXED_TIMESTEP = 1000.0 / 60.0; // 16.666ms
+    const double MAX_FRAME_TIME = 250.0;         // 최대 프레임 시간 제한
+
+public:
+    void Run() {
+        m_timer.Start();
+        m_lastTime = m_timer.GetElapsedMs();
+
+        while (m_running) {
+            double currentTime = m_timer.GetElapsedMs();
+            double frameTime = currentTime - m_lastTime;
+            m_lastTime = currentTime;
+
+            // 스파이크 방지 (디버깅 중 멈춤 등)
+            if (frameTime > MAX_FRAME_TIME) {
+                frameTime = MAX_FRAME_TIME;
+            }
+
+            m_accumulator += frameTime;
+
+            // 고정 타임스텝으로 물리/로직 업데이트
+            while (m_accumulator >= FIXED_TIMESTEP) {
+                FixedUpdate(FIXED_TIMESTEP);
+                m_accumulator -= FIXED_TIMESTEP;
+            }
+
+            // 남은 시간 비율로 보간 렌더링
+            double alpha = m_accumulator / FIXED_TIMESTEP;
+            Render(alpha);
+        }
+    }
+
+    void FixedUpdate(double dt) {
+        // 물리, AI, 게임 로직 (고정 60Hz)
+        m_physics.Step(dt / 1000.0);
+    }
+
+    void Render(double interpolation) {
+        // 이전 상태와 현재 상태 사이를 보간
+        Vector3 pos = Lerp(m_prevPos, m_currentPos, interpolation);
+        DrawCharacter(pos);
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 멀티코어 환경의 함정</h2>
+            <div class="q">스레드마다 시간이 다르게 나온다고?</div>
+            <div class="a">
+                <p>과거에는 <span class="warning">CPU 코어별 TSC 비동기화</span> 문제가 있었습니다:</p>
+                <div class="diagram">
+멀티코어 타이머 문제 (과거 시스템):
++------------------------------------------------------------------+
+|                                                                  |
+|  Thread 1 (Core 0)        Thread 2 (Core 1)                     |
+|  TSC: 1000000000          TSC: 1000005000  (5000 차이!)          |
+|                                                                  |
+|  문제 시나리오:                                                  |
+|  1. Thread 1: start = QPC()  // Core 0 TSC 사용                 |
+|  2. Thread 1이 Core 1으로 이동 (OS 스케줄링)                     |
+|  3. Thread 1: end = QPC()    // Core 1 TSC 사용                 |
+|  4. elapsed = end - start    // <span class="warning">음수 또는 비정상 값!</span>          |
+|                                                                  |
+|  현대 해결책 (Windows Vista 이후):                               |
+|  +------------------------------------------------------------+  |
+|  | - Invariant TSC: 모든 코어 동기화                         |  |
+|  | - QPC가 자동으로 안전한 타이머 소스 선택                   |  |
+|  | - HPET(High Precision Event Timer) 폴백                   |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
++------------------------------------------------------------------+</div>
+                <div class="code-block">
+// 안전한 크로스 스레드 타이밍
+
+class ThreadSafeTimer {
+private:
+    std::atomic<int64_t> m_startCount{0};
+    LARGE_INTEGER m_frequency;
+
+public:
+    ThreadSafeTimer() {
+        QueryPerformanceFrequency(&m_frequency);
+    }
+
+    // 어느 스레드에서 호출해도 안전
+    void Start() {
+        LARGE_INTEGER count;
+        QueryPerformanceCounter(&count);
+        m_startCount.store(count.QuadPart, std::memory_order_release);
+    }
+
+    // 다른 스레드에서 경과 시간 읽기
+    double GetElapsedMs() {
+        LARGE_INTEGER count;
+        QueryPerformanceCounter(&count);
+        int64_t start = m_startCount.load(std::memory_order_acquire);
+
+        return (double)(count.QuadPart - start)
+               * 1000.0 / m_frequency.QuadPart;
+    }
+};
+
+// Windows 10 이상: 항상 안전
+// 주의: 구형 Windows XP 등에서는 SetThreadAffinityMask 필요</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 정밀 Sleep 구현</h2>
+            <div class="q">정확히 1ms만 쉬려면?</div>
+            <div class="a">
+                <p><span class="key-point">timeBeginPeriod</span>로 시스템 타이머 해상도를 높이거나, <span class="highlight">Busy Wait + Sleep 조합</span>을 사용합니다:</p>
+                <div class="code-block">
+// 방법 1: 시스템 타이머 해상도 변경
+#pragma comment(lib, "winmm.lib")
+
+class PrecisionSleep {
+public:
+    PrecisionSleep() {
+        // 시스템 타이머 해상도를 1ms로 설정
+        timeBeginPeriod(1);
+    }
+
+    ~PrecisionSleep() {
+        // 반드시 복원! (전력 소모 증가)
+        timeEndPeriod(1);
+    }
+
+    void SleepMs(int ms) {
+        Sleep(ms);  // 이제 약 1~2ms 정밀도
+    }
+};
+
+// 방법 2: Hybrid Sleep (더 정밀)
+void PreciseSleep(double milliseconds) {
+    LARGE_INTEGER freq, start, current;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&start);
+
+    double targetTicks = milliseconds * freq.QuadPart / 1000.0;
+    double elapsed = 0;
+
+    // 대부분의 시간은 Sleep으로 CPU 양보
+    while (elapsed < targetTicks - freq.QuadPart / 1000) { // 1ms 여유
+        Sleep(0);  // 타임슬라이스 양보
+        QueryPerformanceCounter(&current);
+        elapsed = (double)(current.QuadPart - start.QuadPart);
+    }
+
+    // 마지막 1ms는 Busy Wait (정밀도 위해)
+    while (elapsed < targetTicks) {
+        QueryPerformanceCounter(&current);
+        elapsed = (double)(current.QuadPart - start.QuadPart);
+    }
+}
+
+// 방법 3: Waitable Timer (추천)
+void WaitableTimerSleep(double milliseconds) {
+    HANDLE hTimer = CreateWaitableTimer(NULL, TRUE, NULL);
+
+    LARGE_INTEGER dueTime;
+    dueTime.QuadPart = (LONGLONG)(-milliseconds * 10000); // 100ns 단위, 음수=상대시간
+
+    SetWaitableTimer(hTimer, &dueTime, 0, NULL, NULL, FALSE);
+    WaitForSingleObject(hTimer, INFINITE);
+
+    CloseHandle(hTimer);
+}</div>
+            </div>
+
+            <div class="q">게임 루프에서 프레임 제한은?</div>
+            <div class="a">
+                <div class="code-block">
+// 정밀 프레임 제한기
+
+class FrameRateLimiter {
+private:
+    HighResTimer m_timer;
+    double m_targetFrameTime;  // ms
+    double m_frameStartTime;
+
+public:
+    FrameRateLimiter(int targetFPS = 60) {
+        m_targetFrameTime = 1000.0 / targetFPS;  // 60 FPS = 16.666ms
+        m_timer.Start();
+    }
+
+    void BeginFrame() {
+        m_frameStartTime = m_timer.GetElapsedMs();
+    }
+
+    void EndFrame() {
+        double elapsed = m_timer.GetElapsedMs() - m_frameStartTime;
+        double sleepTime = m_targetFrameTime - elapsed;
+
+        if (sleepTime > 0) {
+            // 2ms 이상 남으면 Sleep
+            if (sleepTime > 2.0) {
+                Sleep((DWORD)(sleepTime - 1));
+            }
+
+            // 나머지는 Busy Wait
+            while ((m_timer.GetElapsedMs() - m_frameStartTime) < m_targetFrameTime) {
+                _mm_pause();  // CPU 힌트: 스핀 대기 중
+            }
+        }
+    }
+};
+
+// 게임 루프에서 사용
+void GameLoop() {
+    FrameRateLimiter limiter(60);  // 60 FPS 제한
+
+    while (running) {
+        limiter.BeginFrame();
+
+        ProcessInput();
+        Update();
+        Render();
+
+        limiter.EndFrame();  // 정확히 16.66ms 맞춤
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 실전: 프로파일러 구현</h2>
+            <div class="q">코드 성능 측정은 어떻게 해?</div>
+            <div class="a">
+                <p><span class="key-point">RAII 패턴</span>으로 스코프 기반 프로파일러를 만듭니다:</p>
+                <div class="code-block">
+// 스코프 기반 프로파일러
+
+class ScopedTimer {
+private:
+    const char* m_name;
+    LARGE_INTEGER m_start;
+    static LARGE_INTEGER s_frequency;
+    static bool s_initialized;
+
+public:
+    ScopedTimer(const char* name) : m_name(name) {
+        if (!s_initialized) {
+            QueryPerformanceFrequency(&s_frequency);
+            s_initialized = true;
+        }
+        QueryPerformanceCounter(&m_start);
+    }
+
+    ~ScopedTimer() {
+        LARGE_INTEGER end;
+        QueryPerformanceCounter(&end);
+
+        double elapsed = (double)(end.QuadPart - m_start.QuadPart)
+                        * 1000000.0 / s_frequency.QuadPart;
+
+        printf("[%s] %.2f us\n", m_name, elapsed);
+    }
+};
+
+LARGE_INTEGER ScopedTimer::s_frequency;
+bool ScopedTimer::s_initialized = false;
+
+// 매크로로 편하게 사용
+#define PROFILE_SCOPE(name) ScopedTimer _timer_##__LINE__(name)
+#define PROFILE_FUNCTION() PROFILE_SCOPE(__FUNCTION__)
+
+// 사용 예시
+void ComplexCalculation() {
+    PROFILE_FUNCTION();  // 자동으로 함수 이름으로 프로파일링
+
+    {
+        PROFILE_SCOPE("Matrix Multiply");
+        MultiplyMatrices();
+    }
+
+    {
+        PROFILE_SCOPE("Vector Normalize");
+        NormalizeVectors();
+    }
+}
+
+// 출력:
+// [Matrix Multiply] 245.32 us
+// [Vector Normalize] 12.45 us
+// [ComplexCalculation] 267.89 us</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>GetTickCount/Sleep</strong>은 15.625ms 해상도로 게임에 부적합</li>
+                <li><strong>QueryPerformanceCounter</strong>로 0.1us 이하 정밀도 측정 가능</li>
+                <li><strong>타이머 드리프트</strong>는 델타 타임 + 고정 타임스텝으로 해결</li>
+                <li>현대 Windows에서 <strong>QPC는 멀티코어 안전</strong> (Invariant TSC)</li>
+                <li>정밀 Sleep은 <strong>Sleep + Busy Wait 하이브리드</strong> 또는 Waitable Timer</li>
+                <li>프로파일링은 <strong>RAII 스코프 타이머</strong>로 깔끔하게 구현</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../false-sharing/">&larr; False Sharing</a>
+            <a href="../category-thread/">목록으로 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>장애 원인을 빠르게 찾는 법 (분산 추적) - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #065F46;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #D1FAE5;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #D1FAE5;
+            border-left: 4px solid #10B981;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #065F46;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #D1FAE5;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #065F46;
+        }
+        .key-point {
+            background: #A7F3D0;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #065F46;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            color: #aed581;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 16px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .code-block.visual {
+            background: #f5f5f5;
+            color: #333;
+            border: 2px solid #e0e0e0;
+            font-size: 1.1rem;
+            line-height: 2;
+        }
+
+        .diagram {
+            background: #f5f5f5;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .compare-table th, .compare-table td {
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #D1FAE5;
+            font-weight: 600;
+        }
+
+        .summary-box {
+            background: #D1FAE5;
+            border: 2px solid #10B981;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            color: #065F46;
+            margin-bottom: 16px;
+        }
+        .summary-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .summary-box li {
+            margin-bottom: 8px;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #10B981;
+            font-weight: bold;
+        }
+
+        .analogy-box {
+            background: #fff9c4;
+            border-left: 4px solid #fbc02d;
+            padding: 20px;
+            margin: 24px 0;
+            border-radius: 8px;
+        }
+        .analogy-box strong {
+            color: #f57f17;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../devops/" class="back-link">< 데브옵스 / 인프라</a>
+
+        <div class="header">
+            <h1>Distributed Tracing</h1>
+            <p>장애 원인을 빠르게 찾는 법</p>
+        </div>
+
+        <!-- 1. 왜 분산 추적이 필요한가 -->
+        <div class="conversation">
+            <h2>1. 로그만 보면 안 돼?</h2>
+
+            <div class="chat">
+                <div class="q">서버 로그 보면 원인 알 수 있잖아?</div>
+                <div class="a">
+                    <p><span class="warning">분산 시스템에서는 어려워!</span></p>
+                    <div class="code-block visual">단일 서버 (쉬움):
+[Game Server]
+- 14:00:01 로그인 요청
+- 14:00:02 DB 조회
+- 14:00:03 에러 발생! <- 바로 찾음
+
+분산 시스템 (어려움):
+[Gate] -> [Game] -> [GameDB] -> [Redis]
+   |          |          |          |
+로그인     캐릭터      DB조회     세션
+요청       로딩                   저장
+
+"14:00:03 에러 발생"
+-> 어느 서버에서?
+-> 어떤 요청 때문에?
+-> 다른 서버에서 뭘 했길래?</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">로그를 다 모아보면?</div>
+                <div class="a">
+                    <div class="code-block visual">분산 로그의 문제:
+
+[Gate Server 로그]
+14:00:01.123 Request from user_123
+14:00:01.124 Request from user_456
+14:00:01.125 Forward to Game Server
+
+[Game Server 로그]
+14:00:01.130 Received request
+14:00:01.135 Query to DB
+14:00:01.500 Timeout error!
+
+질문: 어떤 유저 요청이 타임아웃 났어?
+답: 모름! 로그가 연결이 안 됨!</div>
+                    <p><span class="key-point">요청 단위로 추적</span>이 필요해!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. 분산 추적 개념 -->
+        <div class="conversation">
+            <h2>2. 분산 추적이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">Trace ID? Span?</div>
+                <div class="a">
+                    <div class="diagram">분산 추적 구조:
+
+[하나의 요청 = 1개의 Trace]
+
+Trace ID: abc-123
+├── Span 1: Gate Server (50ms)
+│   └── Span 2: Game Server (400ms)
+│       ├── Span 3: DB Query (350ms)  <- 병목!
+│       └── Span 4: Redis (5ms)
+
+용어:
+- Trace: 요청의 전체 여정
+- Span: 각 서비스에서의 작업 단위
+- Trace ID: 요청을 식별하는 고유 ID
+- Parent Span: 호출한 쪽
+- Child Span: 호출된 쪽</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">어떻게 연결돼?</div>
+                <div class="a">
+                    <div class="analogy-box">
+                        <strong>비유: 택배 송장</strong><br><br>
+                        송장 번호 = Trace ID<br>
+                        물류 센터마다 찍는 스캔 = Span<br><br>
+                        송장 번호로 "어디서 지연됐는지" 추적 가능!<br>
+                        -> "대전 센터에서 24시간 멈춤" 바로 확인
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 구현 방법 -->
+        <div class="conversation">
+            <h2>3. 어떻게 구현해?</h2>
+
+            <div class="chat">
+                <div class="q">코드에서 Trace ID를 전달해?</div>
+                <div class="a">
+                    <p><strong>HTTP 헤더로 전파</strong>:</p>
+                    <div class="code-block">// Gate Server (요청 시작)
+void OnRequest(Request& req) {
+    // Trace ID 생성 (또는 클라이언트에서 받음)
+    std::string traceId = GenerateTraceId();
+    std::string spanId = GenerateSpanId();
+
+    // 현재 Span 시작
+    Span span = tracer.StartSpan("gate.login", traceId, spanId);
+
+    // Game Server로 요청할 때 Trace 정보 전달
+    HttpRequest gameReq;
+    gameReq.SetHeader("X-Trace-Id", traceId);
+    gameReq.SetHeader("X-Parent-Span-Id", spanId);
+    gameReq.SetHeader("X-Span-Id", GenerateSpanId());
+
+    auto response = gameClient.Request(gameReq);
+
+    // Span 종료
+    span.End();
+}
+
+// Game Server (요청 받음)
+void OnRequest(Request& req) {
+    // Trace 정보 추출
+    std::string traceId = req.GetHeader("X-Trace-Id");
+    std::string parentSpanId = req.GetHeader("X-Parent-Span-Id");
+    std::string spanId = req.GetHeader("X-Span-Id");
+
+    // 자식 Span 시작
+    Span span = tracer.StartSpan("game.login", traceId, spanId, parentSpanId);
+
+    // DB 호출 (새 Span)
+    Span dbSpan = tracer.StartSpan("db.query", traceId);
+    auto result = db.Query("SELECT * FROM users");
+    dbSpan.End();
+
+    span.End();
+}</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">게임 서버 TCP는?</div>
+                <div class="a">
+                    <p><strong>패킷에 Trace 정보 포함</strong>:</p>
+                    <div class="code-block">// 패킷 구조에 Trace 정보 추가
+struct PacketHeader {
+    uint16_t packetId;
+    uint16_t size;
+
+    // 분산 추적용
+    char traceId[32];
+    char spanId[16];
+    char parentSpanId[16];
+};
+
+// 패킷 전송 시
+void SendPacket(Connection* conn, Packet& packet) {
+    // 현재 컨텍스트에서 Trace 정보 가져오기
+    auto ctx = TraceContext::Current();
+
+    packet.header.traceId = ctx.GetTraceId();
+    packet.header.spanId = GenerateSpanId();
+    packet.header.parentSpanId = ctx.GetSpanId();
+
+    conn->Send(packet);
+}
+
+// 패킷 수신 시
+void OnPacket(Connection* conn, Packet& packet) {
+    // Trace 컨텍스트 복원
+    TraceContext ctx(
+        packet.header.traceId,
+        packet.header.spanId,
+        packet.header.parentSpanId
+    );
+
+    // 이 컨텍스트에서 Span 시작
+    Span span = tracer.StartSpan("game.process_packet", ctx);
+
+    // 패킷 처리...
+
+    span.End();
+}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Jaeger 사용 -->
+        <div class="conversation">
+            <h2>4. Jaeger로 시각화</h2>
+
+            <div class="chat">
+                <div class="q">Jaeger가 뭐야?</div>
+                <div class="a">
+                    <div class="diagram">Jaeger 아키텍처:
+
+[Game Server] --> [Jaeger Agent] --> [Jaeger Collector]
+[Gate Server] --> [Jaeger Agent] -->        |
+[DB Server]   --> [Jaeger Agent] -->        v
+                                      [Elasticsearch]
+                                            |
+                                            v
+                                      [Jaeger UI]
+                                      (대시보드)</div>
+                    <p>Jaeger UI에서 Trace 검색, 시각화 가능!</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">설정은 어떻게 해?</div>
+                <div class="a">
+                    <div class="code-block"># docker-compose.yml
+version: '3'
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"  # UI
+      - "6831:6831/udp"  # Agent
+    environment:
+      - COLLECTOR_ZIPKIN_HTTP_PORT=9411
+
+  game-server:
+    image: game-server:latest
+    environment:
+      - JAEGER_AGENT_HOST=jaeger
+      - JAEGER_AGENT_PORT=6831
+      - JAEGER_SERVICE_NAME=game-server</div>
+                    <div class="code-block">// OpenTelemetry SDK (C++)
+#include <opentelemetry/sdk/trace/tracer_provider.h>
+#include <opentelemetry/exporters/jaeger/jaeger_exporter.h>
+
+void InitTracing() {
+    // Jaeger Exporter 설정
+    auto exporter = std::make_unique<JaegerExporter>(
+        JaegerExporterOptions{
+            .endpoint = "http://jaeger:14268/api/traces",
+            .service_name = "game-server"
+        }
+    );
+
+    // Tracer Provider 설정
+    auto provider = std::make_shared<TracerProvider>(
+        std::move(exporter)
+    );
+
+    // 글로벌 등록
+    trace::Provider::SetTracerProvider(provider);
+}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. 실제 활용 -->
+        <div class="conversation">
+            <h2>5. 장애 분석 실제 사례</h2>
+
+            <div class="chat">
+                <div class="q">"로그인이 느려요" 신고가 왔어</div>
+                <div class="a">
+                    <div class="code-block visual">분산 추적 없이:
+
+1. Gate 로그 확인 -> 정상
+2. Game 로그 확인 -> 정상
+3. DB 로그 확인 -> 정상?
+4. Redis 로그 확인 -> 정상?
+5. 재현 안 됨... 뭐지?
+
+소요 시간: 2시간</div>
+                    <div class="code-block visual">분산 추적으로:
+
+1. Jaeger에서 "느린 로그인" Trace 검색
+2. Trace 확인:
+   - Gate: 10ms
+   - Game: 20ms
+   - DB Query: 2,500ms!  <- 발견!
+3. DB Span 상세 보기:
+   - Query: "SELECT * FROM user_items WHERE user_id = ?"
+   - user_items 테이블 인덱스 없음!
+
+소요 시간: 5분</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Jaeger UI에서 어떻게 보여?</div>
+                <div class="a">
+                    <div class="code-block visual">Jaeger Trace 뷰:
+
+Trace ID: abc-123-def-456
+Service: game-server
+Duration: 2,530ms
+
+Timeline:
+|============================================| 2530ms
+
+gate.login        |===|                        50ms
+  game.login          |======================| 2480ms
+    db.user_query         |==================| 2400ms  <- 빨간색!
+    redis.session             |=|             30ms
+
+Tags:
+  user_id: 12345
+  error: false
+  db.query: "SELECT * FROM user_items..."
+
+Logs:
+  14:00:01.123 - Starting login
+  14:00:01.130 - DB query started
+  14:00:03.530 - DB query completed (slow!)
+  14:00:03.560 - Login completed</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. 게임 서버 전용 팁 -->
+        <div class="conversation">
+            <h2>6. 게임 서버 분산 추적 팁</h2>
+
+            <div class="chat">
+                <div class="q">패킷마다 Trace하면 너무 많지 않아?</div>
+                <div class="a">
+                    <p><span class="key-point">샘플링</span>이 필수:</p>
+                    <div class="code-block">// 샘플링 전략
+class TracingSampler {
+public:
+    bool ShouldSample(const std::string& traceId) {
+        // 1. 에러 요청은 100% 수집
+        if (HasError()) return true;
+
+        // 2. 느린 요청은 100% 수집
+        if (GetLatency() > 100) return true;
+
+        // 3. 일반 요청은 1% 샘플링
+        return hash(traceId) % 100 == 0;
+    }
+};</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">추적할 만한 Span은?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <tr>
+                            <th>추적 대상</th>
+                            <th>Span 이름 예시</th>
+                        </tr>
+                        <tr>
+                            <td><strong>서버 간 통신</strong></td>
+                            <td>gate.forward_to_game<br>game.notify_world</td>
+                        </tr>
+                        <tr>
+                            <td><strong>DB 쿼리</strong></td>
+                            <td>db.select_player<br>db.update_inventory</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Redis</strong></td>
+                            <td>redis.get_session<br>redis.set_cache</td>
+                        </tr>
+                        <tr>
+                            <td><strong>외부 API</strong></td>
+                            <td>payment.verify<br>auth.validate_token</td>
+                        </tr>
+                        <tr>
+                            <td><strong>게임 로직</strong></td>
+                            <td>game.enter_dungeon<br>game.process_combat</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 요약 -->
+        <div class="summary-box">
+            <h3>핵심 정리: Distributed Tracing</h3>
+            <ul>
+                <li><strong>목적</strong> - 분산 시스템에서 요청 흐름 추적</li>
+                <li><strong>구성</strong> - Trace ID + Span으로 요청 연결</li>
+                <li><strong>전파</strong> - HTTP 헤더 또는 패킷에 Trace 정보 포함</li>
+                <li><strong>도구</strong> - Jaeger, Zipkin, DataDog</li>
+                <li><strong>샘플링</strong> - 전체 수집은 비용 폭탄, 1% 샘플링</li>
+                <li><strong>효과</strong> - 장애 원인 파악 2시간 -> 5분</li>
+            </ul>
+        </div>
+
+    </div>
+</body>
+</html>

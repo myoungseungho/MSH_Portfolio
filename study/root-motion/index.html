@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Root Motion - 게임 애니메이션 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #7B1FA2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #F3E5F5; }
+        .q { background: #F3E5F5; border-left: 4px solid #9C27B0; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #7B1FA2; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #F3E5F5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #7B1FA2; }
+        .key-point { background: #E1BEE7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #4A148C; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #9C27B0; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-animation/" class="back-link">&larr; 게임 애니메이션</a>
+
+        <div class="header">
+            <h1>Root Motion</h1>
+            <p>걷다가 멈출 때 미끄러지지 않게 하는 법</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 발 미끄러짐 문제</h2>
+            <div class="q">게임에서 캐릭터가 걸을 때 발이 미끄러지는 거 본 적 있어?</div>
+            <div class="a">
+                <p><span class="highlight">발 미끄러짐(Foot Sliding)</span>은 흔한 문제야:</p>
+                <div class="diagram">
+발 미끄러짐 문제:
+
+<span class="warning">코드로 이동 + 걷기 애니메이션:</span>
+
+프레임 1:        프레임 2:        프레임 3:
+┌───────────┐   ┌───────────┐   ┌───────────┐
+│    🚶     │   │      🚶   │   │        🚶 │
+│   ↙ ↘    │   │     ↙ ↘  │   │       ↙ ↘│
+│  └   ┘    │   │    └   ┘  │   │      └   ┘│
+│▔▔▔│▔▔▔▔▔▔│   │▔▔▔▔▔│▔▔▔▔│   │▔▔▔▔▔▔▔│▔▔│
+│   └──────────────┼──────────────┼─────→ │
+│   발 위치        │   발 위치    │  발 위치  │
+└───────────┘   └───────────┘   └───────────┘
+
+문제: 발이 땅에 닿은 채로 "미끄러짐"
+     애니메이션의 발 움직임 ≠ 캐릭터 이동 속도</div>
+            </div>
+
+            <div class="q">왜 발이 미끄러져?</div>
+            <div class="a">
+                <p><span class="warning">애니메이션과 이동이 따로 놀기 때문</span>이야:</p>
+                <div class="diagram">
+문제의 원인:
+
+┌─────────────────────────────────────────────┐
+│ 방식 1: 코드 기반 이동                       │
+├─────────────────────────────────────────────┤
+│                                             │
+│  코드: position += velocity * deltaTime;    │
+│  애니메이션: 그냥 제자리에서 걷기 재생       │
+│                                             │
+│  이동 속도: 5m/s (코드로 정함)              │
+│  애니메이션 속도: 3m/s (모션 캡처 시 속도)  │
+│                                             │
+│  <span class="warning">불일치! → 발이 미끄러짐</span>                    │
+│                                             │
+└─────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. Root Motion이란?</h2>
+            <div class="q">Root Motion이 뭔데?</div>
+            <div class="a">
+                <p><span class="highlight">Root Motion</span>은 애니메이션 자체에서 이동값을 추출하는 거야:</p>
+                <div class="diagram">
+Root Motion 원리:
+
+스켈레톤 구조:
+┌─────────────────────────────────────────┐
+│           [Hips] ← 보통 여기가 Root     │
+│              │                          │
+│    ┌─────────┼─────────┐                │
+│    │         │         │                │
+│ [L.Leg]  [Spine]  [R.Leg]              │
+│    │         │         │                │
+│    ▼         ▼         ▼                │
+│                                         │
+│  Root(Hips)가 애니메이션에서 움직이면   │
+│  그 움직임을 캐릭터 이동에 적용!        │
+└─────────────────────────────────────────┘
+
+걷기 애니메이션의 Root 위치 변화:
+시간:    0.0s    0.5s    1.0s
+Root Z:  0.0m    1.5m    3.0m  ← 이 값으로 캐릭터 이동!</div>
+                <div class="code-block">
+// Root Motion 기본 원리
+class RootMotionController {
+    void Update(float deltaTime) {
+        // 1. 이전 프레임의 Root 위치
+        Vector3 prevRootPos = animation-&gt;GetRootPosition(prevTime);
+
+        // 2. 현재 프레임의 Root 위치
+        Vector3 currRootPos = animation-&gt;GetRootPosition(currentTime);
+
+        // 3. 이동량 계산 (애니메이션에서 추출)
+        Vector3 rootMotionDelta = currRootPos - prevRootPos;
+
+        // 4. 캐릭터 이동에 적용
+        // 애니메이션의 로컬 이동 → 월드 이동으로 변환
+        Vector3 worldDelta = character-&gt;rotation * rootMotionDelta;
+        character-&gt;position += worldDelta;
+
+        // <span class="key-point">발이 움직인 만큼만 캐릭터가 이동 → 미끄러짐 없음!</span>
+    }
+};</div>
+            </div>
+
+            <div class="q">그럼 발이 안 미끄러지는 거야?</div>
+            <div class="a">
+                <p><span class="key-point">정확히!</span> 애니메이션의 발 움직임과 캐릭터 이동이 완벽히 일치해:</p>
+                <div class="diagram">
+Root Motion 적용 결과:
+
+프레임 1:        프레임 2:        프레임 3:
+┌───────────┐   ┌───────────┐   ┌───────────┐
+│    🚶     │   │      🚶   │   │        🚶 │
+│   ↙ ↘    │   │     ↙ ↘  │   │       ↙ ↘│
+│  └   ┘    │   │    └   ┘  │   │      └   ┘│
+│▔▔▔│▔▔▔▔▔▔│   │▔▔▔▔▔│▔▔▔▔│   │▔▔▔▔▔▔▔│▔▔│
+│   ●       │   │      ●    │   │         ● │
+│   발이 땅에    │   발이 땅에    │   발이 땅에  │
+│   고정됨       │   고정됨       │   고정됨     │
+└───────────┘   └───────────┘   └───────────┘
+
+<span class="key-point">발이 땅에 닿은 동안 미끄러지지 않음!</span></div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 애니메이션 기반 vs 코드 기반</h2>
+            <div class="q">두 방식의 차이가 뭐야?</div>
+            <div class="a">
+                <div class="diagram">
+두 가지 이동 방식 비교:
+
+┌─────────────────────────────────────────────────────┐
+│ <span class="warning">코드 기반 이동 (In-Place Animation)</span>                  │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  코드:                                              │
+│  void Update() {                                    │
+│      velocity = input.GetAxis() * speed;            │
+│      position += velocity * dt;                     │
+│      animator.Play("Walk");  // 제자리 걷기         │
+│  }                                                  │
+│                                                     │
+│  장점: 정밀한 이동 제어 가능                        │
+│  단점: <span class="warning">발 미끄러짐</span>, 애니메이션 속도 조절 필요          │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│ <span class="key-point">Root Motion 기반 이동</span>                                │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  코드:                                              │
+│  void Update() {                                    │
+│      animator.Play("Walk");  // Root가 움직이는 걷기│
+│      // 이동은 OnAnimatorMove()에서 자동 처리       │
+│  }                                                  │
+│                                                     │
+│  void OnAnimatorMove() {                            │
+│      position += animator.deltaPosition;            │
+│  }                                                  │
+│                                                     │
+│  장점: <span class="key-point">발 미끄러짐 없음</span>, 자연스러운 움직임             │
+│  단점: 이동 제어가 애니메이션에 종속                │
+│                                                     │
+└─────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">어떤 게 더 좋아?</div>
+            <div class="a">
+                <p><span class="highlight">상황에 따라 다름!</span></p>
+                <div class="diagram">
+언제 어떤 방식을 쓸까:
+
+┌────────────────┬─────────────────┬─────────────────┐
+│ 상황           │ 추천 방식       │ 이유            │
+├────────────────┼─────────────────┼─────────────────┤
+│ 격투 게임      │ Root Motion     │ 정확한 히트박스 │
+│ 댄스 게임      │ Root Motion     │ 애니메이션 정밀 │
+│ 등반/파쿠르   │ Root Motion     │ 손발 위치 중요  │
+├────────────────┼─────────────────┼─────────────────┤
+│ FPS 게임       │ 코드 기반       │ 빠른 반응 필요  │
+│ 탑다운 RPG     │ 코드 기반       │ 발 안 보임      │
+│ 레이싱 게임    │ 코드 기반       │ 물리 제어 중요  │
+├────────────────┼─────────────────┼─────────────────┤
+│ 3인칭 액션     │ <span class="key-point">하이브리드</span>     │ 상황별 전환     │
+│ (다크소울 등)  │                 │                 │
+└────────────────┴─────────────────┴─────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 하이브리드 방식</h2>
+            <div class="q">둘 다 쓰면 어떻게 해?</div>
+            <div class="a">
+                <p>상황에 따라 <span class="highlight">전환</span>하는 거야:</p>
+                <div class="code-block">
+// 하이브리드 이동 시스템
+class HybridMovement {
+    bool useRootMotion = false;
+
+    void Update() {
+        // 상황 판단
+        if (isAttacking || isRolling || isClimbing) {
+            // 정밀한 동작 → Root Motion
+            useRootMotion = true;
+        } else if (isRunning || isSprinting) {
+            // 빠른 이동 → 코드 기반
+            useRootMotion = false;
+        }
+    }
+
+    void OnAnimatorMove() {
+        if (useRootMotion) {
+            // 애니메이션에서 이동값 추출
+            controller.Move(animator.deltaPosition);
+            transform.rotation *= animator.deltaRotation;
+        } else {
+            // 코드로 이동
+            Vector3 velocity = inputDir * speed;
+            controller.Move(velocity * Time.deltaTime);
+        }
+    }
+};
+
+// 다크소울 스타일 예시
+void ProcessAction() {
+    if (Input.GetButton("Attack")) {
+        // 공격 중에는 Root Motion (정확한 이동)
+        animator.applyRootMotion = true;
+        animator.Play("SwordSlash");
+    }
+
+    if (Input.GetButton("Roll")) {
+        // 구르기도 Root Motion (정확한 이동 거리)
+        animator.applyRootMotion = true;
+        animator.Play("Roll");
+    }
+
+    // 일반 이동은 코드 기반 (빠른 반응)
+    if (!isAttacking && !isRolling) {
+        animator.applyRootMotion = false;
+        MoveByInput();
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. Root Motion 애니메이션 제작</h2>
+            <div class="q">애니메이션을 어떻게 만들어야 해?</div>
+            <div class="a">
+                <p>모션 캡처 시 <span class="key-point">이동을 포함</span>해서 녹화하거나, 수동으로 Root 커브를 만들어:</p>
+                <div class="diagram">
+Root Motion 애니메이션 제작:
+
+방법 1: 모션 캡처 (실제 이동 포함)
+┌─────────────────────────────────────────────┐
+│  배우가 실제로 걸으면서 캡처                │
+│                                             │
+│  스튜디오 ────────→ 캡처 결과              │
+│  🏃‍♂️──────────────→  Root가 Z축으로 이동   │
+│  (실제로 3m 걸음)    (3m 이동 데이터 포함)  │
+└─────────────────────────────────────────────┘
+
+방법 2: 제자리 애니메이션 + Root 커브 추가
+┌─────────────────────────────────────────────┐
+│  원본: 제자리 걷기                          │
+│                                             │
+│  Root Position Z 커브 추가:                 │
+│  ┌──────────────────────┐                  │
+│  │        ↗            │                  │
+│  │      ↗              │ ← 선형 이동      │
+│  │    ↗                │                  │
+│  │  ↗                  │                  │
+│  └──────────────────────┘                  │
+│  0s                  1s                     │
+│  0m                  3m                     │
+└─────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// Unity에서 Root Motion 커브 추출/적용
+
+// Animator의 Root Motion 데이터 접근
+void OnAnimatorMove() {
+    // 애니메이션에서 추출된 이동량
+    Vector3 deltaPosition = animator.deltaPosition;  // 이번 프레임 이동
+    Quaternion deltaRotation = animator.deltaRotation;  // 이번 프레임 회전
+
+    // 캐릭터 컨트롤러에 적용
+    characterController.Move(deltaPosition);
+    transform.rotation *= deltaRotation;
+}
+
+// 커스텀 Root Motion 처리
+void CustomRootMotion() {
+    AnimatorClipInfo[] clips = animator.GetCurrentAnimatorClipInfo(0);
+    AnimationClip clip = clips[0].clip;
+
+    // 커브에서 직접 읽기
+    float time = animator.GetCurrentAnimatorStateInfo(0).normalizedTime;
+    float rootZ = clip.EvaluateCurve(time, "RootT.z");  // Root Position Z
+
+    // 적용
+    transform.position.z = rootZ;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. Root Motion의 문제점과 해결</h2>
+            <div class="q">Root Motion에도 문제가 있어?</div>
+            <div class="a">
+                <p>몇 가지 <span class="warning">주의점</span>이 있어:</p>
+                <div class="diagram">
+Root Motion 문제점:
+
+문제 1: 애니메이션 속도 ≠ 원하는 속도
+┌─────────────────────────────────────────────┐
+│  걷기 애니메이션: 3m/s                       │
+│  원하는 속도: 5m/s                           │
+│                                             │
+│  해결: 애니메이션 재생 속도 조절             │
+│  animator.speed = 5.0f / 3.0f = 1.67        │
+│                                             │
+│  <span class="warning">주의: 너무 빠르면 부자연스러움</span>              │
+│  → 달리기 애니메이션으로 전환 필요          │
+└─────────────────────────────────────────────┘
+
+문제 2: 회전 시 이동 방향 불일치
+┌─────────────────────────────────────────────┐
+│  캐릭터가 오른쪽을 보는데                    │
+│  Root Motion은 앞으로만 이동                │
+│                                             │
+│  해결: Root Motion을 캐릭터 방향으로 회전    │
+│  worldDelta = characterRotation * localDelta│
+└─────────────────────────────────────────────┘
+
+문제 3: 경사면/계단
+┌─────────────────────────────────────────────┐
+│  애니메이션은 평지 기준                      │
+│  경사면에서 뜨거나 뚫림                      │
+│                                             │
+│  해결: Root Motion Y축은 무시하고           │
+│       CharacterController가 처리            │
+└─────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// Root Motion 문제 해결
+class RootMotionFixer {
+    void OnAnimatorMove() {
+        Vector3 delta = animator.deltaPosition;
+
+        // 문제 1: 속도 조절
+        float desiredSpeed = inputMagnitude * maxSpeed;
+        float animSpeed = GetAnimationSpeed();
+        animator.speed = desiredSpeed / animSpeed;
+
+        // 문제 2: 방향 맞추기
+        // 로컬 Root Motion → 월드 좌표로
+        Vector3 worldDelta = transform.rotation * delta;
+
+        // 문제 3: Y축 무시 (중력은 별도 처리)
+        worldDelta.y = 0;
+
+        // 지면 따라가기
+        if (Physics.Raycast(transform.position, Vector3.down, out hit)) {
+            // 경사면 노멀에 맞춰 이동 방향 조정
+            worldDelta = Vector3.ProjectOnPlane(worldDelta, hit.normal);
+        }
+
+        characterController.Move(worldDelta);
+
+        // 중력 별도 적용
+        ApplyGravity();
+    }
+
+    float GetAnimationSpeed() {
+        // 애니메이션 클립의 원래 이동 속도
+        AnimationClip clip = GetCurrentClip();
+        float distance = clip.GetRootMotionDistance();
+        return distance / clip.length;
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>발 미끄러짐</strong>은 코드 이동과 애니메이션 속도가 불일치할 때 발생</li>
+                <li><strong>Root Motion</strong>은 애니메이션의 Root 뼈대 이동을 캐릭터 이동에 적용</li>
+                <li>Root Motion → <strong>정밀한 동작</strong> (격투, 등반, 구르기)</li>
+                <li>코드 기반 → <strong>빠른 반응</strong> (FPS, 일반 이동)</li>
+                <li>실제 게임은 대부분 <strong>하이브리드</strong> (상황별 전환)</li>
+                <li>속도 조절, 방향 변환, 경사면 처리 등 <strong>보정 필요</strong></li>
+                <li>모션 캡처 시 실제 이동 포함하거나 Root 커브 수동 추가</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../ragdoll-physics/">&larr; Ragdoll 물리</a>
+            <a href="../hit-reaction/">히트 리액션 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

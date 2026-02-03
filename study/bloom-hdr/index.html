@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bloom과 HDR 렌더링 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #7B1FA2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #F3E5F5; }
+        .q { background: #F3E5F5; border-left: 4px solid #9C27B0; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #7B1FA2; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #F3E5F5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #7B1FA2; }
+        .key-point { background: #E1BEE7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #4A148C; }
+        .warning { background: #FFCDD2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B71C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+        .summary-box { background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #9C27B0; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-gpu/" class="back-link">&larr; GPU / 그래픽스</a>
+
+        <div class="header">
+            <h1>Bloom과 HDR 렌더링</h1>
+            <p>화면이 밝으면 눈이 부신 효과는 어떻게 만들까?</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 왜 모니터 밝기엔 한계가 있을까?</h2>
+            <div class="q">태양을 바라보면 눈이 부신데, 게임에서는 왜 안 부셔?</div>
+            <div class="a">
+                <p>모니터는 <span class="highlight">0~255 (8비트)</span>까지만 표현 가능하기 때문입니다.</p>
+                <p>실제 태양 밝기가 10,000이라면, 모니터는 255가 최대입니다.</p>
+                <div class="diagram">
+실제 세상의 밝기 범위 (Dynamic Range):
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   밤하늘     실내조명    맑은날      태양 직시              │
+│     │          │          │           │                    │
+│   0.001      100       10,000    1,000,000,000 cd/m2       │
+│     └──────────┴──────────┴───────────┘                    │
+│                   약 10^12 (1조 배) 차이!                   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+모니터의 밝기 범위:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   검정 (0)              흰색 (255)                          │
+│     │                      │                               │
+│   0.1                    500 cd/m2 (일반 모니터)            │
+│     └──────────────────────┘                               │
+│           약 5000배 차이 (SDR)                              │
+│                                                             │
+│   HDR 모니터: 1000~10000 cd/m2 (그래도 태양은 못 표현)      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">그럼 밝은 건 어떻게 표현해?</div>
+            <div class="a">
+                <p><span class="key-point">HDR 렌더링</span>으로 내부적으로 높은 밝기를 저장하고,</p>
+                <p><span class="key-point">톤 매핑</span>으로 모니터 범위에 맞게 압축합니다.</p>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. HDR 렌더링의 원리</h2>
+            <div class="q">HDR이 뭔데?</div>
+            <div class="a">
+                <p><span class="highlight">High Dynamic Range</span> - 높은 밝기 범위를 저장하는 방식입니다.</p>
+                <div class="diagram">
+LDR (Low Dynamic Range) vs HDR 비교:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  LDR (8비트 RGB):                                           │
+│  ┌─────────────────────────────────┐                       │
+│  │ R: 0~255, G: 0~255, B: 0~255    │                       │
+│  │ 픽셀당 24비트 = 1670만 색상     │                       │
+│  │ 밝기 1.0 초과 불가능            │  <span class="warning">태양 = 흰색으로 클램프</span>
+│  └─────────────────────────────────┘                       │
+│                                                             │
+│  HDR (16비트 Float):                                        │
+│  ┌─────────────────────────────────┐                       │
+│  │ R: -65504 ~ 65504 (half float)  │                       │
+│  │ 픽셀당 48~64비트                │                       │
+│  │ 밝기 무제한 (태양 = 10000.0)    │  <span class="key-point">진짜 밝기 저장!</span>
+│  └─────────────────────────────────┘                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// HDR 렌더타겟 생성 (DirectX 11)
+D3D11_TEXTURE2D_DESC hdrDesc = {};
+hdrDesc.Width = screenWidth;
+hdrDesc.Height = screenHeight;
+hdrDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;  // 16비트 float HDR
+hdrDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+// 렌더링 시 밝기 제한 없음
+float3 sunColor = float3(10000.0, 9500.0, 9000.0);  // 태양은 엄청 밝음
+float3 skyColor = float3(0.5, 0.7, 1.0);            // 하늘은 보통
+
+// HDR 버퍼에 그대로 저장 (클램프 안 함!)
+output.color = sunColor;  // 10000.0 그대로 저장됨</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 톤 매핑 - HDR을 모니터에 맞추기</h2>
+            <div class="q">10000 밝기를 255에 어떻게 넣어?</div>
+            <div class="a">
+                <p><span class="highlight">톤 매핑(Tone Mapping)</span>으로 압축합니다.</p>
+                <p>사진의 노출 조절과 비슷한 원리입니다.</p>
+                <div class="diagram">
+톤 매핑 과정:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   HDR 장면 (0 ~ 10000)                                      │
+│   ┌─────────────────────────────────────┐                  │
+│   │ ████████████████████████████████░░░ │ ← 태양 (10000)   │
+│   │ ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░ │ ← 하늘 (0.5)     │
+│   │ ██░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │ ← 그림자 (0.01)  │
+│   └─────────────────────────────────────┘                  │
+│                          │                                  │
+│                          ▼ 톤 매핑                          │
+│                                                             │
+│   LDR 결과 (0 ~ 1)                                          │
+│   ┌─────────────────────────────────────┐                  │
+│   │ ████████████████████████████████░░░ │ ← 태양 (0.99)    │
+│   │ ████████████░░░░░░░░░░░░░░░░░░░░░░░ │ ← 하늘 (0.45)    │
+│   │ ████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │ ← 그림자 (0.15)  │
+│   └─────────────────────────────────────┘                  │
+│                                                             │
+│   <span class="key-point">밝은 건 압축, 어두운 건 살림!</span>                           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 대표적인 톤 매핑 알고리즘들
+
+// 1. Reinhard 톤 매핑 (가장 간단)
+float3 ReinhardTonemap(float3 hdr) {
+    return hdr / (hdr + 1.0);  // 10000 -> 0.9999
+}
+
+// 2. ACES 필름 톤 매핑 (영화 같은 느낌)
+float3 ACESFilmTonemap(float3 x) {
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
+// 3. Uncharted 2 톤 매핑 (게임에서 인기)
+float3 Uncharted2Tonemap(float3 x) {
+    float A = 0.15, B = 0.50, C = 0.10;
+    float D = 0.20, E = 0.02, F = 0.30;
+    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
+}
+
+// 픽셀 셰이더에서 최종 적용
+float4 PS_ToneMap(float2 uv : TEXCOORD) : SV_Target {
+    float3 hdrColor = HDRTexture.Sample(sampler, uv).rgb;
+
+    // 노출 조절 (카메라 노출 시뮬레이션)
+    float exposure = 1.5;  // 밝게/어둡게 조절
+    hdrColor *= exposure;
+
+    // 톤 매핑 적용
+    float3 ldrColor = ACESFilmTonemap(hdrColor);
+
+    // 감마 보정 (sRGB 변환)
+    ldrColor = pow(ldrColor, 1.0 / 2.2);
+
+    return float4(ldrColor, 1.0);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. Bloom - 밝은 물체의 번짐 효과</h2>
+            <div class="q">태양 주변이 번져 보이는 효과는?</div>
+            <div class="a">
+                <p><span class="highlight">Bloom 효과</span>입니다. 실제 카메라/눈에서도 발생하는 현상이에요.</p>
+                <div class="diagram">
+Bloom 발생 원리 (실제 세계):
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   카메라 렌즈:                                               │
+│   ┌─────────────────────────────────┐                      │
+│   │  밝은 광원                       │                      │
+│   │      ●  ─────────────────▶  ○   │ ← 렌즈 표면에서     │
+│   │     ╱╲                     ╱╲   │   빛이 산란됨       │
+│   │    ╱  ╲ 빛 산란           ╱  ╲  │                      │
+│   │   ╱    ╲                 ╱    ╲ │                      │
+│   └─────────────────────────────────┘                      │
+│                                                             │
+│   눈의 경우:                                                 │
+│   - 수정체 불완전성으로 빛 퍼짐                              │
+│   - 눈물막에서의 산란                                        │
+│   - 망막 세포 간 크로스토크                                  │
+│                                                             │
+│   <span class="key-point">밝은 물체 주변이 뿌옇게 퍼져 보이는 현상!</span>                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">Bloom은 어떻게 구현해?</div>
+            <div class="a">
+                <p>크게 <span class="key-point">4단계</span>로 구현합니다.</p>
+                <div class="diagram">
+Bloom 파이프라인:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  1. HDR 렌더링                                              │
+│     ┌───────────────────────┐                              │
+│     │ 일반 씬 렌더링        │                              │
+│     │ (태양 = 10000.0)      │                              │
+│     └───────────┬───────────┘                              │
+│                 ▼                                           │
+│  2. Bright Pass (밝은 부분 추출)                            │
+│     ┌───────────────────────┐                              │
+│     │ if (brightness > 1.0) │                              │
+│     │   keep pixel          │ → ● 태양만 남음              │
+│     │ else                  │                              │
+│     │   discard             │                              │
+│     └───────────┬───────────┘                              │
+│                 ▼                                           │
+│  3. Blur (가우시안 블러)                                    │
+│     ┌───────────────────────┐                              │
+│     │     ○                 │   다운샘플 + 블러 여러번     │
+│     │    ○○○               │   ────────────────────▶      │
+│     │   ○○○○○             │         ◉                    │
+│     │    ○○○               │      부드럽게 퍼짐           │
+│     │     ○                 │                              │
+│     └───────────┬───────────┘                              │
+│                 ▼                                           │
+│  4. Composite (원본 + Bloom 합성)                           │
+│     ┌───────────────────────┐                              │
+│     │ 원본 HDR + Bloom      │                              │
+│     │ ─────────────────▶    │ → 완성!                      │
+│     │ Tone Mapping          │                              │
+│     └───────────────────────┘                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// Step 1: Bright Pass - 밝은 부분만 추출
+float4 PS_BrightPass(float2 uv : TEXCOORD) : SV_Target {
+    float3 color = HDRTexture.Sample(sampler, uv).rgb;
+
+    // 밝기 계산 (Luminance)
+    float brightness = dot(color, float3(0.2126, 0.7152, 0.0722));
+
+    // 임계값 이상만 통과 (Soft Threshold)
+    float threshold = 1.0;
+    float softKnee = 0.5;
+    float soft = brightness - threshold + softKnee;
+    soft = clamp(soft, 0, 2 * softKnee);
+    soft = soft * soft / (4 * softKnee + 0.00001);
+
+    float contribution = max(soft, brightness - threshold) / max(brightness, 0.00001);
+
+    return float4(color * contribution, 1.0);
+}
+
+// Step 2: Downsample + Blur (여러 해상도로 반복)
+// 1920x1080 -> 960x540 -> 480x270 -> 240x135 -> ...
+float4 PS_Downsample(float2 uv : TEXCOORD) : SV_Target {
+    // 13-tap 필터로 부드럽게 다운샘플
+    float3 color = float3(0, 0, 0);
+
+    // 중앙 (4 샘플)
+    color += Texture.Sample(sampler, uv + texelSize * float2(-1, -1)).rgb * 0.0625;
+    color += Texture.Sample(sampler, uv + texelSize * float2(1, -1)).rgb * 0.0625;
+    color += Texture.Sample(sampler, uv + texelSize * float2(-1, 1)).rgb * 0.0625;
+    color += Texture.Sample(sampler, uv + texelSize * float2(1, 1)).rgb * 0.0625;
+
+    // ... 추가 샘플들
+
+    return float4(color, 1.0);
+}
+
+// Step 3: Gaussian Blur (2-pass: 가로 + 세로)
+static const float weights[5] = { 0.227, 0.194, 0.122, 0.054, 0.016 };
+
+float4 PS_BlurHorizontal(float2 uv : TEXCOORD) : SV_Target {
+    float3 color = Texture.Sample(sampler, uv).rgb * weights[0];
+
+    for (int i = 1; i < 5; i++) {
+        float offset = i * texelSize.x;
+        color += Texture.Sample(sampler, uv + float2(offset, 0)).rgb * weights[i];
+        color += Texture.Sample(sampler, uv - float2(offset, 0)).rgb * weights[i];
+    }
+
+    return float4(color, 1.0);
+}
+
+// Step 4: 최종 합성
+float4 PS_Composite(float2 uv : TEXCOORD) : SV_Target {
+    float3 hdrScene = SceneTexture.Sample(sampler, uv).rgb;
+
+    // 여러 해상도의 Bloom 합성 (더 자연스러운 결과)
+    float3 bloom = float3(0, 0, 0);
+    bloom += BloomMip0.Sample(sampler, uv).rgb * 0.5;   // 1/2 해상도
+    bloom += BloomMip1.Sample(sampler, uv).rgb * 0.3;   // 1/4 해상도
+    bloom += BloomMip2.Sample(sampler, uv).rgb * 0.15;  // 1/8 해상도
+    bloom += BloomMip3.Sample(sampler, uv).rgb * 0.05;  // 1/16 해상도
+
+    float3 final = hdrScene + bloom * bloomIntensity;
+
+    return float4(final, 1.0);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 자동 노출 (Auto Exposure)</h2>
+            <div class="q">어두운 동굴에서 밝은 밖으로 나가면 잠깐 눈부시잖아?</div>
+            <div class="a">
+                <p>실제 눈의 <span class="highlight">명순응/암순응</span>을 시뮬레이션합니다.</p>
+                <div class="diagram">
+자동 노출 (Eye Adaptation):
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   [동굴 내부]                [동굴 출구]               [외부]│
+│                                                             │
+│   평균 밝기: 0.01           평균 밝기: 5.0          평균 밝기: 100.0
+│        │                        │                        │  │
+│        ▼                        ▼                        ▼  │
+│   노출: 높음               노출: 점진 감소          노출: 낮음│
+│   (어두운 곳 밝게)          (적응 중)            (밝은 곳 어둡게)
+│                                                             │
+│   시간에 따른 노출 변화:                                     │
+│                                                             │
+│   노출 ▲                                                    │
+│    8.0 │████                                                │
+│    4.0 │    ████                                            │
+│    2.0 │        ████████                                    │
+│    1.0 │                ████████████████████████            │
+│        └────────────────────────────────────────────▶ 시간  │
+│         동굴    출구     밖 (눈부심 -> 적응)                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 자동 노출 구현
+
+// 1. 화면 평균 밝기 계산 (Compute Shader로 리덕션)
+[numthreads(8, 8, 1)]
+void CS_CalcLuminance(uint3 id : SV_DispatchThreadID) {
+    float3 color = HDRTexture[id.xy].rgb;
+
+    // 로그 평균 사용 (기하 평균에 가까움)
+    float luminance = dot(color, float3(0.2126, 0.7152, 0.0722));
+    float logLuminance = log(luminance + 0.0001);
+
+    // 공유 메모리로 리덕션
+    InterlockedAdd(g_SumLogLuminance, asuint(logLuminance));
+}
+
+// 2. 시간에 따른 노출 적응
+float CalculateExposure(float avgLuminance, float prevExposure, float deltaTime) {
+    // 목표 노출 계산 (18% 그레이 기준)
+    float targetExposure = 0.18 / avgLuminance;
+
+    // 밝은 곳 -> 어두운 곳: 천천히 적응 (암순응)
+    // 어두운 곳 -> 밝은 곳: 빠르게 적응 (명순응)
+    float adaptSpeed = (targetExposure > prevExposure) ? 0.5 : 2.0;
+
+    // 부드럽게 보간
+    float newExposure = prevExposure + (targetExposure - prevExposure)
+                        * (1.0 - exp(-deltaTime * adaptSpeed));
+
+    // 범위 제한
+    return clamp(newExposure, 0.01, 10.0);
+}
+
+// 3. 최종 적용
+float4 PS_FinalToneMap(float2 uv : TEXCOORD) : SV_Target {
+    float3 hdr = HDRTexture.Sample(sampler, uv).rgb;
+
+    // 자동 계산된 노출 적용
+    hdr *= g_AutoExposure;
+
+    // 톤 매핑
+    float3 ldr = ACESFilmTonemap(hdr);
+
+    return float4(ldr, 1.0);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 실제 게임 적용 사례</h2>
+            <div class="q">실제 게임에서는 어떻게 써?</div>
+            <div class="a">
+                <div class="diagram">
+실제 게임 HDR/Bloom 설정 예시:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [환경별 설정]                                               │
+│                                                             │
+│  야외 맑은 날:                                               │
+│  - 태양 밝기: 100.0                                         │
+│  - 하늘 밝기: 2.0                                           │
+│  - Bloom Threshold: 1.5                                     │
+│  - Bloom Intensity: 0.3                                     │
+│                                                             │
+│  실내 (창문 있음):                                           │
+│  - 조명 밝기: 0.8                                           │
+│  - 창문 밖: 5.0 (상대적으로 밝음)                            │
+│  - Bloom Threshold: 1.0                                     │
+│  - Bloom Intensity: 0.5                                     │
+│                                                             │
+│  네온사인 거리:                                              │
+│  - 배경 밝기: 0.1                                           │
+│  - 네온 밝기: 10.0 (강한 Bloom!)                            │
+│  - Bloom Threshold: 0.8                                     │
+│  - Bloom Intensity: 0.8                                     │
+│                                                             │
+│  [성능 최적화]                                               │
+│                                                             │
+│  PC (High):                                                 │
+│  - Bloom Mip: 5단계 (1/2 ~ 1/32)                           │
+│  - Blur Passes: 3회                                         │
+│  - 해상도: 풀 해상도                                         │
+│                                                             │
+│  모바일 (Low):                                               │
+│  - Bloom Mip: 3단계 (1/4 ~ 1/16)                           │
+│  - Blur Passes: 1회                                         │
+│  - 해상도: 절반 해상도                                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>HDR</strong> = 8비트(0~255) 대신 16비트 float로 높은 밝기 저장</li>
+                <li><strong>톤 매핑</strong> = HDR을 모니터 범위(0~1)로 압축 (Reinhard, ACES)</li>
+                <li><strong>Bloom</strong> = 밝은 부분 추출 -> 다운샘플 -> 블러 -> 합성</li>
+                <li><strong>자동 노출</strong> = 화면 평균 밝기에 따라 노출 자동 조절</li>
+                <li><strong>성능</strong> = 다운샘플로 블러 비용 절감, 모바일은 단계 축소</li>
+                <li><strong>활용</strong> = 태양, 폭발, 네온 등 밝은 광원에 필수</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-gpu/">&larr; GPU / 그래픽스</a>
+            <a href="../subsurface-scattering/">피부 렌더링 (SSS) &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

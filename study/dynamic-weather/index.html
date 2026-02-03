@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>동적 날씨 시스템 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #7B1FA2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #F3E5F5; }
+        .q { background: #F3E5F5; border-left: 4px solid #9C27B0; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #7B1FA2; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #F3E5F5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #7B1FA2; }
+        .key-point { background: #E1BEE7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #4A148C; }
+        .warning { background: #FFCDD2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B71C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+        .summary-box { background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #9C27B0; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-gpu/" class="back-link">&larr; GPU / 그래픽스</a>
+
+        <div class="header">
+            <h1>동적 날씨 시스템</h1>
+            <p>눈/비가 실시간으로 쌓이는 효과</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 날씨 시스템 개요</h2>
+            <div class="q">게임에서 날씨 효과는 어떤 것들이 있어?</div>
+            <div class="a">
+                <p>비, 눈, 안개, 바람 등 다양한 요소가 복합적으로 작용합니다.</p>
+                <div class="diagram">
+날씨 시스템 구성 요소:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [파티클 시스템]                                             │
+│  - 빗방울, 눈송이 렌더링                                    │
+│  - 수천~수만 개 파티클 관리                                 │
+│  - GPU 파티클로 성능 최적화                                 │
+│                                                             │
+│  [머티리얼 변화]                                             │
+│  - Wetness (젖음 효과)                                      │
+│  - Snow Accumulation (눈 쌓임)                              │
+│  - 노말맵 변화, 스펙큘러 증가                               │
+│                                                             │
+│  [포스트 프로세스]                                           │
+│  - 화면에 물방울 맺힘                                       │
+│  - 렌즈 플레어 변화                                         │
+│  - 안개/블러 효과                                           │
+│                                                             │
+│  [환경 변화]                                                 │
+│  - 스카이박스/라이팅 변경                                   │
+│  - 앰비언트 사운드                                          │
+│  - 바람에 의한 식생 움직임                                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+날씨 상태 전이:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│    맑음 -----> 흐림 -----> 비 -----> 폭풍                   │
+│      ^                      |                               │
+│      |                      v                               │
+│      +-------- 눈 <-------- +                               │
+│                                                             │
+│  각 전이 시 서서히 블렌딩 (1~5분)                           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 젖음 효과 (Wetness)</h2>
+            <div class="q">비 오면 땅이 젖어 보이는 건 어떻게 해?</div>
+            <div class="a">
+                <p><span class="highlight">Wetness 파라미터</span>로 머티리얼 속성을 동적으로 변경합니다.</p>
+                <div class="diagram">
+젖음 효과의 물리적 변화:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [마른 상태]                                                 │
+│  - Albedo: 밝은 색상                                        │
+│  - Roughness: 높음 (거친 표면)                              │
+│  - 반사: 낮음                                               │
+│                                                             │
+│  [젖은 상태]                                                 │
+│  - Albedo: 어두워짐 (물이 빛 흡수)                          │
+│  - Roughness: 낮아짐 (물막이 표면을 매끄럽게)               │
+│  - 반사: 높아짐 (물 표면 반사)                              │
+│                                                             │
+│  물이 표면의 미세한 틈을 채움:                              │
+│                                                             │
+│    마른 표면          젖은 표면                              │
+│    /\/\/\/\           ~~~~~~~~                              │
+│    빛 난반사          빛 정반사                              │
+│    (거침)             (매끄러움)                            │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// Wetness 셰이더 구현
+
+cbuffer WeatherBuffer {
+    float Wetness;      // 0 = 건조, 1 = 완전히 젖음
+    float RainIntensity;
+    float TimeSinceRain; // 비 그친 후 경과 시간
+};
+
+float4 PS_WetSurface(VS_OUTPUT input) : SV_Target {
+    // 기본 머티리얼
+    float3 albedo = AlbedoTex.Sample(sampler, input.UV).rgb;
+    float roughness = RoughnessTex.Sample(sampler, input.UV).r;
+    float3 normal = NormalTex.Sample(sampler, input.UV).rgb;
+
+    // 노출 정도 (위를 향하면 더 젖음)
+    float3 worldUp = float3(0, 1, 0);
+    float exposure = saturate(dot(input.WorldNormal, worldUp));
+    float localWetness = Wetness * exposure;
+
+    // 젖음에 따른 변화
+    // 1. Albedo 어두워짐 (물이 빛 흡수)
+    float darkenFactor = lerp(1.0, 0.6, localWetness);
+    albedo *= darkenFactor;
+
+    // 2. Roughness 감소 (표면이 매끄러워짐)
+    // 젖으면 roughness가 낮아지지만, 완전히 0이 되진 않음
+    float wetRoughness = lerp(roughness, 0.1, localWetness);
+
+    // 3. Fresnel 효과 증가 (물 표면 반사)
+    float3 V = normalize(CameraPos - input.WorldPos);
+    float fresnel = pow(1.0 - saturate(dot(normal, V)), 5.0);
+    float3 reflectColor = SkyboxTex.Sample(sampler, reflect(-V, normal)).rgb;
+
+    // 4. 웅덩이 효과 (노이즈로 불규칙하게)
+    float puddle = PuddleTex.Sample(sampler, input.UV * 0.1).r;
+    float puddleMask = saturate((localWetness - 0.7) * 5.0) * puddle;
+
+    // 웅덩이에서는 완전한 반사
+    float3 finalColor = lerp(
+        CalculatePBR(albedo, wetRoughness, normal),
+        reflectColor,
+        puddleMask * 0.8 + fresnel * localWetness * 0.3
+    );
+
+    return float4(finalColor, 1.0);
+}
+
+// 마르는 과정 (시간에 따른 Wetness 감소)
+float CalculateWetness(float rainIntensity, float timeSinceRain, float exposure) {
+    // 비 오는 동안 젖음 증가
+    float targetWetness = rainIntensity * exposure;
+
+    // 비 그치면 서서히 마름
+    float dryingRate = 0.1;  // 10분에 완전히 마름
+    float currentWetness = targetWetness - timeSinceRain * dryingRate;
+
+    return saturate(currentWetness);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 눈 쌓임 효과 (Snow Accumulation)</h2>
+            <div class="q">눈이 점점 쌓이는 효과는?</div>
+            <div class="a">
+                <p><span class="highlight">Height Map 블렌딩</span>과 <span class="highlight">노말 변형</span>으로 구현합니다.</p>
+                <div class="diagram">
+눈 쌓임 시스템:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [쌓이는 위치 결정]                                          │
+│                                                             │
+│        * * * * * * *  눈 내림                               │
+│        v v v v v v v                                        │
+│                                                             │
+│            +++++                                            │
+│           +     +   <- 위를 향한 면만 쌓임                  │
+│          +       +                                          │
+│          |       |   <- 수직면은 안 쌓임                    │
+│          |       |                                          │
+│          +-------+                                          │
+│                                                             │
+│  accumulation = dot(normal, upVector) > 0.7 ? snow : 0      │
+│                                                             │
+│  [높이에 따른 쌓임]                                          │
+│                                                             │
+│  Height Map + Snow Depth = 새로운 높이                      │
+│  Tessellation으로 실제 볼륨감 표현                          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 눈 쌓임 셰이더
+
+cbuffer SnowBuffer {
+    float SnowAmount;       // 0~1 전체 눈 양
+    float SnowHeight;       // 최대 쌓이는 높이
+    float3 SnowColor;       // 눈 색상
+};
+
+// 눈 쌓일 수 있는지 판정
+float CalculateSnowCoverage(float3 worldNormal, float3 worldPos) {
+    // 1. 노말이 위를 향하는 정도
+    float upFacing = saturate(dot(worldNormal, float3(0, 1, 0)));
+
+    // 2. 임계값 이상만 눈 쌓임 (기울기 제한)
+    float threshold = 0.5;  // 약 60도 이상
+    float coverage = smoothstep(threshold, threshold + 0.2, upFacing);
+
+    // 3. 높이에 따른 가중치 (높은 곳에 더 많이)
+    float heightFactor = saturate(worldPos.y / 100.0);
+    coverage *= lerp(0.8, 1.2, heightFactor);
+
+    // 4. 노이즈로 자연스럽게
+    float noise = SnowNoiseTex.Sample(sampler, worldPos.xz * 0.01).r;
+    coverage *= lerp(0.7, 1.3, noise);
+
+    return coverage * SnowAmount;
+}
+
+float4 PS_SnowSurface(VS_OUTPUT input) : SV_Target {
+    float snowCoverage = CalculateSnowCoverage(input.WorldNormal, input.WorldPos);
+
+    // 원래 머티리얼
+    float3 baseAlbedo = AlbedoTex.Sample(sampler, input.UV).rgb;
+    float baseRoughness = RoughnessTex.Sample(sampler, input.UV).r;
+    float3 baseNormal = NormalTex.Sample(sampler, input.UV).rgb;
+
+    // 눈 머티리얼
+    float3 snowAlbedo = SnowColor;  // 거의 흰색
+    float snowRoughness = 0.8;      // 약간 거침 (반짝이)
+
+    // 눈 노말 (미세한 굴곡)
+    float3 snowNormal = SnowNormalTex.Sample(sampler, input.UV * 2.0).rgb;
+
+    // 블렌딩
+    float3 finalAlbedo = lerp(baseAlbedo, snowAlbedo, snowCoverage);
+    float finalRoughness = lerp(baseRoughness, snowRoughness, snowCoverage);
+    float3 finalNormal = lerp(baseNormal, snowNormal, snowCoverage);
+
+    // 눈 반짝임 (Sparkle) - 각도에 따라 반짝
+    float sparkle = 0.0;
+    if (snowCoverage > 0.5) {
+        float3 H = normalize(LightDir + ViewDir);
+        float NdotH = saturate(dot(finalNormal, H));
+        float sparkleMask = SparkleNoiseTex.Sample(sampler, input.UV * 50.0).r;
+        sparkle = pow(NdotH, 500.0) * sparkleMask * 2.0;
+    }
+
+    float3 lighting = CalculatePBR(finalAlbedo, finalRoughness, finalNormal);
+    return float4(lighting + sparkle, 1.0);
+}
+
+// Tessellation으로 실제 볼륨 표현
+[domain("tri")]
+DS_OUTPUT DS_SnowTessellation(
+    HS_CONSTANT_OUTPUT patchConst,
+    float3 bary : SV_DomainLocation,
+    const OutputPatch<HS_OUTPUT, 3> patch
+) {
+    DS_OUTPUT output;
+
+    // 보간된 위치/노말
+    float3 pos = BarycentricLerp(patch[0].Pos, patch[1].Pos, patch[2].Pos, bary);
+    float3 normal = BarycentricLerp(patch[0].Normal, patch[1].Normal, patch[2].Normal, bary);
+
+    // 눈 높이 추가
+    float snowCoverage = CalculateSnowCoverage(normal, pos);
+    pos += normal * snowCoverage * SnowHeight;
+
+    output.Position = mul(float4(pos, 1), ViewProj);
+    return output;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 비/눈 파티클 시스템</h2>
+            <div class="q">빗방울은 어떻게 만들어?</div>
+            <div class="a">
+                <p><span class="highlight">GPU 파티클</span>로 수만 개의 입자를 효율적으로 렌더링합니다.</p>
+                <div class="code-block">
+// GPU 파티클 시스템 (Compute Shader)
+
+struct RainParticle {
+    float3 Position;
+    float3 Velocity;
+    float Life;
+    float Size;
+};
+
+RWStructuredBuffer<RainParticle> Particles;
+
+[numthreads(256, 1, 1)]
+void CS_UpdateRain(uint3 id : SV_DispatchThreadID) {
+    RainParticle p = Particles[id.x];
+
+    if (p.Life <= 0) {
+        // 리스폰: 카메라 주변 위에서 생성
+        p.Position = CameraPos + float3(
+            (Random(id.x) - 0.5) * SpawnRadius,
+            SpawnHeight,
+            (Random(id.x + 1) - 0.5) * SpawnRadius
+        );
+        p.Velocity = float3(WindX, -FallSpeed, WindZ);
+        p.Life = 1.0;
+        p.Size = lerp(0.01, 0.03, Random(id.x + 2));
+    }
+
+    // 물리 업데이트
+    p.Velocity.y -= Gravity * DeltaTime;
+    p.Velocity.xz += Wind.xz * DeltaTime;
+    p.Position += p.Velocity * DeltaTime;
+
+    // 지면 충돌 (스플래시 생성)
+    float groundHeight = SampleHeightMap(p.Position.xz);
+    if (p.Position.y < groundHeight) {
+        // 스플래시 파티클 큐에 추가
+        AppendSplash(p.Position, p.Size);
+        p.Life = 0;
+    }
+
+    Particles[id.x] = p;
+}
+
+// 빗방울 렌더링 (Geometry Shader로 빌보드/스트레치)
+[maxvertexcount(4)]
+void GS_RainDrop(point VS_OUTPUT input[1], inout TriangleStream<GS_OUTPUT> stream) {
+    RainParticle p = Particles[input[0].ParticleID];
+
+    // 속도 방향으로 스트레치 (빗줄기 표현)
+    float3 velocity = normalize(p.Velocity);
+    float stretchLength = length(p.Velocity) * 0.02;
+
+    float3 top = p.Position;
+    float3 bottom = p.Position - velocity * stretchLength;
+
+    // 카메라를 향하는 빌보드
+    float3 right = normalize(cross(velocity, CameraDir)) * p.Size;
+
+    // 쿼드 생성
+    EmitVertex(bottom - right);
+    EmitVertex(bottom + right);
+    EmitVertex(top - right);
+    EmitVertex(top + right);
+}
+
+// 화면에 물방울 맺힘 효과 (포스트 프로세스)
+float4 PS_ScreenRainDrops(float2 uv : TEXCOORD) : SV_Target {
+    float2 dropUV = uv * float2(16, 9);  // 타일링
+
+    // 물방울 노이즈
+    float dropMask = RainDropTex.Sample(sampler, dropUV + Time * 0.1).r;
+
+    // 물방울에서 굴절
+    float2 distortion = ddx(dropMask) * 0.02;
+
+    float3 scene = SceneTex.Sample(sampler, uv + distortion * dropMask).rgb;
+
+    // 물방울 하이라이트
+    float highlight = pow(dropMask, 4.0) * 0.3;
+
+    return float4(scene + highlight, 1.0);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 날씨 전환과 최적화</h2>
+            <div class="q">날씨가 바뀔 때 자연스럽게 하려면?</div>
+            <div class="a">
+                <p><span class="key-point">상태 보간</span>과 <span class="key-point">LOD 시스템</span>이 필요합니다.</p>
+                <div class="diagram">
+날씨 전환 시스템:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  struct WeatherState {                                      │
+│      float CloudCoverage;    // 구름량 0~1                  │
+│      float RainIntensity;    // 비 강도                     │
+│      float SnowIntensity;    // 눈 강도                     │
+│      float3 FogColor;        // 안개 색상                   │
+│      float FogDensity;       // 안개 밀도                   │
+│      float3 LightColor;      // 태양광 색상                 │
+│      float LightIntensity;   // 광량                        │
+│      float2 WindDirection;   // 바람 방향                   │
+│      float WindStrength;     // 바람 세기                   │
+│  };                                                         │
+│                                                             │
+│  전환 예시 (맑음 -> 비):                                     │
+│                                                             │
+│  시간:    0분    2분    5분    8분    10분                  │
+│  ─────────────────────────────────────────                  │
+│  구름:    0.1 -> 0.3 -> 0.7 -> 0.9 -> 0.95                 │
+│  비:      0.0 -> 0.0 -> 0.2 -> 0.6 -> 1.0                  │
+│  안개:    0.0 -> 0.1 -> 0.2 -> 0.3 -> 0.4                  │
+│  광량:    1.0 -> 0.9 -> 0.7 -> 0.5 -> 0.4                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+성능 최적화:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  1. 파티클 LOD                                               │
+│     - 가까움: 개별 빗방울 (GPU 파티클)                      │
+│     - 중간: 텍스처 시트 (빌보드)                            │
+│     - 멀리: 안개로 대체                                     │
+│                                                             │
+│  2. 젖음 영역 제한                                           │
+│     - 플레이어 주변만 상세 젖음                             │
+│     - 먼 곳은 전체 Wetness로 근사                          │
+│                                                             │
+│  3. 눈 쌓임 베이킹                                           │
+│     - 정적 오브젝트는 미리 계산                             │
+│     - 동적 오브젝트만 실시간                                │
+│                                                             │
+│  4. 셰이더 변형 최소화                                       │
+│     - Uber 셰이더로 통합                                    │
+│     - 분기 대신 곱셈으로 효과 조절                          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Wetness</strong> = Albedo 어둡게 + Roughness 낮게 + 반사 증가</li>
+                <li><strong>Snow Accumulation</strong> = 위를 향한 면에만 눈 텍스처 블렌딩</li>
+                <li><strong>GPU 파티클</strong> = Compute Shader로 수만 개 빗방울/눈송이 처리</li>
+                <li><strong>스플래시</strong> = 지면 충돌 시 파생 파티클 생성</li>
+                <li><strong>화면 물방울</strong> = 포스트 프로세스로 렌즈 효과</li>
+                <li><strong>최적화</strong> = LOD, 영역 제한, 정적 베이킹으로 성능 확보</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../cascaded-shadow-maps/">&larr; Cascaded Shadow Maps</a>
+            <a href="../pbr-rendering/">PBR 렌더링 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

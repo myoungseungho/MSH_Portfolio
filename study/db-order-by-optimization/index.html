@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORDER BY 최적화 - DB/캐시 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #2E7D32; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #C8E6C9; }
+        .q { background: #E8F5E9; border-left: 4px solid #4CAF50; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #2E7D32; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #E8F5E9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2E7D32; }
+        .key-point { background: #C8E6C9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1B5E20; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #4CAF50; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #F1F8E9; border: 2px solid #C8E6C9; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #33691E; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">&larr; DB / 캐시</a>
+
+        <div class="header">
+            <h1>인벤토리 정렬이 왜 이렇게 느린 걸까?</h1>
+            <p>ORDER BY 최적화의 모든 것</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. ORDER BY의 숨겨진 비용</h2>
+            <div class="q">인벤토리 목록 조회가 5초나 걸려요. 왜죠?</div>
+            <div class="a">
+                <p>실제 게임에서 자주 보는 상황입니다:</p>
+                <div class="code-block">
+-- 인벤토리 조회 (100만 유저, 유저당 평균 500개 아이템)
+SELECT item_id, item_name, quantity, grade, acquired_date
+FROM inventory
+WHERE user_id = 12345
+ORDER BY grade DESC, acquired_date DESC
+LIMIT 50;</div>
+                <p>이 쿼리가 느린 이유를 분석해보면:</p>
+                <div class="diagram">
+ORDER BY 내부 동작 - Filesort 발생:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  1단계: WHERE로 필터링                                      │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ user_id = 12345인 행 추출                          │     │
+│  │ → 500개 행 (메모리로 로드)                         │     │
+│  └──────────────────────────────────────────────────┘     │
+│                    ▼                                       │
+│  2단계: Filesort (문제 발생!)                              │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ 500개 행을 grade DESC, acquired_date DESC로 정렬   │     │
+│  │                                                    │     │
+│  │ 메모리 충분? → <span class="key-point">메모리 정렬</span> (빠름)                │     │
+│  │ 메모리 부족? → <span class="warning">디스크 정렬</span> (느림!)                │     │
+│  │                                                    │     │
+│  │ sort_buffer_size = 256KB (기본값)                  │     │
+│  │ 500행 × 평균 200바이트 = 100KB → 메모리 OK         │     │
+│  └──────────────────────────────────────────────────┘     │
+│                    ▼                                       │
+│  3단계: LIMIT 적용                                         │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ 정렬된 500개 중 상위 50개만 반환                    │     │
+│  │ → <span class="warning">450개는 정렬해놓고 버림!</span>                        │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+
+<span class="warning">핵심 문제: 인덱스 없이 ORDER BY → 전체 정렬 후 LIMIT</span></div>
+            </div>
+
+            <div class="q">Filesort가 정확히 뭔가요?</div>
+            <div class="a">
+                <p><span class="highlight">Filesort</span>는 "인덱스를 사용할 수 없어서 별도로 정렬한다"는 의미입니다:</p>
+                <div class="diagram">
+MySQL의 두 가지 정렬 방식:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  1. Index Scan (이상적)                                    │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ 인덱스가 이미 정렬되어 있음                         │     │
+│  │ B+Tree 리프 노드를 순서대로 읽기만 하면 됨          │     │
+│  │                                                    │     │
+│  │ Index: (user_id, grade DESC, acquired_date DESC)  │     │
+│  │        ↓                                          │     │
+│  │   [12345, S급, 2024-01-15] → 1번째 결과           │     │
+│  │   [12345, S급, 2024-01-10] → 2번째 결과           │     │
+│  │   [12345, A급, 2024-01-20] → 3번째 결과           │     │
+│  │   ...                                             │     │
+│  │   50개 읽으면 <span class="key-point">즉시 종료!</span>                        │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+│  2. Filesort (비효율적)                                    │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ 인덱스 순서 ≠ ORDER BY 순서                        │     │
+│  │                                                    │     │
+│  │ a) Two-pass (old):                                │     │
+│  │    1차: rowid + 정렬키만 정렬                      │     │
+│  │    2차: rowid로 실제 데이터 다시 읽기              │     │
+│  │    → <span class="warning">Random I/O 2배</span>                              │     │
+│  │                                                    │     │
+│  │ b) Single-pass (new, max_length_for_sort_data):   │     │
+│  │    필요한 컬럼 전부 복사 → 정렬 → 반환             │     │
+│  │    → <span class="warning">메모리 사용량 증가</span>                          │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 인덱스로 ORDER BY 제거하기</h2>
+            <div class="q">인덱스만 잘 만들면 정렬 안 해도 되나요?</div>
+            <div class="a">
+                <p>맞습니다. <span class="key-point">인덱스 순서 = ORDER BY 순서</span>면 정렬이 필요 없습니다:</p>
+                <div class="code-block">
+-- 기존 인덱스 (정렬에 도움 안 됨)
+CREATE INDEX idx_user ON inventory(user_id);
+
+-- 개선된 복합 인덱스 (정렬까지 커버)
+CREATE INDEX idx_user_grade_date ON inventory(
+    user_id,              -- WHERE 조건
+    grade DESC,           -- ORDER BY 첫 번째 컬럼
+    acquired_date DESC    -- ORDER BY 두 번째 컬럼
+);
+
+-- 실행 계획 비교
+EXPLAIN SELECT item_id, item_name, quantity, grade, acquired_date
+FROM inventory
+WHERE user_id = 12345
+ORDER BY grade DESC, acquired_date DESC
+LIMIT 50;</div>
+                <div class="diagram">
+실행 계획 비교:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  Before (idx_user만 있을 때):                              │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ type: ref                                         │     │
+│  │ key: idx_user                                     │     │
+│  │ rows: 500                                         │     │
+│  │ Extra: <span class="warning">Using filesort</span>  ← 문제!                   │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+│  After (idx_user_grade_date):                              │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ type: ref                                         │     │
+│  │ key: idx_user_grade_date                          │     │
+│  │ rows: 50  ← LIMIT 덕분에 50개만 스캔!             │     │
+│  │ Extra: <span class="key-point">Using index</span>  ← 정렬 불필요!               │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+│  성능 차이:                                                │
+│  • Before: 500행 읽기 + 정렬 + 50개 추출 = <span class="warning">15ms</span>          │
+│  • After:  50행만 읽기 (이미 정렬됨) = <span class="key-point">0.5ms</span>            │
+│  → <span class="key-point">30배 빨라짐!</span>                                         │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">인덱스 컬럼 순서가 중요한가요?</div>
+            <div class="a">
+                <p><span class="warning">매우 중요합니다!</span> 순서가 틀리면 인덱스를 못 씁니다:</p>
+                <div class="diagram">
+인덱스 컬럼 순서의 중요성:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  인덱스: (user_id, grade, acquired_date)                   │
+│                                                            │
+│  ✅ 사용 가능한 ORDER BY:                                   │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ ORDER BY user_id                                  │     │
+│  │ ORDER BY user_id, grade                           │     │
+│  │ ORDER BY user_id, grade, acquired_date            │     │
+│  │ WHERE user_id=? ORDER BY grade                    │     │
+│  │ WHERE user_id=? ORDER BY grade, acquired_date     │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+│  ❌ 사용 불가능한 ORDER BY:                                 │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ ORDER BY grade               ← user_id 건너뜀     │     │
+│  │ ORDER BY acquired_date       ← 앞 컬럼들 건너뜀   │     │
+│  │ ORDER BY grade, user_id      ← 순서 틀림         │     │
+│  │ WHERE user_id=? ORDER BY acquired_date           │     │
+│  │                              ↑ grade 건너뜀       │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+│  <span class="key-point">규칙: 인덱스의 왼쪽부터 연속으로 사용해야 함</span>               │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+-- 잘못된 예시: grade를 건너뛰고 acquired_date로 정렬
+SELECT * FROM inventory
+WHERE user_id = 12345
+ORDER BY acquired_date DESC;  -- Filesort 발생!
+
+-- 해결: 별도 인덱스 생성
+CREATE INDEX idx_user_date ON inventory(user_id, acquired_date DESC);
+
+-- 또는 쿼리 변경 (grade도 ORDER BY에 포함)
+SELECT * FROM inventory
+WHERE user_id = 12345
+ORDER BY grade DESC, acquired_date DESC;  -- 인덱스 사용 가능</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. ASC/DESC 혼합 정렬</h2>
+            <div class="q">grade는 DESC, acquired_date는 ASC로 정렬하면요?</div>
+            <div class="a">
+                <p>MySQL 8.0 이전에는 <span class="warning">큰 문제</span>였습니다:</p>
+                <div class="diagram">
+ASC/DESC 혼합 정렬 문제:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  쿼리: ORDER BY grade DESC, acquired_date ASC              │
+│                                                            │
+│  MySQL 5.7 이하:                                           │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ 인덱스: (user_id, grade, acquired_date)           │     │
+│  │         전부 ASC로 저장됨                          │     │
+│  │                                                    │     │
+│  │ 요청: grade DESC + acquired_date ASC              │     │
+│  │       → <span class="warning">인덱스 사용 불가, Filesort!</span>                │     │
+│  │                                                    │     │
+│  │ Backward scan도 불가:                             │     │
+│  │ grade DESC + acquired_date DESC는 가능            │     │
+│  │ grade DESC + acquired_date <span class="warning">ASC</span>는 불가능          │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+│  MySQL 8.0 이상:                                           │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ <span class="key-point">Descending Index 지원!</span>                          │     │
+│  │                                                    │     │
+│  │ CREATE INDEX idx_mixed ON inventory(              │     │
+│  │     user_id,                                      │     │
+│  │     grade DESC,                                   │     │
+│  │     acquired_date ASC                             │     │
+│  │ );                                                │     │
+│  │                                                    │     │
+│  │ → 인덱스가 해당 순서로 정렬되어 저장됨            │     │
+│  │ → ORDER BY grade DESC, acquired_date ASC 최적화  │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+-- MySQL 8.0+ Descending Index
+CREATE INDEX idx_inventory_sort ON inventory(
+    user_id,
+    grade DESC,          -- 높은 등급 먼저
+    acquired_date ASC    -- 같은 등급 내에서 오래된 것 먼저
+);
+
+-- MSSQL은 원래부터 지원
+CREATE INDEX idx_inventory_sort ON inventory(
+    user_id,
+    grade DESC,
+    acquired_date ASC
+);
+
+-- PostgreSQL 8.3+ 지원
+CREATE INDEX idx_inventory_sort ON inventory(
+    user_id,
+    grade DESC,
+    acquired_date ASC
+);</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. LIMIT와 ORDER BY의 함정</h2>
+            <div class="q">LIMIT 쓰면 상위 N개만 정렬하나요?</div>
+            <div class="a">
+                <p><span class="warning">아닙니다!</span> 인덱스 없으면 전체 정렬 후 N개 추출합니다:</p>
+                <div class="diagram">
+LIMIT의 동작 방식:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  인덱스 없는 경우:                                          │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ SELECT * FROM items ORDER BY price DESC LIMIT 10 │     │
+│  │                                                    │     │
+│  │ 1. 전체 100만 행 스캔                             │     │
+│  │ 2. 100만 행 정렬 (Filesort)                       │     │
+│  │ 3. 상위 10개 반환                                 │     │
+│  │                                                    │     │
+│  │ <span class="warning">O(N log N) 정렬 비용 발생!</span>                       │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+│  인덱스 있는 경우:                                          │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ CREATE INDEX idx_price ON items(price DESC);      │     │
+│  │                                                    │     │
+│  │ 1. 인덱스에서 상위 10개 rowid 획득                │     │
+│  │ 2. 해당 행만 테이블에서 조회                      │     │
+│  │                                                    │     │
+│  │ <span class="key-point">O(LIMIT) = O(10) 상수 시간!</span>                      │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">OFFSET이 크면 왜 느려지나요?</div>
+            <div class="a">
+                <p><span class="warning">OFFSET N</span>은 "N개를 읽고 버린다"는 의미입니다:</p>
+                <div class="diagram">
+OFFSET의 성능 문제:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  LIMIT 50 OFFSET 10000 의 실제 동작:                       │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │                                                    │     │
+│  │ 1. 인덱스 스캔 시작                               │     │
+│  │    ↓                                              │     │
+│  │ 2. 1번째 ~ 10000번째 행 읽기 (그리고 버림!)       │     │
+│  │    ↓                                              │     │
+│  │ 3. 10001번째 ~ 10050번째 행 읽기 (반환)           │     │
+│  │                                                    │     │
+│  │ <span class="warning">총 10050행 읽고 10000행 버림!</span>                     │     │
+│  │                                                    │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+│  페이지 깊이별 성능:                                        │
+│  ┌───────────┬───────────┬───────────┐                   │
+│  │ 페이지     │ OFFSET    │ 읽는 행   │                   │
+│  ├───────────┼───────────┼───────────┤                   │
+│  │ 1페이지   │ 0         │ 50        │                   │
+│  │ 10페이지  │ 450       │ 500       │                   │
+│  │ 100페이지 │ 4950      │ 5000      │                   │
+│  │ 1000페이지│ 49950     │ <span class="warning">50000</span>     │                   │
+│  └───────────┴───────────┴───────────┘                   │
+│                                                            │
+│  <span class="warning">깊은 페이지일수록 기하급수적으로 느려짐!</span>                  │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+-- 느린 방식: 깊은 페이지
+SELECT * FROM inventory
+WHERE user_id = 12345
+ORDER BY acquired_date DESC
+LIMIT 50 OFFSET 10000;  -- 10050행 읽고 10000행 버림
+
+-- 빠른 방식 1: Keyset Pagination (커서 기반)
+-- 이전 페이지의 마지막 값을 기억
+SELECT * FROM inventory
+WHERE user_id = 12345
+  AND acquired_date < '2024-01-15 10:30:00'  -- 이전 마지막 값
+ORDER BY acquired_date DESC
+LIMIT 50;  -- 딱 50행만 읽음!
+
+-- 빠른 방식 2: Deferred Join
+SELECT i.*
+FROM inventory i
+INNER JOIN (
+    SELECT item_id
+    FROM inventory
+    WHERE user_id = 12345
+    ORDER BY acquired_date DESC
+    LIMIT 50 OFFSET 10000
+) AS subset ON i.item_id = subset.item_id
+ORDER BY i.acquired_date DESC;
+
+-- 인덱스만 스캔하고 필요한 50개만 테이블 조회</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 게임 인벤토리 실전 최적화</h2>
+            <div class="q">실제 게임에서는 어떻게 설계하나요?</div>
+            <div class="a">
+                <p>여러 정렬 기준을 지원해야 하는 인벤토리 설계:</p>
+                <div class="diagram">
+인벤토리 정렬 시나리오:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  유저가 선택할 수 있는 정렬 옵션:                           │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ 1. 최근 획득순     (acquired_date DESC)           │     │
+│  │ 2. 등급순         (grade DESC, acquired_date DESC)│     │
+│  │ 3. 이름순         (item_name ASC)                 │     │
+│  │ 4. 가격순         (sell_price DESC)               │     │
+│  │ 5. 장착 가능 레벨순 (required_level ASC)           │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+│  <span class="warning">문제: 모든 정렬에 인덱스를 만들면?</span>                       │
+│  → 인덱스 5개 × INSERT마다 5번 갱신 = 쓰기 성능 저하       │
+│                                                            │
+│  <span class="key-point">해결책: 핵심 정렬만 인덱스 + 나머지는 캐시</span>              │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+-- 핵심 인덱스 (자주 쓰는 정렬)
+CREATE INDEX idx_inv_recent ON inventory(user_id, acquired_date DESC);
+CREATE INDEX idx_inv_grade ON inventory(user_id, grade DESC, acquired_date DESC);
+
+-- 나머지 정렬은 애플리케이션 캐시로 처리
+class InventoryCache {
+private:
+    std::vector&lt;Item&gt; m_items;
+
+    // 정렬된 인덱스 벡터 (원본 데이터 참조)
+    std::vector&lt;size_t&gt; m_sortedByName;
+    std::vector&lt;size_t&gt; m_sortedByPrice;
+    std::vector&lt;size_t&gt; m_sortedByLevel;
+
+public:
+    void OnItemsLoaded(const std::vector&lt;Item&gt;&amp; items) {
+        m_items = items;
+
+        // 각 정렬 인덱스 미리 계산 (O(N log N))
+        m_sortedByName.resize(items.size());
+        std::iota(m_sortedByName.begin(), m_sortedByName.end(), 0);
+        std::sort(m_sortedByName.begin(), m_sortedByName.end(),
+            [&amp;](size_t a, size_t b) {
+                return items[a].name < items[b].name;
+            });
+
+        // 다른 정렬도 동일하게...
+    }
+
+    // 클라이언트가 정렬 변경 시: O(1) 인덱스 교체
+    const std::vector&lt;size_t&gt;&amp; GetSortedIndices(SortType type) {
+        switch (type) {
+            case SortType::Name:  return m_sortedByName;
+            case SortType::Price: return m_sortedByPrice;
+            // ...
+        }
+    }
+};</div>
+            </div>
+
+            <div class="q">아이템 추가/삭제 시 정렬은요?</div>
+            <div class="a">
+                <p>증분 업데이트로 전체 재정렬을 피합니다:</p>
+                <div class="code-block">
+class InventoryCache {
+    // 아이템 추가 시: O(log N) 삽입
+    void OnItemAdded(const Item&amp; item) {
+        size_t newIndex = m_items.size();
+        m_items.push_back(item);
+
+        // 이름순 정렬에 삽입 위치 찾기 (이진 탐색)
+        auto pos = std::lower_bound(
+            m_sortedByName.begin(),
+            m_sortedByName.end(),
+            newIndex,
+            [&amp;](size_t a, size_t b) {
+                return m_items[a].name < m_items[b].name;
+            });
+
+        m_sortedByName.insert(pos, newIndex);
+        // 다른 정렬도 동일...
+    }
+
+    // 아이템 삭제 시: O(N) - 인덱스 재조정 필요
+    // → 실제로는 삭제 플래그만 세우고 주기적 정리
+    void OnItemRemoved(uint64_t itemId) {
+        // 즉시 삭제 대신 마킹
+        auto it = std::find_if(m_items.begin(), m_items.end(),
+            [itemId](const Item&amp; i) { return i.id == itemId; });
+
+        if (it != m_items.end()) {
+            it->deleted = true;
+            m_deletedCount++;
+
+            // 삭제 비율 10% 초과시 정리
+            if (m_deletedCount > m_items.size() * 0.1) {
+                CompactAndRebuildIndices();
+            }
+        }
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. Covering Index로 극한 최적화</h2>
+            <div class="q">Covering Index가 뭔가요?</div>
+            <div class="a">
+                <p>SELECT에 필요한 <span class="key-point">모든 컬럼이 인덱스에 포함</span>되면 테이블 접근이 불필요합니다:</p>
+                <div class="diagram">
+일반 인덱스 vs Covering Index:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  일반 인덱스:                                              │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ Index (user_id, grade)                            │     │
+│  │    ↓                                              │     │
+│  │ [12345, S급] → rowid: 7823                        │     │
+│  │                  ↓                                │     │
+│  │           Table에서 전체 행 조회 ← <span class="warning">Random I/O!</span>   │     │
+│  │                  ↓                                │     │
+│  │           item_name, quantity 등 반환             │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+│  Covering Index:                                           │
+│  ┌──────────────────────────────────────────────────┐     │
+│  │ Index (user_id, grade, item_id, item_name, qty)   │     │
+│  │    ↓                                              │     │
+│  │ [12345, S급, 1001, "전설의검", 1]                 │     │
+│  │    ↓                                              │     │
+│  │ <span class="key-point">인덱스만으로 결과 반환!</span> (Table 접근 X)          │     │
+│  └──────────────────────────────────────────────────┘     │
+│                                                            │
+│  EXPLAIN 결과:                                             │
+│  Extra: <span class="key-point">Using index</span> ← 테이블 미접근                    │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+-- 쿼리 분석
+SELECT item_id, item_name, quantity, grade
+FROM inventory
+WHERE user_id = 12345
+ORDER BY grade DESC
+LIMIT 50;
+
+-- Covering Index 설계
+CREATE INDEX idx_inv_covering ON inventory(
+    user_id,        -- WHERE
+    grade DESC,     -- ORDER BY
+    item_id,        -- SELECT
+    item_name,      -- SELECT
+    quantity        -- SELECT
+);
+
+-- MySQL의 INCLUDE 문법 (8.0+)은 없지만, MSSQL은 지원
+CREATE INDEX idx_inv_covering ON inventory(user_id, grade DESC)
+INCLUDE (item_id, item_name, quantity);  -- 리프 노드에만 저장
+
+-- 성능 비교
+-- Before: 50 Index Lookups + 50 Table Lookups = 100 I/O
+-- After:  50 Index Lookups만 = 50 I/O (50% 감소)</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Filesort</strong>는 인덱스 미사용 시 발생하는 별도 정렬 작업</li>
+                <li><strong>ORDER BY 컬럼 = 인덱스 컬럼 순서</strong>여야 인덱스 사용 가능</li>
+                <li><strong>ASC/DESC 혼합</strong>은 MySQL 8.0+의 Descending Index로 해결</li>
+                <li><strong>LIMIT + OFFSET</strong>은 깊은 페이지에서 느림 → Keyset Pagination 사용</li>
+                <li><strong>게임 인벤토리</strong>는 핵심 정렬만 인덱스, 나머지는 애플리케이션 캐시</li>
+                <li><strong>Covering Index</strong>로 테이블 접근 없이 인덱스만으로 결과 반환</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../cte/">&larr; CTE - 재귀 쿼리</a>
+            <a href="../db-graph-query-friends/">친구 목록 그래프 쿼리 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

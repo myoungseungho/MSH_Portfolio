@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>왜 virtual 함수가 많으면 느려질까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #C2185B;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #FCE4EC;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #FCE4EC;
+            border-left: 4px solid #E91E63;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #C2185B;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #FCE4EC;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #C2185B;
+        }
+        .key-point {
+            background: #F8BBD9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #880E4F;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #FCE4EC;
+            font-weight: 600;
+            color: #C2185B;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+        .compare-table .neutral {
+            background: #fff3e0;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #C2185B 0%, #E91E63 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #F8BBD9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #C2185B;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../cpp-modern/" class="back-link">← Modern C++</a>
+
+        <header class="header">
+            <h1>왜 virtual 함수가 많으면 느려질까?</h1>
+            <p>vtable, vptr, 간접 호출의 숨겨진 비용</p>
+        </header>
+
+        <!-- Part 1: virtual 함수 기초 -->
+        <div class="conversation">
+            <h2>Part 1. virtual 함수란?</h2>
+
+            <div class="chat">
+                <div class="q">virtual 함수가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">런타임에 어떤 함수를 호출할지 결정</span>하는 함수야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">// 일반 함수 - 컴파일 타임에 결정
+class Animal {
+    void Speak() { cout << "..."; }
+};
+
+class Dog : public Animal {
+    void Speak() { cout << "멍멍"; }
+};
+
+Animal* a = new Dog();
+a->Speak();  // "..." 출력 (Animal::Speak 호출)
+             // 컴파일러: "a는 Animal* 타입이니까 Animal::Speak"
+
+
+// virtual 함수 - 런타임에 결정
+class Animal {
+    virtual void Speak() { cout << "..."; }
+};
+
+class Dog : public Animal {
+    void Speak() override { cout << "멍멍"; }
+};
+
+Animal* a = new Dog();
+a->Speak();  // "멍멍" 출력 (Dog::Speak 호출!)
+             // 런타임: "실제 객체가 Dog니까 Dog::Speak"</div>
+
+            <div class="chat">
+                <div class="q">왜 virtual이 필요해?</div>
+                <div class="a">
+                    <p><span class="key-point">다형성(Polymorphism)</span>을 위해서야!</p>
+                </div>
+            </div>
+
+            <div class="code-block">// 다형성의 힘
+void MakeNoise(Animal* animal) {
+    animal->Speak();  // 어떤 동물이든 OK!
+}
+
+MakeNoise(new Dog());   // "멍멍"
+MakeNoise(new Cat());   // "야옹"
+MakeNoise(new Duck());  // "꽥꽥"
+
+// virtual 없으면 전부 "..." 출력됨!</div>
+        </div>
+
+        <!-- Part 2: vtable 구조 -->
+        <div class="conversation">
+            <h2>Part 2. vtable과 vptr의 내부 구조</h2>
+
+            <div class="chat">
+                <div class="q">런타임에 어떤 함수를 호출할지 어떻게 알아?</div>
+                <div class="a">
+                    <p><span class="highlight">vtable</span>이라는 테이블을 사용해!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[vtable (Virtual Table)]
+
+클래스마다 하나씩 있는 함수 포인터 테이블
+
+class Animal {
+    virtual void Speak();
+    virtual void Move();
+};
+
+class Dog : public Animal {
+    void Speak() override;
+    void Move() override;
+};
+
+class Cat : public Animal {
+    void Speak() override;
+    // Move()는 오버라이드 안 함
+};
+
+
+[메모리에서의 vtable]
+
+Animal vtable:                Dog vtable:
++------------------+          +------------------+
+| 0: Animal::Speak |          | 0: Dog::Speak    |
+| 1: Animal::Move  |          | 1: Dog::Move     |
++------------------+          +------------------+
+
+Cat vtable:
++------------------+
+| 0: Cat::Speak    |
+| 1: Animal::Move  |  ← 오버라이드 안 했으니 부모 함수
++------------------+</div>
+
+            <div class="chat">
+                <div class="q">그럼 객체는 vtable을 어떻게 찾아?</div>
+                <div class="a">
+                    <p>모든 객체에 <span class="highlight">vptr</span>이 숨어있어!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[vptr (Virtual Pointer)]
+
+virtual 함수가 있는 클래스의 모든 객체에 숨겨진 포인터
+
+Dog dog1, dog2;
+Cat cat1;
+
+[메모리 레이아웃]
+
+dog1:                          dog2:
++---------------+              +---------------+
+| vptr ---------|--+           | vptr ---------|--+
+| (멤버 변수들) |  |           | (멤버 변수들) |  |
++---------------+  |           +---------------+  |
+                   |                              |
+                   v                              v
+              Dog vtable: <--------------------+--+
+              +------------------+
+              | 0: Dog::Speak    |
+              | 1: Dog::Move     |
+              +------------------+
+
+cat1:
++---------------+
+| vptr ---------|--→ Cat vtable
+| (멤버 변수들) |
++---------------+
+
+→ 같은 클래스의 객체들은 같은 vtable을 공유!</div>
+
+            <div class="chat">
+                <div class="q">실제 호출 과정을 보여줘.</div>
+            </div>
+
+            <div class="code-block">[virtual 함수 호출 과정]
+
+Animal* a = new Dog();
+a->Speak();
+
+단계별로 보면:
+
+1. a 객체에서 vptr 읽기
+   vptr = a->vptr  (8바이트 메모리 접근)
+
+2. vtable에서 Speak 인덱스 찾기
+   func_ptr = vptr[0]  (또 메모리 접근!)
+
+3. 함수 포인터로 점프
+   call func_ptr
+
+어셈블리로 보면:
+   mov  rax, [rcx]       ; vptr 읽기
+   mov  rax, [rax]       ; vtable[0] 읽기
+   call rax              ; 간접 호출
+
+
+[일반 함수 호출과 비교]
+
+일반 함수:
+   call Animal::Speak    ; 직접 호출 (주소가 코드에 박혀있음)
+
+virtual 함수:
+   mov  rax, [rcx]       ; 메모리 읽기 1
+   mov  rax, [rax]       ; 메모리 읽기 2
+   call rax              ; 간접 호출
+
+→ 추가 명령어 + 메모리 접근 = 오버헤드!</div>
+        </div>
+
+        <!-- Part 3: 성능 문제 -->
+        <div class="conversation">
+            <h2>Part 3. virtual 함수의 성능 문제</h2>
+
+            <div class="chat">
+                <div class="q">정확히 뭐가 느려지는 거야?</div>
+                <div class="a">
+                    <p>크게 <span class="warning">3가지 오버헤드</span>가 있어!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[오버헤드 1: 간접 호출 (Indirect Call)]
+
+직접 호출:
+  CPU: "0x401000 번지로 점프!" (주소가 명령어에 있음)
+
+간접 호출:
+  CPU: "메모리에서 주소 읽어서... 거기로 점프!"
+
+왜 느린가?
+  - 분기 예측 어려움
+  - 파이프라인 스톨 가능성
+  - 명령어 캐시 미스 가능성
+
+단일 호출: 수 나노초 차이
+반복문에서 백만 번: 수 밀리초 차이!</div>
+
+            <div class="code-block">[오버헤드 2: 인라인 불가]
+
+일반 함수는 인라인 가능:
+
+// 원래 코드
+for (int i = 0; i < 1000000; i++) {
+    obj.GetX();  // return m_x;
+}
+
+// 컴파일러가 인라인하면
+for (int i = 0; i < 1000000; i++) {
+    // 함수 호출 없이 직접 m_x 접근!
+}
+
+virtual 함수는 인라인 불가능:
+
+for (int i = 0; i < 1000000; i++) {
+    obj->GetX();  // virtual 함수
+    // 컴파일러: "런타임에 뭐가 호출될지 몰라서 인라인 못 함"
+}
+
+→ 매번 함수 호출 오버헤드 발생!</div>
+
+            <div class="code-block">[오버헤드 3: 캐시 미스]
+
+vtable 접근 = 메모리 접근
+
+최악의 경우:
+1. vptr 읽기 → 캐시 미스 (100ns)
+2. vtable 읽기 → 캐시 미스 (100ns)
+3. 함수 코드 → 명령어 캐시 미스
+
+다형적 컨테이너가 특히 문제:
+
+vector<Animal*> animals;  // Dog, Cat, Duck 섞여있음
+
+for (Animal* a : animals) {
+    a->Speak();
+    // Dog::Speak → Cat::Speak → Duck::Speak → Dog::Speak...
+    // 함수 코드가 계속 바뀜 → 명령어 캐시 스래싱!
+}</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>오버헤드</th>
+                    <th>원인</th>
+                    <th>영향</th>
+                </tr>
+                <tr>
+                    <td>간접 호출</td>
+                    <td>런타임 주소 결정</td>
+                    <td class="neutral">수 나노초/호출</td>
+                </tr>
+                <tr>
+                    <td>인라인 불가</td>
+                    <td>호출 대상 불명</td>
+                    <td class="bad">최적화 차단</td>
+                </tr>
+                <tr>
+                    <td>캐시 미스</td>
+                    <td>vtable/함수 분산</td>
+                    <td class="bad">100ns+/미스</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">실제로 얼마나 차이나?</div>
+                <div class="a">
+                    <p>상황에 따라 <span class="warning">2~10배</span> 차이날 수 있어!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[벤치마크 예시]
+
+// 테스트: 1억 번 호출
+
+일반 함수 (인라인됨):
+  ~0ms (컴파일러가 루프 자체를 최적화)
+
+일반 함수 (인라인 막음):
+  ~100ms
+
+virtual 함수 (같은 타입):
+  ~200ms  (2배)
+
+virtual 함수 (타입 섞임):
+  ~500ms+ (5배+, 캐시 미스 포함)
+
+게임 서버에서:
+  프레임당 수만 번 호출 × 캐시 미스
+  → 무시 못 할 성능 차이!</div>
+        </div>
+
+        <!-- Part 4: 메모리 오버헤드 -->
+        <div class="conversation">
+            <h2>Part 4. 메모리 오버헤드</h2>
+
+            <div class="chat">
+                <div class="q">vptr도 메모리 차지하잖아?</div>
+                <div class="a">
+                    <p>맞아, 객체마다 <span class="highlight">8바이트</span>(64비트)씩!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[vptr 메모리 오버헤드]
+
+class Point {
+    float x, y;  // 8바이트
+};
+sizeof(Point) = 8바이트
+
+class VirtualPoint {
+    virtual void Move();
+    float x, y;  // 8바이트
+};
+sizeof(VirtualPoint) = 16바이트!
+                       (vptr 8 + 데이터 8)
+
+→ virtual 하나 추가로 객체 크기 2배!
+
+
+[대량 객체에서의 영향]
+
+파티클 100만 개:
+  Point:        100만 × 8  =  8MB
+  VirtualPoint: 100만 × 16 = 16MB
+
+→ 8MB 추가 메모리
+→ 캐시 효율 50% 감소!</div>
+
+            <div class="chat">
+                <div class="q">vtable 자체도 메모리 쓰지?</div>
+                <div class="a">
+                    <p>그건 <span class="highlight">클래스당 하나</span>라서 별로 안 커.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[vtable 메모리]
+
+클래스당 vtable 하나:
+  virtual 함수 10개 → 80바이트 (포인터 10개)
+
+클래스가 100개여도 → 8KB
+
+객체가 100만 개면:
+  vptr 오버헤드: 100만 × 8 = 8MB
+  vtable:        100 × 80 = 8KB
+
+→ vtable은 별거 아니고, vptr이 문제!</div>
+        </div>
+
+        <!-- Part 5: 해결책 -->
+        <div class="conversation">
+            <h2>Part 5. 해결책과 대안</h2>
+
+            <div class="chat">
+                <div class="q">그럼 virtual을 아예 안 쓰면 되나?</div>
+                <div class="a">
+                    <p>그건 아니고, <span class="key-point">적재적소에 사용</span>해야 해!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[해결책 1: CRTP (Curiously Recurring Template Pattern)]
+
+// 컴파일 타임 다형성!
+
+template<typename Derived>
+class Animal {
+public:
+    void Speak() {
+        static_cast<Derived*>(this)->SpeakImpl();
+    }
+};
+
+class Dog : public Animal<Dog> {
+public:
+    void SpeakImpl() { cout << "멍멍"; }
+};
+
+class Cat : public Animal<Cat> {
+public:
+    void SpeakImpl() { cout << "야옹"; }
+};
+
+Dog dog;
+dog.Speak();  // "멍멍" - 컴파일 타임에 결정!
+              // vtable 없음, 인라인 가능!
+
+단점: 다른 타입을 한 컨테이너에 못 담음
+      (Animal<Dog>와 Animal<Cat>은 다른 타입)</div>
+
+            <div class="code-block">[해결책 2: std::variant + std::visit (C++17)]
+
+#include <variant>
+
+struct Dog { void Speak() { cout << "멍멍"; } };
+struct Cat { void Speak() { cout << "야옹"; } };
+
+using Animal = std::variant<Dog, Cat>;
+
+vector<Animal> animals;
+animals.push_back(Dog{});
+animals.push_back(Cat{});
+
+for (auto& a : animals) {
+    std::visit([](auto& animal) {
+        animal.Speak();
+    }, a);
+}
+
+장점:
+- vtable 없음
+- 캐시 친화적 (객체가 연속 배치)
+- 인라인 가능
+
+단점:
+- 타입 목록이 컴파일 타임에 고정
+- variant 크기 = 가장 큰 타입 + 태그</div>
+
+            <div class="code-block">[해결책 3: 타입별 컨테이너 분리]
+
+// 나쁜 예 - 타입 섞임
+vector<Entity*> entities;  // Player, Monster, NPC 섞임
+for (Entity* e : entities) {
+    e->Update();  // 매번 다른 vtable → 캐시 스래싱
+}
+
+// 좋은 예 - 타입별 분리
+vector<Player> players;
+vector<Monster> monsters;
+vector<NPC> npcs;
+
+// 같은 타입끼리 처리
+for (Player& p : players) p.Update();
+for (Monster& m : monsters) m.Update();
+for (NPC& n : npcs) n.Update();
+
+→ 캐시 효율 극대화!
+→ 인라인도 가능해질 수 있음!</div>
+
+            <div class="code-block">[해결책 4: virtual 함수 최소화]
+
+// 나쁜 예 - 모든 게 virtual
+class Entity {
+    virtual int GetX();
+    virtual int GetY();
+    virtual int GetHP();
+    virtual void SetX(int);
+    virtual void SetY(int);
+    virtual void SetHP(int);
+    // ...수십 개
+};
+
+// 좋은 예 - 정말 필요한 것만 virtual
+class Entity {
+    // 데이터 접근은 일반 함수
+    int GetX() { return m_x; }
+    int GetY() { return m_y; }
+
+    // 다형성이 필요한 것만 virtual
+    virtual void Update();
+    virtual void Render();
+};
+
+→ vtable 크기 감소
+→ 인라인 가능한 함수 증가</div>
+
+            <div class="code-block">[해결책 5: final 키워드]
+
+class Dog final : public Animal {
+    void Speak() override;
+};
+
+// Dog가 final이면 컴파일러가 알 수 있음:
+// "Dog를 상속하는 클래스 없음"
+// → 최적화 가능!
+
+Dog* dog = new Dog();
+dog->Speak();  // 컴파일러: Dog::Speak 직접 호출 가능!
+
+// 또는 함수에만 final
+class Cat : public Animal {
+    void Speak() override final;  // 이 함수는 더 오버라이드 안 됨
+};</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>기법</th>
+                    <th>장점</th>
+                    <th>단점</th>
+                </tr>
+                <tr>
+                    <td>CRTP</td>
+                    <td class="good">vtable 제거, 인라인</td>
+                    <td>타입 혼용 불가</td>
+                </tr>
+                <tr>
+                    <td>std::variant</td>
+                    <td class="good">캐시 친화적</td>
+                    <td>타입 고정 필요</td>
+                </tr>
+                <tr>
+                    <td>컨테이너 분리</td>
+                    <td class="good">구현 간단</td>
+                    <td>코드 중복 가능</td>
+                </tr>
+                <tr>
+                    <td>virtual 최소화</td>
+                    <td class="good">기존 구조 유지</td>
+                    <td class="neutral">설계 판단 필요</td>
+                </tr>
+                <tr>
+                    <td>final</td>
+                    <td class="good">쉬운 적용</td>
+                    <td class="neutral">확장성 제한</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 6: 실무 가이드라인 -->
+        <div class="conversation">
+            <h2>Part 6. 실무 가이드라인</h2>
+
+            <div class="chat">
+                <div class="q">그래서 언제 virtual을 쓰고 언제 피해야 해?</div>
+                <div class="a">
+                    <p><span class="key-point">Hot Path vs Cold Path</span>를 구분해!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Hot Path - virtual 피하기]
+
+매 프레임 수만~수십만 번 호출되는 곳:
+- 물리 연산
+- 충돌 검사
+- AI 틱
+- 파티클 업데이트
+- 네트워크 패킷 파싱
+
+→ CRTP, variant, 컨테이너 분리 고려
+
+
+[Cold Path - virtual OK]
+
+가끔 호출되는 곳:
+- 초기화/종료
+- 이벤트 핸들러
+- UI 상호작용
+- 파일 I/O
+
+→ 다형성의 유연함 > 약간의 오버헤드</div>
+
+            <div class="code-block">[체크리스트]
+
+virtual 쓰기 전에 물어볼 것:
+
+1. 정말 런타임 다형성이 필요한가?
+   → 타입이 컴파일 타임에 알려진다면 CRTP
+
+2. Hot Path에서 호출되나?
+   → 그렇다면 다른 방법 고려
+
+3. 컨테이너에 여러 타입을 섞어야 하나?
+   → 아니라면 타입별 분리
+
+4. 상속 계층이 깊은가?
+   → 깊으면 컴포지션 고려
+
+5. 이 클래스가 상속될 일이 없나?
+   → final 붙이기</div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>vtable</strong> = 클래스당 하나, virtual 함수 포인터 테이블</li>
+                <li><strong>vptr</strong> = 객체당 하나, vtable을 가리키는 포인터 (8바이트)</li>
+                <li><strong>간접 호출</strong> = vptr → vtable → 함수, 분기 예측 어려움</li>
+                <li><strong>인라인 불가</strong> = 컴파일러가 호출 대상을 몰라서 최적화 차단</li>
+                <li><strong>캐시 미스</strong> = 다형적 컨테이너에서 심각</li>
+                <li><strong>CRTP</strong> = 컴파일 타임 다형성, vtable 없음</li>
+                <li><strong>std::variant</strong> = 타입 안전한 유니온, 캐시 친화적</li>
+                <li><strong>컨테이너 분리</strong> = 같은 타입끼리 모아서 처리</li>
+                <li><strong>final</strong> = 컴파일러에게 최적화 힌트</li>
+                <li><strong>Hot Path</strong>에서는 virtual 피하고, Cold Path에서는 OK</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../cpp-modern/">← Modern C++</a>
+            <a href="../../">메인으로 ></a>
+        </div>
+    </div>
+</body>
+</html>

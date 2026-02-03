@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>왜 게임 서버는 아직도 C++을 쓸까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #C2185B;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #FCE4EC;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #FCE4EC;
+            border-left: 4px solid #E91E63;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #C2185B;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #FCE4EC;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #C2185B;
+        }
+        .key-point {
+            background: #F8BBD9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #880E4F;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #FCE4EC;
+            font-weight: 600;
+            color: #C2185B;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+        .compare-table .neutral {
+            background: #fff3e0;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #C2185B 0%, #E91E63 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #F8BBD9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #C2185B;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../cpp-modern/" class="back-link">← Modern C++</a>
+
+        <header class="header">
+            <h1>왜 게임 서버는 아직도 C++을 쓸까?</h1>
+            <p>Java, C#, Go, Rust가 있는데 왜 아직도 C++을 고집할까?</p>
+        </header>
+
+        <!-- Part 1: 성능 비교 -->
+        <div class="conversation">
+            <h2>Part 1. 언어별 성능 비교</h2>
+
+            <div class="chat">
+                <div class="q">요즘 Java도 빠르다던데, 왜 게임 서버는 C++을 써?</div>
+                <div class="a">
+                    <p><span class="highlight">평균 성능</span>과 <span class="highlight">최악 성능</span>을 구분해야 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[평균 성능 vs 최악 성능]
+
+평균 성능 (Throughput):
+  "1초에 몇 개 처리하나?"
+  → Java, C#도 C++과 비슷하거나 90% 수준
+
+최악 성능 (Latency Spike):
+  "가장 느린 응답이 얼마나 느린가?"
+  → GC 있는 언어는 최악 케이스가 몇십~몇백 ms
+
+게임 서버에서 중요한 건? → 최악 성능!</div>
+
+            <div class="chat">
+                <div class="q">왜 최악 성능이 중요해?</div>
+                <div class="a">
+                    <p>게임은 <span class="key-point">일관된 응답 시간</span>이 필요해!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[웹 서버 vs 게임 서버]
+
+웹 서버:
+  요청 → 100ms 응답  (보통)
+  요청 → 500ms 응답  (가끔 GC)
+  → 유저: "좀 느리네" (참을 수 있음)
+
+게임 서버 (MMORPG):
+  스킬 → 50ms 응답   (보통)
+  스킬 → 500ms 응답  (GC 발생!)
+  → 유저: "야 내 스킬 왜 안 나가!" (참을 수 없음)
+
+FPS 게임:
+  샷 → 30ms 응답    (보통)
+  샷 → 200ms 응답   (GC 발생!)
+  → 유저: "야 분명 맞췄는데!" (분노)</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>언어</th>
+                    <th>평균 성능</th>
+                    <th>최악 성능</th>
+                    <th>예측 가능성</th>
+                </tr>
+                <tr>
+                    <td>C++</td>
+                    <td class="good">100%</td>
+                    <td class="good">안정적</td>
+                    <td class="good">높음</td>
+                </tr>
+                <tr>
+                    <td>Rust</td>
+                    <td class="good">95-100%</td>
+                    <td class="good">안정적</td>
+                    <td class="good">높음</td>
+                </tr>
+                <tr>
+                    <td>Go</td>
+                    <td class="neutral">80-90%</td>
+                    <td class="neutral">가끔 GC</td>
+                    <td class="neutral">중간</td>
+                </tr>
+                <tr>
+                    <td>Java</td>
+                    <td class="neutral">85-95%</td>
+                    <td class="bad">GC 스파이크</td>
+                    <td class="bad">낮음</td>
+                </tr>
+                <tr>
+                    <td>C#</td>
+                    <td class="neutral">85-95%</td>
+                    <td class="bad">GC 스파이크</td>
+                    <td class="bad">낮음</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 2: GC의 문제 -->
+        <div class="conversation">
+            <h2>Part 2. GC의 Stop-the-World 문제</h2>
+
+            <div class="chat">
+                <div class="q">GC가 정확히 왜 문제야?</div>
+                <div class="a">
+                    <p><span class="warning">Stop-the-World</span> 때문이야!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Stop-the-World]
+
+GC가 메모리 정리하려면 → 프로그램 멈춰야 함!
+
+정상 상태:
+[게임 로직] [게임 로직] [게임 로직] [게임 로직]
+    ↓           ↓           ↓           ↓
+  16ms        16ms        16ms        16ms   ← 일정함
+
+GC 발생:
+[게임 로직] [게임 로직] [  GC  ] [게임 로직]
+    ↓           ↓         ↓           ↓
+  16ms        16ms      150ms!       16ms
+
+→ 150ms 동안 모든 유저의 패킷 처리 안 됨!
+→ 수천 명이 동시에 "렉"</div>
+
+            <div class="chat">
+                <div class="q">요즘 GC는 많이 좋아지지 않았어?</div>
+                <div class="a">
+                    <p>맞아, <span class="highlight">Concurrent GC</span>가 있어. 근데 완벽하진 않아.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[GC 발전 과정]
+
+1세대: Stop-the-World (전체 멈춤)
+  → 수백 ms 멈춤
+
+2세대: Generational GC (세대별)
+  → 젊은 객체 위주로 검사 → 멈춤 시간 감소
+
+3세대: Concurrent/Incremental GC
+  → 조금씩 나눠서 청소 → 멈춤 시간 분산
+
+현재: ZGC, Shenandoah (Java), Unity Incremental GC
+  → 1-10ms 수준까지 감소
+
+근데...
+게임 서버는 16ms (60fps) 안에 처리해야 하는데
+1-10ms도 프레임 하나 날릴 수 있음!
+
+그리고 메모리 많이 쓰면 여전히 문제:
+- 동접 만 명, 객체 수백만 개
+- GC가 스캔해야 할 양이 어마어마
+- 여전히 예측 불가능한 스파이크</div>
+
+            <div class="chat">
+                <div class="q">C++은 GC가 없으니까 멈추지 않는 거야?</div>
+                <div class="a">
+                    <p><span class="key-point">정확해!</span> 메모리 해제 시점을 개발자가 결정하니까.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[C++ 메모리 관리]
+
+// 개발자가 해제 시점 결정
+void ProcessPacket(Packet* pkt) {
+    // 처리...
+    delete pkt;  // 여기서 바로 해제, 예측 가능!
+}
+
+// 오브젝트 풀로 아예 해제 안 함
+Packet* pkt = packetPool.Alloc();
+// 처리...
+packetPool.Free(pkt);  // 풀에 반납, 실제 해제 없음!
+
+→ 언제 메모리 작업이 일어나는지 개발자가 알고 있음
+→ Stop-the-World 없음!</div>
+        </div>
+
+        <!-- Part 3: 메모리 제어 -->
+        <div class="conversation">
+            <h2>Part 3. 메모리 제어의 필요성</h2>
+
+            <div class="chat">
+                <div class="q">메모리 직접 관리가 왜 필요해? 귀찮기만 한 거 아니야?</div>
+                <div class="a">
+                    <p>게임 서버는 <span class="highlight">메모리 레이아웃</span>이 성능에 직결돼!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[캐시 친화적 메모리 배치]
+
+GC 언어 (Java, C#):
+객체들이 힙에 흩어져 있음
+
+[  A  ] ... [  B  ] ... [  C  ] ... [  D  ]
+   ↑           ↑           ↑           ↑
+  메모리 여기저기 (Cache Miss 많음)
+
+C++:
+객체들을 연속으로 배치 가능
+
+[  A  ][  B  ][  C  ][  D  ]
+   ↑ CPU가 한 번에 캐시로 읽어옴 (Cache Hit!)
+
+→ 같은 로직이어도 C++이 훨씬 빠를 수 있음</div>
+
+            <div class="chat">
+                <div class="q">구체적으로 얼마나 차이나?</div>
+                <div class="a">
+                    <p>캐시 미스는 <span class="warning">100배 이상</span> 느릴 수 있어!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[메모리 접근 속도]
+
+L1 캐시: ~1ns
+L2 캐시: ~4ns
+L3 캐시: ~10ns
+RAM:     ~100ns  ← 캐시 미스나면 여기!
+
+10,000명의 플레이어 업데이트:
+
+Java/C# (흩어진 객체):
+  for (Player p : players) {
+      p.Update();  // 매번 캐시 미스 가능
+  }
+  → 10,000 x 100ns = 1,000,000ns = 1ms
+
+C++ (연속 배치):
+  for (int i = 0; i < count; i++) {
+      players[i].Update();  // 캐시 히트!
+  }
+  → 10,000 x 4ns = 40,000ns = 0.04ms
+
+→ 같은 작업인데 25배 차이!</div>
+
+            <div class="chat">
+                <div class="q">커스텀 메모리 할당자도 C++ 장점이야?</div>
+                <div class="a">
+                    <p><span class="key-point">맞아!</span> 용도별로 최적화된 할당자를 쓸 수 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[커스텀 할당자]
+
+일반 new/delete:
+  범용적 → 모든 상황에 맞추다 보니 느림
+
+게임 서버용 할당자:
+
+1. 오브젝트 풀 (Object Pool)
+   - 미리 만들어 놓고 재사용
+   - 할당/해제 시간 = O(1)
+
+2. 슬랩 할당자 (Slab Allocator)
+   - 크기별로 미리 분류
+   - 같은 크기 요청에 최적화
+
+3. 스택 할당자 (Stack Allocator)
+   - 프레임 단위로 사용하고 한꺼번에 리셋
+   - 해제 비용 = 0!
+
+4. 링 버퍼 (Ring Buffer)
+   - 패킷 버퍼용
+   - 단편화 없음
+
+→ GC 언어에서는 이런 제어가 어렵거나 불가능!</div>
+        </div>
+
+        <!-- Part 4: 대안들 -->
+        <div class="conversation">
+            <h2>Part 4. 다른 언어 선택지는?</h2>
+
+            <div class="chat">
+                <div class="q">Rust는 어때? GC도 없고 안전하다던데?</div>
+                <div class="a">
+                    <p>Rust는 <span class="highlight">미래의 강력한 대안</span>이야!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Rust]
+
+장점:
+- C++ 수준 성능
+- GC 없음 → Stop-the-World 없음
+- 메모리 안전성 보장 (컴파일 타임)
+- 데이터 레이스 방지
+
+단점:
+- 게임 업계 생태계 부족
+- 기존 C++ 코드베이스와 호환 어려움
+- 러닝 커브 높음
+
+현실:
+- 새 프로젝트에서 고려 가치 있음
+- 기존 C++ 서버를 Rust로 재작성? → 비용 막대함
+- 아직은 "미래" 단계</div>
+
+            <div class="chat">
+                <div class="q">Go는? 고루틴이 좋다던데.</div>
+                <div class="a">
+                    <p>Go는 <span class="highlight">웹 서버에는 좋은데</span> 게임 서버에는 애매해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Go]
+
+장점:
+- 고루틴 (경량 스레드) → 동시성 쉬움
+- 빠른 컴파일
+- 단순한 문법
+
+단점:
+- GC 있음 (저지연 GC지만 여전히 존재)
+- 제네릭 늦게 추가 (아직 제한적)
+- 메모리 레이아웃 제어 어려움
+- 시스템 프로그래밍에 부적합
+
+적합한 곳:
+- 로비 서버, 매치메이킹 서버
+- 마이크로서비스
+- API 게이트웨이
+
+부적합한 곳:
+- 실시간 전투 처리
+- MMORPG 월드 서버</div>
+
+            <div class="chat">
+                <div class="q">C#은? Unity 서버 같은 거 있잖아.</div>
+                <div class="a">
+                    <p>C#도 게임 서버에서 <span class="highlight">많이 쓰여</span>. 특히 모바일!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[C# / .NET]
+
+장점:
+- 개발 생산성 높음
+- 안전한 메모리 관리
+- 풍부한 라이브러리
+
+단점:
+- GC 존재 (성능 상한선)
+- 최적화 한계
+
+적합한 곳:
+- 모바일 게임 서버 (상대적으로 관대)
+- 턴제 게임
+- 소규모 동접
+
+부적합한 곳:
+- 대규모 MMORPG
+- 고성능 FPS 서버
+- 초저지연 요구 게임</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>언어</th>
+                    <th>성능</th>
+                    <th>생산성</th>
+                    <th>안전성</th>
+                    <th>게임 서버 적합도</th>
+                </tr>
+                <tr>
+                    <td>C++</td>
+                    <td class="good">최고</td>
+                    <td class="bad">낮음</td>
+                    <td class="bad">낮음</td>
+                    <td class="good">AAA급</td>
+                </tr>
+                <tr>
+                    <td>Rust</td>
+                    <td class="good">최고</td>
+                    <td class="neutral">중간</td>
+                    <td class="good">높음</td>
+                    <td class="neutral">미래 유망</td>
+                </tr>
+                <tr>
+                    <td>Go</td>
+                    <td class="neutral">양호</td>
+                    <td class="good">높음</td>
+                    <td class="good">높음</td>
+                    <td class="neutral">보조 서버용</td>
+                </tr>
+                <tr>
+                    <td>C#</td>
+                    <td class="neutral">양호</td>
+                    <td class="good">높음</td>
+                    <td class="good">높음</td>
+                    <td class="neutral">모바일/소규모</td>
+                </tr>
+                <tr>
+                    <td>Java</td>
+                    <td class="neutral">양호</td>
+                    <td class="good">높음</td>
+                    <td class="good">높음</td>
+                    <td class="bad">부적합</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 5: 현실 -->
+        <div class="conversation">
+            <h2>Part 5. 현실적인 이유들</h2>
+
+            <div class="chat">
+                <div class="q">기술적인 이유 말고 다른 이유도 있어?</div>
+                <div class="a">
+                    <p><span class="highlight">레거시와 생태계</span>가 더 큰 이유일 수도!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[현실적인 이유들]
+
+1. 레거시 코드
+   - 수십 년간 쌓인 C++ 코드베이스
+   - 검증된 네트워크 라이브러리
+   - 재작성 비용 >> 유지보수 비용
+
+2. 인력 풀
+   - 시니어 게임 서버 개발자 = 대부분 C++ 경험
+   - Rust로 전환? → 팀 전체 재교육
+
+3. 엔진 호환성
+   - Unreal Engine = C++
+   - 클라이언트와 공유하는 코드 (게임 로직, 패킷 정의)
+
+4. 외부 라이브러리
+   - 물리 엔진 (PhysX, Bullet)
+   - 네트워크 (IOCP, libuv)
+   - 대부분 C/C++ 네이티브
+
+5. 튜닝 가능성
+   - 어셈블리 수준까지 최적화 가능
+   - 프로파일러 도구 성숙
+   - "최후의 한 방울"까지 짜낼 수 있음</div>
+
+            <div class="chat">
+                <div class="q">그럼 C++은 앞으로도 계속 쓰일까?</div>
+                <div class="a">
+                    <p><span class="key-point">당분간은 확실히!</span> 하지만 변화도 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[미래 전망]
+
+유지될 영역:
+- AAA급 게임 서버
+- MMORPG 월드 서버
+- 고성능 FPS 서버
+- 기존 C++ 코드베이스 유지보수
+
+변화 가능한 영역:
+- 신규 프로젝트 → Rust 고려
+- 보조 서버 → Go, Node.js
+- 모바일 게임 → C#, Go
+- 마이크로서비스 → 다양한 언어 혼용
+
+하이브리드:
+- 핵심 (전투, 물리) → C++, Rust
+- 주변 (매칭, 로비) → Go, C#
+- 운영 도구 → Python, Node.js</div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>평균 성능</strong>보다 <strong>최악 성능</strong>이 게임 서버에서 중요</li>
+                <li><strong>GC의 Stop-the-World</strong>가 실시간 게임에서 치명적</li>
+                <li>C++은 <strong>메모리 레이아웃 제어</strong>로 캐시 효율 극대화</li>
+                <li><strong>커스텀 할당자</strong>로 할당/해제 비용 최소화</li>
+                <li><strong>Rust</strong>는 미래의 강력한 대안, 하지만 아직 생태계 부족</li>
+                <li><strong>Go, C#</strong>은 보조 서버나 모바일에 적합</li>
+                <li><strong>레거시, 인력, 생태계</strong>도 C++ 선택의 현실적 이유</li>
+                <li>미래는 <strong>하이브리드</strong> - 영역별로 최적 언어 선택</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../cpp-modern/">← Modern C++</a>
+            <a href="../../">메인으로 ></a>
+        </div>
+    </div>
+</body>
+</html>

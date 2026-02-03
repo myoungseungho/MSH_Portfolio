@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>틱레이트 설계 - 네트워크 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #00BCD4; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #E0F7FA; }
+        .q { background: #E0F7FA; border-left: 4px solid #00BCD4; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #00838F; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #E0F7FA; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #00838F; }
+        .key-point { background: #B2EBF2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #00838F; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #00BCD4 0%, #00838F 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #00BCD4; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../network/" class="back-link">&larr; 네트워크</a>
+
+        <div class="header">
+            <h1>틱레이트 설계</h1>
+            <p>왜 FPS는 60틱이고 MMO는 10틱일까?</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 틱레이트란?</h2>
+            <div class="q">틱레이트가 정확히 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">틱레이트(Tickrate)</span>는 서버가 초당 게임 상태를 업데이트하는 횟수입니다:</p>
+                <div class="diagram">
+틱레이트 개념:
++------------------------------------------------------------------+
+|                                                                  |
+|  틱레이트 = 서버의 "심장 박동" 빈도                              |
+|                                                                  |
+|  64 Tick 서버 (1초 동안):                                        |
+|                                                                  |
+|  Tick:  1   2   3   4   5  ...  62  63  64                      |
+|         |   |   |   |   |       |   |   |                       |
+|  Time: 0ms 15.6 31.3 46.9 62.5 ... 953 968 984                  |
+|                                                                  |
+|  각 틱에서 하는 일:                                              |
+|  +------------------------------------------------------------+  |
+|  | 1. 클라이언트 입력 처리                                    |  |
+|  | 2. 물리/충돌 계산                                          |  |
+|  | 3. 게임 로직 업데이트                                      |  |
+|  | 4. 상태 변경 클라이언트에 전송                             |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  틱 간격 = 1000ms / 틱레이트                                     |
+|  - 64 Tick: 15.625ms 간격                                       |
+|  - 20 Tick: 50ms 간격                                           |
+|  - 10 Tick: 100ms 간격                                          |
+|                                                                  |
++------------------------------------------------------------------+</div>
+            </div>
+
+            <div class="q">FPS는 60틱, MMO는 10틱인 이유가 뭐야?</div>
+            <div class="a">
+                <p>장르마다 <span class="key-point">요구 정밀도</span>와 <span class="key-point">플레이어 밀도</span>가 다릅니다:</p>
+                <div class="diagram">
+장르별 틱레이트 비교:
++------------------------------------------------------------------+
+|                                                                  |
+|  장르          틱레이트    틱 간격    이유                       |
+|  ----------------------------------------------------------------|
+|  격투게임      60 Hz      16.6ms    프레임 단위 입력 필요        |
+|  FPS (경쟁)    <span class="key-point">64~128 Hz</span>  7.8~15.6ms  헤드샷 판정 정밀도       |
+|  FPS (캐주얼)  20~30 Hz   33~50ms   약간 느려도 OK               |
+|  MOBA          30 Hz      33ms      스킬 타이밍 중요             |
+|  레이싱        60 Hz      16.6ms    차량 물리 정밀도             |
+|  MMO           <span class="key-point">10~20 Hz</span>   50~100ms   동시접속 수천명 지원        |
+|  턴제 RPG      1~5 Hz     200~1000ms 실시간성 불필요            |
+|                                                                  |
++------------------------------------------------------------------+
+
+FPS가 높은 틱레이트가 필요한 이유:
++------------------------------------------------------------------+
+|                                                                  |
+|  상황: 플레이어가 16ms(=1프레임) 동안 벽 뒤로 숨음               |
+|                                                                  |
+|  64 Tick 서버:                                                   |
+|  T=0ms   [노출] --> 피격 판정                                   |
+|  T=16ms  [벽뒤] --> 안전                                        |
+|  -> 정확하게 숨은 타이밍 반영                                    |
+|                                                                  |
+|  10 Tick 서버:                                                   |
+|  T=0ms   [노출] --> 피격 판정                                   |
+|  T=100ms [벽뒤] --> 100ms 전 위치(노출)로 판정됨!               |
+|  -> 분명히 숨었는데 맞음 = <span class="warning">"데스캠 보니까 안 맞는데요?"</span>           |
+|                                                                  |
++------------------------------------------------------------------+</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 틱레이트와 대역폭의 관계</h2>
+            <div class="q">틱레이트를 높이면 대역폭이 얼마나 늘어?</div>
+            <div class="a">
+                <p>틱레이트는 대역폭과 <span class="warning">정비례</span> 관계입니다:</p>
+                <div class="diagram">
+틱레이트 vs 대역폭:
++------------------------------------------------------------------+
+|                                                                  |
+|  기준: 10명 게임, 플레이어당 상태 패킷 50바이트                   |
+|                                                                  |
+|  틱당 전송량 = 50바이트 x 9명 = 450바이트 (자신 제외)            |
+|                                                                  |
+|  틱레이트별 대역폭:                                              |
+|  +------------------------------------------------------------+  |
+|  | 틱레이트 | 틱당 전송 | 초당 전송    | 분당 전송             |  |
+|  |----------+-----------+-------------+-----------------------|  |
+|  | 10 Hz    | 450 B     | 4.5 KB/s    | 270 KB/min            |  |
+|  | 20 Hz    | 450 B     | 9 KB/s      | 540 KB/min            |  |
+|  | 30 Hz    | 450 B     | 13.5 KB/s   | 810 KB/min            |  |
+|  | 60 Hz    | 450 B     | <span class="warning">27 KB/s</span>     | 1.6 MB/min            |  |
+|  | 128 Hz   | 450 B     | <span class="warning">57.6 KB/s</span>   | 3.5 MB/min            |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  10 -> 60 틱: <span class="warning">6배 대역폭 증가!</span>                                  |
+|                                                                  |
++------------------------------------------------------------------+
+
+MMO의 현실 (100명 존):
++------------------------------------------------------------------+
+|                                                                  |
+|  AOI 적용해서 30명만 보인다고 가정:                              |
+|  틱당 전송량 = 50바이트 x 30명 = 1,500바이트                     |
+|                                                                  |
+|  틱레이트 | 초당 전송  | 100명 서버 아웃바운드                    |
+|  ---------+------------+-----------------------------------------|
+|  10 Hz    | 15 KB/s    | 15 KB x 100 = <span class="key-point">1.5 MB/s</span>               |
+|  60 Hz    | 90 KB/s    | 90 KB x 100 = <span class="warning">9 MB/s</span>                   |
+|                                                                  |
+|  1000명 동접 서버라면:                                           |
+|  - 10 Hz: 15 MB/s (120 Mbps) - 가능                             |
+|  - 60 Hz: 90 MB/s (720 Mbps) - <span class="warning">불가능</span>                       |
+|                                                                  |
++------------------------------------------------------------------+</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 서버와 클라이언트 틱의 분리</h2>
+            <div class="q">서버 틱과 클라이언트 틱은 같아야 해?</div>
+            <div class="a">
+                <p><span class="key-point">아닙니다.</span> 대부분의 게임은 서로 다른 틱레이트를 사용합니다:</p>
+                <div class="diagram">
+서버/클라이언트 틱 분리:
++------------------------------------------------------------------+
+|                                                                  |
+|  클라이언트                    서버                              |
+|  +--------------------+       +--------------------+             |
+|  | Render: 144 Hz     |       | Logic: 20 Hz       |             |
+|  | Input: 144 Hz      |       |                    |             |
+|  | Prediction: 144 Hz |       | 네트워크: 20 Hz    |             |
+|  +--------------------+       +--------------------+             |
+|           |                            |                         |
+|           |    20Hz 상태 업데이트      |                         |
+|           |<---------------------------|                         |
+|           |                            |                         |
+|           |    144Hz 입력 -> 배치      |                         |
+|           |--------------------------->|                         |
+|                                                                  |
+|  클라이언트 역할:                                                |
+|  +------------------------------------------------------------+  |
+|  | - 144Hz로 입력 수집                                        |  |
+|  | - 로컬 예측 (서버 응답 전에 미리 움직임)                   |  |
+|  | - 서버 상태를 보간(Interpolation)하여 부드럽게 표시        |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  서버 역할:                                                      |
+|  +------------------------------------------------------------+  |
+|  | - 20Hz로 권위적(Authoritative) 상태 계산                   |  |
+|  | - 클라이언트 입력을 배치로 처리                            |  |
+|  | - 확정된 상태를 클라이언트에 브로드캐스트                  |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
++------------------------------------------------------------------+</div>
+                <div class="code-block">
+// 서버: 20Hz 고정 틱
+
+class GameServer {
+private:
+    static const int TICK_RATE = 20;
+    static const int TICK_INTERVAL_MS = 1000 / TICK_RATE;  // 50ms
+
+    int64_t m_lastTickTime = 0;
+    int m_currentTick = 0;
+
+public:
+    void Run() {
+        while (m_running) {
+            int64_t now = GetCurrentTimeMs();
+            int64_t elapsed = now - m_lastTickTime;
+
+            if (elapsed >= TICK_INTERVAL_MS) {
+                // 고정 틱 처리
+                ProcessTick();
+                m_currentTick++;
+                m_lastTickTime = now;
+
+                // 밀린 틱 따라잡기 (스파이크 복구)
+                while (now - m_lastTickTime >= TICK_INTERVAL_MS) {
+                    ProcessTick();
+                    m_currentTick++;
+                    m_lastTickTime += TICK_INTERVAL_MS;
+                }
+            }
+
+            // CPU 양보 (다음 틱까지 대기)
+            int64_t sleepTime = TICK_INTERVAL_MS - (GetCurrentTimeMs() - m_lastTickTime);
+            if (sleepTime > 0) {
+                Sleep((DWORD)sleepTime);
+            }
+        }
+    }
+
+    void ProcessTick() {
+        // 1. 수신된 모든 클라이언트 입력 처리
+        ProcessPendingInputs();
+
+        // 2. 게임 로직 업데이트
+        UpdateGameLogic();
+
+        // 3. 물리/충돌 처리
+        UpdatePhysics();
+
+        // 4. 상태 스냅샷 생성 및 전송
+        BroadcastGameState();
+    }
+};
+
+// 클라이언트: 가변 프레임레이트 + 보간
+
+class GameClient {
+private:
+    float m_interpolationDelay = 100.0f;  // 100ms 뒤 상태 표시
+
+    // 서버로부터 받은 상태 버퍼 (20Hz)
+    std::deque<ServerState> m_stateBuffer;
+
+public:
+    void Update(float deltaTime) {
+        // 현재 렌더 시간 (서버 시간 - 보간 딜레이)
+        float renderTime = GetServerTime() - m_interpolationDelay;
+
+        // 두 스냅샷 사이를 보간
+        ServerState interpolated = InterpolateState(renderTime);
+        RenderGameState(interpolated);
+    }
+
+    ServerState InterpolateState(float targetTime) {
+        // targetTime을 감싸는 두 스냅샷 찾기
+        ServerState* before = nullptr;
+        ServerState* after = nullptr;
+
+        for (int i = 0; i < m_stateBuffer.size() - 1; i++) {
+            if (m_stateBuffer[i].time <= targetTime &&
+                m_stateBuffer[i+1].time > targetTime) {
+                before = &m_stateBuffer[i];
+                after = &m_stateBuffer[i+1];
+                break;
+            }
+        }
+
+        if (!before || !after) {
+            return m_stateBuffer.back();  // 외삽 또는 마지막 상태
+        }
+
+        // 선형 보간
+        float t = (targetTime - before->time) / (after->time - before->time);
+        return Lerp(*before, *after, t);
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 가변 틱레이트 시스템</h2>
+            <div class="q">서버 부하에 따라 틱레이트를 조절할 수 있어?</div>
+            <div class="a">
+                <p><span class="key-point">네.</span> 많은 MMO가 상황에 따라 동적으로 틱레이트를 조절합니다:</p>
+                <div class="diagram">
+가변 틱레이트 시스템:
++------------------------------------------------------------------+
+|                                                                  |
+|  상황별 틱레이트 조절:                                           |
+|                                                                  |
+|  평화로운 마을 (플레이어 50명):                                  |
+|  +------------------------------------------------------------+  |
+|  | 틱레이트: 5 Hz (200ms 간격)                                |  |
+|  | 이유: 전투 없음, NPC 상호작용 정도                         |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  일반 필드 (몬스터 사냥):                                        |
+|  +------------------------------------------------------------+  |
+|  | 틱레이트: 10 Hz (100ms 간격)                               |  |
+|  | 이유: 기본 전투, 적당한 반응성                             |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  던전 (8인 파티):                                                |
+|  +------------------------------------------------------------+  |
+|  | 틱레이트: 20 Hz (50ms 간격)                                |  |
+|  | 이유: 보스 패턴 회피, 정밀한 스킬 타이밍                   |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  PvP 아레나 (5v5):                                               |
+|  +------------------------------------------------------------+  |
+|  | 틱레이트: 30 Hz (33ms 간격)                                |  |
+|  | 이유: 공정한 PvP, 빠른 반응 필요                           |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
++------------------------------------------------------------------+</div>
+                <div class="code-block">
+// 가변 틱레이트 서버
+
+class AdaptiveTickServer {
+private:
+    enum class ZoneType {
+        Town,       // 마을: 5 Hz
+        Field,      // 필드: 10 Hz
+        Dungeon,    // 던전: 20 Hz
+        PvPArena    // PvP: 30 Hz
+    };
+
+    int GetTickRateForZone(ZoneType type) {
+        switch (type) {
+            case ZoneType::Town:     return 5;
+            case ZoneType::Field:    return 10;
+            case ZoneType::Dungeon:  return 20;
+            case ZoneType::PvPArena: return 30;
+            default: return 10;
+        }
+    }
+
+    // 부하 기반 동적 조절
+    int m_currentTickRate = 20;
+    float m_cpuUsage = 0.0f;
+
+public:
+    void AdjustTickRate() {
+        // CPU 사용률 모니터링
+        m_cpuUsage = GetServerCpuUsage();
+
+        if (m_cpuUsage > 90.0f) {
+            // 과부하: 틱레이트 감소
+            m_currentTickRate = std::max(5, m_currentTickRate - 5);
+            Log("Server overload! Reducing tickrate to %d", m_currentTickRate);
+        }
+        else if (m_cpuUsage < 50.0f && m_currentTickRate < GetMaxTickRate()) {
+            // 여유: 틱레이트 증가
+            m_currentTickRate = std::min(GetMaxTickRate(), m_currentTickRate + 5);
+        }
+
+        // 클라이언트에 틱레이트 변경 알림
+        BroadcastTickRateChange(m_currentTickRate);
+    }
+
+    // 존별 개별 틱 스케줄러
+    void RunZoneTickScheduler() {
+        for (auto& zone : m_zones) {
+            int tickRate = GetTickRateForZone(zone.type);
+            int tickIntervalMs = 1000 / tickRate;
+
+            if (zone.GetTimeSinceLastTick() >= tickIntervalMs) {
+                zone.ProcessTick();
+                zone.ResetTickTimer();
+            }
+        }
+    }
+};</div>
+            </div>
+
+            <div class="q">클라이언트는 틱레이트 변경을 어떻게 알아?</div>
+            <div class="a">
+                <div class="code-block">
+// 클라이언트: 서버 틱레이트 적응
+
+class AdaptiveClient {
+private:
+    int m_serverTickRate = 20;  // 기본값
+    float m_interpolationBuffer = 2.0f;  // 틱 2개 분량 버퍼
+
+public:
+    void OnTickRateChanged(int newTickRate) {
+        m_serverTickRate = newTickRate;
+
+        // 보간 딜레이 조절
+        // 낮은 틱레이트 = 더 긴 보간 딜레이 필요
+        float tickInterval = 1000.0f / newTickRate;
+        m_interpolationDelay = tickInterval * m_interpolationBuffer;
+
+        Log("Server tickrate changed to %d Hz, interpolation delay: %.0f ms",
+            newTickRate, m_interpolationDelay);
+
+        // 예측 설정도 조절
+        AdjustPredictionSettings(newTickRate);
+    }
+
+    void AdjustPredictionSettings(int tickRate) {
+        if (tickRate < 10) {
+            // 낮은 틱레이트: 더 많은 예측 필요
+            m_predictionSteps = 5;
+            m_correctionSmoothing = 0.1f;  // 느린 보정
+        } else if (tickRate < 30) {
+            m_predictionSteps = 3;
+            m_correctionSmoothing = 0.2f;
+        } else {
+            // 높은 틱레이트: 최소 예측
+            m_predictionSteps = 1;
+            m_correctionSmoothing = 0.3f;  // 빠른 보정
+        }
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 실제 게임 사례</h2>
+            <div class="q">유명 게임들의 틱레이트는?</div>
+            <div class="a">
+                <div class="diagram">
+실제 게임 틱레이트 사례:
++------------------------------------------------------------------+
+|                                                                  |
+|  FPS 게임:                                                       |
+|  +------------------------------------------------------------+  |
+|  | CS:GO / CS2         | <span class="key-point">64 Hz</span> (매치메이킹)               |  |
+|  |                     | <span class="key-point">128 Hz</span> (FACEIT, ESEA 프로 서버)  |  |
+|  |---------------------|--------------------------------------|  |
+|  | Valorant            | <span class="key-point">128 Hz</span> (모든 서버)               |  |
+|  |---------------------|--------------------------------------|  |
+|  | Overwatch 2         | <span class="key-point">63 Hz</span> (서버) / 60 Hz (클라)     |  |
+|  |---------------------|--------------------------------------|  |
+|  | PUBG                | 20-30 Hz (상황에 따라 가변)          |  |
+|  |---------------------|--------------------------------------|  |
+|  | Apex Legends        | <span class="key-point">20 Hz</span> (서버) / 60 Hz (클라)     |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  격투/레이싱:                                                    |
+|  +------------------------------------------------------------+  |
+|  | Street Fighter 6    | <span class="key-point">60 Hz</span> (프레임 단위 게임)         |  |
+|  | Tekken 8            | <span class="key-point">60 Hz</span>                             |  |
+|  | Rocket League       | <span class="key-point">120 Hz</span>                            |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  MOBA:                                                           |
+|  +------------------------------------------------------------+  |
+|  | League of Legends   | <span class="key-point">30 Hz</span>                             |  |
+|  | Dota 2              | <span class="key-point">30 Hz</span>                             |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  MMO:                                                            |
+|  +------------------------------------------------------------+  |
+|  | WoW                 | <span class="key-point">10-20 Hz</span> (상황별 가변)            |  |
+|  | FF14                | <span class="key-point">~20 Hz</span>                            |  |
+|  | Lost Ark            | <span class="key-point">~15 Hz</span>                            |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
++------------------------------------------------------------------+
+
+왜 PUBG/Apex는 틱레이트가 낮을까?
++------------------------------------------------------------------+
+|                                                                  |
+|  배틀로얄 특성:                                                  |
+|  +------------------------------------------------------------+  |
+|  | - 100명 동시 플레이 -> 서버 부하 막대                      |  |
+|  | - 넓은 맵 -> 대부분의 적은 멀리 있음                       |  |
+|  | - 초반: 모두 흩어져 있음 -> 낮은 틱레이트 OK               |  |
+|  | - 후반: 좁은 지역 -> 높은 틱레이트 필요하지만 인원 감소    |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  PUBG 동적 틱레이트:                                             |
+|  - 시작: ~17 Hz (100명 살아있음)                                 |
+|  - 중반: ~25 Hz (50명 생존)                                      |
+|  - 후반: ~30 Hz (20명 생존, 좁은 자기장)                         |
+|                                                                  |
++------------------------------------------------------------------+</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 틱레이트 vs 렌더 프레임</h2>
+            <div class="q">144fps 모니터면 144틱이 필요해?</div>
+            <div class="a">
+                <p><span class="key-point">아닙니다.</span> 렌더 프레임레이트와 네트워크 틱레이트는 별개입니다:</p>
+                <div class="diagram">
+틱레이트 vs 프레임레이트:
++------------------------------------------------------------------+
+|                                                                  |
+|  서버 틱: 20 Hz (50ms 간격)                                      |
+|  클라 프레임: 144 Hz (6.9ms 간격)                                |
+|                                                                  |
+|  시간:  0ms     50ms    100ms   150ms   200ms                   |
+|         |        |        |        |        |                    |
+|  서버:  T1 ------> T2 ------> T3 ------> T4 ------> ...          |
+|         |        |        |        |        |                    |
+|  클라:  |FFFFFFFF|FFFFFFFF|FFFFFFFF|FFFFFFFF| (각 구간 ~7프레임) |
+|                                                                  |
+|  클라이언트가 하는 일:                                           |
+|  +------------------------------------------------------------+  |
+|  | Frame 1~7:   T1 -> T2 사이를 보간해서 렌더링               |  |
+|  | Frame 8~14:  T2 -> T3 사이를 보간해서 렌더링               |  |
+|  | ...                                                        |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  결과:                                                           |
+|  - 20Hz 서버 데이터로 144fps 부드러운 화면 가능                  |
+|  - 보간 덕분에 끊김 없음                                         |
+|  - 단, 실제 게임 상태는 50ms마다 업데이트 (히트박스 등)          |
+|                                                                  |
++------------------------------------------------------------------+</div>
+                <div class="code-block">
+// 고프레임 렌더링 + 저틱 서버
+
+class HighFpsRenderer {
+private:
+    // 서버에서 받은 스냅샷 (20Hz)
+    GameState m_prevState;
+    GameState m_nextState;
+    float m_interpolationT = 0.0f;
+
+    // 렌더 시간 (144Hz)
+    float m_renderAccumulator = 0.0f;
+    float m_tickInterval = 50.0f;  // 20Hz = 50ms
+
+public:
+    void Update(float deltaTime) {
+        // 보간 진행
+        m_renderAccumulator += deltaTime;
+        m_interpolationT = m_renderAccumulator / m_tickInterval;
+
+        // 다음 틱 도착하면 스냅샷 교체
+        if (m_interpolationT >= 1.0f) {
+            m_prevState = m_nextState;
+            m_nextState = GetLatestServerState();
+            m_renderAccumulator -= m_tickInterval;
+            m_interpolationT = m_renderAccumulator / m_tickInterval;
+        }
+
+        // 보간된 상태로 렌더링
+        GameState interpolated = Lerp(m_prevState, m_nextState, m_interpolationT);
+        Render(interpolated);
+    }
+
+    GameState Lerp(const GameState& a, const GameState& b, float t) {
+        GameState result;
+
+        // 위치: 선형 보간
+        result.position = a.position + (b.position - a.position) * t;
+
+        // 회전: 구면 선형 보간 (Slerp)
+        result.rotation = Slerp(a.rotation, b.rotation, t);
+
+        // 애니메이션: 시간 진행
+        result.animTime = a.animTime + (b.animTime - a.animTime) * t;
+
+        // HP 등 이산 값: 보간 안 함 (최신 값 사용)
+        result.hp = b.hp;
+        result.status = b.status;
+
+        return result;
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>틱레이트</strong> = 서버가 초당 게임 상태를 업데이트하는 횟수</li>
+                <li><strong>FPS는 64~128Hz</strong> (헤드샷 정밀도), <strong>MMO는 10~20Hz</strong> (동시접속)</li>
+                <li>틱레이트 2배 = <strong>대역폭 2배</strong> (정비례 관계)</li>
+                <li><strong>서버/클라 틱 분리</strong>: 서버 20Hz + 클라 144fps 가능 (보간으로 부드럽게)</li>
+                <li><strong>가변 틱레이트</strong>: 마을 5Hz, 던전 20Hz, PvP 30Hz 등 상황별 조절</li>
+                <li>배틀로얄은 <strong>생존자 수에 따라 동적 조절</strong></li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../broadcast-optimization/">&larr; 브로드캐스트 최적화</a>
+            <a href="../voip-webrtc/">VoIP와 WebRTC &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

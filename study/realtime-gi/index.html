@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 Global Illumination - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #7B1FA2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #F3E5F5; }
+        .q { background: #F3E5F5; border-left: 4px solid #9C27B0; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #7B1FA2; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #F3E5F5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #7B1FA2; }
+        .key-point { background: #E1BEE7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #4A148C; }
+        .warning { background: #FFCDD2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B71C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+        .summary-box { background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #9C27B0; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-gpu/" class="back-link">&larr; GPU / 그래픽스</a>
+
+        <div class="header">
+            <h1>실시간 Global Illumination</h1>
+            <p>실시간 GI(Global Illumination)는 어떻게 가능해진 걸까?</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. Global Illumination이란?</h2>
+            <div class="q">GI가 없으면 어떻게 보여?</div>
+            <div class="a">
+                <p><span class="highlight">Global Illumination</span>은 빛의 간접 반사를 시뮬레이션합니다.</p>
+                <p>GI 없이는 직접 빛만 표현되어 어두운 곳이 완전히 검게 보입니다.</p>
+                <div class="diagram">
+Direct Light vs Global Illumination:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [Direct Light Only]                                        │
+│                                                             │
+│       * 태양                                                │
+│        \                                                    │
+│         \                                                   │
+│    +-----\-------+                                          │
+│    |      \      |                                          │
+│    |  밝음 | 검정 |  <- 직접광이 안 닿는 곳은 완전히 어둠   │
+│    |      |      |                                          │
+│    +-------------+                                          │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  [With Global Illumination]                                 │
+│                                                             │
+│       * 태양                                                │
+│        \                                                    │
+│         \      간접광                                       │
+│    +-----\-------+  /                                       │
+│    |      \    <-|-+  빛이 벽에서 반사되어                  │
+│    |  밝음 | 어둠 |   어두운 곳도 약간 밝아짐               │
+│    |      |  +   |                                          │
+│    +-------------+                                          │
+│                                                             │
+│  간접광 경로:                                                │
+│  태양 -> 바닥 -> 벽 -> 천장 -> ... (무한 반사)             │
+│                                                             │
+│  <span class="key-point">Color Bleeding</span>: 빨간 벽 옆은 붉은 빛이 반사됨          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 베이크 vs 실시간</h2>
+            <div class="q">예전에는 GI를 어떻게 했어?</div>
+            <div class="a">
+                <p>오프라인에서 미리 계산해서 <span class="highlight">라이트맵에 굽는(Bake)</span> 방식이었습니다.</p>
+                <div class="diagram">
+베이크 GI vs 실시간 GI:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [Baked Lightmaps]                                          │
+│                                                             │
+│  장점:                                                      │
+│  - 최고 품질 GI (수시간 계산)                               │
+│  - 런타임 비용 거의 없음 (텍스처 샘플링만)                  │
+│                                                             │
+│  단점:                                                      │
+│  - <span class="warning">동적 오브젝트에 적용 불가</span>                            │
+│  - <span class="warning">시간대/날씨 변경 불가</span>                                │
+│  - 빌드 시간 오래 걸림                                      │
+│  - 메모리 사용량 높음 (라이트맵 텍스처)                     │
+│                                                             │
+│  사용: 정적 실내 환경, 모바일 게임                          │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  [Realtime GI]                                               │
+│                                                             │
+│  장점:                                                      │
+│  - 동적 조명/오브젝트 지원                                  │
+│  - 시간대/날씨 자유롭게 변경                                │
+│  - 빌드 시간 없음                                           │
+│                                                             │
+│  단점:                                                      │
+│  - <span class="warning">런타임 비용 높음</span>                                     │
+│  - 품질 제한 (근사 기법 사용)                               │
+│  - 노이즈/라이트 리크 아티팩트                              │
+│                                                             │
+│  사용: 오픈월드, 시뮬레이션, 차세대 AAA 게임                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. Light Probes</h2>
+            <div class="q">가장 간단한 실시간 GI 방법은?</div>
+            <div class="a">
+                <p><span class="highlight">Light Probes</span>는 공간에 미리 배치된 샘플 포인트입니다.</p>
+                <div class="diagram">
+Light Probe 시스템:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [배치]                                                      │
+│                                                             │
+│    *       *       *       *  <- Light Probes               │
+│       +-------+                                             │
+│       |       |                                             │
+│    *  |  방   |  *       *                                  │
+│       |       |                                             │
+│       +-------+                                             │
+│    *       *       *       *                                │
+│                                                             │
+│  각 Probe에 SH (Spherical Harmonics) 저장:                  │
+│  - 모든 방향의 간접광을 9~16개 계수로 압축                  │
+│  - 베이크 또는 실시간 업데이트 가능                         │
+│                                                             │
+│  [런타임 샘플링]                                             │
+│                                                             │
+│    *───────*                                                │
+│    |       |                                                │
+│    |   @   |  <- 오브젝트 위치에서                          │
+│    |       |     주변 4개 Probe 보간                        │
+│    *───────*                                                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// Light Probe 샘플링 (Spherical Harmonics)
+
+// SH 계수 (L0, L1 = 4개 밴드, 9개 계수)
+struct LightProbe {
+    float3 L00;   // DC 성분 (평균 밝기)
+    float3 L1_1, L10, L11;  // 1차 밴드 (방향성)
+    // L2 밴드까지 사용하면 더 정밀
+};
+
+// 노말 방향의 간접광 계산
+float3 SampleSH(LightProbe probe, float3 normal) {
+    float3 result = float3(0, 0, 0);
+
+    // L0 (상수항)
+    result += probe.L00 * 0.282095;
+
+    // L1 (선형항)
+    result += probe.L1_1 * 0.488603 * normal.y;
+    result += probe.L10  * 0.488603 * normal.z;
+    result += probe.L11  * 0.488603 * normal.x;
+
+    return max(result, 0);
+}
+
+// 주변 Probe들 보간
+float3 GetIndirectDiffuse(float3 worldPos, float3 normal) {
+    // 가장 가까운 8개 Probe 찾기 (3D 그리드 가정)
+    int3 gridPos = GetGridPosition(worldPos);
+
+    float3 result = float3(0, 0, 0);
+    float totalWeight = 0;
+
+    for (int i = 0; i < 8; i++) {
+        int3 probeIdx = GetProbeIndex(gridPos, i);
+        LightProbe probe = LoadProbe(probeIdx);
+
+        float weight = TrilinearWeight(worldPos, probeIdx);
+        result += SampleSH(probe, normal) * weight;
+        totalWeight += weight;
+    }
+
+    return result / totalWeight;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. DDGI (Dynamic Diffuse GI)</h2>
+            <div class="q">NVIDIA의 DDGI는 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">DDGI</span>는 Light Probe를 레이트레이싱으로 실시간 업데이트합니다.</p>
+                <div class="diagram">
+DDGI 파이프라인:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [1단계] Ray Casting (각 Probe에서)                         │
+│                                                             │
+│          *  Probe                                           │
+│         /|\                                                 │
+│        / | \   -> 여러 방향으로 레이 발사                   │
+│       /  |  \      (64~256개)                               │
+│      v   v   v                                              │
+│    Hit1 Hit2 Hit3  각 Hit 지점의 색상 + 거리 수집           │
+│                                                             │
+│  [2단계] Probe 업데이트                                      │
+│                                                             │
+│    +--------+                                               │
+│    | Probe  |  <- 새로운 SH 계수 계산                       │
+│    | Octahe |     이전 프레임과 블렌딩 (시간적 안정성)      │
+│    | dron   |                                               │
+│    +--------+                                               │
+│                                                             │
+│  [3단계] 가시성 테스트 (Distance Field)                     │
+│                                                             │
+│    Probe -> ? -> Surface                                    │
+│                                                             │
+│    가려진 Probe는 가중치 0                                  │
+│    -> 라이트 리크 방지                                      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// DDGI 스타일 Probe 업데이트 (간략화)
+
+// 각 Probe에서 레이 캐스팅
+[numthreads(64, 1, 1)]
+void CS_TraceProbeRays(uint3 id : SV_DispatchThreadID) {
+    uint probeIndex = id.y;
+    uint rayIndex = id.x;
+
+    float3 probePos = GetProbePosition(probeIndex);
+    float3 rayDir = GetSphereDirection(rayIndex, 64);  // 균등 분포
+
+    // 레이트레이싱
+    RayDesc ray;
+    ray.Origin = probePos;
+    ray.Direction = rayDir;
+    ray.TMin = 0.01;
+    ray.TMax = 10000;
+
+    RayPayload payload = TracePrimaryRay(ray);
+
+    // 히트 정보 저장
+    ProbeRayData[probeIndex][rayIndex].radiance = payload.color;
+    ProbeRayData[probeIndex][rayIndex].distance = payload.hitT;
+}
+
+// Probe의 Irradiance 텍스처 업데이트
+[numthreads(8, 8, 1)]
+void CS_UpdateProbeIrradiance(uint3 id : SV_DispatchThreadID) {
+    uint probeIndex = GetProbeFromTexel(id.xy);
+    float3 texelDir = GetDirectionFromTexel(id.xy);
+
+    float3 irradiance = float3(0, 0, 0);
+    float totalWeight = 0;
+
+    // 모든 레이 결과 가중합
+    for (int r = 0; r < 64; r++) {
+        float3 rayDir = GetRayDirection(r);
+        float weight = max(0, dot(texelDir, rayDir));  // 코사인 가중치
+
+        irradiance += ProbeRayData[probeIndex][r].radiance * weight;
+        totalWeight += weight;
+    }
+
+    irradiance /= max(totalWeight, 0.0001);
+
+    // 이전 프레임과 블렌딩 (hysteresis)
+    float3 prevIrradiance = ProbeIrradiance[id.xy].rgb;
+    float blendFactor = 0.02;  // 2%만 새 값 반영
+
+    ProbeIrradiance[id.xy] = float4(
+        lerp(prevIrradiance, irradiance, blendFactor), 1.0
+    );
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. Lumen (UE5)</h2>
+            <div class="q">언리얼 엔진 5의 Lumen은 어떻게 돼?</div>
+            <div class="a">
+                <p><span class="highlight">Lumen</span>은 하이브리드 GI 시스템으로, 여러 기법을 조합합니다.</p>
+                <div class="diagram">
+Lumen 아키텍처:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [Scene Representation]                                     │
+│                                                             │
+│  Mesh Distance Fields        Surface Cache                  │
+│  ┌────────────────┐         ┌────────────────┐             │
+│  │ 메시별 SDF     │         │ 표면의 간접광  │             │
+│  │ (형상 근사)    │         │ (카드에 저장)  │             │
+│  └───────┬────────┘         └───────┬────────┘             │
+│          │                          │                       │
+│          └──────────┬───────────────┘                       │
+│                     │                                       │
+│                     v                                       │
+│  [Tracing Methods]                                          │
+│                                                             │
+│  Screen-Space (SSGI)    Software RT    Hardware RT          │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐    │
+│  │ G-Buffer     │   │ SDF 레이마칭 │   │ RTX 가속     │    │
+│  │ 트레이싱     │   │ (거리장 활용)│   │ (선택적)     │    │
+│  └──────────────┘   └──────────────┘   └──────────────┘    │
+│                                                             │
+│  [Output]                                                   │
+│                                                             │
+│  Final Gather → Spatial/Temporal Filter → Screen            │
+│                                                             │
+│  특징:                                                      │
+│  - HW RT 없이도 동작 (소프트웨어 레이마칭)                  │
+│  - 화면 밖 반사도 근사 가능 (Surface Cache)                 │
+│  - 동적 오브젝트 완전 지원                                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+Lumen 품질 설정 예시:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  설정          Low       Medium     High      Epic          │
+│  ─────────────────────────────────────────────────────────  │
+│  Ray/픽셀      0.5       1          2         4            │
+│  Final Gather  8x8       4x4        2x2       1x1          │
+│  HW RT         Off       Off        Optional  On           │
+│  비용          1-2ms     3-4ms      5-7ms     8-12ms       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 성능과 품질 트레이드오프</h2>
+            <div class="q">실시간 GI가 느린 이유는?</div>
+            <div class="a">
+                <p>빛의 무한 반사를 시뮬레이션하는 것은 본질적으로 비쌉니다.</p>
+                <div class="diagram">
+GI 기법별 비용/품질:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  기법                비용    품질    동적    사용처         │
+│  ─────────────────────────────────────────────────────────  │
+│  Baked Lightmaps    *       *****   X       모바일         │
+│  Light Probes       **      ***     O       캐릭터용       │
+│  SSGI               **      **      O       보조           │
+│  Voxel GI (SVOGI)   ***     ***     O       중급 PC        │
+│  DDGI               ****    ****    O       고급 PC        │
+│  Lumen              ****    ****    O       UE5            │
+│  Path Tracing       *****   *****   O       RTX/오프라인   │
+│                                                             │
+│  [최적화 전략]                                               │
+│                                                             │
+│  1. 해상도 스케일링                                          │
+│     - 1/2 해상도에서 GI 계산 후 업스케일                    │
+│                                                             │
+│  2. 시간적 누적 (Temporal Accumulation)                     │
+│     - 여러 프레임에 걸쳐 샘플 누적                          │
+│     - 노이즈 감소, 비용 분산                                │
+│                                                             │
+│  3. 공간적 캐싱                                              │
+│     - Probe/Voxel에 결과 저장                               │
+│     - 변화 없으면 재사용                                    │
+│                                                             │
+│  4. 하이브리드 접근                                          │
+│     - 가까움: SSGI (빠름)                                   │
+│     - 멀리: Probes (저렴)                                   │
+│     - 중요한 곳: RT (고품질)                                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>GI</strong> = 빛의 간접 반사, Color Bleeding, 자연스러운 Ambient</li>
+                <li><strong>Baked</strong> = 오프라인 계산, 고품질이지만 정적 환경만</li>
+                <li><strong>Light Probes</strong> = SH 계수로 간접광 저장, 동적 오브젝트에 적용</li>
+                <li><strong>DDGI</strong> = 레이트레이싱으로 Probe 실시간 업데이트</li>
+                <li><strong>Lumen</strong> = SDF + Surface Cache + 다양한 트레이싱 조합</li>
+                <li><strong>최적화</strong> = 시간적 누적, 해상도 스케일링, 하이브리드 접근</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../pbr-rendering/">&larr; PBR 렌더링</a>
+            <a href="../hair-rendering/">Hair 렌더링 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

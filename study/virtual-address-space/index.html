@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가상 주소 공간 - CS 기초 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #455A64;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #ECEFF1;
+        }
+
+        .q {
+            background: #ECEFF1;
+            border-left: 4px solid #607D8B;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #455A64;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #ECEFF1;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #455A64;
+        }
+        .key-point {
+            background: #CFD8DC;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #37474F;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .diagram {
+            background: #F8FAFC;
+            border: 2px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            overflow-x: auto;
+            white-space: pre;
+            color: #334155;
+        }
+
+        .code-block {
+            background: #1E293B;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            color: #E2E8F0;
+            overflow-x: auto;
+            line-height: 1.7;
+            white-space: pre;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #607D8B 0%, #455A64 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul { list-style: none; }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #B0BEC5;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #607D8B;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-cs/" class="back-link">< CS 기초</a>
+
+        <header class="header">
+            <h1>게임이 "메모리 부족"이라는데 RAM은 남았는데?</h1>
+            <p>가상 주소 공간(Virtual Address Space)의 이해</p>
+        </header>
+
+        <div class="conversation">
+            <h2>Part 1. 이상한 메모리 부족 현상</h2>
+
+            <div class="q">유저가 "메모리 16GB인데 왜 튕겨요?" 라고 물어봐. 뭐라고 해?</div>
+            <div class="a">
+                <p>이건 <span class="highlight">물리 메모리(RAM)</span>와 <span class="highlight">가상 주소 공간</span>의 차이 때문이야!</p>
+                <p>유저 컴퓨터의 RAM이 아무리 많아도, 프로그램이 사용할 수 있는 <span class="key-point">"주소"</span>가 부족하면 튕겨.</p>
+            </div>
+
+            <div class="diagram">
+흔한 오해:
+
+유저: "제 컴퓨터 RAM 16GB인데요?"
+┌────────────────────────────────────────────────────┐
+│ 물리 메모리 (RAM)                                   │
+│ [████████████████░░░░░░░░░░░░░░░░░░░░]            │
+│  8GB 사용중           8GB 남음                      │
+│                                                    │
+│ "RAM이 남았으니까 프로그램이 더 쓸 수 있겠지?"       │
+│                      ↓                             │
+│            <span class="warning">틀렸습니다!</span>                            │
+└────────────────────────────────────────────────────┘
+
+실제 상황:
+
+유저의 32비트 게임:
+┌────────────────────────────────────────────────────┐
+│ 가상 주소 공간 (Virtual Address Space)             │
+│ [████████████████████████████████████████]        │
+│  0x00000000                       0xFFFFFFFF      │
+│        ↑                                          │
+│  <span class="warning">2GB 한계에 도달! (32비트 프로세스)</span>              │
+│                                                    │
+│ RAM이 16GB 있어도, "주소"를 쓸 수 없으면 끝!        │
+└────────────────────────────────────────────────────┘</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 가상 주소 공간이란?</h2>
+
+            <div class="q">가상 주소 공간이 뭐야?</div>
+            <div class="a">
+                <p>프로세스가 마치 <span class="key-point">"혼자서 전체 메모리를 다 쓰는 것처럼"</span> 보이게 해주는 시스템이야.</p>
+                <p>실제로는 OS가 가상 주소를 물리 주소로 변환해주고 있어.</p>
+            </div>
+
+            <div class="diagram">
+가상 주소 공간의 핵심 개념:
+
+┌──────────────────────────────────────────────────────────────┐
+│                                                              │
+│  프로세스 A                    프로세스 B                    │
+│  "내가 0x1000 쓴다!"           "나도 0x1000 쓴다!"           │
+│        │                             │                       │
+│        ▼                             ▼                       │
+│  ┌─────────────┐              ┌─────────────┐               │
+│  │ 가상 주소   │              │ 가상 주소   │               │
+│  │ 0x1000      │              │ 0x1000      │               │
+│  └──────┬──────┘              └──────┬──────┘               │
+│         │                            │                       │
+│         └─────────┬──────────────────┘                       │
+│                   ▼                                          │
+│         ┌──────────────────┐                                 │
+│         │ 페이지 테이블     │  (OS가 관리하는 변환 테이블)    │
+│         │ A: 0x1000 → 물리 0x5000                           │
+│         │ B: 0x1000 → 물리 0x8000                           │
+│         └──────────────────┘                                 │
+│                   │                                          │
+│                   ▼                                          │
+│  ┌───────────────────────────────────────────────────┐      │
+│  │ 물리 메모리 (RAM)                                  │      │
+│  │ 0x5000: [프로세스 A 데이터]                        │      │
+│  │ 0x8000: [프로세스 B 데이터]                        │      │
+│  └───────────────────────────────────────────────────┘      │
+│                                                              │
+│  <span class="key-point">같은 가상 주소 0x1000이 다른 물리 주소로 매핑!</span>              │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘</div>
+
+            <div class="q">왜 이런 복잡한 걸 만들었어?</div>
+            <div class="a">
+                <p>여러 가지 이유가 있어:</p>
+            </div>
+
+            <div class="diagram">
+가상 메모리의 장점:
+
+1. <span class="key-point">프로세스 격리</span>
+   ┌─────────────────────────────────────────────────┐
+   │ 프로세스 A가 0x1000에 뭘 써도                    │
+   │ 프로세스 B의 0x1000은 영향 없음!                 │
+   │                                                 │
+   │ → 한 프로그램 크래시해도 다른 프로그램 안전      │
+   └─────────────────────────────────────────────────┘
+
+2. <span class="key-point">메모리 보호</span>
+   ┌─────────────────────────────────────────────────┐
+   │ 페이지별로 권한 설정 가능:                       │
+   │ - 읽기 전용 (코드 영역)                         │
+   │ - 읽기/쓰기 (데이터 영역)                       │
+   │ - 실행 금지 (스택, 힙)                          │
+   │                                                 │
+   │ → 버퍼 오버플로우 공격 방어에 필수!             │
+   └─────────────────────────────────────────────────┘
+
+3. <span class="key-point">RAM보다 큰 메모리 사용</span>
+   ┌─────────────────────────────────────────────────┐
+   │ RAM: 4GB                                        │
+   │ 프로세스가 원하는 메모리: 8GB                    │
+   │                                                 │
+   │ → 안 쓰는 부분은 디스크(페이지 파일)에 저장     │
+   │ → 필요할 때 다시 RAM으로 로드                   │
+   └─────────────────────────────────────────────────┘</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 페이지 테이블의 동작</h2>
+
+            <div class="q">페이지 테이블이 어떻게 동작해?</div>
+            <div class="a">
+                <p>가상 주소를 <span class="highlight">페이지</span> 단위(보통 4KB)로 나눠서 물리 주소와 매핑해.</p>
+            </div>
+
+            <div class="diagram">
+페이지 테이블 동작 원리:
+
+가상 주소: 0x12345678 (32비트)
+┌────────────────────────────────────────────────────┐
+│                                                    │
+│  [0x12345] [0x678]                                 │
+│      ↓        ↓                                    │
+│  페이지 번호  페이지 내 오프셋                      │
+│                                                    │
+└────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────┐
+│ 페이지 테이블 (프로세스마다 별도)                   │
+├───────────────┬─────────────┬──────────────────────┤
+│ 가상 페이지   │ 물리 프레임 │ 플래그               │
+├───────────────┼─────────────┼──────────────────────┤
+│ 0x12344       │ 0xABC00     │ R/W, Present         │
+│ <span class="key-point">0x12345</span>       │ <span class="key-point">0x78900</span>     │ R/W, Present         │
+│ 0x12346       │ -           │ Not Present (swap)   │
+└───────────────┴─────────────┴──────────────────────┘
+         │
+         ▼
+물리 주소 = 0x78900 + 0x678 = <span class="key-point">0x78F78</span>
+
+플래그 설명:
+- Present: RAM에 있음 (없으면 페이지 폴트!)
+- R/W: 읽기/쓰기 가능
+- User: 유저 모드 접근 가능
+- Dirty: 수정됨 (swap 시 디스크에 써야 함)</div>
+
+            <div class="q">페이지 폴트가 뭐야?</div>
+            <div class="a">
+                <p>접근하려는 페이지가 RAM에 없을 때 발생하는 인터럽트야.</p>
+                <p>OS가 디스크에서 해당 페이지를 읽어서 RAM에 올려줘.</p>
+            </div>
+
+            <div class="diagram">
+페이지 폴트 처리 과정:
+
+┌────────────────────────────────────────────────────────────┐
+│ 1. CPU가 가상 주소 0x12346678 접근 시도                     │
+│                   ↓                                        │
+│ 2. 페이지 테이블 확인 → 0x12346 페이지가 "Not Present"!     │
+│                   ↓                                        │
+│ 3. <span class="warning">페이지 폴트 발생!</span> (CPU 예외)                           │
+│                   ↓                                        │
+│ 4. OS 페이지 폴트 핸들러 실행                               │
+│    ├─ 빈 물리 프레임 찾기                                  │
+│    ├─ (없으면) 안 쓰는 페이지를 디스크로 swap-out           │
+│    └─ 디스크에서 필요한 페이지를 RAM으로 swap-in            │
+│                   ↓                                        │
+│ 5. 페이지 테이블 업데이트 (Present = 1)                     │
+│                   ↓                                        │
+│ 6. 원래 명령어 다시 실행                                    │
+└────────────────────────────────────────────────────────────┘
+
+<span class="warning">페이지 폴트가 너무 자주 일어나면? → 쓰래싱(Thrashing)!</span>
+→ 디스크 I/O가 병목이 되어 시스템이 매우 느려짐</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 실제 게임에서의 메모리 부족 사례</h2>
+
+            <div class="q">실제로 어떤 문제가 생겨?</div>
+            <div class="a">
+                <p>32비트 게임에서 가장 흔한 문제는 <span class="warning">가상 주소 공간 고갈</span>이야.</p>
+            </div>
+
+            <div class="diagram">
+실제 사례: 32비트 MMORPG
+
+┌──────────────────────────────────────────────────────────────┐
+│ 가상 주소 공간 (2GB 한계)                                    │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  0x00000000 ┌────────────────────┐                          │
+│             │ EXE 코드           │ 100MB                     │
+│  0x00400000 ├────────────────────┤                          │
+│             │ DLL들              │ 300MB                     │
+│             │ (DirectX, 물리엔진)│                           │
+│  0x10000000 ├────────────────────┤                          │
+│             │ 텍스처 메모리      │ 800MB                     │
+│             │ (VRAM 미러링)      │                           │
+│  0x40000000 ├────────────────────┤                          │
+│             │ 3D 모델 데이터     │ 400MB                     │
+│             │                    │                           │
+│  0x60000000 ├────────────────────┤                          │
+│             │ 게임 오브젝트 힙   │ 300MB                     │
+│             │                    │                           │
+│  0x70000000 ├────────────────────┤                          │
+│             │ <span class="warning">단편화된 빈 공간</span>    │ 100MB (조각조각)       │
+│             │                    │                           │
+│  0x7FFFFFFF └────────────────────┘                          │
+│                                                              │
+│  총 사용: ~1.9GB / 한계: 2GB                                 │
+│  <span class="warning">100MB 남았지만, 50MB 연속 공간이 없어서 할당 실패!</span>       │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘</div>
+
+            <div class="q">왜 조각나는 거야?</div>
+            <div class="a">
+                <p>동적 할당/해제가 반복되면서 <span class="highlight">외부 단편화</span>가 발생해.</p>
+            </div>
+
+            <div class="code-block">
+// 게임 플레이 중 메모리 상태 변화
+
+초기 상태:
+[████████████████████████████████████████░░░░░░░░░░]
+ 텍스처A  모델B  텍스처C  모델D  사운드E    빈 공간
+
+존 이동 후 (일부 언로드):
+[████████░░░░░░░░████████░░░░░░░░████████░░░░░░░░░░]
+ 텍스처A  (해제)  텍스처F  (해제)  사운드E    빈 공간
+                 ↓
+         새 텍스처 G (200MB) 로드 시도
+                 ↓
+<span class="warning">연속된 200MB 공간이 없어서 실패!</span>
+(빈 공간 총합은 300MB지만, 가장 큰 연속 공간은 100MB)</div>
+
+            <div class="q">해결 방법은?</div>
+            <div class="a">
+                <p>여러 가지 전략이 있어:</p>
+            </div>
+
+            <div class="diagram">
+메모리 단편화 해결 전략:
+
+1. <span class="key-point">64비트로 전환</span>
+   ┌────────────────────────────────────────────────┐
+   │ 가상 주소 공간: 2GB → 128TB                    │
+   │ 단편화가 있어도 공간이 넉넉함                  │
+   └────────────────────────────────────────────────┘
+
+2. <span class="key-point">메모리 풀 사용</span>
+   ┌────────────────────────────────────────────────┐
+   │ 같은 크기 객체끼리 모아서 관리                 │
+   │ → 외부 단편화 최소화                          │
+   │                                                │
+   │ 예: 몬스터 풀, 이펙트 풀, 네트워크 패킷 풀     │
+   └────────────────────────────────────────────────┘
+
+3. <span class="key-point">대용량 할당 미리 예약</span>
+   ┌────────────────────────────────────────────────┐
+   │ 게임 시작 시 텍스처용 1GB 미리 VirtualAlloc    │
+   │ → 나중에 단편화로 못 잡는 상황 방지            │
+   └────────────────────────────────────────────────┘
+
+4. <span class="key-point">/LARGEADDRESSAWARE 플래그</span>
+   ┌────────────────────────────────────────────────┐
+   │ 32비트 프로세스도 최대 4GB까지 사용 가능       │
+   │ (64비트 Windows에서 실행 시)                   │
+   └────────────────────────────────────────────────┘</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 디버깅: 메모리 상태 확인하기</h2>
+
+            <div class="q">가상 주소 공간 상태를 어떻게 확인해?</div>
+            <div class="a">
+                <p><span class="highlight">VMMap</span> 도구가 가장 직관적이야 (Sysinternals 제공, 무료).</p>
+            </div>
+
+            <div class="code-block">
+// 코드로 가상 메모리 상태 확인하기
+
+#include &lt;windows.h&gt;
+#include &lt;psapi.h&gt;
+
+void PrintMemoryInfo() {
+    MEMORYSTATUSEX memInfo;
+    memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+    GlobalMemoryStatusEx(&memInfo);
+
+    printf("물리 메모리 전체: %llu MB\n",
+           memInfo.ullTotalPhys / (1024 * 1024));
+    printf("물리 메모리 사용 가능: %llu MB\n",
+           memInfo.ullAvailPhys / (1024 * 1024));
+    printf("가상 메모리 전체: %llu MB\n",
+           memInfo.ullTotalVirtual / (1024 * 1024));
+    printf("가상 메모리 사용 가능: %llu MB\n",
+           memInfo.ullAvailVirtual / (1024 * 1024));
+}
+
+// 프로세스 메모리 상세 정보
+void PrintProcessMemory() {
+    PROCESS_MEMORY_COUNTERS_EX pmc;
+    GetProcessMemoryInfo(GetCurrentProcess(),
+                         (PROCESS_MEMORY_COUNTERS*)&pmc,
+                         sizeof(pmc));
+
+    printf("작업 집합 (RAM에 있는 양): %zu MB\n",
+           pmc.WorkingSetSize / (1024 * 1024));
+    printf("커밋 크기 (할당받은 총량): %zu MB\n",
+           pmc.PrivateUsage / (1024 * 1024));
+}</div>
+
+            <div class="diagram">
+VMMap으로 본 실제 게임 메모리:
+
+┌────────────────────────────────────────────────────────────┐
+│ Type            Size      Committed   Private              │
+├────────────────────────────────────────────────────────────┤
+│ Image           312 MB    312 MB      0 KB     (.exe, .dll)│
+│ Mapped File     128 MB    128 MB      0 KB     (메모리맵)  │
+│ Shareable       64 MB     64 MB       0 KB                 │
+│ <span class="warning">Heap            1,024 MB  1,024 MB    1,024 MB</span>  ← 주목!  │
+│ Stack           16 MB     2 MB        2 MB                 │
+│ Private Data    256 MB    256 MB      256 MB               │
+│ <span class="key-point">Free            200 MB</span>    -           -         ← 남은 공간│
+├────────────────────────────────────────────────────────────┤
+│ Total           2,000 MB                                   │
+│ <span class="warning">Largest Free Block: 45 MB</span>  ← 연속 공간 부족!           │
+└────────────────────────────────────────────────────────────┘</div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>가상 주소 공간</strong> - 프로세스가 사용할 수 있는 주소의 범위 (RAM과 별개!)</li>
+                <li><strong>페이지 테이블</strong> - 가상 주소를 물리 주소로 변환하는 OS 테이블</li>
+                <li><strong>페이지 폴트</strong> - 필요한 페이지가 RAM에 없을 때 발생하는 인터럽트</li>
+                <li><strong>32비트 한계</strong> - 가상 주소 공간 2GB (RAM이 16GB여도 2GB만 사용 가능)</li>
+                <li><strong>외부 단편화</strong> - 연속된 빈 공간이 없어서 큰 할당 실패</li>
+                <li><strong>해결책</strong> - 64비트 전환, 메모리 풀, /LARGEADDRESSAWARE</li>
+                <li><strong>디버깅</strong> - VMMap, Process Explorer, GlobalMemoryStatusEx()</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-cs/">< CS 기초</a>
+            <a href="../32bit-memory-limit/">32비트 4GB 한계 ></a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>좋은 로그 메시지 - UX/DX - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #FF5722; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FBE9E7; }
+        .q { background: #FBE9E7; border-left: 4px solid #FF5722; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #E64A19; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #FBE9E7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #E64A19; }
+        .key-point { background: #FFCCBC; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #BF360C; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #FF5722 0%, #E64A19 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #FF5722; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">&larr; UX / DX</a>
+
+        <div class="header">
+            <h1>좋은 로그 메시지</h1>
+            <p>좋은 로그 메시지의 조건</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 로그 레벨</h2>
+            <div class="q">로그 레벨이 왜 필요해?</div>
+            <div class="a">
+                <p><span class="highlight">심각도에 따라 분류</span>하면 문제 추적이 쉬워집니다:</p>
+                <div class="diagram">
+로그 레벨 체계:
++----------------------------------------------------------+
+|                                                          |
+|  레벨          용도                   예시                |
+|  -----        ----                   ----                |
+|  <span class="key-point">TRACE</span>       아주 상세한 디버깅     함수 진입/종료       |
+|  <span class="highlight">DEBUG</span>       개발 중 디버깅          변수 값 출력         |
+|  INFO        일반적인 정보           서버 시작, 접속 수   |
+|  <span class="warning">WARN</span>        잠재적 문제             메모리 80% 사용      |
+|  <span class="warning">ERROR</span>       오류 (복구 가능)        DB 연결 실패 재시도  |
+|  <span class="warning">FATAL</span>       치명적 오류 (종료)      서버 크래시          |
+|                                                          |
++----------------------------------------------------------+
+
+환경별 로그 레벨 설정:
++----------------------------------------------------------+
+|  환경          최소 레벨    설명                         |
+|  ----         --------    ----                         |
+|  개발          TRACE       모든 로그 출력                |
+|  테스트        DEBUG       TRACE 제외                   |
+|  스테이징      INFO        정상 동작 확인용              |
+|  프로덕션      WARN        문제만 기록 (성능 중요)       |
++----------------------------------------------------------+</div>
+                <div class="code-block">
+// 로그 레벨 시스템
+enum LogLevel {
+    TRACE = 0,
+    DEBUG = 1,
+    INFO = 2,
+    WARN = 3,
+    ERROR = 4,
+    FATAL = 5
+};
+
+class Logger {
+    LogLevel m_minLevel = INFO;  // 이 레벨 이상만 출력
+
+public:
+    void SetLevel(LogLevel level) { m_minLevel = level; }
+
+    void Log(LogLevel level, const char* format, ...) {
+        if (level < m_minLevel) return;  // 필터링
+
+        // 레벨 접두어
+        const char* prefix[] = {
+            "[TRACE]", "[DEBUG]", "[INFO ]",
+            "[WARN ]", "[ERROR]", "[FATAL]"
+        };
+
+        // 타임스탬프 + 레벨 + 메시지
+        printf("%s %s ", GetTimestamp(), prefix[level]);
+        va_list args;
+        va_start(args, format);
+        vprintf(format, args);
+        va_end(args);
+        printf("\n");
+    }
+};
+
+// 매크로로 편리하게 사용
+#define LOG_TRACE(...) Logger::Get()->Log(TRACE, __VA_ARGS__)
+#define LOG_DEBUG(...) Logger::Get()->Log(DEBUG, __VA_ARGS__)
+#define LOG_INFO(...)  Logger::Get()->Log(INFO, __VA_ARGS__)
+#define LOG_WARN(...)  Logger::Get()->Log(WARN, __VA_ARGS__)
+#define LOG_ERROR(...) Logger::Get()->Log(ERROR, __VA_ARGS__)
+#define LOG_FATAL(...) Logger::Get()->Log(FATAL, __VA_ARGS__)
+
+// 사용 예시
+void ProcessLogin(const User& user) {
+    LOG_DEBUG("ProcessLogin called: userId=%d", user.id);
+
+    if (user.isBanned) {
+        LOG_WARN("Banned user attempted login: %d", user.id);
+        return;
+    }
+
+    LOG_INFO("User logged in: %s", user.name);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 구조화된 로깅</h2>
+            <div class="q">로그를 분석하기 쉽게 하려면?</div>
+            <div class="a">
+                <p><span class="highlight">구조화된 로깅(Structured Logging)</span>을 사용합니다:</p>
+                <div class="diagram">
+텍스트 로그 vs 구조화 로그:
++----------------------------------------------------------+
+|                                                          |
+|  <span class="warning">텍스트 로그</span> (파싱 어려움):                               |
+|  +----------------------------------------------------+ |
+|  | [2024-01-15 10:23:45] User john logged in from     | |
+|  | 192.168.1.100 with session abc123                  | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  <span class="key-point">구조화 로그</span> (JSON):                                     |
+|  +----------------------------------------------------+ |
+|  | {                                                  | |
+|  |   "timestamp": "2024-01-15T10:23:45Z",             | |
+|  |   "level": "INFO",                                 | |
+|  |   "event": "user_login",                           | |
+|  |   "user": "john",                                  | |
+|  |   "ip": "192.168.1.100",                           | |
+|  |   "session": "abc123"                              | |
+|  | }                                                  | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  장점:                                                   |
+|  - 자동 파싱 가능 (Elasticsearch, Splunk)               |
+|  - 필드별 검색: user="john" AND level="ERROR"          |
+|  - 집계/분석 용이: 시간대별 로그인 수                    |
+|                                                          |
++----------------------------------------------------------+</div>
+                <div class="code-block">
+// 구조화된 로깅 시스템
+class StructuredLogger {
+public:
+    class LogEntry {
+        std::map&lt;std::string, std::string&gt; m_fields;
+        LogLevel m_level;
+        std::string m_message;
+
+    public:
+        LogEntry& Field(const std::string& key, const std::string& value) {
+            m_fields[key] = value;
+            return *this;
+        }
+
+        LogEntry& Field(const std::string& key, int value) {
+            m_fields[key] = std::to_string(value);
+            return *this;
+        }
+
+        void Log() {
+            // JSON 출력
+            std::ostringstream json;
+            json << "{";
+            json << "\"timestamp\":\"" << GetISO8601Timestamp() << "\",";
+            json << "\"level\":\"" << LevelToString(m_level) << "\",";
+            json << "\"message\":\"" << EscapeJson(m_message) << "\"";
+
+            for (const auto& [key, value] : m_fields) {
+                json << ",\"" << key << "\":\"" << EscapeJson(value) << "\"";
+            }
+
+            json << "}";
+            OutputLog(json.str());
+        }
+    };
+
+    static LogEntry Info(const std::string& msg) {
+        LogEntry entry;
+        entry.m_level = INFO;
+        entry.m_message = msg;
+        return entry;
+    }
+};
+
+// 사용 예시
+StructuredLogger::Info("user_login")
+    .Field("user", user.name)
+    .Field("ip", request.ip)
+    .Field("session", session.id)
+    .Field("device", request.userAgent)
+    .Log();
+
+// 출력:
+// {"timestamp":"2024-01-15T10:23:45Z","level":"INFO",
+//  "message":"user_login","user":"john","ip":"192.168.1.100",
+//  "session":"abc123","device":"Chrome/120"}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 컨텍스트 정보</h2>
+            <div class="q">로그에 뭘 포함해야 해?</div>
+            <div class="a">
+                <p><span class="highlight">나중에 디버깅할 때 필요한 정보</span>를 미리 넣어야 합니다:</p>
+                <div class="diagram">
+로그에 포함할 컨텍스트:
++----------------------------------------------------------+
+|                                                          |
+|  필수 정보:                                               |
+|  +----------------------------------------------------+ |
+|  | 타임스탬프  - 언제 발생했는가                        | |
+|  | 로그 레벨   - 심각도                                 | |
+|  | 메시지      - 무엇이 발생했는가                      | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  권장 정보:                                               |
+|  +----------------------------------------------------+ |
+|  | 요청 ID     - 여러 로그를 하나의 요청으로 추적       | |
+|  | 유저 ID     - 누구에게 발생했는가                    | |
+|  | 세션 ID     - 어떤 세션인가                          | |
+|  | 서버 ID     - 어떤 서버에서 발생했는가               | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  디버깅용 (DEBUG/TRACE):                                  |
+|  +----------------------------------------------------+ |
+|  | 파일명      - 어떤 파일에서                          | |
+|  | 라인 번호   - 몇 번째 줄에서                         | |
+|  | 함수명      - 어떤 함수에서                          | |
+|  | 스택 트레이스 - 호출 경로                            | |
+|  +----------------------------------------------------+ |
+|                                                          |
++----------------------------------------------------------+
+
+<span class="warning">나쁜 로그</span>:
+  "Error occurred"
+  -> 언제? 어디서? 뭐가? 왜?
+
+<span class="key-point">좋은 로그</span>:
+  "[2024-01-15 10:23:45] [ERROR] [req-abc123] [user-456]
+   Failed to save inventory: DB connection timeout
+   itemId=789, count=5, retries=3
+   at InventoryService.Save:142"</div>
+                <div class="code-block">
+// 요청 컨텍스트를 스레드 로컬로 관리
+class LogContext {
+    static thread_local std::string s_requestId;
+    static thread_local std::string s_userId;
+    static thread_local std::string s_sessionId;
+
+public:
+    // 요청 시작 시 설정
+    static void SetRequest(const std::string& reqId,
+                           const std::string& userId,
+                           const std::string& sessionId) {
+        s_requestId = reqId;
+        s_userId = userId;
+        s_sessionId = sessionId;
+    }
+
+    // 요청 종료 시 정리
+    static void Clear() {
+        s_requestId.clear();
+        s_userId.clear();
+        s_sessionId.clear();
+    }
+
+    // 로그 출력 시 자동 포함
+    static std::string GetContextPrefix() {
+        std::ostringstream ss;
+        if (!s_requestId.empty()) ss << "[req:" << s_requestId << "] ";
+        if (!s_userId.empty()) ss << "[user:" << s_userId << "] ";
+        return ss.str();
+    }
+};
+
+// RAII로 컨텍스트 관리
+class RequestScope {
+public:
+    RequestScope(const Request& req) {
+        LogContext::SetRequest(
+            req.id,
+            req.userId,
+            req.sessionId
+        );
+    }
+    ~RequestScope() {
+        LogContext::Clear();
+    }
+};
+
+// 사용
+void HandleRequest(const Request& req) {
+    RequestScope scope(req);  // 컨텍스트 자동 설정
+
+    LOG_INFO("Processing request");
+    // 출력: [req:abc123] [user:456] Processing request
+
+    DoSomething();  // 여기서도 같은 컨텍스트
+
+}  // 자동으로 컨텍스트 정리</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 성능 영향 최소화</h2>
+            <div class="q">로그 많이 쓰면 느려지지 않아?</div>
+            <div class="a">
+                <p>성능 영향을 줄이는 <span class="highlight">최적화 기법</span>들:</p>
+                <div class="diagram">
+로그 성능 최적화:
++----------------------------------------------------------+
+|                                                          |
+|  1. 레벨 필터링 (가장 중요)                                |
+|  +----------------------------------------------------+ |
+|  | 프로덕션에서 DEBUG/TRACE 끄기                        | |
+|  | 출력 안 해도 되는 로그는 최대한 일찍 차단             | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  2. 문자열 생성 지연 (Lazy Evaluation)                    |
+|  +----------------------------------------------------+ |
+|  | <span class="warning">나쁨</span>: LOG_DEBUG(Format("x=%d", x));              | |
+|  |       -> 출력 안 해도 Format 호출됨                  | |
+|  |                                                     | |
+|  | <span class="key-point">좋음</span>: LOG_DEBUG("x=%d", x);                    | |
+|  |       -> 출력할 때만 포맷팅                          | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  3. 비동기 로깅                                           |
+|  +----------------------------------------------------+ |
+|  | 메인 스레드 -> 큐에 넣기 -> 로그 스레드가 기록       | |
+|  | 파일 I/O가 메인 스레드 블로킹 안 함                  | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  4. 버퍼링                                                |
+|  +----------------------------------------------------+ |
+|  | 로그마다 파일 쓰기 X                                 | |
+|  | 버퍼에 모았다가 한 번에 쓰기                         | |
+|  | 플러시 주기: 1초 또는 버퍼 가득 참                   | |
+|  +----------------------------------------------------+ |
+|                                                          |
++----------------------------------------------------------+</div>
+                <div class="code-block">
+// 비동기 로거
+class AsyncLogger {
+    std::queue&lt;std::string&gt; m_queue;
+    std::mutex m_mutex;
+    std::condition_variable m_cv;
+    std::thread m_writerThread;
+    bool m_running = true;
+
+public:
+    AsyncLogger() {
+        // 백그라운드 스레드에서 실제 쓰기
+        m_writerThread = std::thread([this]() {
+            while (m_running || !m_queue.empty()) {
+                std::string msg;
+                {
+                    std::unique_lock lock(m_mutex);
+                    m_cv.wait(lock, [this]() {
+                        return !m_queue.empty() || !m_running;
+                    });
+
+                    if (!m_queue.empty()) {
+                        msg = std::move(m_queue.front());
+                        m_queue.pop();
+                    }
+                }
+
+                if (!msg.empty()) {
+                    WriteToFile(msg);  // 실제 I/O
+                }
+            }
+        });
+    }
+
+    void Log(std::string msg) {
+        // 메인 스레드: 큐에 넣기만 (빠름)
+        {
+            std::lock_guard lock(m_mutex);
+            m_queue.push(std::move(msg));
+        }
+        m_cv.notify_one();
+    }
+};
+
+// 레벨 체크 매크로 (포맷팅 지연)
+#define LOG_DEBUG(fmt, ...) \
+    do { \
+        if (Logger::GetLevel() <= DEBUG) { \
+            Logger::Log(DEBUG, fmt, ##__VA_ARGS__); \
+        } \
+    } while(0)
+
+// 더 나은 방법: 람다로 지연 평가
+#define LOG_DEBUG_LAZY(expr) \
+    do { \
+        if (Logger::GetLevel() <= DEBUG) { \
+            Logger::Log(DEBUG, expr()); \
+        } \
+    } while(0)
+
+// 사용
+LOG_DEBUG_LAZY([&]() {
+    // 이 람다는 DEBUG 레벨일 때만 실행됨
+    return Format("Expensive: %s", ExpensiveToString(obj));
+});</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 게임 서버 로깅 모범 사례</h2>
+            <div class="q">게임 서버에서 뭘 로깅해야 해?</div>
+            <div class="a">
+                <p>게임 서버 특화 <span class="highlight">로깅 패턴</span>:</p>
+                <div class="diagram">
+게임 서버 로깅 체크리스트:
++----------------------------------------------------------+
+|                                                          |
+|  접속/인증:                                               |
+|  +----------------------------------------------------+ |
+|  | [INFO] 로그인 성공/실패                              | |
+|  | [INFO] 로그아웃 (정상/비정상)                        | |
+|  | [WARN] 중복 로그인 시도                              | |
+|  | [WARN] 인증 실패 (비번 틀림, 밴 계정)                | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  게임플레이:                                              |
+|  +----------------------------------------------------+ |
+|  | [INFO] 중요 아이템 획득/사용 (과금, 희귀템)          | |
+|  | [INFO] 거래 로그 (감사 추적용)                       | |
+|  | [WARN] 비정상 행동 (스피드핵 의심 등)                | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  서버 상태:                                               |
+|  +----------------------------------------------------+ |
+|  | [INFO] 서버 시작/종료                                | |
+|  | [INFO] 현재 접속자 수 (주기적)                       | |
+|  | [WARN] 메모리 80% 이상                              | |
+|  | [ERROR] DB 연결 실패                                 | |
+|  +----------------------------------------------------+ |
+|                                                          |
+|  <span class="warning">주의: 민감 정보 제외</span>                                       |
+|  - 비밀번호, 결제 카드 정보                               |
+|  - 개인정보 (마스킹 처리)                                 |
+|                                                          |
++----------------------------------------------------------+</div>
+                <div class="code-block">
+// 게임 서버 로깅 예시
+
+// 접속 로그
+void OnPlayerLogin(Player* player, const LoginResult& result) {
+    if (result.success) {
+        LOG_INFO("Player login success")
+            .Field("playerId", player->GetId())
+            .Field("characterId", player->GetCharId())
+            .Field("ip", player->GetIP())
+            .Field("device", player->GetDeviceInfo())
+            .Log();
+    } else {
+        LOG_WARN("Player login failed")
+            .Field("account", MaskAccountId(result.account))
+            .Field("reason", result.errorCode)
+            .Field("ip", result.ip)
+            .Log();
+    }
+}
+
+// 아이템 거래 로그 (감사 추적)
+void OnItemTrade(Player* seller, Player* buyer, Item* item, int price) {
+    LOG_INFO("Item trade")
+        .Field("sellerId", seller->GetId())
+        .Field("buyerId", buyer->GetId())
+        .Field("itemId", item->GetId())
+        .Field("itemName", item->GetName())
+        .Field("price", price)
+        .Field("sellerGoldBefore", seller->GetGold() + price)
+        .Field("sellerGoldAfter", seller->GetGold())
+        .Field("buyerGoldBefore", buyer->GetGold())
+        .Field("buyerGoldAfter", buyer->GetGold() - price)
+        .Log();
+}
+
+// 비정상 행동 감지
+void OnMovement(Player* player, Vector3 newPos) {
+    float distance = Distance(player->GetPos(), newPos);
+    float expectedMax = player->GetSpeed() * deltaTime * 1.5f;
+
+    if (distance > expectedMax) {
+        LOG_WARN("Suspicious movement")
+            .Field("playerId", player->GetId())
+            .Field("distance", distance)
+            .Field("expected", expectedMax)
+            .Field("from", ToString(player->GetPos()))
+            .Field("to", ToString(newPos))
+            .Log();
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>로그 레벨</strong>: TRACE < DEBUG < INFO < WARN < ERROR < FATAL</li>
+                <li><strong>환경별 설정</strong>: 개발=TRACE, 프로덕션=WARN</li>
+                <li><strong>구조화 로깅</strong>: JSON 형식으로 검색/분석 용이하게</li>
+                <li><strong>컨텍스트</strong>: 요청 ID, 유저 ID, 세션 ID 포함</li>
+                <li><strong>성능</strong>: 레벨 필터링, 지연 평가, 비동기 쓰기, 버퍼링</li>
+                <li><strong>게임 서버</strong>: 접속, 거래, 비정상 행동 필수 로깅</li>
+                <li><strong>보안</strong>: 비밀번호, 카드 정보 등 민감 정보 제외</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../hot-reload/">&larr; 핫 리로드</a>
+            <a href="../ide-features/">IDE 기능 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

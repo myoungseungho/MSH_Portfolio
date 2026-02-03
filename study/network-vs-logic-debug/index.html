@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>네트워크 vs 로직 구별 - 디버깅 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #B91C1C; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEE2E2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .key-point { background: #FECACA; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #991B1B; }
+        .warning { background: #FEF3C7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #92400E; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #FEF2F2; border: 2px solid #FECACA; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #7F1D1D; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+
+        <div class="header">
+            <h1>네트워크 vs 로직 구별</h1>
+            <p>버그가 네트워크 문제인지 로직 문제인지 구별하는 법</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 왜 구별이 중요한가</h2>
+            <div class="q">네트워크랑 로직 버그가 뭐가 달라?</div>
+            <div class="a">
+                <p>원인이 다르면 <span class="warning">해결책도 완전히 다릅니다</span>:</p>
+                <div class="diagram">
+네트워크 문제 vs 로직 문제:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  증상: "스킬 써도 데미지가 안 들어가요"                         │
+│                                                                 │
+│  <span class="highlight">네트워크 문제</span>라면:                                            │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  [클라이언트] ──패킷──X──▶ [서버]                       │   │
+│  │                 패킷 손실/지연                           │   │
+│  │                                                         │   │
+│  │  원인: 패킷 드랍, 타임아웃, 연결 끊김                   │   │
+│  │  해결: 재전송 로직, 타임아웃 조정, 네트워크 코드 수정   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  <span class="key-point">로직 문제</span>라면:                                                │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  [클라이언트] ──패킷──────▶ [서버]                      │   │
+│  │                              ↓                          │   │
+│  │                         DamageCalc()                    │   │
+│  │                         return 0;  ← 계산 버그!        │   │
+│  │                                                         │   │
+│  │  원인: 데미지 공식 오류, 조건문 실수, 데이터 오류       │   │
+│  │  해결: 게임 로직 코드 수정                              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  <span class="warning">잘못된 진단 = 헛수고</span>                                           │
+│  네트워크 문제인데 로직 코드만 뒤지면 시간 낭비!               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 로컬 테스트 먼저</h2>
+            <div class="q">어떻게 구별해?</div>
+            <div class="a">
+                <p>첫 번째 원칙: <span class="highlight">네트워크를 제거하고 테스트</span>합니다:</p>
+                <div class="diagram">
+로컬 테스트로 네트워크 문제 배제:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  Step 1: 로컬 서버 테스트                                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                                                         │   │
+│  │  [클라이언트] ─localhost─▶ [서버]                       │   │
+│  │       │                       │                         │   │
+│  │       └── 같은 PC에서 실행 ───┘                         │   │
+│  │                                                         │   │
+│  │  → 네트워크 지연/손실 = 0                               │   │
+│  │  → 여기서도 버그 발생? = <span class="key-point">로직 문제 확정</span>                 │   │
+│  │  → 여기선 정상? = <span class="highlight">네트워크 문제 의심</span>                      │   │
+│  │                                                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Step 2: 단위 테스트 (더 확실)                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                                                         │   │
+│  │  // 네트워크 완전 제외, 함수만 테스트                   │   │
+│  │  TEST(DamageCalc) {                                     │   │
+│  │      Player attacker(level=50, atk=100);                │   │
+│  │      Monster target(def=30);                            │   │
+│  │                                                         │   │
+│  │      int dmg = CalcDamage(attacker, target);            │   │
+│  │      EXPECT_GT(dmg, 0);  // 0보다 커야 함               │   │
+│  │  }                                                      │   │
+│  │                                                         │   │
+│  │  → 테스트 실패? = <span class="key-point">순수 로직 버그</span>                        │   │
+│  │                                                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 로컬 테스트용 Mock 서버
+
+class MockServer {
+    // 실제 네트워크 없이 서버 로직만 실행
+    PacketHandler handler;
+
+public:
+    // 클라이언트가 보낸 패킷을 직접 전달
+    void ProcessPacket(const Packet& pkt) {
+        // 네트워크 레이어 완전 스킵
+        handler.OnPacket(pkt);
+    }
+
+    // 서버 응답을 직접 받기
+    Packet GetResponse() {
+        return handler.GetPendingResponse();
+    }
+};
+
+// 테스트 코드
+void TestSkillDamage_LocalOnly() {
+    MockServer server;
+    MockClient client;
+
+    // 1. 스킬 사용 패킷 생성
+    Packet skillPkt = client.CreateSkillPacket(SKILL_FIREBALL, targetId);
+
+    // 2. 서버에 직접 전달 (네트워크 없음)
+    server.ProcessPacket(skillPkt);
+
+    // 3. 서버 응답 확인
+    Packet response = server.GetResponse();
+
+    // 4. 데미지 결과 검증
+    DamageResult result = ParseDamageResult(response);
+
+    if (result.damage == 0) {
+        // <span class="key-point">네트워크 없이도 0이면 = 로직 버그!</span>
+        LogError("Logic bug: Skill damage is 0 without network!");
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 패킷 로깅</h2>
+            <div class="q">네트워크 문제 같으면 어떻게 확인해?</div>
+            <div class="a">
+                <p><span class="highlight">패킷 로깅</span>으로 요청/응답을 전부 기록합니다:</p>
+                <div class="diagram">
+패킷 로깅 분석:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  정상 케이스:                                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  14:30:00.123 [C→S] PKT_SKILL_USE id=1001 target=5002   │   │
+│  │  14:30:00.145 [S→C] PKT_SKILL_RESULT damage=150         │   │
+│  │              └── 응답 시간: 22ms                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  네트워크 문제 케이스 1: 패킷 손실                              │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  14:30:00.123 [C→S] PKT_SKILL_USE id=1001 target=5002   │   │
+│  │  <span class="warning">(응답 없음 - 패킷 드랍?)</span>                                 │   │
+│  │  14:30:05.123 [C→S] PKT_SKILL_USE id=1001 target=5002   │   │
+│  │              └── 5초 후 재전송                          │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  네트워크 문제 케이스 2: 지연                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  14:30:00.123 [C→S] PKT_SKILL_USE id=1001 target=5002   │   │
+│  │  14:30:02.456 [S→C] PKT_SKILL_RESULT damage=150         │   │
+│  │              └── 응답 시간: <span class="warning">2333ms</span> (비정상 지연!)        │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  로직 문제 케이스:                                              │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  14:30:00.123 [C→S] PKT_SKILL_USE id=1001 target=5002   │   │
+│  │  14:30:00.145 [S→C] PKT_SKILL_RESULT <span class="highlight">damage=0</span>           │   │
+│  │              └── 응답은 왔는데 데미지가 0!              │   │
+│  │              └── <span class="key-point">패킷은 정상, 서버 로직 문제!</span>            │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 패킷 로깅 시스템
+
+class PacketLogger {
+    FILE* logFile;
+    mutex logMutex;
+
+public:
+    void LogSend(const Packet& pkt) {
+        lock_guard&lt;mutex&gt; lock(logMutex);
+
+        auto now = GetTimestamp();
+        fprintf(logFile, "%s [C→S] %s %s\n",
+                now.c_str(),
+                GetPacketName(pkt.id),
+                PacketToString(pkt).c_str());
+    }
+
+    void LogReceive(const Packet& pkt) {
+        lock_guard&lt;mutex&gt; lock(logMutex);
+
+        auto now = GetTimestamp();
+        fprintf(logFile, "%s [S→C] %s %s\n",
+                now.c_str(),
+                GetPacketName(pkt.id),
+                PacketToString(pkt).c_str());
+    }
+
+    // 요청-응답 매칭하여 지연 시간 계산
+    void LogRoundTrip(uint32_t requestId, uint32_t responseId) {
+        auto it = pendingRequests.find(requestId);
+        if (it != pendingRequests.end()) {
+            auto latency = GetTimestamp() - it->second.sendTime;
+            fprintf(logFile, "  └── RTT: %lldms\n", latency);
+
+            if (latency > 1000) {
+                LogWarning("High latency detected: %lldms", latency);
+            }
+        }
+    }
+};
+
+// 사용
+void SendPacket(const Packet& pkt) {
+    g_PacketLogger.LogSend(pkt);
+    network.Send(pkt);
+}
+
+void OnPacketReceived(const Packet& pkt) {
+    g_PacketLogger.LogReceive(pkt);
+    ProcessPacket(pkt);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 네트워크 시뮬레이션</h2>
+            <div class="q">실제 네트워크 문제를 재현하려면?</div>
+            <div class="a">
+                <p><span class="highlight">네트워크 시뮬레이터</span>로 지연, 손실, 중복을 인위적으로 발생시킵니다:</p>
+                <div class="diagram">
+네트워크 시뮬레이션 도구:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  Windows: clumsy (오픈소스)                                     │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  [x] Lag: 200ms                 (지연 추가)             │   │
+│  │  [x] Drop: 10%                  (패킷 손실)             │   │
+│  │  [ ] Duplicate: 5%              (패킷 중복)             │   │
+│  │  [ ] Out of order: 10%          (순서 뒤섞기)           │   │
+│  │  [x] Throttle: 100KB/s          (대역폭 제한)           │   │
+│  │                                                         │   │
+│  │  Filter: tcp and port 12345                             │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Linux: tc (traffic control)                                    │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  # 200ms 지연 추가                                      │   │
+│  │  tc qdisc add dev eth0 root netem delay 200ms           │   │
+│  │                                                         │   │
+│  │  # 10% 패킷 손실                                        │   │
+│  │  tc qdisc add dev eth0 root netem loss 10%              │   │
+│  │                                                         │   │
+│  │  # 복합 조건                                            │   │
+│  │  tc qdisc add dev eth0 root netem delay 100ms 50ms \    │   │
+│  │     loss 5% duplicate 1% reorder 10%                    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  코드 레벨 시뮬레이션 (테스트용):                               │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  class FaultyNetwork {                                  │   │
+│  │      int latencyMs = 200;                               │   │
+│  │      float dropRate = 0.1f;                             │   │
+│  │                                                         │   │
+│  │      bool Send(Packet& pkt) {                           │   │
+│  │          if (Random() < dropRate) return false;  // 드랍│   │
+│  │          Sleep(latencyMs);                       // 지연│   │
+│  │          actualNetwork.Send(pkt);                       │   │
+│  │          return true;                                   │   │
+│  │      }                                                  │   │
+│  │  };                                                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 코드 내장 네트워크 시뮬레이터
+
+class NetworkSimulator {
+    bool enabled = false;
+    int minLatencyMs = 0;
+    int maxLatencyMs = 0;
+    float packetLossRate = 0.0f;
+    float duplicateRate = 0.0f;
+
+public:
+    void Configure(int minLat, int maxLat, float loss, float dup) {
+        enabled = true;
+        minLatencyMs = minLat;
+        maxLatencyMs = maxLat;
+        packetLossRate = loss;
+        duplicateRate = dup;
+    }
+
+    void ProcessOutgoing(Packet& pkt, function&lt;void(Packet&)&gt; sendFunc) {
+        if (!enabled) {
+            sendFunc(pkt);
+            return;
+        }
+
+        // 1. 패킷 손실 시뮬레이션
+        if (Random::Float() < packetLossRate) {
+            Log("[SIM] Packet dropped: %s", GetPacketName(pkt.id));
+            return;  // 전송하지 않음
+        }
+
+        // 2. 지연 시뮬레이션
+        int delay = Random::Range(minLatencyMs, maxLatencyMs);
+
+        // 비동기로 지연 후 전송
+        Scheduler::After(delay, [=]() {
+            sendFunc(pkt);
+
+            // 3. 중복 시뮬레이션
+            if (Random::Float() < duplicateRate) {
+                Log("[SIM] Packet duplicated: %s", GetPacketName(pkt.id));
+                Scheduler::After(5, [=]() { sendFunc(pkt); });
+            }
+        });
+    }
+};
+
+// 사용
+NetworkSimulator g_NetSim;
+
+void InitDebugMode() {
+    // 열악한 네트워크 환경 시뮬레이션
+    g_NetSim.Configure(
+        100, 300,   // 100~300ms 지연
+        0.05f,      // 5% 패킷 손실
+        0.02f       // 2% 중복
+    );
+}
+
+void Send(Packet& pkt) {
+    g_NetSim.ProcessOutgoing(pkt, [](Packet& p) {
+        actualSocket.Send(p);
+    });
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 디버깅 체크리스트</h2>
+            <div class="q">체계적으로 구별하는 순서가 있어?</div>
+            <div class="a">
+                <p>아래 체크리스트를 순서대로 확인하세요:</p>
+                <div class="diagram">
+네트워크 vs 로직 구별 체크리스트:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  <span class="key-point">Phase 1: 로컬 테스트</span>                                          │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  □ 1. 로컬 서버(localhost)에서 재현 시도                │   │
+│  │     → 재현됨 = 로직 문제 가능성 높음                    │   │
+│  │     → 재현 안됨 = Phase 2로                             │   │
+│  │                                                         │   │
+│  │  □ 2. 단위 테스트로 해당 함수만 테스트                  │   │
+│  │     → 실패 = 로직 버그 확정, 코드 수정                  │   │
+│  │     → 성공 = Phase 2로                                  │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  <span class="key-point">Phase 2: 패킷 분석</span>                                            │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  □ 3. 패킷 로그 확인                                    │   │
+│  │     - 요청 패킷이 서버에 도착했나?                      │   │
+│  │     - 응답 패킷이 클라이언트에 도착했나?                │   │
+│  │     - 응답 내용이 정상인가?                             │   │
+│  │                                                         │   │
+│  │  □ 4. Wireshark로 네트워크 레벨 확인                    │   │
+│  │     - TCP 재전송 많은가?                                │   │
+│  │     - RST 패킷 있나?                                    │   │
+│  │     - 패킷 순서 맞나?                                   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  <span class="key-point">Phase 3: 네트워크 시뮬레이션</span>                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  □ 5. 열악한 네트워크 시뮬레이션                        │   │
+│  │     - 지연 200ms+에서 재현되나?                         │   │
+│  │     - 패킷 손실 10%에서 재현되나?                       │   │
+│  │     → 재현됨 = 네트워크 내성 부족                       │   │
+│  │     → 재현 안됨 = 특정 환경 문제                        │   │
+│  │                                                         │   │
+│  │  □ 6. 실제 불안정한 네트워크에서 테스트                 │   │
+│  │     - 모바일 데이터 (3G)                                │   │
+│  │     - VPN 경유                                          │   │
+│  │     - 해외 서버 연결                                    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  <span class="key-point">Phase 4: 결론</span>                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  네트워크 문제 징후:                                    │   │
+│  │  - 특정 유저/지역에서만 발생                            │   │
+│  │  - 피크타임에 더 자주 발생                              │   │
+│  │  - 패킷 로그에 손실/지연 보임                           │   │
+│  │                                                         │   │
+│  │  로직 문제 징후:                                        │   │
+│  │  - 모든 환경에서 동일하게 발생                          │   │
+│  │  - 로컬 테스트에서도 재현됨                             │   │
+│  │  - 패킷 로그는 정상인데 결과가 이상함                   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 자동화된 진단 도구
+
+enum DiagnosisResult {
+    LIKELY_LOGIC_BUG,
+    LIKELY_NETWORK_BUG,
+    NEEDS_MORE_INFO
+};
+
+DiagnosisResult DiagnoseIssue(const BugReport& report) {
+    // 1. 로컬 재현 테스트
+    bool reproducedLocally = TestOnLocalServer(report);
+    if (reproducedLocally) {
+        Log("Bug reproduced on localhost - likely logic issue");
+        return LIKELY_LOGIC_BUG;
+    }
+
+    // 2. 패킷 로그 분석
+    PacketLogAnalysis analysis = AnalyzePacketLog(report.packetLog);
+
+    if (analysis.hasPacketLoss || analysis.hasHighLatency) {
+        Log("Packet issues detected: loss=%d%%, avg_latency=%dms",
+            analysis.lossRate * 100, analysis.avgLatencyMs);
+        return LIKELY_NETWORK_BUG;
+    }
+
+    if (analysis.responseReceived && analysis.responseAbnormal) {
+        Log("Response received but abnormal - likely logic issue");
+        return LIKELY_LOGIC_BUG;
+    }
+
+    // 3. 환경 분석
+    if (report.environment.networkType == "3G" ||
+        report.environment.region == "overseas") {
+        Log("Poor network environment detected");
+        return LIKELY_NETWORK_BUG;
+    }
+
+    return NEEDS_MORE_INFO;
+}
+
+// 패킷 로그 분석
+struct PacketLogAnalysis {
+    bool hasPacketLoss;
+    bool hasHighLatency;
+    int avgLatencyMs;
+    float lossRate;
+    bool responseReceived;
+    bool responseAbnormal;
+};
+
+PacketLogAnalysis AnalyzePacketLog(const PacketLog& log) {
+    PacketLogAnalysis result = {};
+
+    int totalRequests = 0;
+    int lostResponses = 0;
+    int totalLatency = 0;
+
+    for (auto& request : log.requests) {
+        totalRequests++;
+
+        auto response = FindMatchingResponse(log, request);
+        if (!response) {
+            lostResponses++;
+            continue;
+        }
+
+        int latency = response->timestamp - request.timestamp;
+        totalLatency += latency;
+
+        if (latency > 1000) result.hasHighLatency = true;
+    }
+
+    result.lossRate = (float)lostResponses / totalRequests;
+    result.hasPacketLoss = result.lossRate > 0.01f;  // 1% 이상
+    result.avgLatencyMs = totalLatency / (totalRequests - lostResponses);
+
+    return result;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 실제 사례</h2>
+            <div class="q">실제로 어떻게 구별했어?</div>
+            <div class="a">
+                <p>실제 디버깅 사례를 보겠습니다:</p>
+                <div class="diagram">
+사례: "거래가 가끔 실패해요"
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  Step 1: 로컬 테스트                                            │
+│  → 로컬에서 100회 거래 → 실패 0회                              │
+│  → <span class="warning">로컬에선 재현 안 됨</span>                                        │
+│                                                                 │
+│  Step 2: 패킷 로그 확인                                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  [실패 케이스 로그]                                     │   │
+│  │  14:30:00 [C→S] TRADE_CONFIRM                           │   │
+│  │  14:30:00 [S→C] TRADE_RESULT status=FAIL reason=TIMEOUT │   │
+│  │                                                         │   │
+│  │  → 서버가 TIMEOUT을 반환함                              │   │
+│  │  → 그럼 서버에서 뭘 기다린 거지?                        │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Step 3: 서버 로그 확인                                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  [서버 로그]                                            │   │
+│  │  14:30:00 Trade started: userA → userB                  │   │
+│  │  14:30:00 Waiting for userB confirm...                  │   │
+│  │  14:30:05 <span class="warning">Timeout: userB no response</span>                    │   │
+│  │                                                         │   │
+│  │  → userB의 확인 패킷이 안 온 거였음!                    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Step 4: userB 패킷 로그 확인                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  14:30:00 [S→C] TRADE_REQUEST from userA                │   │
+│  │  14:30:02 [C→S] TRADE_CONFIRM                           │   │
+│  │  14:30:05 [S→C] TRADE_RESULT status=FAIL                │   │
+│  │                                                         │   │
+│  │  → userB는 14:30:02에 확인 보냈는데?                    │   │
+│  │  → 서버는 못 받았다고 함                                │   │
+│  │  → <span class="key-point">네트워크 문제 (패킷 손실) 확정!</span>                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  해결: 거래 확인 패킷에 재전송 로직 추가                        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>로컬 테스트 먼저</strong>: localhost에서 재현되면 로직 문제</li>
+                <li><strong>단위 테스트</strong>: 네트워크 없이 함수만 테스트</li>
+                <li><strong>패킷 로깅</strong>: 요청/응답을 전부 기록하고 분석</li>
+                <li><strong>네트워크 시뮬레이션</strong>: clumsy, tc로 열악한 환경 재현</li>
+                <li>패킷은 정상인데 결과가 이상 = <strong>로직 문제</strong></li>
+                <li>패킷 손실/지연이 보임 = <strong>네트워크 문제</strong></li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../bug-reproduction/">&larr; 버그 재현율 높이기</a>
+            <a href="../code-coverage/">코드 커버리지 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

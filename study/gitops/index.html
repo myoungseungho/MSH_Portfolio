@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>서버 설정을 코드로 관리하는 법 (GitOps) - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #065F46;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #D1FAE5;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #D1FAE5;
+            border-left: 4px solid #10B981;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #065F46;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #D1FAE5;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #065F46;
+        }
+        .key-point {
+            background: #A7F3D0;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #065F46;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            color: #aed581;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 16px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .code-block.visual {
+            background: #f5f5f5;
+            color: #333;
+            border: 2px solid #e0e0e0;
+            font-size: 1.1rem;
+            line-height: 2;
+        }
+
+        .diagram {
+            background: #f5f5f5;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .compare-table th, .compare-table td {
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #D1FAE5;
+            font-weight: 600;
+        }
+
+        .summary-box {
+            background: #D1FAE5;
+            border: 2px solid #10B981;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            color: #065F46;
+            margin-bottom: 16px;
+        }
+        .summary-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .summary-box li {
+            margin-bottom: 8px;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #10B981;
+            font-weight: bold;
+        }
+
+        .analogy-box {
+            background: #fff9c4;
+            border-left: 4px solid #fbc02d;
+            padding: 20px;
+            margin: 24px 0;
+            border-radius: 8px;
+        }
+        .analogy-box strong {
+            color: #f57f17;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../devops/" class="back-link">< 데브옵스 / 인프라</a>
+
+        <div class="header">
+            <h1>GitOps</h1>
+            <p>서버 설정을 코드로 관리하는 법</p>
+        </div>
+
+        <!-- 1. 왜 GitOps가 필요한가 -->
+        <div class="conversation">
+            <h2>1. 인프라도 코드로 관리해?</h2>
+
+            <div class="chat">
+                <div class="q">콘솔에서 클릭클릭하면 안 돼?</div>
+                <div class="a">
+                    <p><span class="warning">3개월 후...</span></p>
+                    <div class="code-block visual">수동 관리의 문제:
+
+신입: "이 서버 설정 어떻게 되어 있어요?"
+선배: "음... 그때 내가 했는데... 기억 안 나네"
+신입: "문서 없어요?"
+선배: "바빠서 못 적었어"
+신입: "재현하려면?"
+선배: "콘솔 들어가서... 여기 클릭하고... 어 뭐였지?"
+
+결과:
+- 설정 재현 불가
+- 담당자 퇴사하면 지식 손실
+- "왜 이렇게 설정됐지?" 미스터리</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Infrastructure as Code?</div>
+                <div class="a">
+                    <div class="diagram">IaC (Infrastructure as Code):
+
+인프라 설정 = 코드 파일
+
+[Terraform]          [AWS Console]
+resource "aws_       서버 10대,
+instance" {...}  ==  로드밸런서,
+                     DB 인스턴스...
+
+장점:
+- 버전 관리 (Git)
+- 코드 리뷰 가능
+- 재현 가능
+- 자동화</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. GitOps 원칙 -->
+        <div class="conversation">
+            <h2>2. GitOps가 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">IaC랑 뭐가 달라?</div>
+                <div class="a">
+                    <p><strong>Git을 Single Source of Truth로!</strong></p>
+                    <div class="code-block visual">GitOps 원칙:
+
+1. 선언적 (Declarative)
+   - "서버 3대 실행해" (O)
+   - "서버 1대 추가해" (X)
+
+2. Git = 진실의 원천
+   - Git에 있는 설정 = 실제 인프라
+   - 수동 변경 금지
+
+3. 자동 동기화
+   - Git 변경 -> 자동으로 인프라 반영
+   - 드리프트 자동 감지/수정
+
+4. 풀 기반 (Pull-based)
+   - 에이전트가 Git을 감시
+   - 변경 감지하면 Pull해서 적용</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">기존 CI/CD랑 뭐가 달라?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <tr>
+                            <th>구분</th>
+                            <th>전통적 CI/CD</th>
+                            <th>GitOps</th>
+                        </tr>
+                        <tr>
+                            <td><strong>배포 방식</strong></td>
+                            <td>Push (CI가 밀어넣음)</td>
+                            <td>Pull (에이전트가 당김)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>인증</strong></td>
+                            <td>CI에 클러스터 접근 권한</td>
+                            <td>에이전트만 접근</td>
+                        </tr>
+                        <tr>
+                            <td><strong>상태 관리</strong></td>
+                            <td>CI 서버에 의존</td>
+                            <td>Git이 진실의 원천</td>
+                        </tr>
+                        <tr>
+                            <td><strong>드리프트</strong></td>
+                            <td>수동 확인</td>
+                            <td>자동 감지/수정</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. ArgoCD -->
+        <div class="conversation">
+            <h2>3. ArgoCD로 GitOps 하기</h2>
+
+            <div class="chat">
+                <div class="q">ArgoCD가 뭐야?</div>
+                <div class="a">
+                    <div class="diagram">ArgoCD 동작 방식:
+
+[Git Repository]
+   |
+   | (감시)
+   v
+[ArgoCD]
+   |
+   | (동기화)
+   v
+[Kubernetes Cluster]
+
+Git에 Deployment YAML 수정
+       |
+       v
+ArgoCD가 변경 감지
+       |
+       v
+자동으로 kubectl apply
+       |
+       v
+클러스터에 반영!</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">설정 예시 보여줘</div>
+                <div class="a">
+                    <div class="code-block"># argocd-application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: game-server
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/company/game-server-k8s.git
+    targetRevision: HEAD
+    path: k8s/production
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: game
+
+  syncPolicy:
+    automated:
+      prune: true       # 삭제된 리소스 정리
+      selfHeal: true    # 드리프트 자동 복구
+    syncOptions:
+      - CreateNamespace=true</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Git 저장소 구조는?</div>
+                <div class="a">
+                    <div class="code-block"># GitOps 저장소 구조
+game-server-k8s/
+├── base/                    # 공통 설정
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   └── kustomization.yaml
+├── overlays/
+│   ├── development/         # 개발 환경
+│   │   ├── kustomization.yaml
+│   │   └── patch-replicas.yaml
+│   ├── staging/             # 스테이징
+│   │   ├── kustomization.yaml
+│   │   └── patch-replicas.yaml
+│   └── production/          # 프로덕션
+│       ├── kustomization.yaml
+│       ├── patch-replicas.yaml
+│       └── patch-resources.yaml
+└── README.md</div>
+                    <div class="code-block"># base/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-server
+spec:
+  replicas: 1  # base는 1개
+  selector:
+    matchLabels:
+      app: game-server
+  template:
+    spec:
+      containers:
+      - name: game-server
+        image: game-server:latest
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"</div>
+                    <div class="code-block"># overlays/production/patch-replicas.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-server
+spec:
+  replicas: 10  # 프로덕션은 10개!</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. 게임 서버 설정 관리 -->
+        <div class="conversation">
+            <h2>4. 게임 서버 설정은?</h2>
+
+            <div class="chat">
+                <div class="q">게임 밸런스 설정도 GitOps?</div>
+                <div class="a">
+                    <p><span class="key-point">Yes!</span> 기획 데이터도 Git으로:</p>
+                    <div class="code-block"># game-config/monster-stats.yaml
+monsters:
+  - id: 1001
+    name: "슬라임"
+    hp: 100
+    attack: 10
+    defense: 5
+    exp_reward: 15
+
+  - id: 1002
+    name: "고블린"
+    hp: 250
+    attack: 25
+    defense: 12
+    exp_reward: 45
+
+  - id: 2001
+    name: "드래곤 (보스)"
+    hp: 50000
+    attack: 500
+    defense: 200
+    exp_reward: 10000</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">기획팀도 Git 써야 해?</div>
+                <div class="a">
+                    <div class="code-block visual">기획팀 워크플로우:
+
+1. 기획팀: Excel로 밸런스 작업
+2. 변환 도구: Excel -> YAML 자동 변환
+3. Git PR: "몬스터 밸런스 조정 v1.2"
+4. 코드 리뷰: 개발팀 검토
+5. 머지: main 브랜치에 반영
+6. ArgoCD: 자동으로 ConfigMap 업데이트
+7. 게임 서버: 설정 리로드 (무중단)
+
+장점:
+- 변경 이력 추적 (누가 언제 뭘 바꿨는지)
+- 롤백 가능 ("어제 패치가 OP였어요" -> 되돌리기)
+- 리뷰 프로세스 (실수 방지)</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">핫 리로드는 어떻게?</div>
+                <div class="a">
+                    <div class="code-block">// 게임 서버 설정 핫 리로드
+class ConfigManager {
+public:
+    void WatchConfigMap() {
+        // Kubernetes ConfigMap 변경 감지
+        while (m_running) {
+            auto newConfig = LoadConfigMap("game-config");
+
+            if (newConfig != m_currentConfig) {
+                LOG_INFO("Config changed, reloading...");
+
+                // 무중단 적용
+                ApplyConfig(newConfig);
+                m_currentConfig = newConfig;
+
+                LOG_INFO("Config reloaded successfully!");
+            }
+
+            Sleep(5000);  // 5초마다 체크
+        }
+    }
+
+private:
+    void ApplyConfig(const Config& config) {
+        // 락 걸고 적용
+        std::lock_guard<std::mutex> lock(m_configMutex);
+
+        // 몬스터 스탯 업데이트
+        for (const auto& monster : config.monsters) {
+            m_monsterStats[monster.id] = monster;
+        }
+
+        // 아이템 정보 업데이트
+        for (const auto& item : config.items) {
+            m_itemStats[item.id] = item;
+        }
+    }
+};</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. Terraform + GitOps -->
+        <div class="conversation">
+            <h2>5. 인프라도 GitOps</h2>
+
+            <div class="chat">
+                <div class="q">Terraform은 어떻게 써?</div>
+                <div class="a">
+                    <div class="code-block"># terraform/main.tf
+# 게임 서버 인프라
+
+provider "aws" {
+  region = "ap-northeast-2"
+}
+
+# VPC
+module "vpc" {
+  source = "./modules/vpc"
+  cidr   = "10.0.0.0/16"
+}
+
+# 게임 서버 (Auto Scaling Group)
+module "game_server" {
+  source = "./modules/asg"
+
+  name          = "game-server"
+  min_size      = 2
+  max_size      = 100
+  instance_type = "c5.2xlarge"
+  vpc_id        = module.vpc.vpc_id
+  subnet_ids    = module.vpc.private_subnet_ids
+}
+
+# RDS (게임 DB)
+module "game_db" {
+  source = "./modules/rds"
+
+  name             = "game-db"
+  instance_class   = "db.r5.2xlarge"
+  allocated_storage = 500
+  multi_az         = true
+}
+
+# ElastiCache (Redis)
+module "redis" {
+  source = "./modules/elasticache"
+
+  name       = "game-redis"
+  node_type  = "cache.r5.large"
+  num_nodes  = 3
+}</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Terraform도 자동 적용?</div>
+                <div class="a">
+                    <div class="code-block"># .github/workflows/terraform.yml
+name: Terraform GitOps
+
+on:
+  push:
+    branches: [main]
+    paths: ['terraform/**']
+  pull_request:
+    paths: ['terraform/**']
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: terraform
+
+      - name: Terraform Plan
+        run: terraform plan -out=plan.tfplan
+        working-directory: terraform
+
+      - name: Save Plan
+        uses: actions/upload-artifact@v3
+        with:
+          name: terraform-plan
+          path: terraform/plan.tfplan
+
+  apply:
+    needs: plan
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download Plan
+        uses: actions/download-artifact@v3
+        with:
+          name: terraform-plan
+          path: terraform
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve plan.tfplan
+        working-directory: terraform</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 요약 -->
+        <div class="summary-box">
+            <h3>핵심 정리: GitOps</h3>
+            <ul>
+                <li><strong>IaC</strong> - 인프라 설정을 코드 파일로 관리</li>
+                <li><strong>GitOps</strong> - Git이 진실의 원천, 자동 동기화</li>
+                <li><strong>ArgoCD</strong> - 쿠버네티스 GitOps 도구 (Pull 방식)</li>
+                <li><strong>게임 설정</strong> - 밸런스 데이터도 Git으로 버전 관리</li>
+                <li><strong>Terraform</strong> - AWS/GCP 인프라도 코드로</li>
+                <li><strong>핵심</strong> - 변경 추적 + 리뷰 + 롤백 가능!</li>
+            </ul>
+        </div>
+
+    </div>
+</body>
+</html>

@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>왜 string 복사가 그렇게 비쌀까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #C2185B;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #FCE4EC;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #FCE4EC;
+            border-left: 4px solid #E91E63;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #C2185B;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #FCE4EC;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #C2185B;
+        }
+        .key-point {
+            background: #F8BBD9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #880E4F;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #FCE4EC;
+            font-weight: 600;
+            color: #C2185B;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+        .compare-table .neutral {
+            background: #fff3e0;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #C2185B 0%, #E91E63 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #F8BBD9;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #C2185B;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../cpp-modern/" class="back-link">← Modern C++</a>
+
+        <header class="header">
+            <h1>왜 string 복사가 그렇게 비쌀까?</h1>
+            <p>std::string의 내부 구조와 SSO, string_view 최적화</p>
+        </header>
+
+        <!-- Part 1: string 내부 구조 -->
+        <div class="conversation">
+            <h2>Part 1. std::string의 내부 구조</h2>
+
+            <div class="chat">
+                <div class="q">std::string이 내부적으로 어떻게 생겼어?</div>
+                <div class="a">
+                    <p>기본적으로 <span class="highlight">포인터 + 크기 + 용량</span>이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[std::string 기본 구조]
+
+// 단순화한 구조
+class string {
+    char* m_data;      // 실제 문자열 (힙에 있음)
+    size_t m_size;     // 현재 길이
+    size_t m_capacity; // 할당된 크기
+};
+
+sizeof(string) = 24바이트 (64비트)
+                 (포인터 8 + size_t 8 + size_t 8)
+
+
+[메모리 레이아웃]
+
+string s = "Hello, World!";
+
+스택:                      힙:
++----------------+         +------------------+
+| m_data --------|-------->| H e l l o ,   W |
+| m_size = 13    |         | o r l d ! \0    |
+| m_capacity = 16|         +------------------+
++----------------+
+
+→ 문자열 데이터는 힙에!</div>
+
+            <div class="chat">
+                <div class="q">왜 힙에 저장해?</div>
+                <div class="a">
+                    <p>문자열 길이가 <span class="highlight">가변</span>이니까!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[왜 힙을 쓰나?]
+
+스택에 고정 크기로 넣으면:
+
+class BadString {
+    char m_data[256];  // 256바이트 고정
+};
+
+string short_str = "Hi";      // 254바이트 낭비!
+string long_str = "[500자]";  // 저장 불가!
+
+힙을 쓰면:
+- 필요한 만큼만 할당
+- 길이 제한 없음
+- 동적으로 늘릴 수 있음</div>
+        </div>
+
+        <!-- Part 2: 복사 비용 -->
+        <div class="conversation">
+            <h2>Part 2. 왜 복사가 비쌀까?</h2>
+
+            <div class="chat">
+                <div class="q">string 복사하면 뭐가 일어나?</div>
+                <div class="a">
+                    <p><span class="warning">힙 할당 + 전체 복사</span>가 일어나!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[string 복사 과정]
+
+string s1 = "Hello, World!";
+string s2 = s1;  // 복사!
+
+1단계: 새 힙 메모리 할당
+  - malloc/new 호출 (비쌈!)
+  - OS에 메모리 요청할 수도
+
+2단계: 문자열 전체 복사
+  - memcpy(s2.m_data, s1.m_data, 13)
+
+3단계: 메타데이터 설정
+  - s2.m_size = 13
+  - s2.m_capacity = ...
+
+
+[메모리 상태]
+
+복사 전:
+s1.m_data → [Hello, World!\0]
+
+복사 후:
+s1.m_data → [Hello, World!\0]
+s2.m_data → [Hello, World!\0]  ← 새로 할당된 복사본!
+
+→ 문자열이 길수록 복사 비용 증가!</div>
+
+            <div class="chat">
+                <div class="q">힙 할당이 왜 비싸?</div>
+                <div class="a">
+                    <p>힙 할당은 <span class="warning">시스템 콜</span>까지 갈 수 있어!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[힙 할당 비용]
+
+스택 할당:
+  mov rsp, -100   // 스택 포인터만 이동
+  → ~1 나노초
+
+힙 할당:
+  1. 메모리 관리자에서 빈 블록 찾기
+  2. 적절한 크기의 청크 분할
+  3. 필요하면 OS에 페이지 요청 (시스템 콜!)
+  4. 메타데이터 기록
+  → 수십~수백 나노초
+
+반복문에서 string 복사:
+for (int i = 0; i < 100000; i++) {
+    string copy = original;  // 매번 힙 할당!
+}
+→ 수 밀리초 이상 소요!</div>
+
+            <div class="code-block">[실제 벤치마크]
+
+1만 번 복사:
+
+짧은 문자열 (10자):
+  힙 할당 O: ~1ms
+  SSO:       ~0.1ms  (10배 빠름)
+
+긴 문자열 (1000자):
+  ~5ms (복사 시간도 추가)
+
+문자열 더하기:
+string result;
+for (auto& s : strings) {
+    result += s;  // 매번 재할당 가능!
+}
+→ O(N^2) 될 수 있음!</div>
+        </div>
+
+        <!-- Part 3: SSO -->
+        <div class="conversation">
+            <h2>Part 3. SSO (Small String Optimization)</h2>
+
+            <div class="chat">
+                <div class="q">짧은 문자열도 힙에 할당해야 해?</div>
+                <div class="a">
+                    <p>현대 STL은 <span class="key-point">SSO</span>를 써서 안 그래!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[SSO: Small String Optimization]
+
+아이디어:
+  string 객체 자체가 24바이트인데,
+  짧은 문자열은 그 안에 저장하면 되지 않을까?
+
+
+[SSO 구현 (개념)]
+
+class string {
+    union {
+        // 긴 문자열용
+        struct {
+            char* m_data;
+            size_t m_size;
+            size_t m_capacity;
+        };
+        // 짧은 문자열용 (SSO)
+        struct {
+            char m_buffer[23];  // 내장 버퍼
+            unsigned char m_local_size;  // 길이 + 플래그
+        };
+    };
+};
+
+→ 22자 이하: string 객체 내부에 저장 (힙 안 씀!)
+→ 23자 이상: 기존처럼 힙 사용</div>
+
+            <div class="chat">
+                <div class="q">메모리 구조가 어떻게 달라져?</div>
+            </div>
+
+            <div class="code-block">[SSO 메모리 레이아웃]
+
+짧은 문자열 (SSO):
+string s = "Hello";
+
+스택:
++------------------------+
+| H e l l o \0 _ _ _ _   |  ← 문자열이 객체 안에!
+| _ _ _ _ _ _ _ _ _ _ _  |
+| _ _ _ _ _ 5 [SSO플래그]|
++------------------------+
+힙 할당 없음!
+
+
+긴 문자열 (힙):
+string s = "This is a very long string...";
+
+스택:                      힙:
++----------------+         +------------------+
+| m_data --------|-------->| This is a very  |
+| m_size = 30    |         | long string...  |
+| m_capacity     |         +------------------+
++----------------+</div>
+
+            <div class="chat">
+                <div class="q">SSO 덕분에 얼마나 빨라져?</div>
+                <div class="a">
+                    <p>짧은 문자열은 <span class="key-point">10배 이상</span> 빨라질 수 있어!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[SSO 효과]
+
+SSO 적용 (22자 이하):
+  - 힙 할당: 없음
+  - 복사: memcpy만 (빠름)
+  - 해제: 없음
+
+게임에서 흔한 짧은 문자열:
+  - 아이템 이름: "검", "방패" (2~10자)
+  - 플레이어 이름: "홍길동" (3~12자)
+  - 명령어: "attack", "move" (5~10자)
+  - 에러 코드: "ERR_001" (7자)
+
+→ 대부분 SSO 혜택!</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>컴파일러</th>
+                    <th>SSO 버퍼 크기</th>
+                </tr>
+                <tr>
+                    <td>GCC (libstdc++)</td>
+                    <td>15바이트</td>
+                </tr>
+                <tr>
+                    <td>Clang (libc++)</td>
+                    <td>22바이트</td>
+                </tr>
+                <tr>
+                    <td>MSVC</td>
+                    <td>15바이트</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 4: string_view -->
+        <div class="conversation">
+            <h2>Part 4. string_view (C++17)</h2>
+
+            <div class="chat">
+                <div class="q">읽기만 할 건데 꼭 복사해야 해?</div>
+                <div class="a">
+                    <p><span class="key-point">string_view</span>를 쓰면 복사 없이 참조만!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[string_view란?]
+
+#include <string_view>
+
+// string_view = 포인터 + 크기 (복사 없음!)
+class string_view {
+    const char* m_data;  // 원본을 가리킴
+    size_t m_size;
+};
+
+sizeof(string_view) = 16바이트
+
+
+string original = "Hello, World!";
+
+// 복사 발생
+string copy = original;
+→ 힙 할당 + 문자열 복사
+
+// 복사 없음!
+string_view view = original;
+→ 포인터만 복사 (16바이트)</div>
+
+            <div class="chat">
+                <div class="q">언제 string_view를 써?</div>
+                <div class="a">
+                    <p><span class="highlight">읽기 전용</span>으로 문자열을 받을 때!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[string_view 활용]
+
+// 나쁜 예 - 불필요한 복사
+void PrintName(string name) {  // 복사 발생!
+    cout << name;
+}
+
+// 좋은 예 - 복사 없음
+void PrintName(string_view name) {  // 참조만!
+    cout << name;
+}
+
+
+// string_view의 유연함
+PrintName("Hello");                    // const char* → OK
+PrintName(string("Hello"));            // string → OK
+PrintName(string_view("Hello"));       // string_view → OK
+
+char buffer[] = "Hello";
+PrintName(string_view(buffer, 5));     // 버퍼 일부 → OK!
+
+
+// 부분 문자열도 복사 없음!
+string data = "name=John&age=30";
+string_view name = string_view(data).substr(5, 4);  // "John"
+// data의 메모리를 직접 참조!</div>
+
+            <div class="code-block">[string_view 주의사항]
+
+// 위험! 수명 문제
+string_view GetName() {
+    string local = "John";
+    return string_view(local);  // local이 사라지면 댕글링!
+}
+
+// 위험! 임시 객체
+string_view view = string("temp");  // 임시 객체가 바로 소멸!
+cout << view;  // 정의되지 않은 동작!
+
+// 안전하게 사용
+void Process(string_view sv) {
+    // 이 함수 내에서만 사용 OK
+}
+
+string data = "...";
+string_view view = data;  // data가 살아있는 동안 OK</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>const string&</th>
+                    <th>string_view</th>
+                </tr>
+                <tr>
+                    <td>크기</td>
+                    <td>8바이트 (참조)</td>
+                    <td>16바이트 (값)</td>
+                </tr>
+                <tr>
+                    <td>const char* 받기</td>
+                    <td class="bad">임시 string 생성</td>
+                    <td class="good">직접 참조</td>
+                </tr>
+                <tr>
+                    <td>부분 문자열</td>
+                    <td class="bad">새 string 생성</td>
+                    <td class="good">포인터 조정만</td>
+                </tr>
+                <tr>
+                    <td>Null 종료 보장</td>
+                    <td class="good">보장됨</td>
+                    <td class="bad">보장 안 됨</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 5: 최적화 기법 -->
+        <div class="conversation">
+            <h2>Part 5. 문자열 최적화 기법들</h2>
+
+            <div class="chat">
+                <div class="q">게임 서버에서 문자열 최적화 어떻게 해?</div>
+                <div class="a">
+                    <p>여러 기법을 조합해서 써!</p>
+                </div>
+            </div>
+
+            <div class="code-block">[기법 1: reserve로 재할당 방지]
+
+// 나쁜 예 - 재할당 반복
+string result;
+for (int i = 0; i < 1000; i++) {
+    result += "item";  // 용량 부족하면 재할당!
+}
+// 수십 번 재할당 발생
+
+// 좋은 예 - 미리 공간 확보
+string result;
+result.reserve(4000);  // 미리 할당
+for (int i = 0; i < 1000; i++) {
+    result += "item";  // 재할당 없음!
+}</div>
+
+            <div class="code-block">[기법 2: 이동 시맨틱스 활용]
+
+// 나쁜 예 - 복사
+string Process(string s) {
+    // 처리...
+    return s;  // 복사 (최적화 안 되면)
+}
+
+// 좋은 예 - 이동
+string Process(string s) {
+    // 처리...
+    return std::move(s);  // 이동 (복사 없음)
+}
+
+// 또는 RVO 활용
+string Process() {
+    string s = "result";
+    return s;  // RVO로 복사 없이 반환
+}</div>
+
+            <div class="code-block">[기법 3: 문자열 풀링]
+
+// 자주 쓰는 문자열을 미리 만들어 놓기
+class StringPool {
+    unordered_map<string_view, string> m_pool;
+public:
+    const string& Get(string_view key) {
+        auto it = m_pool.find(key);
+        if (it != m_pool.end()) {
+            return it->second;
+        }
+        return m_pool.emplace(key, string(key)).first->second;
+    }
+};
+
+// 사용
+StringPool pool;
+const string& msg = pool.Get("공격 성공!");  // 첫 호출: 생성
+const string& msg2 = pool.Get("공격 성공!"); // 두번째: 재사용!
+
+→ 동일한 문자열 여러 번 생성 방지</div>
+
+            <div class="code-block">[기법 4: 인라인 문자열 (게임 서버)]
+
+// 고정 크기 문자열 (힙 안 씀)
+template<size_t N>
+struct FixedString {
+    char data[N];
+    size_t length;
+
+    FixedString(const char* s) {
+        length = strlen(s);
+        assert(length < N);
+        memcpy(data, s, length + 1);
+    }
+};
+
+// 사용
+FixedString<32> name = "Player1";  // 스택에!
+FixedString<64> message = "Hello!";
+
+→ 힙 할당 0, 캐시 친화적!</div>
+
+            <div class="code-block">[기법 5: 해시로 비교 최적화]
+
+// 문자열 비교는 O(n)
+if (command == "attack") { ... }
+
+// 해시로 O(1) 비교
+constexpr uint32_t Hash(const char* s) {
+    uint32_t hash = 0;
+    while (*s) hash = hash * 31 + *s++;
+    return hash;
+}
+
+constexpr uint32_t CMD_ATTACK = Hash("attack");
+constexpr uint32_t CMD_MOVE = Hash("move");
+
+uint32_t cmdHash = Hash(command.c_str());
+switch (cmdHash) {
+    case CMD_ATTACK: /* ... */ break;
+    case CMD_MOVE:   /* ... */ break;
+}</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>추천 방법</th>
+                </tr>
+                <tr>
+                    <td>읽기 전용 파라미터</td>
+                    <td class="good">string_view</td>
+                </tr>
+                <tr>
+                    <td>짧은 문자열 (22자 이하)</td>
+                    <td class="good">SSO 믿고 그냥 string</td>
+                </tr>
+                <tr>
+                    <td>문자열 조합</td>
+                    <td>reserve + append</td>
+                </tr>
+                <tr>
+                    <td>반환값</td>
+                    <td>이동 또는 RVO 활용</td>
+                </tr>
+                <tr>
+                    <td>고정 크기 버퍼</td>
+                    <td class="good">FixedString / char[]</td>
+                </tr>
+                <tr>
+                    <td>문자열 비교 많음</td>
+                    <td class="good">해시 사용</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 6: 실수 사례 -->
+        <div class="conversation">
+            <h2>Part 6. 흔한 실수들</h2>
+
+            <div class="chat">
+                <div class="q">문자열 관련 흔한 실수가 뭐야?</div>
+            </div>
+
+            <div class="code-block">[실수 1: 루프에서 문자열 더하기]
+
+// O(N^2) 복잡도!
+string result;
+for (const auto& item : items) {
+    result = result + item.name + ", ";  // 매번 새 string 생성!
+}
+
+// 고친 코드 - O(N)
+string result;
+result.reserve(items.size() * 20);  // 예상 크기
+for (const auto& item : items) {
+    result += item.name;
+    result += ", ";
+}
+
+
+[실수 2: 불필요한 string 생성]
+
+// 나쁜 예
+void Log(string message) { ... }  // 복사!
+
+Log("Simple message");  // const char* → string 생성
+
+// 좋은 예
+void Log(string_view message) { ... }
+
+Log("Simple message");  // 복사 없음!
+
+
+[실수 3: c_str() 남용]
+
+// string_view에서 c_str() 필요할 때
+void LegacyAPI(const char* s);  // C API
+
+string_view sv = ...;
+LegacyAPI(sv.data());  // 주의: null 종료 안 될 수 있음!
+
+// 안전하게
+string temp(sv);
+LegacyAPI(temp.c_str());  // null 종료 보장
+
+
+[실수 4: 임시 string에서 string_view]
+
+string_view bad = string("temp");  // 위험!
+// 임시 string이 바로 소멸 → bad는 댕글링
+
+string good_str = "temp";
+string_view good = good_str;  // OK</div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>std::string</strong> = 포인터 + 크기 + 용량, 보통 24바이트</li>
+                <li><strong>복사 비용</strong> = 힙 할당 + memcpy, 길이에 비례</li>
+                <li><strong>힙 할당</strong> = 스택의 100배 이상 느림</li>
+                <li><strong>SSO</strong> = 짧은 문자열(15~22자)은 객체 내부에 저장</li>
+                <li><strong>string_view</strong> = 복사 없이 참조, 읽기 전용일 때 사용</li>
+                <li><strong>reserve</strong> = 재할당 방지, 크기 알면 미리 확보</li>
+                <li><strong>이동 시맨틱스</strong> = 복사 대신 이동으로 오버헤드 제거</li>
+                <li><strong>문자열 풀링</strong> = 중복 문자열 공유로 메모리/시간 절약</li>
+                <li><strong>FixedString</strong> = 고정 크기로 힙 할당 완전 회피</li>
+                <li><strong>주의</strong>: string_view의 수명 관리, 루프에서 += 사용</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../cpp-modern/">← Modern C++</a>
+            <a href="../../">메인으로 ></a>
+        </div>
+    </div>
+</body>
+</html>

@@ -33,7 +33,6 @@
         .nav-links a { color: #0891B2; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
-
     </style>
 </head>
 <body>
@@ -42,42 +41,354 @@
 
         <div class="header">
             <h1>Sparse Texture / Tiled Resource</h1>
-            <p>GPU 가상 메모리</p>
+            <p>GPU 가상 메모리로 거대 텍스처 다루기</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 개념</h2>
-            <div class="q">Sparse Texture / Tiled Resource이(가) 뭐야?</div>
+            <h2>Part 1. 일반 텍스처의 한계</h2>
+            <div class="q">왜 거대한 텍스처가 문제야?</div>
             <div class="a">
-                <p><span class="highlight">GPU 가상 메모리</span></p>
-                <p>게임 리소스 관리의 핵심 개념 중 하나입니다.</p>
+                <p>GPU 메모리는 <span class="warning">모든 텍스처를 한꺼번에 올려야</span> 했습니다:</p>
+                <div class="diagram">
+일반 텍스처의 문제:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  게임에서 16K 지형 텍스처 사용:                             │
+│  16384 × 16384 × 4 bytes = <span class="warning">1GB per texture</span>               │
+│                                                            │
+│  실제로 화면에 보이는 영역:                                 │
+│  ┌────────────────────────────────────────┐               │
+│  │ 전체 지형 텍스처 (16K × 16K)          │               │
+│  │                                        │               │
+│  │    ┌────┐                              │               │
+│  │    │ 화면│  ← 실제 보이는 건          │               │
+│  │    │ 영역│    전체의 1% 미만!          │               │
+│  │    └────┘                              │               │
+│  │                                        │               │
+│  └────────────────────────────────────────┘               │
+│                                                            │
+│  <span class="warning">문제</span>: 1%만 보는데 100%를 메모리에 올림                   │
+│  → GPU 메모리 낭비, 로딩 시간 증가                         │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 왜 필요해?</h2>
-            <div class="q">언제 쓰는 거야?</div>
+            <h2>Part 2. Sparse Texture 개념</h2>
+            <div class="q">Sparse Texture가 어떻게 해결해?</div>
             <div class="a">
-                <p>메모리와 로딩 시간을 최적화할 때 사용합니다.</p>
-                <p>현대 게임에서 <span class="key-point">필수적인 기술</span>입니다.</p>
+                <p><span class="highlight">OS 가상 메모리</span>와 같은 개념을 GPU에 적용합니다:</p>
+                <div class="diagram">
+Sparse Texture (= Tiled Resource = Mega Texture):
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  핵심 아이디어: <span class="key-point">필요한 타일만 메모리에 상주</span>               │
+│                                                            │
+│  가상 텍스처 (논리적)          물리 메모리 (실제)          │
+│  ┌──┬──┬──┬──┬──┬──┐        ┌──────────────┐            │
+│  │T1│T2│T3│T4│T5│T6│        │ Tile Pool    │            │
+│  ├──┼──┼──┼──┼──┼──┤        │              │            │
+│  │T7│▓▓│▓▓│T10│T11│T12│       │ ┌──┐ ┌──┐   │            │
+│  ├──┼──┼──┼──┼──┼──┤        │ │T8│ │T9│   │            │
+│  │T13│T14│T15│T16│T17│T18│       │ └──┘ └──┘   │            │
+│  └──┴──┴──┴──┴──┴──┘        │              │            │
+│       ↑   ↑                  └──────────────┘            │
+│       │   │                         ↑                     │
+│       └───┴── 매핑됨 ───────────────┘                     │
+│                                                            │
+│  ▓▓ = Resident (메모리에 있음)                             │
+│  T = Non-resident (필요 시 로드)                           │
+│                                                            │
+│  <span class="key-point">결과</span>: 1GB 가상 텍스처를 64MB 물리 메모리로 사용 가능!   │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">OS 가상 메모리랑 뭐가 다른 거야?</div>
+            <div class="a">
+                <p>원리는 같지만 <span class="highlight">GPU 전용으로 최적화</span>되어 있습니다:</p>
+                <div class="diagram">
+비교: OS 가상 메모리 vs GPU Sparse Texture
+
+┌────────────────────────┬────────────────────────┐
+│ OS 가상 메모리          │ GPU Sparse Texture     │
+├────────────────────────┼────────────────────────┤
+│ 페이지 단위: 4KB       │ 타일 단위: 64KB (일반) │
+│ Page Fault → OS 핸들링  │ Miss → Fallback mip   │
+│ 디스크 스왑            │ 스트리밍 시스템 연동   │
+│ CPU 접근               │ GPU 셰이더 접근        │
+│ 동기적 (느림)          │ 비동기적 (매끄러움)    │
+└────────────────────────┴────────────────────────┘
+
+핵심 차이: <span class="key-point">Page Fault 대신 저해상도 Fallback</span>
+→ 타일이 없으면 상위 mip 사용 (끊김 없음)</div>
             </div>
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 실전 적용</h2>
-            <div class="q">실제로 어떻게 써?</div>
+            <h2>Part 3. 타일 매핑 구조</h2>
+            <div class="q">타일 매핑은 어떻게 작동해?</div>
             <div class="a">
-                <p>Unity, Unreal 등 주요 엔진에서 지원합니다.</p>
-                <p>프로젝트 규모와 플랫폼에 맞게 적용합니다.</p>
+                <p><span class="highlight">Page Table</span> 같은 구조로 가상→물리 주소를 변환합니다:</p>
+                <div class="diagram">
+Sparse Texture 메모리 구조:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  1. 가상 텍스처 (Virtual Texture)                          │
+│     - 논리적 크기: 16K × 16K                               │
+│     - 실제 메모리 할당 없음                                │
+│                                                            │
+│  2. 타일 매핑 테이블 (Page Table)                          │
+│     ┌───────────────────────────────────────────┐         │
+│     │ Virtual Tile │ Physical Tile │ Resident │         │
+│     ├───────────────┼───────────────┼──────────┤         │
+│     │ (0, 0, mip0) │ Pool[42]     │ ✓        │         │
+│     │ (1, 0, mip0) │ Pool[17]     │ ✓        │         │
+│     │ (2, 0, mip0) │ NULL         │ ✗        │         │
+│     │ (0, 0, mip1) │ Pool[3]      │ ✓        │  (fallback) │
+│     └───────────────┴───────────────┴──────────┘         │
+│                                                            │
+│  3. 물리 타일 풀 (Tile Pool)                               │
+│     - 고정 크기 메모리 (예: 256MB)                         │
+│     - LRU로 타일 교체                                      │
+│     - 실제 텍스처 데이터 저장                              │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// DirectX 12 Tiled Resource 생성
+
+// 1. Reserved Resource 생성 (메모리 없이 주소만)
+D3D12_RESOURCE_DESC desc = {};
+desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+desc.Width = 16384;
+desc.Height = 16384;
+desc.Format = DXGI_FORMAT_BC7_UNORM;
+desc.Layout = D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE;
+
+device->CreateReservedResource(
+    &desc,
+    D3D12_RESOURCE_STATE_COMMON,
+    nullptr,
+    IID_PPV_ARGS(&sparseTexture)
+);
+
+// 2. Heap 생성 (실제 물리 메모리 풀)
+D3D12_HEAP_DESC heapDesc = {};
+heapDesc.SizeInBytes = 256 * 1024 * 1024;  // 256MB 풀
+heapDesc.Properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+heapDesc.Flags = D3D12_HEAP_FLAG_DENY_BUFFERS | D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES;
+
+device->CreateHeap(&heapDesc, IID_PPV_ARGS(&tilePool));
+
+// 3. 타일 매핑 업데이트
+D3D12_TILED_RESOURCE_COORDINATE coord = { tileX, tileY, 0, subresource };
+D3D12_TILE_REGION_SIZE regionSize = { 1, FALSE, 0, 0, 0 };
+D3D12_TILE_RANGE_FLAGS flags = D3D12_TILE_RANGE_FLAG_NONE;
+UINT heapOffset = poolTileIndex;
+
+commandQueue->UpdateTileMappings(
+    sparseTexture,
+    1, &coord, &regionSize,
+    tilePool,
+    1, &flags, &heapOffset, &tileCount,
+    D3D12_TILE_MAPPING_FLAG_NONE
+);</div>
             </div>
         </div>
+
+        <div class="conversation">
+            <h2>Part 4. Residency 관리</h2>
+            <div class="q">어떤 타일을 메모리에 둘지 어떻게 결정해?</div>
+            <div class="a">
+                <p><span class="highlight">Feedback Buffer</span>로 GPU가 어떤 타일을 사용하는지 알려줍니다:</p>
+                <div class="diagram">
+Feedback 기반 Residency 관리:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  Frame N:                                                  │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │ GPU 렌더링 중...                                    │  │
+│  │                                                     │  │
+│  │ 셰이더에서 텍스처 샘플링 시:                        │  │
+│  │ → (tileX, tileY, mipLevel) 기록                    │  │
+│  │                                                     │  │
+│  │ Feedback Buffer:                                    │  │
+│  │ ┌────────────────────────────────────────────┐     │  │
+│  │ │ Tile(3,2,mip0), Tile(3,3,mip0), Tile(4,2,mip0)│  │  │
+│  │ │ Tile(1,1,mip1), Tile(2,1,mip1)...           │     │  │
+│  │ └────────────────────────────────────────────┘     │  │
+│  └─────────────────────────────────────────────────────┘  │
+│                        │                                   │
+│                        ▼                                   │
+│  Frame N+1:                                                │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │ CPU가 Feedback 분석                                 │  │
+│  │ → 필요한 타일 식별                                  │  │
+│  │ → 스트리밍 요청 생성                                │  │
+│  │ → 타일 매핑 업데이트                                │  │
+│  └─────────────────────────────────────────────────────┘  │
+│                                                            │
+│  <span class="key-point">결과: GPU가 실제로 보는 것만 로드</span>                       │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// Sampler Feedback (DX12 Ultimate)
+
+// 1. Feedback Map 생성
+D3D12_RESOURCE_DESC feedbackDesc = {};
+feedbackDesc.Format = DXGI_FORMAT_SAMPLER_FEEDBACK_MIN_MIP_OPAQUE;
+feedbackDesc.Width = sparseTextureWidth / 64;   // 타일 단위
+feedbackDesc.Height = sparseTextureHeight / 64;
+
+device->CreateCommittedResource(..., &feedbackMap);
+
+// 2. 셰이더에서 Feedback 기록
+// HLSL:
+Texture2D<float4> SparseTexture : register(t0);
+FeedbackTexture2D<SAMPLER_FEEDBACK_MIN_MIP> FeedbackMap : register(u0);
+
+float4 PSMain(float2 uv : TEXCOORD) : SV_Target {
+    // 자동으로 사용된 타일/mip 기록
+    FeedbackMap.WriteSamplerFeedback(SparseTexture, Sampler, uv);
+
+    return SparseTexture.Sample(Sampler, uv);
+}
+
+// 3. CPU에서 Feedback 읽기
+context->ResolveSubresource(feedbackReadback, 0, feedbackMap, 0, ...);
+// → 어떤 타일이 필요한지 분석</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. Virtual Texture와의 관계</h2>
+            <div class="q">Virtual Texture랑 뭐가 달라?</div>
+            <div class="a">
+                <p><span class="highlight">Sparse Texture는 하드웨어 기능</span>, <span class="highlight">Virtual Texture는 소프트웨어 기법</span>입니다:</p>
+                <div class="diagram">
+Sparse Texture vs Virtual Texture:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  Sparse Texture (Hardware)                                 │
+│  ────────────────────────────────────────────────────────  │
+│  - GPU 하드웨어 직접 지원                                  │
+│  - API: DX12 Tiled Resources, Vulkan Sparse Binding       │
+│  - 타일 단위 메모리 매핑                                   │
+│  - 모든 텍스처 타입 지원                                   │
+│                                                            │
+│  Virtual Texture (Software) = Mega Texture                 │
+│  ────────────────────────────────────────────────────────  │
+│  - 소프트웨어 구현 (Sparse Texture 위에 구축 가능)         │
+│  - Indirection Table + Physical Cache                      │
+│  - id Tech 5 (RAGE)에서 시작                               │
+│  - UE5: Runtime Virtual Texture                            │
+│                                                            │
+│  조합 사용:                                                │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │ Virtual Texture 시스템                              │  │
+│  │    ├─ Feedback Rendering                            │  │
+│  │    ├─ Indirection Table                             │  │
+│  │    └─ Physical Cache ← <span class="key-point">Sparse Texture로 구현</span>     │  │
+│  └─────────────────────────────────────────────────────┘  │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 플랫폼별 지원</h2>
+            <div class="q">어떤 플랫폼에서 쓸 수 있어?</div>
+            <div class="a">
+                <div class="diagram">
+플랫폼별 Sparse Texture 지원:
+┌─────────────────────┬────────────────────────────────────┐
+│ 플랫폼              │ API / 기능명                        │
+├─────────────────────┼────────────────────────────────────┤
+│ DirectX 11.2+       │ Tiled Resources (Tier 1/2/3)       │
+│ DirectX 12          │ Reserved Resources + UpdateTileMappings │
+│ DirectX 12 Ultimate │ + Sampler Feedback                  │
+│ Vulkan              │ Sparse Binding / Residency          │
+│ Metal               │ Sparse Textures (iOS 16+, macOS 13+)│
+│ OpenGL              │ ARB_sparse_texture (제한적)         │
+├─────────────────────┼────────────────────────────────────┤
+│ PlayStation 5       │ 네이티브 지원                       │
+│ Xbox Series X/S     │ Sampler Feedback Streaming         │
+│ Nintendo Switch     │ 미지원                              │
+└─────────────────────┴────────────────────────────────────┘
+
+<span class="warning">주의</span>: GPU마다 기능 수준(Tier) 다름
+- Tier 1: 기본 매핑만
+- Tier 2: 단일 텍스처 다중 매핑
+- Tier 3: 볼륨 텍스처, 샘플러 피드백</div>
+                <div class="code-block">
+// 기능 지원 확인
+
+// DirectX 12
+D3D12_FEATURE_DATA_D3D12_OPTIONS options = {};
+device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options));
+
+switch (options.TiledResourcesTier) {
+    case D3D12_TILED_RESOURCES_TIER_1:
+        // 기본 2D 텍스처만
+        break;
+    case D3D12_TILED_RESOURCES_TIER_2:
+        // + NULL 매핑, 단일 타일 다중 매핑
+        break;
+    case D3D12_TILED_RESOURCES_TIER_3:
+        // + 3D 텍스처, 샘플러 피드백
+        break;
+}
+
+// Vulkan
+VkPhysicalDeviceFeatures features;
+vkGetPhysicalDeviceFeatures(physicalDevice, &features);
+if (features.sparseBinding && features.sparseResidencyImage2D) {
+    // Sparse Texture 지원
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 실제 활용 사례</h2>
+            <div class="q">어디에 주로 써?</div>
+            <div class="a">
+                <div class="diagram">
+Sparse Texture 활용 사례:
+┌────────────────────────────────────────────────────────────┐
+│                                                            │
+│  1. 오픈월드 지형                                          │
+│     - 거대한 지형 텍스처 (16K+ 해상도)                     │
+│     - 플레이어 주변만 고해상도 로드                        │
+│                                                            │
+│  2. 스트리밍 섀도우 맵                                     │
+│     - Virtual Shadow Maps (UE5)                            │
+│     - 16K 가상 해상도, 필요한 타일만 렌더링                │
+│                                                            │
+│  3. 대규모 텍스처 아틀라스                                 │
+│     - UI 아틀라스                                          │
+│     - 데칼/스프레이 시스템                                 │
+│                                                            │
+│  4. 프로시저럴 텍스처                                      │
+│     - 런타임 생성 텍스처                                   │
+│     - 무한 지형 시스템                                     │
+│                                                            │
+│  <span class="key-point">공통점</span>: 거대하지만 전체가 동시에 필요하지 않은 경우     │
+│                                                            │
+└────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>Sparse Texture / Tiled Resource</strong>의 핵심 개념</li>
-                <li>메모리와 로딩 <strong>최적화</strong></li>
-                <li>현대 게임 <strong>필수 기술</strong></li>
-                <li>엔진별 <strong>구현 방식</strong> 확인</li>
+                <li><strong>Sparse Texture</strong>는 GPU 가상 메모리 - 필요한 타일만 물리 메모리에 매핑</li>
+                <li><strong>타일 풀</strong>에서 LRU로 타일 교체, 메모리 사용량 고정</li>
+                <li><strong>Feedback Buffer</strong>로 GPU가 사용하는 타일 추적</li>
+                <li>타일 미로드 시 <strong>Fallback mip</strong>으로 끊김 없이 렌더링</li>
+                <li>DX12 <strong>Tiled Resources</strong>, Vulkan <strong>Sparse Binding</strong></li>
+                <li><strong>Virtual Texture</strong>는 소프트웨어 구현, Sparse Texture는 하드웨어</li>
+                <li>오픈월드 지형, 섀도우 맵 등 <strong>거대 텍스처</strong>에 필수</li>
             </ul>
         </div>
 

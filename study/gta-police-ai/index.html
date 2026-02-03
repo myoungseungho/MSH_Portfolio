@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTA 경찰 추격 AI - 게임에 적용된 기술 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #B45309; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEF3C7; }
+        .q { background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B45309; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #FEF3C7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B45309; }
+        .key-point { background: #FDE68A; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #92400E; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #F59E0B 0%, #B45309 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #F59E0B; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #FFFBEB; border: 2px solid #FDE68A; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #78350F; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../게임에_적용된_기술/" class="back-link">&larr; 게임에 적용된 기술</a>
+
+        <div class="header">
+            <h1>GTA 경찰 추격 AI</h1>
+            <p>수배 시스템과 추격 AI는 어떻게 작동하는 걸까?</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 수배 레벨 시스템</h2>
+            <div class="q">별이 늘어나면 뭐가 달라지는 거야?</div>
+            <div class="a">
+                <p>GTA의 <span class="highlight">수배 레벨(Wanted Level)</span>은 단순히 적 숫자만 늘리는 게 아닙니다. 추격 전략 자체가 바뀝니다:</p>
+                <div class="diagram">
+수배 레벨별 AI 행동 변화:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  ★☆☆☆☆ (1성)                                                 │
+│  ├── 경찰 수: 1-2명                                            │
+│  ├── 차량: 순찰차만                                            │
+│  ├── 행동: <span class="key-point">추격만</span> (공격 안 함)                                │
+│  └── 탈출 난이도: 시야에서 벗어나면 끝                          │
+│                                                                 │
+│  ★★★☆☆ (3성)                                                 │
+│  ├── 경찰 수: 6-8명                                            │
+│  ├── 차량: 순찰차 + 헬기                                       │
+│  ├── 행동: <span class="warning">발포 허용</span>, 로드블록 설치                           │
+│  └── 탈출 난이도: 헬기 시야 회피 필요                          │
+│                                                                 │
+│  ★★★★★ (5성)                                                 │
+│  ├── 경찰 수: 무제한 스폰                                      │
+│  ├── 차량: SWAT 밴 + 탱크(!) + 다중 헬기                       │
+│  ├── 행동: <span class="warning">사살 우선</span>, 포위 전술, 스파이크 스트립              │
+│  └── 탈출 난이도: 거의 불가능 (Pay 'n' Spray 필수)             │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 수배 레벨 시스템 의사코드
+
+enum WantedLevel { NONE = 0, ONE_STAR, TWO_STAR, THREE_STAR, FOUR_STAR, FIVE_STAR };
+
+struct WantedConfig {
+    int maxCops;              // 최대 경찰 수
+    bool canShoot;            // 발포 허용
+    bool useHelicopter;       // 헬기 출동
+    bool useRoadblock;        // 로드블록 설치
+    float searchRadius;       // 탐색 반경
+    float escapeTime;         // 탈출까지 필요 시간
+};
+
+WantedConfig g_WantedConfigs[] = {
+    // maxCops, canShoot, heli,  roadblock, radius, escapeTime
+    { 0,       false,    false, false,     0,      0    },  // 0성
+    { 2,       false,    false, false,     50,     10   },  // 1성
+    { 4,       true,     false, false,     75,     15   },  // 2성
+    { 8,       true,     true,  true,      100,    30   },  // 3성
+    { 12,      true,     true,  true,      150,    60   },  // 4성
+    { 999,     true,     true,  true,      200,    120  },  // 5성
+};
+
+void UpdateWantedLevel(Player* player) {
+    // 범죄 심각도에 따라 수배 레벨 증가
+    if (player->killedCivilian) AddStars(1);
+    if (player->killedCop)      AddStars(2);
+    if (player->destroyedHeli)  AddStars(3);
+
+    // 수배 레벨에 맞는 반응 적용
+    ApplyWantedConfig(g_WantedConfigs[currentLevel]);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 시야 기반 탐지 (Vision Cone)</h2>
+            <div class="q">경찰이 플레이어를 어떻게 찾아내?</div>
+            <div class="a">
+                <p>단순히 거리만 체크하면 벽 뒤에서도 발각됩니다. GTA는 <span class="highlight">시야 원뿔(Vision Cone)</span>을 사용합니다:</p>
+                <div class="diagram">
+시야 원뿔 (Vision Cone) 시스템:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│                        [플레이어]                               │
+│                            *                                    │
+│                           /|\                                   │
+│                          / | \                                  │
+│    <span class="warning">시야 밖 (은신)</span>     /  |  \      <span class="warning">시야 밖</span>                │
+│                        /   |   \                                │
+│                       /    |    \                               │
+│                      /  시야각   \                              │
+│                     /   (120°)   \                              │
+│                    /      |       \                             │
+│                   /       |        \                            │
+│                  [────────────────────]                         │
+│                        <span class="key-point">탐지 영역</span>                              │
+│                                                                 │
+│  시야 거리: 50m (일반), 100m (헬기)                             │
+│  시야 각도: 120° (전방)                                         │
+│  장애물: 건물, 차량 뒤는 시야 차단                              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+Raycast 기반 시야 차단:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  [경찰] ─────────X─────────▶ [플레이어]                        │
+│               건물(장애물)                                       │
+│                   │                                             │
+│                   └─ Raycast 충돌 → <span class="key-point">시야 차단됨</span>                │
+│                                                                 │
+│  [경찰] ──────────────────────▶ [플레이어]                     │
+│          장애물 없음                                            │
+│                   │                                             │
+│                   └─ Raycast 성공 → <span class="warning">탐지됨!</span>                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 시야 기반 탐지 시스템
+
+struct VisionCone {
+    float angle;       // 시야 각도 (반각)
+    float distance;    // 시야 거리
+};
+
+bool CanSeeTarget(const Cop* cop, const Player* player) {
+    Vec3 toPlayer = player->position - cop->position;
+    float dist = toPlayer.Length();
+
+    // 1. 거리 체크
+    if (dist > cop->visionCone.distance)
+        return false;
+
+    // 2. 각도 체크 (시야 원뿔 내부인지)
+    Vec3 forward = cop->GetForwardVector();
+    float dotProduct = Dot(Normalize(forward), Normalize(toPlayer));
+    float angle = acos(dotProduct);
+
+    if (angle > cop->visionCone.angle)
+        return false;
+
+    // 3. 장애물 체크 (Raycast)
+    RaycastHit hit;
+    if (Physics::Raycast(cop->position, toPlayer, dist, &hit)) {
+        // 뭔가에 맞았다 = 시야 차단
+        if (hit.entity != player)
+            return false;
+    }
+
+    return true;  // 발견!
+}
+
+// 헬기의 경우: 360도 시야 + 장거리
+bool HelicopterCanSee(const Helicopter* heli, const Player* player) {
+    Vec3 toPlayer = player->position - heli->position;
+    float dist = toPlayer.Length();
+
+    // 헬기는 각도 제한 없음 (360도), 거리만 체크
+    if (dist > 150.0f) return false;
+
+    // 실내인지 체크 (지붕 아래면 못 봄)
+    if (player->IsIndoors()) return false;
+
+    // Raycast로 장애물 체크
+    return !Physics::RaycastBlocked(heli->position, player->position);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 추격 경로 계산</h2>
+            <div class="q">경찰차가 플레이어를 어떻게 따라와?</div>
+            <div class="a">
+                <p>단순히 직선으로 따라가면 건물에 부딪힙니다. <span class="highlight">예측 추격(Predictive Pursuit)</span>을 사용합니다:</p>
+                <div class="diagram">
+단순 추격 vs 예측 추격:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  단순 추격 (현재 위치로):                                       │
+│  ┌─────────────────────────────────────────┐                   │
+│  │                                         │                   │
+│  │  [플레이어] ──────▶                     │                   │
+│  │       ↑                                 │                   │
+│  │       │   <span class="warning">항상 뒤따라감 (따라잡기 어려움)</span>   │                   │
+│  │       │                                 │                   │
+│  │  [경찰차]                               │                   │
+│  │                                         │                   │
+│  └─────────────────────────────────────────┘                   │
+│                                                                 │
+│  예측 추격 (미래 위치로):                                       │
+│  ┌─────────────────────────────────────────┐                   │
+│  │                                         │                   │
+│  │  [플레이어] ──────▶ <span class="key-point">[예측 위치]</span>         │                   │
+│  │                        ↗               │                   │
+│  │                      /                  │                   │
+│  │                    /   <span class="key-point">차단 경로</span>         │                   │
+│  │  [경찰차] ────────/                     │                   │
+│  │                                         │                   │
+│  └─────────────────────────────────────────┘                   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+로드블록 설치 위치 선정:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│         현재 위치        예측 경로           로드블록 위치       │
+│  [플레이어] ───────────────────────────▶ <span class="warning">[로드블록]</span>          │
+│                                              ╔═══════╗         │
+│                                              ║ 경찰차 ║         │
+│                                              ╚═══════╝         │
+│                                                                 │
+│  알고리즘: 도로 네트워크에서 플레이어 진행 방향의               │
+│           전방 교차로를 찾아 미리 배치                          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 예측 추격 알고리즘
+
+Vec3 PredictTargetPosition(const Player* player, float predictionTime) {
+    // 현재 속도 기반 미래 위치 예측
+    Vec3 velocity = player->GetVelocity();
+    Vec3 predicted = player->position + velocity * predictionTime;
+
+    // 도로 위로 스냅 (도로를 벗어나지 않도록)
+    return SnapToNearestRoad(predicted);
+}
+
+void CopCar::UpdatePursuit(const Player* player) {
+    // 1. 플레이어 미래 위치 예측 (2초 후)
+    Vec3 predictedPos = PredictTargetPosition(player, 2.0f);
+
+    // 2. 내 현재 위치에서 예측 위치까지 경로 탐색
+    Path path = Navigation::FindPath(this->position, predictedPos);
+
+    // 3. 옆에서 끼어들기 (Flanking) 시도
+    if (CanFlank(player)) {
+        // 플레이어 왼쪽 또는 오른쪽 차선으로 우회
+        Vec3 flankPos = GetFlankPosition(player, 10.0f);
+        path = Navigation::FindPath(this->position, flankPos);
+    }
+
+    // 4. PIT 기동 (옆에서 밀어서 스핀)
+    if (IsAlongsidePlayer(player, 3.0f)) {
+        ExecutePITManeuver(player);
+    }
+
+    FollowPath(path);
+}
+
+// 로드블록 설치 위치 결정
+void DispatchRoadblock(const Player* player) {
+    // 플레이어 진행 방향 전방 도로 탐색
+    Vec3 direction = Normalize(player->GetVelocity());
+    float lookAhead = 200.0f;  // 200m 전방
+
+    // 도로 네트워크에서 교차로 찾기
+    RoadNode* intersection = RoadNetwork::FindIntersectionAhead(
+        player->position, direction, lookAhead
+    );
+
+    if (intersection) {
+        // 교차로에 로드블록 스폰
+        SpawnRoadblock(intersection->position, intersection->GetBlockDirection());
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 수배 해제 로직</h2>
+            <div class="q">어떻게 해야 별이 없어져?</div>
+            <div class="a">
+                <p><span class="highlight">Last Known Position</span> 시스템입니다. 경찰이 마지막으로 본 위치를 수색합니다:</p>
+                <div class="diagram">
+수배 해제 메커니즘:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  Phase 1: 추격 중 (Chasing)                                     │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  [경찰] ────시야────▶ [플레이어]                         │   │
+│  │            경찰이 플레이어를 직접 보고 있음              │   │
+│  │            → 수배 게이지 유지                            │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Phase 2: 시야 이탈 (Lost Visual)                               │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                                                         │   │
+│  │  [경찰] ────시야────▶ X (빈 공간)                       │   │
+│  │                       │                                 │   │
+│  │                       └─ <span class="key-point">Last Known Position (LKP)</span>       │   │
+│  │                                                         │   │
+│  │  [플레이어] (다른 곳에 숨음)                             │   │
+│  │                                                         │   │
+│  │  → 수색 원형 영역 생성 (LKP 중심)                       │   │
+│  │  → 수배 게이지 서서히 감소 시작                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Phase 3: 수색 중 (Searching)                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                                                         │   │
+│  │         ┌───────────────┐                               │   │
+│  │         │   <span class="warning">수색 영역</span>    │  ← 이 안에서 발견되면      │   │
+│  │         │   [경찰1]     │     LKP 갱신, 게이지 리셋     │   │
+│  │         │       [경찰2] │                               │   │
+│  │         │  ◎ LKP      │                               │   │
+│  │         └───────────────┘                               │   │
+│  │                                                         │   │
+│  │         [플레이어] (수색 영역 밖)                        │   │
+│  │                                                         │   │
+│  │  → 수색 영역 밖에서 버티면 게이지 0으로 → <span class="key-point">수배 해제!</span>  │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 수배 해제 시스템
+
+class WantedSystem {
+    Vec3 lastKnownPosition;    // 마지막으로 목격된 위치
+    float searchRadius;        // 수색 반경
+    float escapeTimer;         // 탈출 타이머
+    float escapeTimeRequired;  // 필요 탈출 시간
+
+    void Update(float deltaTime) {
+        bool anyoneCanSee = false;
+
+        // 모든 경찰의 시야 체크
+        for (auto cop : activeCops) {
+            if (cop->CanSeePlayer()) {
+                anyoneCanSee = true;
+                lastKnownPosition = player->position;  // LKP 갱신
+                break;
+            }
+        }
+
+        if (anyoneCanSee) {
+            // 시야 내에 있음 → 타이머 리셋
+            escapeTimer = 0;
+            state = CHASING;
+        } else {
+            // 시야 이탈
+            if (state == CHASING) {
+                // 수색 모드로 전환
+                state = SEARCHING;
+                CreateSearchArea(lastKnownPosition);
+            }
+
+            // 탈출 타이머 진행
+            escapeTimer += deltaTime;
+
+            if (escapeTimer >= escapeTimeRequired) {
+                // 수배 해제!
+                ClearWantedLevel();
+            }
+        }
+    }
+
+    void CreateSearchArea(Vec3 lkp) {
+        searchRadius = g_WantedConfigs[currentLevel].searchRadius;
+
+        // 경찰들을 LKP 주변으로 이동 명령
+        for (auto cop : activeCops) {
+            Vec3 searchPoint = lkp + RandomPointInCircle(searchRadius);
+            cop->SetSearchTarget(searchPoint);
+        }
+    }
+};
+
+// 시야 차단을 활용한 탈출
+bool Player::IsHidingEffectively() {
+    // 실내에 있으면 헬기 시야 차단
+    if (IsIndoors()) return true;
+
+    // 다른 차량 안에 있으면 (차량 변경)
+    if (IsInDifferentVehicle()) return true;
+
+    // 덤불/쓰레기통 안 (스텔스 오브젝트)
+    if (IsInStealthObject()) return true;
+
+    return false;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 다른 게임에 응용</h2>
+            <div class="q">이 시스템을 스텔스 게임에 쓰면?</div>
+            <div class="a">
+                <p>GTA의 추격 AI는 다른 장르에도 그대로 적용됩니다:</p>
+                <div class="diagram">
+GTA 경찰 AI → 다른 장르 응용:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  <span class="key-point">스텔스 게임</span> (Metal Gear, Hitman)                           │
+│  ├── Vision Cone → 적 경비병 시야                              │
+│  ├── LKP → "?" 마크 (의심 상태)                                │
+│  ├── Search Area → 경보 발령 시 증원 출동                      │
+│  └── 수배 레벨 → 경계 레벨 (평상시/경계/전투)                  │
+│                                                                 │
+│  <span class="key-point">호러 게임</span> (Outlast, Alien Isolation)                       │
+│  ├── Vision Cone → 괴물 감지 범위                              │
+│  ├── LKP → 마지막으로 소리 들린 곳                            │
+│  ├── Prediction → 플레이어 예상 이동 경로 차단                 │
+│  └── 수배 레벨 → 괴물 공격성 레벨                              │
+│                                                                 │
+│  <span class="key-point">좀비 서바이벌</span> (Days Gone, State of Decay)                  │
+│  ├── Vision Cone → 시야 + 청각 감지                            │
+│  ├── LKP → 무리 집결 지점                                      │
+│  ├── Search Area → 점점 퍼지는 좀비 무리                       │
+│  └── 수배 레벨 → 좀비 무리 크기                                │
+│                                                                 │
+│  <span class="key-point">오픈월드 RPG</span> (Skyrim, Witcher)                             │
+│  ├── Vision Cone → NPC/몬스터 어그로 범위                      │
+│  ├── LKP → 전투 이탈 시 복귀 지점                              │
+│  ├── 수배 레벨 → 현상금 시스템                                 │
+│  └── Search Area → 경비병 순찰 범위 확대                       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 스텔스 게임 적용 예시
+
+enum AlertLevel { UNAWARE, SUSPICIOUS, ALERT, COMBAT };
+
+class StealthAI {
+    AlertLevel alertLevel;
+    Vec3 lastKnownPosition;
+    float suspicionMeter;  // 0~100
+
+    void Update() {
+        bool canSeePlayer = CanSeeTarget(player);
+        bool canHearPlayer = CanHearTarget(player);  // 청각 추가!
+
+        if (canSeePlayer) {
+            // 직접 발견 → 즉시 전투
+            alertLevel = COMBAT;
+            lastKnownPosition = player->position;
+            AlertNearbyGuards(lastKnownPosition);
+
+        } else if (canHearPlayer) {
+            // 소리만 들림 → 의심
+            suspicionMeter += 30 * deltaTime;
+            if (suspicionMeter >= 100) {
+                alertLevel = ALERT;
+                MoveToInvestigate(GetSoundSource());
+            }
+
+        } else if (alertLevel != UNAWARE) {
+            // 감지 못함 → 점진적 해제
+            suspicionMeter -= 10 * deltaTime;
+            if (suspicionMeter <= 0) {
+                alertLevel = UNAWARE;
+                ReturnToPatrol();
+            }
+        }
+    }
+
+    // GTA의 Search Area와 같은 개념
+    void AlertNearbyGuards(Vec3 position) {
+        auto guards = FindGuardsInRadius(position, 50.0f);
+        for (auto guard : guards) {
+            guard->SetInvestigateTarget(position);
+            guard->alertLevel = ALERT;
+        }
+    }
+};
+
+// 공포 게임 적용: 청각 중심
+class HorrorMonsterAI {
+    void ProcessSound(Vec3 soundPos, float volume) {
+        float distance = Distance(this->position, soundPos);
+        float hearingChance = volume / distance;  // 거리에 따라 감소
+
+        if (Random::Float() < hearingChance) {
+            // 소리 감지 → LKP 설정
+            lastKnownPosition = soundPos;
+            state = INVESTIGATING;
+
+            // 예측 이동 (GTA의 Predictive Pursuit)
+            // 소리가 난 방향으로 전진하며 찾기
+            Vec3 predictedPath = soundPos + GetLikelyEscapeDirection();
+            SetMoveTarget(predictedPath);
+        }
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 성능 최적화</h2>
+            <div class="q">도시에 경찰이 수백 명인데 다 계산해?</div>
+            <div class="a">
+                <p>모든 경찰의 시야를 매 프레임 체크하면 성능이 터집니다. <span class="highlight">레벨별 최적화</span>를 적용합니다:</p>
+                <div class="diagram">
+경찰 AI 최적화 전략:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  1. 거리 기반 LOD (Level of Detail):                            │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                                                         │   │
+│  │     [100m 이내]        [100-300m]        [300m+]        │   │
+│  │  ┌──────────────┐   ┌──────────────┐   ┌──────────┐   │   │
+│  │  │ Full AI      │   │ Simplified   │   │ Disabled │   │   │
+│  │  │ - 매 프레임   │   │ - 0.5초마다  │   │ - 비활성 │   │   │
+│  │  │ - Vision+Path│   │ - 거리만 체크│   │          │   │   │
+│  │  └──────────────┘   └──────────────┘   └──────────┘   │   │
+│  │                                                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  2. 공간 분할 (Spatial Partitioning):                           │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                                                         │   │
+│  │  플레이어가 있는 섹터와 인접 섹터만 활성화              │   │
+│  │                                                         │   │
+│  │  ┌─────┬─────┬─────┐                                   │   │
+│  │  │     │     │     │                                   │   │
+│  │  ├─────┼─────┼─────┤                                   │   │
+│  │  │     │ <span class="key-point">[P]</span> │     │  ← P = Player, 주변 8칸만 활성    │   │
+│  │  ├─────┼─────┼─────┤                                   │   │
+│  │  │     │     │     │                                   │   │
+│  │  └─────┴─────┴─────┘                                   │   │
+│  │                                                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  3. 시야 체크 최적화:                                           │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  1단계: 거리 체크 (가장 저렴)                O(1)       │   │
+│  │  2단계: 각도 체크 (내적 연산)                O(1)       │   │
+│  │  3단계: Raycast (가장 비쌈)                  O(n)       │   │
+│  │                                                         │   │
+│  │  → 1,2단계 통과한 것만 3단계 실행                       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 최적화된 경찰 시야 체크
+
+class OptimizedCopManager {
+    SpatialHash spatialHash;  // 공간 분할 구조
+
+    void UpdateAllCops(float deltaTime) {
+        Vec3 playerPos = player->position;
+
+        // 플레이어 주변 셀의 경찰만 가져오기
+        auto nearbyCops = spatialHash.GetObjectsInRadius(playerPos, 150.0f);
+
+        for (auto cop : nearbyCops) {
+            float dist = Distance(cop->position, playerPos);
+
+            if (dist < 100.0f) {
+                // 가까움: 매 프레임 전체 AI
+                cop->UpdateFull(deltaTime);
+
+            } else if (dist < 300.0f) {
+                // 중간: 0.5초마다 간소화 체크
+                cop->updateTimer += deltaTime;
+                if (cop->updateTimer >= 0.5f) {
+                    cop->updateTimer = 0;
+                    cop->UpdateSimplified(deltaTime);
+                }
+
+            } // 300m+ : 아무것도 안 함
+        }
+    }
+};
+
+// 시야 체크 조기 종료 최적화
+bool Cop::CanSeePlayer_Optimized() {
+    Vec3 toPlayer = player->position - this->position;
+    float distSq = toPlayer.LengthSquared();  // sqrt 회피!
+
+    // 1단계: 거리 (제곱 비교로 sqrt 회피)
+    float maxDistSq = visionDistance * visionDistance;
+    if (distSq > maxDistSq)
+        return false;  // 조기 종료
+
+    // 2단계: 각도 (내적만 사용)
+    float dot = Dot(GetForward(), Normalize(toPlayer));
+    if (dot < cosHalfAngle)  // cos 미리 계산해둠
+        return false;  // 조기 종료
+
+    // 3단계: Raycast (통과한 것만 비싼 연산)
+    return !Physics::RaycastBlocked(position, player->position);
+}</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>수배 레벨</strong>은 단순히 적 수가 아닌 AI 전략 자체를 변경</li>
+                <li><strong>Vision Cone + Raycast</strong>로 현실적인 시야 기반 탐지</li>
+                <li><strong>예측 추격</strong>으로 플레이어 미래 위치를 차단</li>
+                <li><strong>Last Known Position</strong>으로 시야 이탈 후 수색 행동</li>
+                <li>수배 해제 = 수색 영역 밖에서 일정 시간 버티기</li>
+                <li>스텔스, 호러, RPG 등 다양한 장르에 응용 가능</li>
+                <li><strong>LOD + 공간분할</strong>로 수백 명 AI도 실시간 처리</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../게임에_적용된_기술/">&larr; 게임에 적용된 기술</a>
+            <a href="../08_Pathfinding_경로탐색/">경로 탐색 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

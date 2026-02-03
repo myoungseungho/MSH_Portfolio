@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>브로드캐스트 최적화 - 네트워크 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #00BCD4; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #E0F7FA; }
+        .q { background: #E0F7FA; border-left: 4px solid #00BCD4; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #00838F; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #E0F7FA; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #00838F; }
+        .key-point { background: #B2EBF2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #00838F; }
+        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #00BCD4 0%, #00838F 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #00BCD4; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../network/" class="back-link">&larr; 네트워크</a>
+
+        <div class="header">
+            <h1>브로드캐스트 최적화</h1>
+            <p>MMO 월드 보스 100명이 때리면 왜 렉 걸릴까?</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 브로드캐스트의 O(n^2) 문제</h2>
+            <div class="q">100명이 보스를 때리면 왜 렉이 걸려?</div>
+            <div class="a">
+                <p><span class="warning">모든 플레이어에게 모든 이벤트를 전송</span>하면 패킷이 기하급수적으로 증가합니다:</p>
+                <div class="diagram">
+브로드캐스트의 숨겨진 비용:
++------------------------------------------------------------------+
+|                                                                  |
+|  월드 보스 레이드: 100명 참여                                    |
+|                                                                  |
+|  매 틱(100ms)마다 발생하는 이벤트:                               |
+|  - 각 플레이어 공격: 100회                                       |
+|  - 보스 피격 이펙트: 100회                                       |
+|  - 데미지 숫자 표시: 100회                                       |
+|  - 총 이벤트: 300개/틱                                           |
+|                                                                  |
+|  단순 브로드캐스트:                                              |
+|  +------------------------------------------------------------+  |
+|  | 이벤트 300개 x 수신자 100명 = <span class="warning">30,000 패킷/틱</span>              |  |
+|  | 초당 10틱 = <span class="warning">300,000 패킷/초</span>                             |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  패킷당 평균 50바이트 가정:                                      |
+|  300,000 x 50 = <span class="warning">15 MB/s</span> (서버 아웃바운드)                     |
+|                                                                  |
+|  문제는 여기서 끝이 아님!                                        |
+|  - 각 send() 시스템 콜 오버헤드                                  |
+|  - TCP 헤더 40바이트 추가 (50바이트 데이터 + 40 = 90바이트)     |
+|  - 실제 대역폭: 27 MB/s                                          |
+|                                                                  |
++------------------------------------------------------------------+</div>
+            </div>
+
+            <div class="q">100명이면 100배인데 왜 n^2이야?</div>
+            <div class="a">
+                <p><span class="highlight">모든 사람의 행동이 모든 사람에게 전파</span>되기 때문입니다:</p>
+                <div class="diagram">
+O(n^2) 시각화:
++------------------------------------------------------------------+
+|                                                                  |
+|  10명일 때:                                                      |
+|                                                                  |
+|     P1 ---> P2, P3, P4, P5, P6, P7, P8, P9, P10  (9개)          |
+|     P2 ---> P1, P3, P4, P5, P6, P7, P8, P9, P10  (9개)          |
+|     ...                                                          |
+|     P10 --> P1, P2, P3, P4, P5, P6, P7, P8, P9   (9개)          |
+|                                                                  |
+|     총: 10 x 9 = 90 패킷                                        |
+|                                                                  |
+|  100명일 때:                                                     |
+|     총: 100 x 99 = <span class="warning">9,900 패킷</span>  (10배 인원 = 100배 패킷!)      |
+|                                                                  |
+|  +------------------------------------------------------------+  |
+|  | 인원    | 패킷 수  | 증가율                                |  |
+|  |---------+----------+---------------------------------------|  |
+|  | 10명    | 90       | 기준                                  |  |
+|  | 50명    | 2,450    | 27배                                  |  |
+|  | 100명   | 9,900    | 110배                                 |  |
+|  | 200명   | 39,800   | 442배                                 |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
++------------------------------------------------------------------+</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. AOI (Area of Interest) 기반 최적화</h2>
+            <div class="q">내 주변 사람에게만 보내면 되지 않아?</div>
+            <div class="a">
+                <p><span class="key-point">AOI(관심 영역)</span>를 적용하면 O(n^2)을 O(n * k)로 줄일 수 있습니다:</p>
+                <div class="diagram">
+AOI 기반 최적화:
++------------------------------------------------------------------+
+|                                                                  |
+|  그리드 기반 AOI:                                                |
+|                                                                  |
+|  +-----+-----+-----+-----+-----+                                 |
+|  |     |     |  A  |     |     |                                 |
+|  +-----+-----+-----+-----+-----+                                 |
+|  |     |  B  |  X  |  C  |     |  X: 내 위치                     |
+|  +-----+-----+-----+-----+-----+  A,B,C,D,E: 주변 플레이어       |
+|  |     |  D  |  E  |     |     |                                 |
+|  +-----+-----+-----+-----+-----+                                 |
+|  |     |     |     |     |     |                                 |
+|  +-----+-----+-----+-----+-----+                                 |
+|                                                                  |
+|  전체 100명 중 내 AOI에 5명만 있다면:                            |
+|                                                                  |
+|  브로드캐스트: 내 행동 -> A, B, C, D, E (5명)                    |
+|  수신: A, B, C, D, E의 행동만 받음 (5개)                         |
+|                                                                  |
+|  결과:                                                           |
+|  +------------------------------------------------------------+  |
+|  | 브로드캐스트: 100 x 99 = 9,900  ->  100 x 5 = <span class="key-point">500</span>         |  |
+|  | <span class="key-point">95% 패킷 감소!</span>                                          |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
++------------------------------------------------------------------+</div>
+                <div class="code-block">
+// 그리드 기반 AOI 구현
+
+class GridAOI {
+private:
+    static const int GRID_SIZE = 100;  // 100m x 100m
+    std::unordered_map<int64_t, std::vector<Player*>> m_grid;
+
+    int64_t GetCellKey(float x, float y) {
+        int cellX = (int)(x / GRID_SIZE);
+        int cellY = (int)(y / GRID_SIZE);
+        return ((int64_t)cellX << 32) | (uint32_t)cellY;
+    }
+
+public:
+    // 플레이어 이동 시 셀 업데이트
+    void UpdatePlayerPosition(Player* player, float newX, float newY) {
+        int64_t oldKey = GetCellKey(player->x, player->y);
+        int64_t newKey = GetCellKey(newX, newY);
+
+        if (oldKey != newKey) {
+            // 이전 셀에서 제거
+            RemoveFromCell(oldKey, player);
+            // 새 셀에 추가
+            AddToCell(newKey, player);
+            // Enter/Leave 이벤트 처리
+            HandleCellChange(player, oldKey, newKey);
+        }
+
+        player->x = newX;
+        player->y = newY;
+    }
+
+    // 주변 플레이어 조회 (3x3 그리드)
+    std::vector<Player*> GetNearbyPlayers(float x, float y) {
+        std::vector<Player*> result;
+        int centerX = (int)(x / GRID_SIZE);
+        int centerY = (int)(y / GRID_SIZE);
+
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                int64_t key = ((int64_t)(centerX + dx) << 32)
+                            | (uint32_t)(centerY + dy);
+                auto it = m_grid.find(key);
+                if (it != m_grid.end()) {
+                    result.insert(result.end(),
+                                  it->second.begin(),
+                                  it->second.end());
+                }
+            }
+        }
+        return result;
+    }
+};
+
+// 브로드캐스트 시 AOI 적용
+void BroadcastAttack(Player* attacker, int damage) {
+    auto nearbyPlayers = m_aoi.GetNearbyPlayers(attacker->x, attacker->y);
+
+    PacketAttack pkt;
+    pkt.attackerId = attacker->id;
+    pkt.damage = damage;
+
+    for (Player* receiver : nearbyPlayers) {
+        if (receiver != attacker) {
+            receiver->Send(pkt);  // 주변에만 전송
+        }
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 패킷 병합과 배치 전송</h2>
+            <div class="q">패킷을 개별로 보내는 게 왜 문제야?</div>
+            <div class="a">
+                <p>작은 패킷 1000개보다 <span class="highlight">큰 패킷 10개</span>가 훨씬 효율적입니다:</p>
+                <div class="diagram">
+패킷별 오버헤드:
++------------------------------------------------------------------+
+|                                                                  |
+|  개별 전송 (1000개 x 50바이트 패킷):                             |
+|                                                                  |
+|  [Hdr 40B][Data 50B] <- 패킷 1                                  |
+|  [Hdr 40B][Data 50B] <- 패킷 2                                  |
+|  [Hdr 40B][Data 50B] <- 패킷 3                                  |
+|  ...                                                             |
+|  [Hdr 40B][Data 50B] <- 패킷 1000                               |
+|                                                                  |
+|  총 전송: (40 + 50) x 1000 = <span class="warning">90,000 bytes</span>                       |
+|  send() 호출: <span class="warning">1000회</span> (커널 컨텍스트 스위치!)                  |
+|                                                                  |
+|  ----------------------------------------------------------------|
+|                                                                  |
+|  배치 전송 (10개 패킷에 100개씩 묶음):                           |
+|                                                                  |
+|  [Hdr 40B][Data1 50B][Data2 50B]...[Data100 50B]                |
+|                                                                  |
+|  총 전송: 40 x 10 + 50 x 1000 = <span class="key-point">50,400 bytes</span>                  |
+|  send() 호출: <span class="key-point">10회</span>                                          |
+|                                                                  |
+|  <span class="key-point">44% 대역폭 절약 + 100배 적은 시스템 콜!</span>                       |
+|                                                                  |
++------------------------------------------------------------------+</div>
+                <div class="code-block">
+// 패킷 배치 시스템
+
+class PacketBatcher {
+private:
+    static const int BATCH_SIZE = 1400;  // MTU 고려
+    static const int BATCH_INTERVAL_MS = 50;  // 50ms마다 플러시
+
+    struct PlayerBatch {
+        std::vector<uint8_t> buffer;
+        int packetCount = 0;
+        int64_t lastFlushTime = 0;
+    };
+
+    std::unordered_map<Player*, PlayerBatch> m_batches;
+
+public:
+    // 패킷을 배치에 추가
+    void QueuePacket(Player* player, const void* data, int size) {
+        auto& batch = m_batches[player];
+
+        // 배치가 가득 차면 플러시
+        if (batch.buffer.size() + size + 2 > BATCH_SIZE) {
+            FlushBatch(player);
+        }
+
+        // 패킷 크기 헤더 (2바이트) + 데이터
+        uint16_t packetSize = (uint16_t)size;
+        batch.buffer.push_back(packetSize & 0xFF);
+        batch.buffer.push_back((packetSize >> 8) & 0xFF);
+        batch.buffer.insert(batch.buffer.end(),
+                           (uint8_t*)data,
+                           (uint8_t*)data + size);
+        batch.packetCount++;
+    }
+
+    // 배치 전송
+    void FlushBatch(Player* player) {
+        auto it = m_batches.find(player);
+        if (it == m_batches.end() || it->second.buffer.empty()) {
+            return;
+        }
+
+        auto& batch = it->second;
+
+        // 배치 헤더: [패킷 개수 2B][데이터...]
+        std::vector<uint8_t> finalPacket;
+        uint16_t count = (uint16_t)batch.packetCount;
+        finalPacket.push_back(count & 0xFF);
+        finalPacket.push_back((count >> 8) & 0xFF);
+        finalPacket.insert(finalPacket.end(),
+                          batch.buffer.begin(),
+                          batch.buffer.end());
+
+        player->SendRaw(finalPacket.data(), finalPacket.size());
+
+        batch.buffer.clear();
+        batch.packetCount = 0;
+        batch.lastFlushTime = GetCurrentTimeMs();
+    }
+
+    // 주기적 플러시 (50ms마다)
+    void Tick() {
+        int64_t now = GetCurrentTimeMs();
+        for (auto& [player, batch] : m_batches) {
+            if (!batch.buffer.empty() &&
+                now - batch.lastFlushTime >= BATCH_INTERVAL_MS) {
+                FlushBatch(player);
+            }
+        }
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 이벤트 우선순위와 쓰로틀링</h2>
+            <div class="q">모든 이벤트가 같은 중요도야?</div>
+            <div class="a">
+                <p><span class="key-point">아닙니다.</span> 중요도에 따라 전송 빈도를 조절합니다:</p>
+                <div class="diagram">
+이벤트 우선순위:
++------------------------------------------------------------------+
+|                                                                  |
+|  Priority 0 (Critical) - 즉시 전송                               |
+|  +------------------------------------------------------------+  |
+|  | - 내 캐릭터 피격                                           |  |
+|  | - 내가 준 데미지                                           |  |
+|  | - 보스 패턴 시작                                           |  |
+|  | - 사망/부활                                                |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  Priority 1 (High) - 100ms 이내                                  |
+|  +------------------------------------------------------------+  |
+|  | - 다른 플레이어 스킬 시전                                  |  |
+|  | - 보스 HP 변화                                             |  |
+|  | - 버프/디버프 적용                                         |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  Priority 2 (Normal) - 200ms 이내, 병합 가능                     |
+|  +------------------------------------------------------------+  |
+|  | - 다른 플레이어 이동                                       |  |
+|  | - 일반 공격 애니메이션                                     |  |
+|  | - 이펙트 재생                                              |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  Priority 3 (Low) - 500ms 이내, 샘플링 가능                      |
+|  +------------------------------------------------------------+  |
+|  | - 배경 NPC 이동                                            |  |
+|  | - 환경 이펙트                                              |  |
+|  | - 멀리 있는 플레이어                                       |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
++------------------------------------------------------------------+</div>
+                <div class="code-block">
+// 우선순위 기반 브로드캐스트
+
+enum class EventPriority {
+    Critical = 0,  // 즉시 전송
+    High = 1,      // 100ms 이내
+    Normal = 2,    // 200ms 이내
+    Low = 3        // 500ms 이내
+};
+
+class PriorityBroadcaster {
+private:
+    struct QueuedEvent {
+        Player* target;
+        std::vector<uint8_t> data;
+        EventPriority priority;
+        int64_t queueTime;
+    };
+
+    std::priority_queue<QueuedEvent> m_eventQueue;
+    std::unordered_map<Player*, int> m_eventCountPerPlayer;
+
+    static const int MAX_EVENTS_PER_PLAYER_PER_TICK = 50;
+
+public:
+    void BroadcastEvent(const std::vector<Player*>& targets,
+                       const void* data, int size,
+                       EventPriority priority) {
+
+        for (Player* target : targets) {
+            // Critical은 즉시 전송
+            if (priority == EventPriority::Critical) {
+                target->Send(data, size);
+                continue;
+            }
+
+            // 그 외는 큐에 추가
+            QueuedEvent event;
+            event.target = target;
+            event.data.assign((uint8_t*)data, (uint8_t*)data + size);
+            event.priority = priority;
+            event.queueTime = GetCurrentTimeMs();
+            m_eventQueue.push(event);
+        }
+    }
+
+    void ProcessQueue() {
+        int64_t now = GetCurrentTimeMs();
+        m_eventCountPerPlayer.clear();
+
+        while (!m_eventQueue.empty()) {
+            auto& event = m_eventQueue.top();
+
+            // 플레이어당 이벤트 제한
+            if (m_eventCountPerPlayer[event.target] >= MAX_EVENTS_PER_PLAYER_PER_TICK) {
+                // Low 우선순위는 드롭
+                if (event.priority == EventPriority::Low) {
+                    m_eventQueue.pop();
+                    continue;
+                }
+            }
+
+            // 우선순위별 대기 시간 체크
+            int maxWaitMs = GetMaxWaitTime(event.priority);
+            if (now - event.queueTime >= maxWaitMs) {
+                event.target->Send(event.data.data(), event.data.size());
+                m_eventCountPerPlayer[event.target]++;
+            }
+
+            m_eventQueue.pop();
+        }
+    }
+
+    int GetMaxWaitTime(EventPriority priority) {
+        switch (priority) {
+            case EventPriority::High:   return 100;
+            case EventPriority::Normal: return 200;
+            case EventPriority::Low:    return 500;
+            default: return 0;
+        }
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 동적 LOD (Level of Detail)</h2>
+            <div class="q">멀리 있는 플레이어는 덜 자주 보내도 되지 않아?</div>
+            <div class="a">
+                <p><span class="key-point">거리 기반 LOD</span>로 업데이트 빈도를 차등 적용합니다:</p>
+                <div class="diagram">
+거리 기반 네트워크 LOD:
++------------------------------------------------------------------+
+|                                                                  |
+|                        [ME]                                      |
+|                         |                                        |
+|        Zone 1 (0~20m)   |   업데이트: 매 틱 (100ms)              |
+|     +-------[  ]---------+                                       |
+|     |  A   B   C        |                                        |
+|     +-------------------+                                        |
+|           |                                                      |
+|        Zone 2 (20~50m)  |   업데이트: 200ms                      |
+|   +---------[    ]-------+                                       |
+|   |    D      E         |                                        |
+|   +---------------------+                                        |
+|             |                                                    |
+|        Zone 3 (50~100m) |   업데이트: 500ms                      |
+|  +----------[     ]------+                                       |
+|  |       F    G    H    |                                        |
+|  +-----------------------+                                       |
+|               |                                                  |
+|        Zone 4 (100m+)   |   업데이트: 1000ms + 위치만            |
+|  +------------[       ]--+                                       |
+|  |    I  J  K  L  M  N  |                                        |
+|  +------------------------+                                      |
+|                                                                  |
+|  결과: 같은 100명이어도 업데이트 횟수 대폭 감소                  |
+|                                                                  |
++------------------------------------------------------------------+</div>
+                <div class="code-block">
+// 거리 기반 LOD 브로드캐스트
+
+class LODBroadcaster {
+private:
+    struct LODConfig {
+        float maxDistance;
+        int updateIntervalMs;
+        bool positionOnly;  // true면 위치만 전송
+    };
+
+    std::vector<LODConfig> m_lodLevels = {
+        { 20.0f,   100, false },  // Zone 1: 풀 업데이트
+        { 50.0f,   200, false },  // Zone 2: 절반 빈도
+        { 100.0f,  500, false },  // Zone 3: 1/5 빈도
+        { FLT_MAX, 1000, true }   // Zone 4: 위치만
+    };
+
+    std::unordered_map<std::pair<Player*, Player*>, int64_t> m_lastUpdate;
+
+public:
+    void BroadcastPlayerState(Player* source, const PlayerState& state) {
+        auto nearbyPlayers = m_aoi.GetAllPlayersInRange(source, 200.0f);
+
+        for (Player* target : nearbyPlayers) {
+            if (target == source) continue;
+
+            float distance = CalculateDistance(source, target);
+            const LODConfig& lod = GetLODForDistance(distance);
+
+            auto key = std::make_pair(source, target);
+            int64_t now = GetCurrentTimeMs();
+
+            // 마지막 업데이트 이후 충분한 시간이 지났는지
+            if (now - m_lastUpdate[key] < lod.updateIntervalMs) {
+                continue;  // 스킵
+            }
+
+            if (lod.positionOnly) {
+                // 멀리 있으면 위치만
+                PacketPositionOnly pkt;
+                pkt.playerId = source->id;
+                pkt.x = state.x;
+                pkt.y = state.y;
+                pkt.z = state.z;
+                target->Send(pkt);
+            } else {
+                // 가까우면 풀 스테이트
+                target->Send(state);
+            }
+
+            m_lastUpdate[key] = now;
+        }
+    }
+
+    const LODConfig& GetLODForDistance(float distance) {
+        for (const auto& lod : m_lodLevels) {
+            if (distance <= lod.maxDistance) {
+                return lod;
+            }
+        }
+        return m_lodLevels.back();
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 실제 MMO 사례</h2>
+            <div class="q">실제 게임들은 어떻게 처리해?</div>
+            <div class="a">
+                <p>대규모 MMO들의 <span class="highlight">브로드캐스트 최적화 전략</span>:</p>
+                <div class="diagram">
+실제 MMO 사례:
++------------------------------------------------------------------+
+|                                                                  |
+|  WoW (World of Warcraft):                                        |
+|  +------------------------------------------------------------+  |
+|  | - AOI: 100야드 반경                                        |  |
+|  | - 레이드(40인): 별도 인스턴스, AOI 없이 전체 브로드캐스트  |  |
+|  | - 도시: 강제 LOD, 멀리 있으면 걷기 애니메이션만            |  |
+|  | - 전장(40vs40): 틱레이트 감소 (20Hz -> 10Hz)              |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  EVE Online (수천 명 전투):                                      |
+|  +------------------------------------------------------------+  |
+|  | - <span class="key-point">Time Dilation</span>: 서버 과부하 시 게임 시간 자체를 느리게   |  |
+|  | - 1000명 전투 시 10% 속도 (1초 = 10초)                    |  |
+|  | - 우선순위: 내 함선 > 타겟 > 아군 > 적군 > 잔해           |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  Guild Wars 2 (월드 보스):                                       |
+|  +------------------------------------------------------------+  |
+|  | - 동적 이벤트 스케일링: 참여자 수에 따라 보스 HP 증가      |  |
+|  | - Culling: 30명 이상이면 나머지는 렌더링 안 함            |  |
+|  | - 업데이트 쓰로틀링: 초당 최대 20명 상태 업데이트          |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  Lost Ark (레이드):                                              |
+|  +------------------------------------------------------------+  |
+|  | - 8인 레이드: 인스턴스 분리, 풀 브로드캐스트               |  |
+|  | - 필드 보스: AOI + LOD + 배치 전송 조합                    |  |
+|  | - 이펙트 최적화: 중요 스킬만 전체 전송, 나머지는 로컬     |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
++------------------------------------------------------------------+</div>
+                <div class="code-block">
+// EVE Online 스타일 Time Dilation
+
+class TimeDilation {
+private:
+    float m_dilationFactor = 1.0f;  // 1.0 = 정상, 0.1 = 10배 느림
+    int m_playersInArea = 0;
+
+    static const int THRESHOLD_SLOW = 500;   // 500명 이상이면 감속
+    static const int THRESHOLD_CRAWL = 1000; // 1000명 이상이면 최대 감속
+
+public:
+    void UpdateDilation(int playersInArea) {
+        m_playersInArea = playersInArea;
+
+        if (playersInArea < THRESHOLD_SLOW) {
+            m_dilationFactor = 1.0f;
+        } else if (playersInArea < THRESHOLD_CRAWL) {
+            // 500~1000명: 선형 감소 (1.0 -> 0.5)
+            float ratio = (float)(playersInArea - THRESHOLD_SLOW)
+                        / (THRESHOLD_CRAWL - THRESHOLD_SLOW);
+            m_dilationFactor = 1.0f - (ratio * 0.5f);
+        } else {
+            // 1000명 이상: 최대 감속
+            m_dilationFactor = 0.1f;
+        }
+
+        // 클라이언트에 알림
+        BroadcastDilationChange(m_dilationFactor);
+    }
+
+    // 게임 로직에서 시간 적용
+    float GetDilatedDeltaTime(float realDeltaTime) {
+        return realDeltaTime * m_dilationFactor;
+    }
+
+    // 스킬 쿨다운, 이동 속도 등 모두 적용
+    void ApplyDilationToGameState(GameState& state) {
+        state.skillCooldowns *= m_dilationFactor;
+        state.moveSpeed *= m_dilationFactor;
+        state.attackSpeed *= m_dilationFactor;
+    }
+};</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>브로드캐스트는 O(n^2)</strong> - 100명이면 10,000 패킷/틱</li>
+                <li><strong>AOI</strong>로 주변 플레이어에게만 전송 (95%+ 감소)</li>
+                <li><strong>패킷 배치</strong>로 send() 호출 횟수와 헤더 오버헤드 감소</li>
+                <li><strong>우선순위</strong> 기반으로 중요 이벤트 우선 전송</li>
+                <li><strong>거리 기반 LOD</strong>로 멀리 있는 플레이어는 낮은 빈도</li>
+                <li>대규모 전투는 <strong>Time Dilation</strong>이나 <strong>인스턴스 분리</strong>로 해결</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../aoi/">&larr; AOI (Area of Interest)</a>
+            <a href="../tickrate-design/">틱레이트 설계 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cascaded Shadow Maps - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #7B1FA2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #F3E5F5; }
+        .q { background: #F3E5F5; border-left: 4px solid #9C27B0; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #7B1FA2; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #F3E5F5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #7B1FA2; }
+        .key-point { background: #E1BEE7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #4A148C; }
+        .warning { background: #FFCDD2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B71C1C; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+        .summary-box { background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #9C27B0; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-gpu/" class="back-link">&larr; GPU / 그래픽스</a>
+
+        <div class="header">
+            <h1>Cascaded Shadow Maps (CSM)</h1>
+            <p>그림자가 계단처럼 보이지 않게 하는 법</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. Shadow Map의 기본 문제</h2>
+            <div class="q">왜 그림자가 계단처럼 울퉁불퉁해?</div>
+            <div class="a">
+                <p><span class="highlight">Shadow Map의 해상도 한계</span> 때문입니다.</p>
+                <div class="diagram">
+Shadow Map 원리:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  1. 광원 시점에서 깊이 렌더링 (Shadow Map 생성)             │
+│                                                             │
+│       [태양]                                                │
+│          \                                                  │
+│           \  광원 방향                                      │
+│            v                                                │
+│     +-------------+                                         │
+│     | Shadow Map  |  2048x2048 텍스처                       │
+│     | (깊이 값)   |  각 픽셀 = 광원에서 가장 가까운 거리    │
+│     +-------------+                                         │
+│                                                             │
+│  2. 카메라 렌더링 시 그림자 판정                            │
+│                                                             │
+│     현재 픽셀의 광원 기준 거리 vs Shadow Map 값             │
+│     - 거리 > Shadow Map 값 -> <span class="warning">그림자!</span> (뭔가 앞에 있음)     │
+│     - 거리 <= Shadow Map 값 -> 밝음                        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+계단 현상 (Aliasing) 원인:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  Shadow Map 1픽셀이 커버하는 월드 영역:                     │
+│                                                             │
+│  가까운 곳:  1픽셀 = 0.1m x 0.1m  (충분히 정밀)            │
+│  먼 곳:      1픽셀 = 10m x 10m    <span class="warning">(계단 현상!)</span>             │
+│                                                             │
+│           카메라                                            │
+│              *                                              │
+│             /|\                                             │
+│            / | \                                            │
+│           /  |  \                                           │
+│          /   |   \                                          │
+│     [가까움][중간][멀리]                                    │
+│       ###   ####  ########                                  │
+│       정밀  중간    거침                                    │
+│                                                             │
+│  -> 같은 해상도로 넓은 영역을 커버하면 멀리서 품질 저하     │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. Cascaded Shadow Maps 원리</h2>
+            <div class="q">그럼 해상도를 높이면 되지 않아?</div>
+            <div class="a">
+                <p>해상도를 4배 올리면 메모리도 4배, 렌더링 비용도 증가합니다.</p>
+                <p><span class="key-point">Cascaded Shadow Maps</span>는 거리별로 여러 개의 Shadow Map을 사용합니다!</p>
+                <div class="diagram">
+CSM의 핵심 아이디어:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [기존] 하나의 큰 Shadow Map                                │
+│                                                             │
+│          +---------------------------+                      │
+│          |                           |                      │
+│          |    2048 x 2048            |                      │
+│          |    (전체 영역)            |                      │
+│          |                           |                      │
+│          +---------------------------+                      │
+│                                                             │
+│  [CSM] 거리별로 나눈 여러 Shadow Map                        │
+│                                                             │
+│    Cascade 0    Cascade 1    Cascade 2    Cascade 3        │
+│    (0~10m)      (10~30m)     (30~100m)    (100~500m)       │
+│    +-------+    +-------+    +-------+    +-------+        │
+│    | 1024  |    | 1024  |    | 1024  |    | 1024  |        │
+│    |       |    |       |    |       |    |       |        │
+│    +-------+    +-------+    +-------+    +-------+        │
+│      가까움       중간         멀리        아주 멀리        │
+│     (정밀!)     (적당)       (적당)        (덜 정밀)        │
+│                                                             │
+│  -> 가까운 곳에 더 많은 해상도 할당!                        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// CSM 캐스케이드 분할 설정
+struct CascadeConfig {
+    float splitDistances[4] = { 10.0f, 30.0f, 100.0f, 500.0f };
+    int   shadowMapSize = 1024;  // 각 캐스케이드당
+    int   cascadeCount = 4;
+};
+
+// 뷰 프러스텀을 거리별로 분할
+void CalculateCascadeSplits(float nearZ, float farZ, float* splits, int count) {
+    float lambda = 0.5f;  // 선형/로그 혼합 비율
+
+    for (int i = 0; i < count; i++) {
+        float p = (float)(i + 1) / count;
+
+        // 로그 분할 (가까울수록 촘촘)
+        float logSplit = nearZ * pow(farZ / nearZ, p);
+
+        // 선형 분할
+        float linearSplit = nearZ + (farZ - nearZ) * p;
+
+        // 혼합 (람다로 조절)
+        splits[i] = lambda * logSplit + (1.0f - lambda) * linearSplit;
+    }
+}
+
+// 각 캐스케이드용 광원 뷰-프로젝션 행렬 계산
+Matrix CalculateLightMatrix(int cascadeIndex, const Frustum& viewFrustum) {
+    // 1. 해당 캐스케이드의 프러스텀 코너 계산
+    float nearSplit = (cascadeIndex == 0) ? nearZ : splits[cascadeIndex - 1];
+    float farSplit = splits[cascadeIndex];
+
+    // 2. 프러스텀 코너를 월드 공간으로 변환
+    Vector3 corners[8];
+    GetFrustumCorners(nearSplit, farSplit, corners);
+
+    // 3. 광원 방향으로 바운딩 박스 계산
+    BoundingBox bbox = ComputeLightSpaceBBox(corners, lightDirection);
+
+    // 4. 직교 투영 행렬 생성
+    return CreateOrthoMatrix(bbox);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. CSM 구현 상세</h2>
+            <div class="q">실제로 어떻게 렌더링해?</div>
+            <div class="a">
+                <p>각 캐스케이드별로 Shadow Map을 생성하고, 픽셀 셰이더에서 적절한 캐스케이드를 선택합니다.</p>
+                <div class="diagram">
+CSM 렌더링 파이프라인:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [1단계] Shadow Map 생성 (4번 렌더링)                       │
+│                                                             │
+│  for (int i = 0; i < 4; i++) {                              │
+│      SetRenderTarget(shadowMapArray[i]);                    │
+│      SetViewProjection(lightMatrix[i]);                     │
+│      RenderScene(depthOnly);  // 깊이만 출력               │
+│  }                                                          │
+│                                                             │
+│  [2단계] 씬 렌더링 시 그림자 샘플링                         │
+│                                                             │
+│  for each pixel:                                            │
+│      1. 픽셀의 뷰 공간 깊이로 캐스케이드 인덱스 결정        │
+│      2. 해당 캐스케이드의 Shadow Map 샘플링                 │
+│      3. 그림자 여부 판정                                    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 픽셀 셰이더에서 CSM 샘플링
+
+cbuffer CascadeBuffer {
+    matrix LightViewProj[4];     // 각 캐스케이드의 광원 행렬
+    float4 CascadeSplits;        // 분할 거리 (뷰 공간)
+};
+
+Texture2DArray ShadowMapArray;   // 4개 캐스케이드를 배열로
+
+float CalculateShadow(float3 worldPos, float viewDepth) {
+    // 1. 어떤 캐스케이드를 사용할지 결정
+    int cascadeIndex = 3;
+    if (viewDepth < CascadeSplits.x) cascadeIndex = 0;
+    else if (viewDepth < CascadeSplits.y) cascadeIndex = 1;
+    else if (viewDepth < CascadeSplits.z) cascadeIndex = 2;
+
+    // 2. 해당 캐스케이드의 Shadow Map 좌표 계산
+    float4 shadowCoord = mul(float4(worldPos, 1), LightViewProj[cascadeIndex]);
+    shadowCoord.xyz /= shadowCoord.w;
+
+    // [-1,1] -> [0,1] 변환
+    shadowCoord.xy = shadowCoord.xy * 0.5 + 0.5;
+    shadowCoord.y = 1.0 - shadowCoord.y;  // Y 반전
+
+    // 3. Shadow Map 샘플링
+    float shadowMapDepth = ShadowMapArray.Sample(
+        samplerPoint,
+        float3(shadowCoord.xy, cascadeIndex)
+    ).r;
+
+    // 4. 그림자 판정 (bias로 acne 방지)
+    float bias = 0.001 * (cascadeIndex + 1);  // 먼 캐스케이드는 더 큰 bias
+    return (shadowCoord.z - bias > shadowMapDepth) ? 0.3 : 1.0;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. Shadow Map 품질 문제들</h2>
+            <div class="q">Shadow Acne랑 Peter Panning이 뭐야?</div>
+            <div class="a">
+                <p>Shadow Map의 대표적인 아티팩트입니다.</p>
+                <div class="diagram">
+Shadow Map 아티팩트:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [Shadow Acne] 표면에 줄무늬 그림자                         │
+│                                                             │
+│     원인: Shadow Map 해상도 한계로 자기 자신에게 그림자     │
+│                                                             │
+│     광원 ->  ####                                           │
+│              ####   표면                                    │
+│              #### < - - - 실제 깊이                         │
+│                ^                                            │
+│                |                                            │
+│           Shadow Map 샘플이                                 │
+│           표면보다 약간 앞에 있음                           │
+│           = 자기 그림자!                                    │
+│                                                             │
+│     해결: <span class="key-point">Depth Bias 추가</span>                                │
+│           shadowCoord.z -= bias;                            │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  [Peter Panning] 그림자가 물체에서 떨어짐                   │
+│                                                             │
+│     원인: Bias가 너무 크면 그림자 시작점이 밀림             │
+│                                                             │
+│       오브젝트                                              │
+│         ###                                                 │
+│         ###                                                 │
+│         ###                                                 │
+│                   <- gap (그림자 없음)                      │
+│              ::::::::  그림자                               │
+│                                                             │
+│     해결: <span class="key-point">Slope Scale Bias</span> (기울기에 따른 동적 bias)   │
+│           bias = baseBias + slopeBias * tan(angle);         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// Bias 계산 (Slope Scale Bias)
+float CalculateBias(float3 normal, float3 lightDir) {
+    float cosAngle = saturate(dot(normal, lightDir));
+    float sinAngle = sqrt(1.0 - cosAngle * cosAngle);
+    float tanAngle = sinAngle / max(cosAngle, 0.0001);
+
+    float baseBias = 0.0005;
+    float slopeBias = 0.001;
+
+    return baseBias + slopeBias * tanAngle;
+}
+
+// 또는 Normal Offset 사용
+float3 ApplyNormalOffset(float3 worldPos, float3 normal, float offset) {
+    // 노말 방향으로 살짝 밀어서 Shadow Map 좌표 계산
+    return worldPos + normal * offset;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 소프트 섀도우 (PCF, VSM)</h2>
+            <div class="q">부드러운 그림자는 어떻게 만들어?</div>
+            <div class="a">
+                <p><span class="highlight">PCF(Percentage Closer Filtering)</span>나 <span class="highlight">VSM(Variance Shadow Maps)</span>을 사용합니다.</p>
+                <div class="diagram">
+소프트 섀도우 기법:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [Hard Shadow]                                              │
+│                                                             │
+│     ████████████                                            │
+│     ████████████   <- 경계가 날카로움                       │
+│     ░░░░░░░░░░░░                                            │
+│                                                             │
+│  [Soft Shadow with PCF]                                     │
+│                                                             │
+│     ████████████                                            │
+│     ████████░░░░   <- 경계가 부드러움                       │
+│     ░░░░░░░░░░░░                                            │
+│                                                             │
+│  PCF 원리:                                                  │
+│  +---+---+---+                                              │
+│  | S | S | L |  S = Shadow, L = Lit                        │
+│  +---+---+---+                                              │
+│  | S | ? | L |  중앙 픽셀                                   │
+│  +---+---+---+  -> 주변 9개 샘플의 평균                     │
+│  | L | L | L |  -> 4/9 = 44% 그림자                        │
+│  +---+---+---+                                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// PCF (Percentage Closer Filtering)
+float PCF_Shadow(float3 shadowCoord, int cascadeIndex) {
+    float shadow = 0.0;
+    float2 texelSize = 1.0 / float2(1024, 1024);
+
+    // 3x3 샘플링 (9 탭)
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            float2 offset = float2(x, y) * texelSize;
+            float depth = ShadowMapArray.Sample(
+                samplerPoint,
+                float3(shadowCoord.xy + offset, cascadeIndex)
+            ).r;
+
+            shadow += (shadowCoord.z > depth) ? 0.0 : 1.0;
+        }
+    }
+
+    return shadow / 9.0;  // 평균
+}
+
+// Poisson Disk Sampling (더 자연스러운 결과)
+static const float2 poissonDisk[16] = {
+    float2(-0.94, -0.30), float2(0.94, -0.30),
+    float2(-0.40, -0.90), float2(0.40, -0.90),
+    // ... 더 많은 샘플
+};
+
+float PoissonPCF(float3 shadowCoord, int cascadeIndex, float radius) {
+    float shadow = 0.0;
+
+    for (int i = 0; i < 16; i++) {
+        float2 offset = poissonDisk[i] * radius / 1024.0;
+        float depth = ShadowMapArray.Sample(
+            samplerPoint,
+            float3(shadowCoord.xy + offset, cascadeIndex)
+        ).r;
+
+        shadow += (shadowCoord.z > depth) ? 0.0 : 1.0;
+    }
+
+    return shadow / 16.0;
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 캐스케이드 경계 처리</h2>
+            <div class="q">캐스케이드 경계에서 튀는 현상은?</div>
+            <div class="a">
+                <p><span class="highlight">캐스케이드 블렌딩</span>으로 부드럽게 전환합니다.</p>
+                <div class="code-block">
+// 캐스케이드 경계에서 블렌딩
+float CalculateShadowWithBlend(float3 worldPos, float viewDepth) {
+    int cascadeIndex = GetCascadeIndex(viewDepth);
+
+    float shadow = SampleShadowMap(worldPos, cascadeIndex);
+
+    // 다음 캐스케이드와 블렌딩 (경계 근처에서)
+    float blendRegion = CascadeSplits[cascadeIndex] * 0.1;  // 10% 영역
+    float distToEdge = CascadeSplits[cascadeIndex] - viewDepth;
+
+    if (distToEdge < blendRegion && cascadeIndex < 3) {
+        float nextShadow = SampleShadowMap(worldPos, cascadeIndex + 1);
+        float blendFactor = distToEdge / blendRegion;
+        shadow = lerp(nextShadow, shadow, blendFactor);
+    }
+
+    return shadow;
+}
+
+// 디버그: 캐스케이드별 색상 표시
+float3 DebugCascadeColor(int cascadeIndex) {
+    const float3 colors[4] = {
+        float3(1, 0, 0),  // 빨강 - Cascade 0
+        float3(0, 1, 0),  // 초록 - Cascade 1
+        float3(0, 0, 1),  // 파랑 - Cascade 2
+        float3(1, 1, 0)   // 노랑 - Cascade 3
+    };
+    return colors[cascadeIndex];
+}</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Shadow Map</strong> = 광원 시점에서 깊이를 텍스처에 저장</li>
+                <li><strong>CSM</strong> = 거리별 여러 Shadow Map으로 가까운 곳에 고해상도 할당</li>
+                <li><strong>Shadow Acne</strong> = Depth Bias로 해결 (너무 크면 Peter Panning)</li>
+                <li><strong>PCF</strong> = 주변 샘플 평균으로 소프트 섀도우 구현</li>
+                <li><strong>캐스케이드 블렌딩</strong> = 경계에서 부드러운 전환</li>
+                <li><strong>성능 팁</strong> = 그림자 렌더링은 LOD 낮게, 정적 오브젝트 캐싱</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../subsurface-scattering/">&larr; Subsurface Scattering</a>
+            <a href="../dynamic-weather/">동적 날씨 시스템 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

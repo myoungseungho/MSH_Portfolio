@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>서버 롤백을 5분 만에 하는 법 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #065F46;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #D1FAE5;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #D1FAE5;
+            border-left: 4px solid #10B981;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #065F46;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #D1FAE5;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #065F46;
+        }
+        .key-point {
+            background: #A7F3D0;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #065F46;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            color: #aed581;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 16px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+
+        .code-block.visual {
+            background: #f5f5f5;
+            color: #333;
+            border: 2px solid #e0e0e0;
+            font-size: 1.1rem;
+            line-height: 2;
+        }
+
+        .diagram {
+            background: #f5f5f5;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .compare-table th, .compare-table td {
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #D1FAE5;
+            font-weight: 600;
+        }
+
+        .summary-box {
+            background: #D1FAE5;
+            border: 2px solid #10B981;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            color: #065F46;
+            margin-bottom: 16px;
+        }
+        .summary-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .summary-box li {
+            margin-bottom: 8px;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #10B981;
+            font-weight: bold;
+        }
+
+        .analogy-box {
+            background: #fff9c4;
+            border-left: 4px solid #fbc02d;
+            padding: 20px;
+            margin: 24px 0;
+            border-radius: 8px;
+        }
+        .analogy-box strong {
+            color: #f57f17;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../devops/" class="back-link">< 데브옵스 / 인프라</a>
+
+        <div class="header">
+            <h1>Server Rollback</h1>
+            <p>서버 롤백을 5분 만에 하는 법</p>
+        </div>
+
+        <!-- 1. 왜 롤백이 중요한가 -->
+        <div class="conversation">
+            <h2>1. 롤백이 왜 중요해?</h2>
+
+            <div class="chat">
+                <div class="q">배포하면 끝 아니야?</div>
+                <div class="a">
+                    <p><span class="warning">배포 후가 진짜 시작이야!</span></p>
+                    <div class="code-block visual">실제 사례 (가상 시나리오):
+
+14:00 - 새 버전 배포 완료
+14:05 - "레이드 보상이 안 들어와요" 신고
+14:10 - 원인 파악 중... DB 쿼리 버그!
+14:30 - 핫픽스 개발 중...
+14:45 - 테스트 중...
+15:00 - 핫픽스 배포
+
+결과:
+- 1시간 동안 레이드 보상 미지급
+- 영향받은 유저: 5,000명
+- 보상 비용: ???</div>
+                    <p>만약 <span class="key-point">즉시 롤백</span>했다면?</p>
+                    <div class="code-block visual">14:00 - 새 버전 배포 완료
+14:05 - "레이드 보상이 안 들어와요" 신고
+14:06 - 롤백 시작
+14:07 - 롤백 완료, 이전 버전 복구
+
+결과:
+- 영향 시간: 7분
+- 영향받은 유저: 500명
+- 보상 비용: 최소화</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. 버전 관리 전략 -->
+        <div class="conversation">
+            <h2>2. 버전 관리는 어떻게 해?</h2>
+
+            <div class="chat">
+                <div class="q">롤백하려면 이전 버전이 있어야 하잖아?</div>
+                <div class="a">
+                    <p><strong>버전 관리 전략</strong>이 핵심이야:</p>
+                    <div class="code-block visual">버전 관리 구조:
+
+/releases/
+  ├── v1.0.0/
+  │   ├── server.exe
+  │   ├── config.json
+  │   └── checksum.md5
+  ├── v1.0.1/
+  ├── v1.0.2/
+  ├── v1.1.0/  <- 현재 배포
+  └── latest -> v1.1.0 (심볼릭 링크)
+
+유지 정책:
+- 최근 10개 버전 유지
+- 7일 이상 된 버전 자동 삭제
+- Major 버전은 영구 보관</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">도커 이미지로는?</div>
+                <div class="a">
+                    <p><span class="key-point">태그</span>로 버전 관리:</p>
+                    <div class="code-block"># 이미지 빌드 시 태그
+docker build -t game-server:v1.1.0 .
+docker build -t game-server:v1.1.0-20250203 .  # 날짜 포함
+
+# 레지스트리에 푸시
+docker push registry.example.com/game-server:v1.1.0
+
+# 현재 배포 버전 확인
+docker ps --format "{{.Image}}"
+# 출력: registry.example.com/game-server:v1.1.0
+
+# 롤백 (이전 버전으로)
+docker pull registry.example.com/game-server:v1.0.2
+docker stop game-server
+docker run -d --name game-server \
+  registry.example.com/game-server:v1.0.2</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 이미지 기반 롤백 -->
+        <div class="conversation">
+            <h2>3. 이미지 기반 롤백</h2>
+
+            <div class="chat">
+                <div class="q">컨테이너 환경에서 롤백은?</div>
+                <div class="a">
+                    <p><strong>쿠버네티스 롤백</strong>이 가장 빨라:</p>
+                    <div class="code-block"># 현재 배포 상태 확인
+kubectl rollout history deployment/game-server
+
+# 출력:
+# REVISION  CHANGE-CAUSE
+# 1         Initial deployment
+# 2         Update to v1.0.1
+# 3         Update to v1.1.0  <- 현재
+
+# 이전 버전으로 롤백 (1초!)
+kubectl rollout undo deployment/game-server
+
+# 특정 버전으로 롤백
+kubectl rollout undo deployment/game-server --to-revision=1
+
+# 롤백 상태 확인
+kubectl rollout status deployment/game-server</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">실제로 얼마나 걸려?</div>
+                <div class="a">
+                    <div class="diagram">쿠버네티스 롤백 타임라인:
+
+0초: kubectl rollout undo 실행
+1초: 이전 이미지 선택
+2초: 새 Pod 생성 시작
+30초: Pod Ready (헬스체크 통과)
+31초: 트래픽 전환
+
+총 소요: 약 30초 ~ 1분</div>
+                    <p><span class="highlight">미리 이미지가 캐시되어 있으면 더 빨라!</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. 데이터 마이그레이션 롤백 -->
+        <div class="conversation">
+            <h2>4. DB 롤백이 진짜 어렵지 않아?</h2>
+
+            <div class="chat">
+                <div class="q">코드는 롤백해도 DB는?</div>
+                <div class="a">
+                    <p><span class="warning">이게 가장 어려운 부분이야!</span></p>
+                    <div class="code-block visual">문제 상황:
+
+v1.0: users 테이블
+  - id, name, email
+
+v1.1: users 테이블 (마이그레이션)
+  - id, first_name, last_name, email
+  - name 컬럼 삭제됨!
+
+롤백하면?
+- 코드: v1.0 (name 컬럼 사용)
+- DB: v1.1 스키마 (name 컬럼 없음!)
+- 결과: 에러!</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 어떻게 해야 해?</div>
+                <div class="a">
+                    <p><strong>3단계 마이그레이션</strong> 원칙:</p>
+                    <div class="code-block visual">안전한 DB 변경 방법:
+
+Step 1: 확장 (Expand)
+- 새 컬럼 추가 (기존 유지)
+- v1.0.5: name, first_name, last_name 모두 존재
+- 코드: name 사용 + first_name/last_name 동시 기록
+
+Step 2: 전환 (Migrate)
+- 데이터 마이그레이션 완료
+- v1.1.0: first_name, last_name 사용
+- 코드: first_name/last_name 사용 (name은 읽기만)
+
+Step 3: 축소 (Contract)
+- 이전 컬럼 삭제
+- v1.2.0: name 컬럼 삭제
+- 이 시점부터 v1.0으로 롤백 불가
+
+핵심: 각 단계가 안정화된 후 다음 단계!</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">마이그레이션 스크립트는?</div>
+                <div class="a">
+                    <div class="code-block">-- migrations/001_expand_user_name.sql
+-- UP (적용)
+ALTER TABLE users ADD COLUMN first_name VARCHAR(50);
+ALTER TABLE users ADD COLUMN last_name VARCHAR(50);
+
+-- 기존 데이터 마이그레이션
+UPDATE users
+SET first_name = SUBSTRING_INDEX(name, ' ', 1),
+    last_name = SUBSTRING_INDEX(name, ' ', -1)
+WHERE first_name IS NULL;
+
+-- DOWN (롤백)
+ALTER TABLE users DROP COLUMN first_name;
+ALTER TABLE users DROP COLUMN last_name;</div>
+                    <div class="code-block"># 마이그레이션 실행
+python manage.py migrate
+
+# 롤백 (이전 버전으로)
+python manage.py migrate 001_expand_user_name --reverse
+
+# 또는 Flyway
+flyway migrate
+flyway undo</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. 자동화 스크립트 -->
+        <div class="conversation">
+            <h2>5. 롤백 자동화</h2>
+
+            <div class="chat">
+                <div class="q">새벽에 장애 나면 어떡해?</div>
+                <div class="a">
+                    <p><strong>자동 롤백</strong>을 설정해둬:</p>
+                    <div class="code-block">#!/bin/bash
+# auto_rollback.sh - 자동 롤백 스크립트
+
+# 설정
+ERROR_THRESHOLD=5  # 5% 에러율
+CHECK_INTERVAL=30  # 30초마다 체크
+ROLLBACK_COOLDOWN=300  # 롤백 후 5분 대기
+
+check_health() {
+    # Prometheus에서 에러율 조회
+    ERROR_RATE=$(curl -s "http://prometheus:9090/api/v1/query?query=\
+        rate(http_requests_total{status=~'5..'}[1m])/\
+        rate(http_requests_total[1m])*100" | jq '.data.result[0].value[1]')
+
+    echo "Current error rate: ${ERROR_RATE}%"
+
+    if (( $(echo "$ERROR_RATE > $ERROR_THRESHOLD" | bc -l) )); then
+        return 1  # 비정상
+    fi
+    return 0  # 정상
+}
+
+rollback() {
+    echo "[$(date)] Starting auto-rollback..."
+
+    # Slack 알림
+    curl -X POST $SLACK_WEBHOOK -d '{
+        "text": "Auto-rollback triggered! Error rate exceeded threshold."
+    }'
+
+    # 쿠버네티스 롤백
+    kubectl rollout undo deployment/game-server
+
+    # 롤백 결과 대기
+    kubectl rollout status deployment/game-server
+
+    echo "[$(date)] Rollback completed"
+}
+
+# 메인 루프
+while true; do
+    if ! check_health; then
+        rollback
+        sleep $ROLLBACK_COOLDOWN
+    fi
+    sleep $CHECK_INTERVAL
+done</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">수동 롤백은?</div>
+                <div class="a">
+                    <p><strong>원클릭 롤백</strong> 스크립트:</p>
+                    <div class="code-block">#!/bin/bash
+# rollback.sh - 수동 롤백 스크립트
+
+VERSION=${1:-"previous"}
+
+echo "======================================"
+echo "  Game Server Rollback Script"
+echo "======================================"
+echo ""
+
+# 현재 버전 확인
+CURRENT=$(kubectl get deployment game-server \
+    -o jsonpath='{.spec.template.spec.containers[0].image}')
+echo "Current version: $CURRENT"
+
+# 롤백 대상 확인
+if [ "$VERSION" = "previous" ]; then
+    TARGET=$(kubectl rollout history deployment/game-server \
+        --revision=$(kubectl rollout history deployment/game-server \
+        | tail -2 | head -1 | awk '{print $1}'))
+else
+    TARGET="registry.example.com/game-server:$VERSION"
+fi
+echo "Target version: $TARGET"
+
+# 확인
+read -p "Proceed with rollback? (y/n): " CONFIRM
+if [ "$CONFIRM" != "y" ]; then
+    echo "Rollback cancelled."
+    exit 0
+fi
+
+# 롤백 실행
+echo ""
+echo "Starting rollback..."
+START_TIME=$(date +%s)
+
+if [ "$VERSION" = "previous" ]; then
+    kubectl rollout undo deployment/game-server
+else
+    kubectl set image deployment/game-server \
+        game-server=$TARGET
+fi
+
+# 완료 대기
+kubectl rollout status deployment/game-server
+
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+
+echo ""
+echo "======================================"
+echo "  Rollback completed in ${DURATION}s"
+echo "======================================"
+
+# Slack 알림
+curl -X POST $SLACK_WEBHOOK -d "{
+    \"text\": \"Manual rollback completed\nFrom: $CURRENT\nTo: $TARGET\nDuration: ${DURATION}s\"
+}"</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. 실전 체크리스트 -->
+        <div class="conversation">
+            <h2>6. 롤백 체크리스트</h2>
+
+            <div class="chat">
+                <div class="q">롤백할 때 뭘 확인해야 해?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <tr>
+                            <th>단계</th>
+                            <th>확인 항목</th>
+                            <th>담당</th>
+                        </tr>
+                        <tr>
+                            <td><strong>롤백 전</strong></td>
+                            <td>
+                                - 현재 버전 기록<br>
+                                - 롤백 대상 버전 확인<br>
+                                - DB 호환성 검증<br>
+                                - 팀 공유
+                            </td>
+                            <td>DevOps</td>
+                        </tr>
+                        <tr>
+                            <td><strong>롤백 중</strong></td>
+                            <td>
+                                - 진행 상태 모니터링<br>
+                                - 에러 로그 확인<br>
+                                - 헬스체크 상태
+                            </td>
+                            <td>DevOps</td>
+                        </tr>
+                        <tr>
+                            <td><strong>롤백 후</strong></td>
+                            <td>
+                                - 서비스 정상 확인<br>
+                                - 에러율 모니터링<br>
+                                - 유저 피드백 확인
+                            </td>
+                            <td>QA/CS</td>
+                        </tr>
+                        <tr>
+                            <td><strong>사후</strong></td>
+                            <td>
+                                - 장애 보고서 작성<br>
+                                - 원인 분석<br>
+                                - 재발 방지 대책
+                            </td>
+                            <td>전체</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. 롤백이 안 되는 경우 -->
+        <div class="conversation">
+            <h2>7. 롤백이 안 되는 경우</h2>
+
+            <div class="chat">
+                <div class="q">롤백이 불가능한 상황도 있어?</div>
+                <div class="a">
+                    <p><span class="warning">있어!</span> 이런 경우는 핫픽스가 필수:</p>
+                    <div class="code-block visual">롤백 불가 상황:
+
+1. 비가역적 DB 변경
+   - 컬럼 삭제 + 데이터 손실
+   - 테이블 드롭
+
+2. 외부 API 버전 변경
+   - 결제 API v1 -> v2 (v1 종료)
+   - 소셜 로그인 프로토콜 변경
+
+3. 클라이언트 강제 업데이트
+   - 앱스토어에 신버전만 존재
+   - 프로토콜 호환성 없음
+
+4. 데이터 마이그레이션 완료
+   - 1000만 유저 데이터 변환 완료
+   - 롤백 = 데이터 불일치</div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 어떻게 대비해?</div>
+                <div class="a">
+                    <p><span class="key-point">Feature Flag</span>로 코드 레벨 롤백:</p>
+                    <div class="code-block">// 기능 플래그로 새 기능 제어
+void ProcessReward(Player* player) {
+    if (FeatureFlag::IsEnabled("new_reward_system")) {
+        // 새 보상 시스템
+        NewRewardSystem::Process(player);
+    } else {
+        // 기존 보상 시스템
+        LegacyRewardSystem::Process(player);
+    }
+}
+
+// 문제 발생 시 플래그만 끄면 됨
+// 서버 재배포 없이 즉시 적용!
+FeatureFlag::Disable("new_reward_system");</div>
+                    <div class="analogy-box">
+                        <strong>비유: 비상 스위치</strong><br><br>
+                        - 새 기능 = 새 전구<br>
+                        - Feature Flag = 전등 스위치<br><br>
+                        전구가 고장나면?<br>
+                        -> 스위치만 끄면 됨! (전구 교체 없이)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 요약 -->
+        <div class="summary-box">
+            <h3>핵심 정리: 서버 롤백</h3>
+            <ul>
+                <li><strong>버전 관리</strong> - 최근 N개 버전 항상 보관</li>
+                <li><strong>이미지 롤백</strong> - 쿠버네티스로 30초 내 롤백</li>
+                <li><strong>DB 롤백</strong> - Expand-Migrate-Contract 3단계 원칙</li>
+                <li><strong>자동화</strong> - 에러율 초과 시 자동 롤백</li>
+                <li><strong>Feature Flag</strong> - 코드 레벨 즉시 롤백</li>
+                <li><strong>목표</strong> - 5분 이내 서비스 복구</li>
+            </ul>
+        </div>
+
+    </div>
+</body>
+</html>

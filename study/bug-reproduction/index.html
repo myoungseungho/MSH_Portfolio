@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>버그 재현율 높이기 - 디버깅 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #B91C1C; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #FEE2E2; }
+        .q { background: #FEE2E2; border-left: 4px solid #DC2626; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #B91C1C; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
+        .key-point { background: #FECACA; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #991B1B; }
+        .warning { background: #FEF3C7; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #92400E; }
+        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
+        .summary-box { background: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #DC2626; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+        .diagram { background: #FEF2F2; border: 2px solid #FECACA; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #7F1D1D; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+
+        <div class="header">
+            <h1>버그 재현율 높이기</h1>
+            <p>"가끔 발생해요"를 "항상 발생"으로 만드는 테크닉</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 재현이 왜 중요한가</h2>
+            <div class="q">버그가 안 재현되면 어떻게 해?</div>
+            <div class="a">
+                <p><span class="warning">재현 불가 = 수정 불가</span>입니다. 디버깅의 80%는 재현에 달려있습니다:</p>
+                <div class="diagram">
+버그 재현율과 디버깅 난이도:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  재현율 100% (항상 발생)                                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  <span class="key-point">쉬움</span>: 브레이크포인트 걸고 한 번만 실행하면 원인 파악    │   │
+│  │  예: "로그인 버튼 누르면 크래시"                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  재현율 50% (가끔 발생)                                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  <span class="warning">중간</span>: 조건 조합을 찾아야 함, 로그 분석 필요              │   │
+│  │  예: "특정 맵에서 스킬 쓰면 가끔 렉"                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  재현율 1% (매우 드묾)                                          │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  <span class="highlight">어려움</span>: Race Condition, 메모리 손상, 타이밍 문제       │   │
+│  │  예: "며칠에 한 번 서버 크래시"                          │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  재현율 0% (재현 불가)                                          │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  <span class="highlight">불가능</span>: 증거(로그, 덤프)가 없으면 손 못 대는 경우도   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  <span class="key-point">목표: 모든 버그를 100% 재현 가능하게 만들기</span>                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 재현 환경 구축</h2>
+            <div class="q">QA가 "여기서만 발생"한다는데?</div>
+            <div class="a">
+                <p>환경 차이를 최소화하는 것이 첫 번째입니다. <span class="highlight">환경 스냅샷</span>을 만드세요:</p>
+                <div class="diagram">
+환경 스냅샷 체크리스트:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  1. 하드웨어 환경                                               │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  □ CPU: Intel i7-12700 / AMD Ryzen 5600X                │   │
+│  │  □ RAM: 16GB / 32GB                                      │   │
+│  │  □ GPU: RTX 3060 / RX 6700 XT                           │   │
+│  │  □ 저장장치: SSD / HDD                                   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  2. 소프트웨어 환경                                             │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  □ OS 버전: Windows 10 22H2 / Windows 11 23H2           │   │
+│  │  □ 드라이버 버전: NVIDIA 546.33                         │   │
+│  │  □ DirectX 버전: 12.0                                    │   │
+│  │  □ .NET / VC++ Redistributable 버전                     │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  3. 게임 상태                                                   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  □ 클라이언트 버전: 1.2.345                             │   │
+│  │  □ 서버 버전: 1.2.345                                   │   │
+│  │  □ 캐릭터 레벨/직업/장비                                 │   │
+│  │  □ 현재 맵/채널/위치                                     │   │
+│  │  □ 파티/길드 상태                                       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  4. 타이밍 조건                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  □ 서버 시작 후 경과 시간                               │   │
+│  │  □ 클라이언트 플레이 시간                               │   │
+│  │  □ 시간대 (점검 직후/피크타임)                          │   │
+│  │  □ 동시접속자 수                                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 환경 자동 수집 코드
+
+struct EnvironmentSnapshot {
+    // 하드웨어
+    string cpuModel;
+    int ramMB;
+    string gpuModel;
+    string gpuDriver;
+
+    // 소프트웨어
+    string osVersion;
+    string clientVersion;
+    string serverVersion;
+
+    // 게임 상태
+    int characterLevel;
+    string characterClass;
+    string currentMap;
+    int currentChannel;
+    Vector3 position;
+
+    // 타이밍
+    time_t serverUptime;
+    time_t sessionTime;
+    int concurrentUsers;
+};
+
+EnvironmentSnapshot CaptureEnvironment() {
+    EnvironmentSnapshot snap;
+
+    // 시스템 정보 수집
+    snap.cpuModel = GetCPUModel();
+    snap.ramMB = GetTotalPhysicalMemoryMB();
+    snap.gpuModel = GetGPUModel();
+    snap.gpuDriver = GetGPUDriverVersion();
+    snap.osVersion = GetWindowsVersion();
+
+    // 게임 상태 수집
+    snap.clientVersion = GetClientVersion();
+    snap.characterLevel = g_pPlayer->GetLevel();
+    snap.currentMap = g_pWorld->GetCurrentMapName();
+    snap.position = g_pPlayer->GetPosition();
+
+    // 서버 상태 (서버 측에서)
+    snap.serverUptime = GetServerUptime();
+    snap.concurrentUsers = GetOnlineUserCount();
+
+    return snap;
+}
+
+// 버그 리포트에 자동 첨부
+void SubmitBugReport(const string& description) {
+    auto env = CaptureEnvironment();
+    BugReport report;
+    report.description = description;
+    report.environment = env;
+    report.callstack = GetCurrentCallStack();
+    report.recentLogs = GetRecentLogs(100);  // 최근 100줄
+
+    SendToServer(report);
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 입력 녹화/재생</h2>
+            <div class="q">플레이어가 정확히 뭘 했는지 어떻게 알아?</div>
+            <div class="a">
+                <p><span class="highlight">입력 녹화(Input Recording)</span>로 플레이어 행동을 그대로 재현합니다:</p>
+                <div class="diagram">
+입력 녹화/재생 시스템:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  녹화 모드:                                                     │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                                                         │   │
+│  │  Frame 0:    [W키 Down]                                 │   │
+│  │  Frame 15:   [마우스 이동 dx=10, dy=-5]                 │   │
+│  │  Frame 30:   [W키 Up]                                   │   │
+│  │  Frame 32:   [Space키 Down] (점프)                      │   │
+│  │  Frame 33:   [Space키 Up]                               │   │
+│  │  Frame 45:   [좌클릭 Down] (공격)                       │   │
+│  │  Frame 46:   [좌클릭 Up]                                │   │
+│  │  Frame 60:   <span class="highlight">[크래시 발생!]</span>                             │   │
+│  │                                                         │   │
+│  │  → replay_2024_01_15_14_30.bin 저장                     │   │
+│  │                                                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  재생 모드:                                                     │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                                                         │   │
+│  │  replay_2024_01_15_14_30.bin 로드                       │   │
+│  │  → 저장된 입력을 프레임 단위로 재주입                   │   │
+│  │  → <span class="key-point">100% 동일한 상황 재현!</span>                             │   │
+│  │                                                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 입력 녹화/재생 시스템
+
+struct InputEvent {
+    uint32_t frame;        // 발생 프레임
+    InputType type;        // KEY_DOWN, KEY_UP, MOUSE_MOVE, MOUSE_CLICK
+    int keyCode;           // 키 코드 또는 마우스 버튼
+    int mouseX, mouseY;    // 마우스 위치/이동량
+};
+
+class InputRecorder {
+    vector&lt;InputEvent&gt; events;
+    uint32_t startFrame;
+    bool isRecording;
+
+public:
+    void StartRecording() {
+        events.clear();
+        startFrame = GetCurrentFrame();
+        isRecording = true;
+    }
+
+    void OnInput(InputType type, int keyCode, int mx, int my) {
+        if (!isRecording) return;
+
+        InputEvent evt;
+        evt.frame = GetCurrentFrame() - startFrame;
+        evt.type = type;
+        evt.keyCode = keyCode;
+        evt.mouseX = mx;
+        evt.mouseY = my;
+
+        events.push_back(evt);
+    }
+
+    void SaveToFile(const string& path) {
+        FILE* f = fopen(path.c_str(), "wb");
+        uint32_t count = events.size();
+        fwrite(&count, sizeof(count), 1, f);
+        fwrite(events.data(), sizeof(InputEvent), count, f);
+        fclose(f);
+    }
+};
+
+class InputPlayer {
+    vector&lt;InputEvent&gt; events;
+    size_t currentIndex;
+    uint32_t startFrame;
+
+public:
+    void LoadFromFile(const string& path) {
+        FILE* f = fopen(path.c_str(), "rb");
+        uint32_t count;
+        fread(&count, sizeof(count), 1, f);
+        events.resize(count);
+        fread(events.data(), sizeof(InputEvent), count, f);
+        fclose(f);
+
+        currentIndex = 0;
+        startFrame = GetCurrentFrame();
+    }
+
+    // 매 프레임 호출
+    void Update() {
+        uint32_t currentFrame = GetCurrentFrame() - startFrame;
+
+        while (currentIndex < events.size() &&
+               events[currentIndex].frame <= currentFrame) {
+
+            // 녹화된 입력 재주입
+            auto& evt = events[currentIndex];
+            InjectInput(evt.type, evt.keyCode, evt.mouseX, evt.mouseY);
+
+            currentIndex++;
+        }
+    }
+};</div>
+            </div>
+
+            <div class="q">네트워크 게임은 서버 응답도 달라지잖아?</div>
+            <div class="a">
+                <p><span class="highlight">패킷 녹화</span>를 추가합니다. 클라이언트가 받은 모든 서버 응답도 저장:</p>
+                <div class="code-block">
+// 네트워크 패킷 녹화
+
+struct PacketEvent {
+    uint32_t frame;
+    uint16_t packetId;
+    vector&lt;uint8_t&gt; data;
+};
+
+class NetworkRecorder {
+    vector&lt;PacketEvent&gt; receivedPackets;
+
+public:
+    void OnPacketReceived(uint16_t id, const void* data, size_t size) {
+        PacketEvent evt;
+        evt.frame = GetCurrentFrame();
+        evt.packetId = id;
+        evt.data.resize(size);
+        memcpy(evt.data.data(), data, size);
+
+        receivedPackets.push_back(evt);
+    }
+};
+
+// 재생 시: 실제 서버 연결 대신 녹화된 패킷 사용
+class NetworkPlayer {
+    vector&lt;PacketEvent&gt; packets;
+    size_t currentIndex;
+
+public:
+    void Update() {
+        // 현재 프레임에 해당하는 패킷들 재주입
+        while (currentIndex < packets.size() &&
+               packets[currentIndex].frame <= currentFrame) {
+
+            auto& pkt = packets[currentIndex];
+            // 마치 서버에서 받은 것처럼 처리
+            ProcessPacket(pkt.packetId, pkt.data.data(), pkt.data.size());
+
+            currentIndex++;
+        }
+    }
+};
+
+// <span class="key-point">결과: 오프라인에서도 온라인 버그 재현 가능!</span></div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 시드 기반 랜덤</h2>
+            <div class="q">"랜덤하게 발생"하는 버그는?</div>
+            <div class="a">
+                <p>게임의 모든 랜덤을 <span class="highlight">시드(Seed) 기반</span>으로 만들면 재현 가능합니다:</p>
+                <div class="diagram">
+시드 기반 랜덤의 원리:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  일반 랜덤 (재현 불가):                                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  rand() → 42  (시스템 시간 기반, 매번 다름)             │   │
+│  │  rand() → 17                                            │   │
+│  │  rand() → 83                                            │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  시드 기반 랜덤 (재현 가능):                                    │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  <span class="key-point">srand(12345)</span>  ← 시드 고정                             │   │
+│  │  rand() → 42  (항상 동일!)                              │   │
+│  │  rand() → 17  (항상 동일!)                              │   │
+│  │  rand() → 83  (항상 동일!)                              │   │
+│  │                                                         │   │
+│  │  → 시드 12345만 저장하면 전체 랜덤 시퀀스 재현          │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  버그 발생 시:                                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  1. 크래시 로그에 시드 기록: "Seed: 12345"              │   │
+│  │  2. 개발자: srand(12345) + 동일 입력 → 100% 재현       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 시드 기반 랜덤 시스템
+
+class DeterministicRandom {
+    uint64_t seed;
+    uint64_t state;
+
+public:
+    void SetSeed(uint64_t s) {
+        seed = s;
+        state = s;
+        LogInfo("Random seed set: %llu", seed);
+    }
+
+    uint64_t GetSeed() const { return seed; }
+
+    // Xorshift64 알고리즘 (빠르고 품질 좋음)
+    uint64_t Next() {
+        state ^= state >> 12;
+        state ^= state << 25;
+        state ^= state >> 27;
+        return state * 0x2545F4914F6CDD1DULL;
+    }
+
+    int Range(int min, int max) {
+        return min + (Next() % (max - min + 1));
+    }
+
+    float Float01() {
+        return (Next() & 0xFFFFFF) / (float)0xFFFFFF;
+    }
+};
+
+// 전역 인스턴스
+DeterministicRandom g_Random;
+
+// 게임 시작 시
+void StartGame() {
+    // 시드 생성 (시간 기반)
+    uint64_t seed = time(nullptr) ^ GetTickCount64();
+    g_Random.SetSeed(seed);
+
+    // 크래시 핸들러에 시드 저장
+    SetCrashMetadata("random_seed", to_string(seed));
+}
+
+// 디버그 모드: 특정 시드로 시작
+void StartGameWithSeed(uint64_t seed) {
+    g_Random.SetSeed(seed);  // 버그 재현용
+}
+
+// 사용 예
+int damage = g_Random.Range(minDamage, maxDamage);
+float critChance = g_Random.Float01();
+bool isCrit = critChance < 0.1f;</div>
+            </div>
+
+            <div class="q">멀티스레드면 랜덤 순서가 달라지지 않아?</div>
+            <div class="a">
+                <p><span class="warning">주의!</span> 멀티스레드에서는 스레드별로 독립적인 랜덤 생성기를 사용해야 합니다:</p>
+                <div class="code-block">
+// 스레드별 독립 랜덤
+
+thread_local DeterministicRandom t_Random;
+
+void InitThreadRandom(int threadId, uint64_t baseSeed) {
+    // 스레드별로 다른 시드 (하지만 재현 가능)
+    uint64_t threadSeed = baseSeed ^ (threadId * 0x9E3779B97F4A7C15ULL);
+    t_Random.SetSeed(threadSeed);
+}
+
+// 또는: 메인 스레드에서만 랜덤 호출하고 결과를 공유
+struct FrameRandomValues {
+    int monsterSpawnCount;
+    float weatherIntensity;
+    vector&lt;int&gt; lootDrops;
+};
+
+// 메인 스레드에서 프레임 시작 시 모든 랜덤값 미리 생성
+FrameRandomValues GenerateFrameRandom() {
+    FrameRandomValues vals;
+    vals.monsterSpawnCount = g_Random.Range(0, 5);
+    vals.weatherIntensity = g_Random.Float01();
+    // ...
+    return vals;
+}
+
+// 다른 스레드에서는 미리 생성된 값만 읽기 (랜덤 호출 X)
+// → 스레드 실행 순서와 무관하게 동일한 결과!</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 체계적 재현 방법론</h2>
+            <div class="q">그래도 재현 안 되면?</div>
+            <div class="a">
+                <p><span class="highlight">이분 탐색(Binary Search)</span>으로 버그 조건을 좁혀갑니다:</p>
+                <div class="diagram">
+버그 조건 이분 탐색:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  버그 리포트: "10분 플레이하면 가끔 크래시"                     │
+│                                                                 │
+│  Step 1: 시간 좁히기                                            │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  0분 ───────────── 5분 ───────────── 10분               │   │
+│  │         [테스트]        [테스트]        [크래시!]       │   │
+│  │            OK             OK                             │   │
+│  │                                                         │   │
+│  │  5분 ─────── 7.5분 ─────── 10분                         │   │
+│  │       [테스트]      [테스트]     [크래시!]              │   │
+│  │          OK         <span class="warning">크래시!</span>                           │   │
+│  │                                                         │   │
+│  │  → <span class="key-point">5~7.5분 사이에 트리거 조건 존재</span>                    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Step 2: 행동 좁히기                                            │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  5분 동안 뭘 했나?                                      │   │
+│  │  - 사냥 10마리                                          │   │
+│  │  - 스킬 사용 50회                                       │   │
+│  │  - 아이템 획득 20개                                     │   │
+│  │  - 파티 가입/탈퇴 1회                                   │   │
+│  │                                                         │   │
+│  │  파티 없이 테스트 → OK                                  │   │
+│  │  파티 있고 테스트 → <span class="warning">크래시!</span>                          │   │
+│  │                                                         │   │
+│  │  → <span class="key-point">파티 상태에서만 발생</span>                              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Step 3: 더 좁히기                                              │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  파티 + 스킬 사용 → <span class="warning">크래시!</span>                          │   │
+│  │  파티 + 일반 공격만 → OK                                │   │
+│  │  파티 + 특정 스킬 → <span class="warning">크래시!</span>                          │   │
+│  │                                                         │   │
+│  │  → <span class="key-point">파티 + 번개 연쇄 스킬 = 100% 재현!</span>               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+                <div class="code-block">
+// 체계적 재현 체크리스트
+
+struct ReproductionChecklist {
+    // 1. 기본 조건 분리
+    bool testWithoutNetwork();     // 네트워크 문제인지
+    bool testWithoutOtherPlayers(); // 다른 플레이어 문제인지
+    bool testWithFreshCharacter();  // 캐릭터 데이터 문제인지
+    bool testWithMinimalConfig();   // 설정 문제인지
+
+    // 2. 타이밍 조건 테스트
+    bool testImmediatelyAfterLogin();
+    bool testAfter5Minutes();
+    bool testAfter30Minutes();
+    bool testDuringPeakHours();
+
+    // 3. 리소스 조건 테스트
+    bool testWithLowMemory();       // 메모리 부족 시뮬레이션
+    bool testWithHighCPU();         // CPU 부하 시뮬레이션
+    bool testWithSlowDisk();        // 디스크 지연 시뮬레이션
+    bool testWithPacketLoss();      // 패킷 손실 시뮬레이션
+};
+
+// 자동화된 버그 헌팅
+void AutomatedBugHunt(const BugReport& report) {
+    // 환경 복원
+    RestoreEnvironment(report.environment);
+
+    // 입력 재생하면서 조건 변형
+    for (int i = 0; i < 100; i++) {
+        // 랜덤 시드 변형
+        g_Random.SetSeed(report.seed + i);
+
+        // 타이밍 약간씩 변형 (±10%)
+        SetPlaybackSpeed(0.9f + (i % 20) * 0.01f);
+
+        PlaybackInputs(report.inputs);
+
+        if (CrashDetected()) {
+            Log("Reproduced with seed offset %d, speed %.2f",
+                i, 0.9f + (i % 20) * 0.01f);
+            break;
+        }
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 레이스 컨디션 재현</h2>
+            <div class="q">타이밍 문제는 어떻게 재현해?</div>
+            <div class="a">
+                <p>레이스 컨디션은 <span class="highlight">의도적 지연 삽입</span>으로 재현 확률을 높입니다:</p>
+                <div class="code-block">
+// 레이스 컨디션 재현 기법
+
+// 1. Sleep 삽입으로 타이밍 창 확대
+#ifdef DEBUG_RACE_CONDITION
+    #define RACE_WINDOW() Sleep(rand() % 100)
+#else
+    #define RACE_WINDOW()
+#endif
+
+void ThreadA() {
+    data = PrepareData();
+    RACE_WINDOW();  // 여기서 잠깐 멈춤
+    isReady = true;
+}
+
+void ThreadB() {
+    RACE_WINDOW();  // 여기서 잠깐 멈춤
+    if (isReady) {
+        UseData(data);  // data가 아직 준비 안 됐을 수 있음!
+    }
+}
+
+// 2. ThreadSanitizer 사용 (Clang/GCC)
+// 컴파일: clang++ -fsanitize=thread -g -O1 main.cpp
+// → 레이스 컨디션 자동 탐지
+
+// 3. Application Verifier (Windows)
+// 힙 접근 지연, 핸들 검증 등 다양한 레이스 조건 테스트
+
+// 4. 스트레스 테스트
+void StressTestForRace() {
+    const int NUM_THREADS = 16;
+    const int ITERATIONS = 10000;
+
+    for (int test = 0; test < 1000; test++) {
+        // 많은 스레드, 많은 반복으로 레이스 확률 증가
+        vector&lt;thread&gt; threads;
+
+        for (int i = 0; i < NUM_THREADS; i++) {
+            threads.push_back(thread([&]() {
+                for (int j = 0; j < ITERATIONS; j++) {
+                    DoSuspiciousOperation();
+                }
+            }));
+        }
+
+        for (auto& t : threads) t.join();
+
+        // 데이터 정합성 검증
+        if (!VerifyDataIntegrity()) {
+            Log("Race condition detected at test %d!", test);
+            break;
+        }
+    }
+}</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>환경 스냅샷</strong>: 하드웨어, 소프트웨어, 게임 상태 전부 기록</li>
+                <li><strong>입력 녹화/재생</strong>: 플레이어 행동 100% 재현</li>
+                <li><strong>패킷 녹화</strong>: 네트워크 게임도 오프라인 재현 가능</li>
+                <li><strong>시드 기반 랜덤</strong>: "랜덤 버그"도 재현 가능하게</li>
+                <li><strong>이분 탐색</strong>: 조건을 절반씩 좁혀서 트리거 찾기</li>
+                <li><strong>레이스 컨디션</strong>: 의도적 지연 + 스트레스 테스트로 재현 확률 증가</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../network-vs-logic-debug/">네트워크 vs 로직 구별 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>
