@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VoIP와 WebRTC - 네트워크 - MSH Portfolio</title>
+    <title>Discord는 어떻게 실시간으로 목소리를 보내요? - 네트워크 - MSH Portfolio</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
@@ -28,634 +28,414 @@
         .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
         .summary-box ul { list-style: none; }
         .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "->"; position: absolute; left: 0; opacity: 0.7; }
+        .summary-box li::before { content: "✓"; position: absolute; left: 0; opacity: 0.9; }
         .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
         .nav-links a { color: #00BCD4; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
         .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
+        .analogy-box { background: #FFF3E0; border-left: 4px solid #FF9800; padding: 20px; margin: 20px 0; border-radius: 0 12px 12px 0; }
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .compare-table th, .compare-table td { border: 1px solid #e0e0e0; padding: 12px; text-align: left; }
+        .compare-table th { background: #E0F7FA; color: #00838F; }
     </style>
 </head>
 <body>
     <div class="container">
-        <a href="../network/" class="back-link">&larr; 네트워크</a>
+        <a href="../network/" class="back-link">← 네트워크</a>
 
-        <div class="header">
-            <h1>VoIP와 WebRTC</h1>
-            <p>실시간 음성 채팅은 어떻게 구현하는 걸까?</p>
-        </div>
+        <header class="header">
+            <h1>Discord는 어떻게 실시간으로 목소리를 보내요?</h1>
+            <p>VoIP와 WebRTC - 인터넷으로 목소리 보내는 법</p>
+        </header>
 
-        <div class="conversation">
-            <h2>Part 1. WebRTC 기본 원리</h2>
-            <div class="q">WebRTC가 뭐야?</div>
-            <div class="a">
-                <p><span class="highlight">WebRTC</span>는 브라우저/앱 간 실시간 P2P 통신을 가능하게 하는 기술입니다:</p>
-                <div class="diagram">
-WebRTC 개요:
-+------------------------------------------------------------------+
-|                                                                  |
-|  WebRTC = Web Real-Time Communication                            |
-|                                                                  |
-|  전통적인 방식:                                                  |
-|  +------------------------------------------------------------+  |
-|  | Client A --> [서버] --> Client B                           |  |
-|  | (모든 데이터가 서버를 경유)                                |  |
-|  +------------------------------------------------------------+  |
-|                                                                  |
-|  WebRTC P2P 방식:                                                |
-|  +------------------------------------------------------------+  |
-|  | Client A <======= 직접 연결 =======> Client B             |  |
-|  | (서버는 연결 수립만 도움, 데이터는 직접 전송)              |  |
-|  +------------------------------------------------------------+  |
-|                                                                  |
-|  WebRTC의 3가지 주요 API:                                        |
-|                                                                  |
-|  1. MediaStream (getUserMedia)                                   |
-|     - 마이크, 카메라 접근                                        |
-|                                                                  |
-|  2. RTCPeerConnection                                            |
-|     - P2P 연결 수립, 미디어 전송                                 |
-|                                                                  |
-|  3. RTCDataChannel                                               |
-|     - 임의의 데이터 전송 (게임 데이터 등)                        |
-|                                                                  |
-+------------------------------------------------------------------+</div>
+        <div class="content-section">
+            <div class="conversation">
+                <h2>Part 1. 전화랑 뭐가 달라?</h2>
+                <div class="q">친구랑 게임하면서 디스코드로 통화해본 적 있어?</div>
+                <div class="a">
+                    <p>당연히 있지! 롤 하면서 "여기로 와!" 하고 소리 지르잖아.</p>
+                </div>
+
+                <div class="q">근데 신기하지 않아? 전화번호도 없이 어떻게 목소리가 실시간으로 가는 거지?</div>
+                <div class="a">
+                    <p>음... 인터넷으로 가니까?</p>
+                </div>
+
+                <div class="q">그래. 근데 어떻게? 카카오톡 문자도 인터넷으로 가는데, 왜 음성은 실시간이 가능해?</div>
+                <div class="a">
+                    <p>한번 생각해 보자.</p>
+                    <p>카카오톡 메시지는:</p>
+                    <div class="diagram">
+나 → 카카오 서버 → 친구
+
+"뭐해?" 라는 3글자를 보내면
+서버가 받아서 → 저장하고 → 친구에게 전달
+
+몇 초 걸려도 상관없어
+어차피 텍스트잖아</div>
+                    <p>근데 음성 통화는?</p>
+                    <div class="diagram">
+나: "안녕~" → ??? → 친구 귀
+
+0.1초 안에 도착해야 해
+늦으면 대화가 이상해짐
+
+"안녕~"
+       (0.5초 후)
+       "어... 뭐라고?"
+
+이러면 대화가 안 돼!</div>
+                </div>
+
+                <div class="q">아... 그럼 서버 거치면 느려지겠네?</div>
+                <div class="a">
+                    <p><span class="key-point">정확해!</span> 그래서 두 가지 선택지가 있어:</p>
+                    <table class="compare-table">
+                        <tr>
+                            <th>방법</th>
+                            <th>장점</th>
+                            <th>단점</th>
+                        </tr>
+                        <tr>
+                            <td>서버 경유</td>
+                            <td>연결 쉬움</td>
+                            <td>느림, 서버 비용</td>
+                        </tr>
+                        <tr>
+                            <td>직접 연결 (P2P)</td>
+                            <td>빠름!</td>
+                            <td>연결 어려움</td>
+                        </tr>
+                    </table>
+                    <p>음성 통화에서 가장 중요한 게 뭐야?</p>
+                </div>
+
+                <div class="q">빠른 거... 실시간이어야 하니까?</div>
+                <div class="a">
+                    <p><span class="key-point">맞아!</span> 그래서 음성 통화는 <span class="highlight">P2P (Peer-to-Peer)</span> 직접 연결을 선호해.</p>
+                    <div class="diagram">
+서버 경유:
+나 ----→ 서버 ----→ 친구
+     50ms      50ms
+
+     총 100ms 지연
+
+
+P2P 직접 연결:
+나 ←=========→ 친구
+       40ms
+
+     총 40ms 지연!</div>
+                    <p>근데 여기서 문제가 생겨...</p>
+                </div>
             </div>
 
-            <div class="q">P2P 연결은 어떻게 수립해?</div>
-            <div class="a">
-                <p><span class="key-point">Signaling</span> 과정을 통해 서로의 연결 정보를 교환합니다:</p>
-                <div class="diagram">
-WebRTC 연결 수립 과정 (Signaling):
-+------------------------------------------------------------------+
-|                                                                  |
-|    Client A              Signaling Server              Client B  |
-|       |                        |                          |      |
-|       |---(1) Offer SDP------->|                          |      |
-|       |                        |---(2) Offer SDP--------->|      |
-|       |                        |                          |      |
-|       |                        |<--(3) Answer SDP---------|      |
-|       |<--(4) Answer SDP-------|                          |      |
-|       |                        |                          |      |
-|       |---(5) ICE Candidate--->|                          |      |
-|       |                        |---(6) ICE Candidate----->|      |
-|       |                        |                          |      |
-|       |                        |<--(7) ICE Candidate------|      |
-|       |<--(8) ICE Candidate----|                          |      |
-|       |                        |                          |      |
-|       |<===========(9) P2P 연결 수립=============>|              |
-|       |                                                   |      |
-|                                                                  |
-|  SDP (Session Description Protocol):                             |
-|  - 코덱, 해상도, 포맷 등 미디어 정보                             |
-|  - "나는 Opus 코덱으로 48kHz 오디오를 보낼 수 있어"             |
-|                                                                  |
-|  ICE Candidate:                                                  |
-|  - 연결 가능한 IP/포트 후보들                                    |
-|  - "내 공인 IP는 1.2.3.4:5000이야"                              |
-|                                                                  |
-+------------------------------------------------------------------+</div>
-                <div class="code-block">
-// 클라이언트 A: Offer 생성
+            <div class="conversation">
+                <h2>Part 2. 직접 연결이 왜 어려워?</h2>
+                <div class="q">직접 연결하면 되지, 뭐가 어려워?</div>
+                <div class="a">
+                    <p>집에 컴퓨터가 있잖아. 친구 컴퓨터랑 직접 연결하려면 뭐가 필요해?</p>
+                </div>
 
-async function createOffer() {
-    // 1. PeerConnection 생성
-    const pc = new RTCPeerConnection({
-        iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            {
-                urls: 'turn:your-turn-server.com:3478',
-                username: 'user',
-                credential: 'password'
-            }
-        ]
-    });
+                <div class="q">IP 주소?</div>
+                <div class="a">
+                    <p>맞아. 근데 너 집 컴퓨터 IP 주소가 뭐야?</p>
+                    <div class="diagram">
+네 컴퓨터 IP: 192.168.0.10
 
-    // 2. 로컬 미디어 스트림 추가
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+...잠깐, 이거 친구도 똑같은 IP일 수 있는데?</div>
+                </div>
 
-    // 3. ICE Candidate 발생 시 시그널링 서버로 전송
-    pc.onicecandidate = (event) => {
-        if (event.candidate) {
-            signalingServer.send({
-                type: 'ice-candidate',
-                candidate: event.candidate
-            });
-        }
-    };
+                <div class="q">어? 왜 같아?</div>
+                <div class="a">
+                    <p>이게 바로 <span class="highlight">NAT (공유기)</span> 문제야!</p>
+                    <div class="analogy-box">
+                        <strong>🏠 비유: 아파트 주소</strong><br><br>
+                        인터넷은 아파트 단지 같아.<br><br>
+                        <strong>공인 IP</strong> = 아파트 단지 주소 (예: 서울시 강남구 ...)<br>
+                        <strong>사설 IP</strong> = 동/호수 (예: 101동 1502호)<br><br>
+                        외부에서 "101동 1502호로 와!" 해봐야...<br>
+                        <span class="warning">어느 아파트 단지인데?</span> 알 수가 없어!
+                    </div>
+                    <div class="diagram">
+현실:
 
-    // 4. Offer 생성 및 전송
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+너네 집                           친구네 집
+┌─────────────────┐              ┌─────────────────┐
+│ 너: 192.168.0.10│              │친구: 192.168.0.5│
+│        │        │              │        │        │
+│    [공유기]     │              │    [공유기]     │
+│   공인IP: 1.2.3.4              │   공인IP: 5.6.7.8
+└────────┼────────┘              └────────┼────────┘
+         │                                │
+         └──────── 인터넷 ────────────────┘
 
-    signalingServer.send({
-        type: 'offer',
-        sdp: pc.localDescription
-    });
+너: "192.168.0.5로 연결!"
+친구: "그게 어딘데? 우리 집에도 192.168.0.5 있는데?"</div>
+                </div>
 
-    return pc;
-}
+                <div class="q">그럼 공인 IP를 알면 되는 거 아냐?</div>
+                <div class="a">
+                    <p>맞아! 근데 <span class="warning">내가 내 공인 IP를 모른다</span>는 게 문제야.</p>
+                    <p>공유기 뒤에 숨어있으니까 내 컴퓨터는 "나는 192.168.0.10이야" 라고만 알아.</p>
+                    <p>그래서 누군가가 <span class="key-point">"네 진짜 IP는 이거야"</span> 라고 알려줘야 해.</p>
+                </div>
 
-// 클라이언트 B: Answer 생성
+                <div class="q">누가 알려줘?</div>
+                <div class="a">
+                    <p><span class="highlight">STUN 서버</span>가 알려줘!</p>
+                    <div class="diagram">
+STUN = "네 공인 IP 알려주는 서버"
 
-async function handleOffer(offer) {
-    const pc = new RTCPeerConnection(iceConfig);
+나 ----→ STUN 서버: "내 IP가 뭐야?"
 
-    // 원격 오디오 수신 처리
-    pc.ontrack = (event) => {
-        const remoteAudio = document.getElementById('remoteAudio');
-        remoteAudio.srcObject = event.streams[0];
-    };
+STUN ----→ 나: "너 공인 IP는 1.2.3.4:12345야"
 
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+이제 나는 이 정보를 친구에게 알려줄 수 있어!</div>
+                    <p>구글이 무료 STUN 서버를 운영해: <code>stun:stun.l.google.com:19302</code></p>
+                </div>
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+                <div class="q">오 그럼 해결된 거네?</div>
+                <div class="a">
+                    <p><span class="warning">아직 아니야.</span> 어떤 공유기는 너무 까다로워서 STUN으로도 안 돼.</p>
+                    <p>이럴 때는 어쩔 수 없이 <span class="highlight">TURN 서버</span>가 중계해줘야 해.</p>
+                    <div class="diagram">
+TURN = "어쩔 수 없을 때 중계해주는 서버"
 
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
+나 ----→ TURN ----→ 친구
 
-    signalingServer.send({
-        type: 'answer',
-        sdp: pc.localDescription
-    });
+P2P는 아니지만, 최소한 연결은 됨!
 
-    return pc;
-}</div>
-            </div>
-        </div>
-
-        <div class="conversation">
-            <h2>Part 2. STUN과 TURN 서버</h2>
-            <div class="q">NAT 뒤에 있으면 P2P 연결이 안 되지 않아?</div>
-            <div class="a">
-                <p><span class="highlight">STUN</span>과 <span class="highlight">TURN</span> 서버가 이 문제를 해결합니다:</p>
-                <div class="diagram">
-NAT 문제와 해결:
-+------------------------------------------------------------------+
-|                                                                  |
-|  문제: NAT(공유기) 뒤의 클라이언트                               |
-|                                                                  |
-|  +-------------+                      +-------------+            |
-|  | Client A    |                      | Client B    |            |
-|  | 192.168.1.10|                      | 192.168.0.5 |            |
-|  +------+------+                      +------+------+            |
-|         |                                    |                   |
-|    +----+----+                          +----+----+              |
-|    | NAT     |                          | NAT     |              |
-|    | 1.2.3.4 |                          | 5.6.7.8 |              |
-|    +----+----+                          +----+----+              |
-|         |                                    |                   |
-|         |        <span class="warning">서로 사설 IP만 알아서</span>      |                   |
-|         |        <span class="warning">직접 연결 불가!</span>           |                   |
-|                                                                  |
-+------------------------------------------------------------------+
-
-STUN (Session Traversal Utilities for NAT):
-+------------------------------------------------------------------+
-|                                                                  |
-|  역할: "내 공인 IP가 뭔지 알려줘"                                |
-|                                                                  |
-|  Client A --> STUN Server: "내 IP가 뭐야?"                       |
-|  STUN Server --> Client A: "너 공인 IP는 1.2.3.4:12345야"       |
-|                                                                  |
-|  이제 A는 자신의 공인 주소를 B에게 알려줄 수 있음!               |
-|                                                                  |
-|  <span class="key-point">무료 STUN 서버들:</span>                                           |
-|  - stun:stun.l.google.com:19302                                  |
-|  - stun:stun1.l.google.com:19302                                 |
-|  - stun:stun.services.mozilla.com                                |
-|                                                                  |
-+------------------------------------------------------------------+
-
-TURN (Traversal Using Relays around NAT):
-+------------------------------------------------------------------+
-|                                                                  |
-|  문제: Symmetric NAT 등으로 STUN만으로 안 될 때                  |
-|                                                                  |
-|  TURN 서버가 <span class="key-point">중계(Relay)</span> 역할:                               |
-|                                                                  |
-|    Client A -----> TURN Server -----> Client B                   |
-|              UDP         UDP                                     |
-|                                                                  |
-|  <span class="warning">단점:</span> 모든 트래픽이 서버 경유 (대역폭 비용 발생)            |
-|  <span class="key-point">장점:</span> 거의 100% 연결 성공                                  |
-|                                                                  |
-|  연결 성공률:                                                    |
-|  - STUN만: ~85%                                                  |
-|  - STUN + TURN: ~99%                                             |
-|                                                                  |
-+------------------------------------------------------------------+</div>
-                <div class="code-block">
-// ICE (Interactive Connectivity Establishment)
-
-const iceConfig = {
-    iceServers: [
-        // 1순위: STUN (무료, P2P)
-        { urls: 'stun:stun.l.google.com:19302' },
-
-        // 2순위: TURN (유료, 중계)
-        {
-            urls: [
-                'turn:your-server.com:3478?transport=udp',
-                'turn:your-server.com:3478?transport=tcp',
-                'turns:your-server.com:5349'  // TLS 암호화
-            ],
-            username: 'username',
-            credential: 'password'
-        }
-    ],
-
-    // ICE 후보 수집 정책
-    iceCandidatePoolSize: 10,  // 미리 후보 수집
-    iceTransportPolicy: 'all'  // 'all' | 'relay' (TURN만 사용)
-};
-
-// ICE 연결 상태 모니터링
-pc.oniceconnectionstatechange = () => {
-    switch (pc.iceConnectionState) {
-        case 'checking':
-            console.log('연결 시도 중...');
-            break;
-        case 'connected':
-            console.log('P2P 연결 성공!');
-            break;
-        case 'failed':
-            console.log('연결 실패, TURN으로 폴백');
-            // 재연결 시도 또는 TURN 강제 사용
-            break;
-        case 'disconnected':
-            console.log('연결 끊김, 재연결 시도');
-            break;
-    }
-};</div>
-            </div>
-        </div>
-
-        <div class="conversation">
-            <h2>Part 3. 오디오 코덱 (Opus)</h2>
-            <div class="q">음성 데이터는 얼마나 압축해?</div>
-            <div class="a">
-                <p><span class="key-point">Opus</span>는 VoIP에 최적화된 코덱으로, 6~510 kbps 범위로 조절 가능합니다:</p>
-                <div class="diagram">
-Opus 코덱 특성:
-+------------------------------------------------------------------+
-|                                                                  |
-|  원본 PCM vs Opus 압축:                                          |
-|                                                                  |
-|  원본 (16bit, 48kHz, Mono):                                      |
-|  - 2 bytes x 48000 samples = 96,000 bytes/sec = <span class="warning">768 kbps</span>       |
-|                                                                  |
-|  Opus 압축 후:                                                   |
-|  - VoIP 품질: <span class="key-point">16-24 kbps</span> (32~48배 압축!)                    |
-|  - 고품질: 64 kbps (12배 압축)                                   |
-|  - 음악: 128+ kbps                                               |
-|                                                                  |
-|  비트레이트별 품질:                                              |
-|  +------------------------------------------------------------+  |
-|  | 비트레이트 | 품질              | 용도                     |  |
-|  |------------+-------------------+--------------------------|  |
-|  | 6-12 kbps  | 낮음 (알아들음)   | 극한 저대역폭            |  |
-|  | 16-24 kbps | <span class="key-point">VoIP 표준</span>         | 게임 음성채팅           |  |
-|  | 32-48 kbps | 고품질 음성       | Discord, Zoom           |  |
-|  | 64-96 kbps | 음악 스트리밍     | Spotify (웹)            |  |
-|  | 128+ kbps  | 투명 품질         | 전문 방송               |  |
-|  +------------------------------------------------------------+  |
-|                                                                  |
-|  Opus 특징:                                                      |
-|  - 지연: 2.5ms ~ 60ms (설정 가능)                                |
-|  - 적응형: 네트워크 상태에 따라 비트레이트 자동 조절             |
-|  - 패킷 손실 복원: 최대 20% 손실까지 보정 가능                   |
-|                                                                  |
-+------------------------------------------------------------------+</div>
-                <div class="code-block">
-// Opus 코덱 설정 (SDP 조작)
-
-function setOpusPreferences(sdp, bitrate = 24000) {
-    // Opus 관련 라인 찾기
-    const opusPayload = getOpusPayloadType(sdp);
-
-    // fmtp 라인 수정 (비트레이트, 스테레오 등)
-    const fmtpLine = `a=fmtp:${opusPayload} minptime=10;useinbandfec=1;maxaveragebitrate=${bitrate}`;
-
-    // SDP에 삽입
-    return insertAfter(sdp, `a=rtpmap:${opusPayload}`, fmtpLine);
-}
-
-// Opus 옵션 설명:
-// - minptime=10: 최소 패킷 길이 10ms
-// - useinbandfec=1: Forward Error Correction 활성화 (패킷 손실 복구)
-// - maxaveragebitrate=24000: 최대 평균 24kbps
-// - stereo=0: 모노 (VoIP는 모노로 충분)
-// - cbr=0: VBR 사용 (적응형 비트레이트)
-
-// C++ (libopus) 예시
-/*
-OpusEncoder* encoder = opus_encoder_create(
-    48000,           // 샘플레이트
-    1,               // 채널 수 (모노)
-    OPUS_APPLICATION_VOIP,  // VoIP 최적화
-    &error
-);
-
-// 비트레이트 설정
-opus_encoder_ctl(encoder, OPUS_SET_BITRATE(24000));
-
-// 패킷 손실 예상 비율 설정 (FEC 활성화)
-opus_encoder_ctl(encoder, OPUS_SET_PACKET_LOSS_PERC(10));
-
-// 복잡도 설정 (CPU vs 품질 트레이드오프)
-opus_encoder_ctl(encoder, OPUS_SET_COMPLEXITY(5));  // 0-10
-*/</div>
-            </div>
-        </div>
-
-        <div class="conversation">
-            <h2>Part 4. 게임 내 음성 채팅 구현</h2>
-            <div class="q">게임에서 음성 채팅은 어떻게 구현해?</div>
-            <div class="a">
-                <p>게임 음성 채팅은 보통 <span class="highlight">서버 중계</span> 또는 <span class="highlight">P2P 메시</span> 방식을 사용합니다:</p>
-                <div class="diagram">
-게임 음성 채팅 아키텍처:
-+------------------------------------------------------------------+
-|                                                                  |
-|  방식 1: 서버 중계 (SFU - Selective Forwarding Unit)             |
-|  +------------------------------------------------------------+  |
-|  |                      +--------+                            |  |
-|  |        +------------>| Voice  |<------------+              |  |
-|  |        |             | Server |             |              |  |
-|  |        |             +---+----+             |              |  |
-|  |        |                 |                  |              |  |
-|  |    +---+---+         +---+---+         +---+---+           |  |
-|  |    |   A   |         |   B   |         |   C   |           |  |
-|  |    +-------+         +-------+         +-------+           |  |
-|  |                                                            |  |
-|  |  장점: 관리 쉬움, 녹음/모더레이션 가능                     |  |
-|  |  단점: 서버 비용, 추가 지연                                |  |
-|  +------------------------------------------------------------+  |
-|                                                                  |
-|  방식 2: P2P 풀 메시 (소규모 그룹)                               |
-|  +------------------------------------------------------------+  |
-|  |        A <-----------> B                                   |  |
-|  |        ^               ^                                   |  |
-|  |        |               |                                   |  |
-|  |        v               v                                   |  |
-|  |        C <-----------> D                                   |  |
-|  |                                                            |  |
-|  |  장점: 최소 지연, 서버 비용 없음                           |  |
-|  |  단점: N명 = N*(N-1)/2 연결 (6명 = 15개 연결)              |  |
-|  +------------------------------------------------------------+  |
-|                                                                  |
-|  방식 3: P2P 스타 (한 명이 호스트)                               |
-|  +------------------------------------------------------------+  |
-|  |        B       C                                           |  |
-|  |         \     /                                            |  |
-|  |          \   /                                             |  |
-|  |           \ /                                              |  |
-|  |            A (Host)                                        |  |
-|  |           / \                                              |  |
-|  |          /   \                                             |  |
-|  |         D     E                                            |  |
-|  |                                                            |  |
-|  |  장점: 연결 수 감소 (N-1개)                                |  |
-|  |  단점: 호스트 대역폭 부담, 호스트 이탈 시 재구성 필요     |  |
-|  +------------------------------------------------------------+  |
-|                                                                  |
-+------------------------------------------------------------------+</div>
-                <div class="code-block">
-// 게임 음성 채팅 시스템 (SFU 방식)
-
-class GameVoiceChat {
-private:
-    RTCPeerConnection* m_voiceServerConnection;
-    std::map<int, AudioTrack> m_playerTracks;
-
-    // 음성 활성화 감지 (VAD)
-    bool m_voiceActivationEnabled = true;
-    float m_vadThreshold = -40.0f;  // dB
-
-public:
-    void JoinVoiceChannel(int channelId) {
-        // 1. 음성 서버에 WebRTC 연결
-        m_voiceServerConnection = CreatePeerConnection();
-
-        // 2. 마이크 캡처 및 Opus 인코딩
-        StartMicrophoneCapture();
-
-        // 3. 채널 참가 요청
-        SendJoinRequest(channelId);
-    }
-
-    void StartMicrophoneCapture() {
-        // 오디오 캡처 시작
-        AudioCapture capture(48000, 1);  // 48kHz, Mono
-
-        capture.OnAudioData([this](const int16_t* samples, int count) {
-            // VAD (Voice Activity Detection)
-            float level = CalculateAudioLevel(samples, count);
-
-            if (m_voiceActivationEnabled && level < m_vadThreshold) {
-                return;  // 말 안 하고 있으면 전송 안 함
-            }
-
-            // Push-to-Talk 모드면 버튼 체크
-            if (m_pushToTalkEnabled && !IsKeyPressed(m_pttKey)) {
-                return;
-            }
-
-            // Opus 인코딩 후 전송
-            OpusEncode(samples, count);
-            SendToVoiceServer();
-        });
-    }
-
-    // 근접 음성 (Proximity Voice)
-    void UpdateProximityVolume(int playerId, float distance) {
-        // 거리에 따라 볼륨 조절
-        float volume = CalculateVolumeByDistance(distance);
-
-        // 3D 오디오 위치 설정
-        Vector3 direction = GetDirectionToPlayer(playerId);
-        SetPlayerAudioPosition(playerId, direction, volume);
-    }
-
-    float CalculateVolumeByDistance(float distance) {
-        const float MAX_DISTANCE = 30.0f;   // 30m 이상이면 안 들림
-        const float FALLOFF_START = 5.0f;   // 5m 이후부터 감쇠
-
-        if (distance > MAX_DISTANCE) return 0.0f;
-        if (distance < FALLOFF_START) return 1.0f;
-
-        // 선형 감쇠
-        return 1.0f - (distance - FALLOFF_START) / (MAX_DISTANCE - FALLOFF_START);
-    }
-};</div>
+연결 성공률:
+- STUN만: ~85%
+- STUN + TURN: ~99%</div>
+                </div>
             </div>
 
-            <div class="q">음성 지연(Latency)은 얼마나 나와?</div>
-            <div class="a">
-                <div class="diagram">
+            <div class="conversation">
+                <h2>Part 3. 연결은 됐는데, 목소리를 어떻게 보내?</h2>
+                <div class="q">연결됐으면 목소리 보내면 되는 거 아냐?</div>
+                <div class="a">
+                    <p>목소리가 뭔지부터 생각해보자.</p>
+                    <p>마이크에 "안녕~" 하고 말하면 뭐가 나올까?</p>
+                </div>
+
+                <div class="q">음... 소리?</div>
+                <div class="a">
+                    <p>컴퓨터가 이해하는 건 <span class="highlight">숫자</span>야.</p>
+                    <div class="diagram">
+"안녕~" 하고 말하면:
+
+마이크가 1초에 48,000번 소리를 측정해 (48kHz)
+
+     ↓ 숫자로 변환
+
+[1234, -567, 890, -1234, 567, ...]
+
+     ↓ 1초 데이터 크기
+
+2바이트 x 48,000개 = 96,000 바이트 = 768 kbps</div>
+                </div>
+
+                <div class="q">768 kbps면... 많은 거야?</div>
+                <div class="a">
+                    <p>꽤 많아. 4명이 동시에 말하면 3 Mbps야.</p>
+                    <p>인터넷 느린 친구는 끊길 수 있어.</p>
+                    <p>그래서 <span class="highlight">압축</span>이 필요해!</p>
+                </div>
+
+                <div class="q">어떻게 압축해?</div>
+                <div class="a">
+                    <p><span class="highlight">Opus</span>라는 코덱을 써.</p>
+                    <div class="diagram">
+Opus 압축:
+
+원본: 768 kbps (엄청 큼!)
+     ↓
+압축 후: 24 kbps (32배 줄어듦!)
+
+근데 품질은?
+- 6-12 kbps: 알아는 들음
+- 16-24 kbps: 디스코드 수준 (충분!)
+- 64 kbps 이상: 음악 스트리밍 품질</div>
+                    <p>디스코드는 보통 24 kbps 정도야. 768을 24로 줄이면서도 목소리는 선명해!</p>
+                </div>
+
+                <div class="q">와 32배나 줄어들어? 어떻게 가능해?</div>
+                <div class="a">
+                    <p>사람 목소리의 특성을 이용해:</p>
+                    <div class="diagram">
+1. 사람은 모든 주파수를 듣지 않아
+   - 20Hz~20kHz가 가청 범위
+   - 목소리는 주로 85Hz~3kHz
+   - 나머지는 버려도 됨!
+
+2. 연속된 소리는 비슷해
+   - "아~~~" 하면 비슷한 패턴 반복
+   - 변화량만 저장해도 됨!
+
+3. 조용한 구간은 거의 안 보내
+   - 말 안 할 때는 데이터 X</div>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <h2>Part 4. 이걸 합치면? WebRTC!</h2>
+                <div class="q">STUN, TURN, Opus... 이걸 다 직접 구현해야 해?</div>
+                <div class="a">
+                    <p><span class="key-point">아니!</span> 이걸 전부 묶어서 쓰기 쉽게 만든 게 <span class="highlight">WebRTC</span>야.</p>
+                    <div class="diagram">
+WebRTC = Web Real-Time Communication
+
+┌────────────────────────────────────────┐
+│              WebRTC                     │
+│  ┌──────────┬──────────┬──────────┐   │
+│  │   STUN   │   TURN   │  Opus    │   │
+│  │  (IP확인) │  (중계)  │ (압축)   │   │
+│  └──────────┴──────────┴──────────┘   │
+│                                        │
+│  + 암호화 (보안)                       │
+│  + 에코 제거                           │
+│  + 노이즈 제거                         │
+└────────────────────────────────────────┘
+
+브라우저에 이미 내장되어 있어!</div>
+                </div>
+
+                <div class="q">브라우저에 내장? 그럼 설치 안 해도 돼?</div>
+                <div class="a">
+                    <p><span class="key-point">맞아!</span> 그래서 디스코드 웹 버전이 가능한 거야.</p>
+                    <p>설치 없이 브라우저에서 바로 음성 통화!</p>
+                </div>
+
+                <div class="q">그럼 Discord도 WebRTC 써?</div>
+                <div class="a">
+                    <p>Discord, Zoom, Google Meet... 다 WebRTC 기반이야.</p>
+                    <div class="diagram">
+실제 서비스들:
+
+Discord:  WebRTC + 자체 서버 (SFU)
+Zoom:     WebRTC + 자체 서버
+Meet:     순수 WebRTC
+게임:     WebRTC 또는 미들웨어 (Vivox, Photon)
+
+"SFU"가 뭐냐면...</div>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <h2>Part 5. 게임에서는 어떻게 써?</h2>
+                <div class="q">게임 음성 채팅도 P2P야?</div>
+                <div class="a">
+                    <p>경우에 따라 다른데, 대부분 게임은 <span class="highlight">서버 중계 (SFU)</span> 방식을 써.</p>
+                </div>
+
+                <div class="q">어? P2P가 빠르다면서 왜?</div>
+                <div class="a">
+                    <p>좋은 질문이야! 4명이 음성 채팅한다고 생각해봐.</p>
+                    <div class="diagram">
+P2P 풀 메시 (모두가 모두와 연결):
+
+    A ←───→ B
+    ↑ ╲   ╱ ↑
+    │   ╳   │
+    ↓ ╱   ╲ ↓
+    C ←───→ D
+
+연결 수 = 4명 × 3 ÷ 2 = 6개 연결!
+10명이면? 45개 연결!
+업로드도 3배로 해야 함 (A→B, A→C, A→D)</div>
+                    <p><span class="warning">연결이 너무 많아져!</span></p>
+                </div>
+
+                <div class="q">그래서 서버를 거치는 거구나?</div>
+                <div class="a">
+                    <p><span class="key-point">맞아!</span> SFU (Selective Forwarding Unit) 방식:</p>
+                    <div class="diagram">
+SFU 서버 방식:
+
+        ┌──────────┐
+    ┌───┤  Voice   ├───┐
+    │   │  Server  │   │
+    │   └────┬─────┘   │
+    │        │         │
+    A        B         C
+
+- 각자 서버로 1번만 업로드
+- 서버가 다른 사람들에게 전달
+- 연결 수 = 인원수 × 1
+
+장점:
+- 녹음 가능 (신고 시스템!)
+- 관리 쉬움
+- 욕설 차단 가능</div>
+                    <p>Valorant, League of Legends, Fortnite 다 이 방식이야.</p>
+                </div>
+
+                <div class="q">근접 음성 채팅은 어떻게 해? Fortnite에서 가까이 가면 들리잖아</div>
+                <div class="a">
+                    <p><span class="highlight">3D 공간 오디오</span>야!</p>
+                    <div class="diagram">
+근접 음성 (Proximity Voice):
+
+거리에 따라 볼륨 조절:
+
+  5m 이내: 100% 볼륨
+  5~30m:   거리에 비례해서 감소
+  30m 이상: 0% (안 들림)
+
+방향도 반영:
+  왼쪽에 있으면 → 왼쪽 스피커에서 크게
+  오른쪽에 있으면 → 오른쪽 스피커에서 크게</div>
+                    <p>VRChat 같은 메타버스 게임에서는 필수 기능이야!</p>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <h2>Part 6. 지연은 얼마나 생겨?</h2>
+                <div class="q">말하고 상대방이 듣기까지 얼마나 걸려?</div>
+                <div class="a">
+                    <div class="diagram">
 음성 채팅 지연 분해:
-+------------------------------------------------------------------+
-|                                                                  |
-|  말하기 ---> 듣기 까지 총 지연:                                  |
-|                                                                  |
-|  +--------------------+                                          |
-|  | 1. 마이크 캡처     |  ~10-20ms (버퍼 크기에 따라)             |
-|  +--------------------+                                          |
-|           |                                                      |
-|           v                                                      |
-|  +--------------------+                                          |
-|  | 2. Opus 인코딩     |  ~5-20ms (프레임 크기)                   |
-|  +--------------------+                                          |
-|           |                                                      |
-|           v                                                      |
-|  +--------------------+                                          |
-|  | 3. 네트워크 전송   |  ~20-100ms (지역/서버 위치)              |
-|  +--------------------+                                          |
-|           |                                                      |
-|           v                                                      |
-|  +--------------------+                                          |
-|  | 4. Jitter Buffer   |  ~20-60ms (패킷 순서 정렬)               |
-|  +--------------------+                                          |
-|           |                                                      |
-|           v                                                      |
-|  +--------------------+                                          |
-|  | 5. Opus 디코딩     |  ~5ms                                    |
-|  +--------------------+                                          |
-|           |                                                      |
-|           v                                                      |
-|  +--------------------+                                          |
-|  | 6. 스피커 재생     |  ~10-20ms                                |
-|  +--------------------+                                          |
-|                                                                  |
-|  총 지연: <span class="key-point">70-225ms</span>                                          |
-|  - 좋은 환경: 70-100ms (자연스러운 대화)                         |
-|  - 나쁜 환경: 200ms+ (대화 어색함)                               |
-|                                                                  |
-+------------------------------------------------------------------+</div>
+
+1. 마이크 캡처      10~20ms
+2. Opus 압축        5~20ms
+3. 네트워크 전송    20~100ms (지역/서버 위치)
+4. 버퍼링           20~60ms
+5. 디코딩           5ms
+6. 스피커 재생      10~20ms
+─────────────────────────────
+총합:               70~225ms
+
+좋은 환경: 70~100ms (자연스러운 대화)
+나쁜 환경: 200ms+ (대화 어색함)</div>
+                </div>
+
+                <div class="q">전화는 얼마나 걸려?</div>
+                <div class="a">
+                    <p>일반 전화: 150~300ms</p>
+                    <p>VoLTE: 100~150ms</p>
+                    <p><span class="key-point">잘 만든 VoIP가 전화보다 빠를 수 있어!</span></p>
+                </div>
             </div>
-        </div>
 
-        <div class="conversation">
-            <h2>Part 5. 실제 게임 음성 시스템 사례</h2>
-            <div class="q">유명 게임들은 어떤 방식을 써?</div>
-            <div class="a">
-                <div class="diagram">
-실제 게임 음성 시스템:
-+------------------------------------------------------------------+
-|                                                                  |
-|  Discord (게임 음성 채팅 표준):                                  |
-|  +------------------------------------------------------------+  |
-|  | - SFU 서버 방식                                            |  |
-|  | - Opus 코덱, 64-96 kbps                                    |  |
-|  | - 지연: ~80-120ms                                          |  |
-|  | - 특징: Krisp AI 노이즈 제거                               |  |
-|  +------------------------------------------------------------+  |
-|                                                                  |
-|  Valorant / League of Legends:                                   |
-|  +------------------------------------------------------------+  |
-|  | - 자체 SFU 서버                                            |  |
-|  | - Opus, 낮은 비트레이트 (대역폭 우선)                      |  |
-|  | - 팀 음성 + 파티 음성 분리                                 |  |
-|  +------------------------------------------------------------+  |
-|                                                                  |
-|  Fortnite:                                                       |
-|  +------------------------------------------------------------+  |
-|  | - Vivox 미들웨어 사용                                      |  |
-|  | - 3D 근접 음성 (적이 가까이 오면 들림!)                    |  |
-|  | - 크로스 플랫폼 (PC, 콘솔, 모바일)                         |  |
-|  +------------------------------------------------------------+  |
-|                                                                  |
-|  VRChat / 메타버스 게임:                                         |  |
-|  +------------------------------------------------------------+  |
-|  | - 3D 공간 오디오 필수                                      |  |
-|  | - HRTF (Head-Related Transfer Function)                    |  |
-|  | - 거리 감쇠 + 방향성                                       |  |
-|  +------------------------------------------------------------+  |
-|                                                                  |
-|  음성 미들웨어 비교:                                             |
-|  +--------------------+------------------+--------------------+  |
-|  | Vivox (Unity)      | Photon Voice     | Agora             |  |
-|  |--------------------+------------------+--------------------|  |
-|  | 대형 게임 표준     | Unity 친화적     | 글로벌 인프라      |  |
-|  | Fortnite, PUBG 등  | 인디 게임 많음   | 중국/아시아 강점   |  |
-|  | 유료 (동시접속당)  | 유료             | 무료 티어 있음     |  |
-|  +--------------------+------------------+--------------------+  |
-|                                                                  |
-+------------------------------------------------------------------+</div>
-                <div class="code-block">
-// Unity + Photon Voice 2 예시
-
-using Photon.Voice.Unity;
-using Photon.Voice.PUN;
-
-public class GameVoiceManager : MonoBehaviourPunCallbacks
-{
-    private PhotonVoiceNetwork voiceNetwork;
-    private Recorder recorder;
-
-    void Start()
-    {
-        // Voice Network 초기화
-        voiceNetwork = PhotonVoiceNetwork.Instance;
-
-        // 마이크 레코더 설정
-        recorder = GetComponent<Recorder>();
-        recorder.TransmitEnabled = false;  // 기본 음소거
-        recorder.VoiceDetection = true;    // VAD 활성화
-        recorder.VoiceDetectionThreshold = 0.01f;
-    }
-
-    // Push to Talk
-    void Update()
-    {
-        if (Input.GetKey(KeyCode.V))
-        {
-            recorder.TransmitEnabled = true;
-        }
-        else
-        {
-            recorder.TransmitEnabled = false;
-        }
-    }
-
-    // 3D 근접 음성 설정
-    public void SetupProximityVoice(PhotonVoiceView voiceView)
-    {
-        // Speaker에 AudioSource 3D 설정
-        var audioSource = voiceView.SpeakerInUse.GetComponent<AudioSource>();
-        audioSource.spatialBlend = 1.0f;  // 완전 3D
-        audioSource.maxDistance = 30f;    // 30m
-        audioSource.rolloffMode = AudioRolloffMode.Linear;
-    }
-
-    // 팀/전체 채널 전환
-    public void SwitchVoiceChannel(byte channel)
-    {
-        // channel 0: 전체, 1: 팀, 2: 파티 등
-        recorder.InterestGroup = channel;
-    }
-}</div>
+            <div class="summary-box">
+                <h3>📌 핵심 정리: VoIP와 WebRTC</h3>
+                <ul>
+                    <li><strong>P2P</strong> - 서버 없이 직접 연결하면 빠르다</li>
+                    <li><strong>STUN</strong> - "네 공인 IP 알려줄게" (공유기 문제 해결)</li>
+                    <li><strong>TURN</strong> - 직접 연결 안 되면 중계해줌</li>
+                    <li><strong>Opus</strong> - 768kbps → 24kbps로 32배 압축</li>
+                    <li><strong>WebRTC</strong> - 위 기술 전부 묶은 패키지 (브라우저 내장)</li>
+                    <li><strong>SFU</strong> - 게임은 서버 중계 방식 선호 (관리 용이)</li>
+                    <li><strong>지연</strong> - 70~100ms면 자연스러운 대화 가능</li>
+                </ul>
             </div>
-        </div>
 
-        <div class="summary-box">
-            <h3>핵심 정리</h3>
-            <ul>
-                <li><strong>WebRTC</strong>는 브라우저/앱 간 P2P 실시간 통신 기술</li>
-                <li><strong>Signaling</strong>으로 SDP/ICE 교환 후 연결 수립</li>
-                <li><strong>STUN</strong>은 공인 IP 확인, <strong>TURN</strong>은 중계 서버 (NAT 우회)</li>
-                <li><strong>Opus</strong> 코덱으로 16-24 kbps VoIP 품질 (768kbps -> 24kbps, 32배 압축)</li>
-                <li>게임은 보통 <strong>SFU 서버 중계</strong> 방식 (관리/모더레이션 용이)</li>
-                <li>총 지연은 <strong>70-225ms</strong>, 좋은 환경에서 100ms 이하</li>
-                <li>Vivox, Photon Voice, Agora 등 <strong>미들웨어</strong> 활용 가능</li>
-            </ul>
-        </div>
-
-        <div class="nav-links">
-            <a href="../tickrate-design/">&larr; 틱레이트 설계</a>
-            <a href="../network-budget/">네트워크 버짓 &rarr;</a>
+            <div class="nav-links">
+                <a href="../tickrate-design/">← 틱레이트 설계</a>
+                <a href="../network-budget/">네트워크 버짓 →</a>
+            </div>
         </div>
     </div>
 </body>
