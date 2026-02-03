@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>동접 수백만인데 서버 구조가 어떻게 생겼어요? - MSH Portfolio</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.8;
+            color: #1f2937;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .header .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.95;
+            font-weight: 500;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: white;
+            text-decoration: none;
+            font-size: 0.95rem;
+            opacity: 0.9;
+            transition: opacity 0.2s;
+        }
+
+        .back-link:hover {
+            opacity: 1;
+        }
+
+        .content {
+            padding: 2.5rem;
+        }
+
+        .qa-section {
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 2px solid #E0F2FE;
+        }
+
+        .qa-section:last-child {
+            border-bottom: none;
+        }
+
+        .question {
+            background: linear-gradient(135deg, #BAE6FD 0%, #E0F2FE 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #0EA5E9;
+        }
+
+        .question h2 {
+            color: #0284C7;
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        .answer {
+            padding: 0 1rem;
+            color: #374151;
+            line-height: 1.9;
+        }
+
+        .answer p {
+            margin-bottom: 1.2rem;
+        }
+
+        .code-block {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .diagram {
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 2px solid #E0F2FE;
+            margin: 1.5rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            overflow-x: auto;
+        }
+
+        .key-point {
+            background: #BAE6FD;
+            border-left: 4px solid #0EA5E9;
+            padding: 1.2rem;
+            margin: 1.5rem 0;
+            border-radius: 8px;
+        }
+
+        .key-point strong {
+            color: #0284C7;
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 1.05rem;
+        }
+
+        .highlight {
+            background: #E0F2FE;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+            color: #0284C7;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%);
+            padding: 2rem;
+            border-radius: 12px;
+            margin: 2rem 0;
+            border: 2px solid #0EA5E9;
+        }
+
+        .summary-box h3 {
+            color: #0284C7;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .summary-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .summary-box li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+
+        .summary-box li:before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: #0EA5E9;
+            font-weight: bold;
+        }
+
+        ul, ol {
+            margin-left: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem 0.5rem;
+            }
+
+            .header {
+                padding: 2rem 1.5rem;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .content {
+                padding: 1.5rem;
+            }
+
+            .question h2 {
+                font-size: 1.2rem;
+            }
+
+            .code-block, .diagram {
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="../multiplayer/" class="back-link">← 멀티플레이어 목록으로</a>
+            <h1>동접 수백만인데 서버 구조가 어떻게 생겼어요?</h1>
+            <p class="subtitle">Shard/Realm Architecture</p>
+        </div>
+
+        <div class="content">
+            <!-- Part 1 -->
+            <div class="qa-section">
+                <div class="question">
+                    <h2>Part 1: 왜 서버를 여러 개로 나누나요?</h2>
+                </div>
+                <div class="answer">
+                    <p><strong>하나의 서버로는 모든 플레이어를 수용할 수 없기 때문입니다.</strong></p>
+
+                    <p>기술적 한계:</p>
+                    <ul>
+                        <li><span class="highlight">CPU 한계</span>: 단일 서버가 처리 가능한 플레이어 수 제한 (보통 2000~5000명)</li>
+                        <li><span class="highlight">메모리 한계</span>: 모든 캐릭터 데이터를 RAM에 올릴 수 없음</li>
+                        <li><span class="highlight">네트워크 한계</span>: 대역폭 포화 (100만 명이 동시 접속하면?)</li>
+                    </ul>
+
+                    <div class="key-point">
+                        <strong>동접 10만 vs 동시접속 10만</strong>
+                        <ul>
+                            <li><strong>동접</strong>: 전체 서버군에 10만 명 (여러 서버 합산)</li>
+                            <li><strong>동시접속</strong>: 하나의 월드에 10만 명 (단일 서버)</li>
+                        </ul>
+                    </div>
+
+                    <div class="diagram">
+[만약 서버를 안 나누면?]
+
+             단일 서버
+         ┌──────────────┐
+100만 명 →│   💥 폭발!   │
+         │ CPU 100%     │
+         │ RAM 부족     │
+         │ 렉 999ms     │
+         └──────────────┘
+                    </div>
+
+                    <p>게임 디자인 이유:</p>
+                    <ul>
+                        <li><strong>경제 분리</strong>: 서버마다 독립된 경제 (아이템 시세, 골드 가치)</li>
+                        <li><strong>커뮤니티</strong>: 같은 서버 = 같은 길드, 명성 공유</li>
+                        <li><strong>경쟁 구조</strong>: 서버 간 순위 경쟁 (공성전, 월드 보스)</li>
+                    </ul>
+
+                    <p>결과: 서버를 나눌 수밖에 없다!</p>
+                </div>
+            </div>
+
+            <!-- Part 2 -->
+            <div class="qa-section">
+                <div class="question">
+                    <h2>Part 2: Shard, Realm, Channel이 뭐가 다른가요?</h2>
+                </div>
+                <div class="answer">
+                    <p><strong>모두 "서버를 나누는 방식"이지만, 개념이 다릅니다.</strong></p>
+
+                    <div class="diagram">
+[용어 비교]
+
+┌─────────────────────────────────────┐
+│  Realm (렐름/서버군)                 │
+│  ┌───────────────────────────────┐  │
+│  │  Channel 1 (채널)             │  │
+│  │    ┌─────────┬─────────┐     │  │
+│  │    │ Shard 1 │ Shard 2 │     │  │
+│  │    │ 존 A,B  │ 존 C,D  │     │  │
+│  │    └─────────┴─────────┘     │  │
+│  └───────────────────────────────┘  │
+│  ┌───────────────────────────────┐  │
+│  │  Channel 2                    │  │
+│  │    ┌─────────┬─────────┐     │  │
+│  │    │ Shard 3 │ Shard 4 │     │  │
+│  │    └─────────┴─────────┘     │  │
+│  └───────────────────────────────┘  │
+└─────────────────────────────────────┘
+                    </div>
+
+                    <p><span class="highlight">1. Realm (렐름)</span></p>
+                    <ul>
+                        <li>WoW에서 사용하는 용어</li>
+                        <li>완전히 독립된 서버 세계</li>
+                        <li>캐릭터 이동 불가 (유료 이전만 가능)</li>
+                        <li>예: "아즈샤라 서버", "스톰레이지 서버"</li>
+                    </ul>
+
+                    <div class="code-block">
+// Realm 선택
+Realm realm = SelectRealm("아즈샤라");
+
+// 이 렐름의 모든 데이터는 독립됨
+Database db = realm.GetDatabase();  // 별도 DB
+Economy economy = realm.GetEconomy(); // 별도 경제
+PlayerList players = realm.GetPlayers(); // 별도 유저풀
+                    </code>
+
+                    <p><span class="highlight">2. Shard (샤드)</span></p>
+                    <ul>
+                        <li>하나의 Realm을 여러 조각으로 나눈 것</li>
+                        <li>주로 지역별로 분할 (존 A,B → Shard 1 / 존 C,D → Shard 2)</li>
+                        <li>플레이어는 이동하면서 Shard가 바뀜 (자동, 무의식)</li>
+                        <li>예: "스톰윈드 샤드", "오그리마 샤드"</li>
+                    </ul>
+
+                    <div class="code-block">
+// Shard는 자동 라우팅
+if (player.EnterZone("스톰윈드")) {
+    // 자동으로 해당 샤드로 연결
+    Shard shard = RealmRouter.GetShardForZone("스톰윈드");
+    shard.AddPlayer(player);
+}
+                    </code>
+
+                    <p><span class="highlight">3. Channel (채널)</span></p>
+                    <ul>
+                        <li>같은 맵의 "복사본" (주로 혼잡도 분산용)</li>
+                        <li>플레이어가 직접 선택 가능</li>
+                        <li>채널 간 이동 가능 (쿨타임 있음)</li>
+                        <li>예: "엘윈 숲 1채널", "엘윈 숲 2채널"</li>
+                    </ul>
+
+                    <div class="key-point">
+                        <strong>핵심 차이</strong>
+                        <ul>
+                            <li><strong>Realm</strong>: 독립된 세계 (DB 분리)</li>
+                            <li><strong>Shard</strong>: 같은 세계, 다른 지역 (존 분할)</li>
+                            <li><strong>Channel</strong>: 같은 지역, 복사본 (혼잡도 분산)</li>
+                        </ul>
+                    </div>
+
+                    <div class="diagram">
+[실제 구조 예시: 리니지]
+
+렐름: 바츠
+├─ 채널 1
+│  ├─ 샤드: 기란 마을
+│  ├─ 샤드: 글루딘 던전
+│  └─ 샤드: 말하는 섬
+├─ 채널 2 (복사본)
+│  └─ (동일 샤드들)
+└─ 채널 3
+                    </diagram>
+
+                    <p>조합 예시:</p>
+                    <ul>
+                        <li>WoW: Realm만 사용 (채널 없음)</li>
+                        <li>리니지: Realm + Channel 사용</li>
+                        <li>GW2: Shard만 사용 (메가서버)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Part 3 -->
+            <div class="qa-section">
+                <div class="question">
+                    <h2>Part 3: WoW의 Realm 구조는 어떻게 생겼나요?</h2>
+                </div>
+                <div class="answer">
+                    <p><strong>서버 유형별로 규칙이 다릅니다.</strong></p>
+
+                    <div class="diagram">
+[WoW Realm 종류]
+
+┌──────────────────────────────────────┐
+│  북미 리전                            │
+│  ├─ PvE 서버 (50개)                  │
+│  │  └─ 스톰레이지: PvP 비활성화      │
+│  ├─ PvP 서버 (30개)                  │
+│  │  └─ 아즈샤라: 야외 PvP 강제      │
+│  └─ RP 서버 (10개)                   │
+│     └─ 문가드: 롤플레이 규칙         │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│  유럽 리전                            │
+│  └─ (동일 구조, 독립 DB)             │
+└──────────────────────────────────────┘
+                    </diagram>
+
+                    <p><span class="highlight">서버 유형별 특징</span></p>
+
+                    <p><strong>PvE 서버</strong> (Player vs Environment)</p>
+                    <ul>
+                        <li>야외 PvP 비활성화 (안전한 레벨링)</li>
+                        <li>PvP는 전장/투기장에서만</li>
+                        <li>초보자 추천</li>
+                    </ul>
+
+                    <p><strong>PvP 서버</strong></p>
+                    <ul>
+                        <li>야외에서 적대 진영 공격 가능</li>
+                        <li>퀘스트 중에도 PK 위험</li>
+                        <li>하드코어 유저용</li>
+                    </ul>
+
+                    <p><strong>RP 서버</strong> (Role Playing)</p>
+                    <ul>
+                        <li>롤플레이 장려 (캐릭터 연기)</li>
+                        <li>이름 규칙 엄격 (LegolasXXX 금지)</li>
+                        <li>특수 커뮤니티</li>
+                    </ul>
+
+                    <div class="code-block">
+// Realm 설정 예시
+
+class Realm {
+    string name;
+    RealmType type;  // PvE, PvP, RP
+    Region region;   // US, EU, KR
+    int maxPlayers;  // 5000
+    Database db;     // 독립 DB
+
+    bool AllowPvP(Zone zone) {
+        if (type == REALM_PVE) {
+            return zone.IsBattleground(); // 전장만
+        }
+        if (type == REALM_PVP) {
+            return !zone.IsSanctuary(); // 안전지대 제외 전부
+        }
+    }
+}
+
+// 플레이어 생성 시
+Player newPlayer = CreatePlayer(realm);
+newPlayer.SetBoundRealm(realm); // 영구 귀속
+                    </code>
+
+                    <div class="key-point">
+                        <strong>Realm 간 이동 불가 원칙</strong>
+                        한 번 캐릭터를 만들면 그 Realm에 영구 귀속됩니다. 이유는:
+                        <ul>
+                            <li>경제 보호 (골드/아이템 밀반입 방지)</li>
+                            <li>커뮤니티 유지 (명성, 길드 관계)</li>
+                            <li>서버 간 밸런스 (인구 조절)</li>
+                        </ul>
+                    </div>
+
+                    <p>Realm 선택의 중요성:</p>
+                    <ol>
+                        <li>친구들이 어느 서버에 있는지 확인</li>
+                        <li>진영 비율 확인 (호드 60% vs 얼라 40%?)</li>
+                        <li>인구 수 확인 (과밀/과소 서버 피하기)</li>
+                        <li>서버 유형 확인 (PvP 싫으면 PvE로)</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Part 4 -->
+            <div class="qa-section">
+                <div class="question">
+                    <h2>Part 4: Cross-Realm 기술은 뭔가요?</h2>
+                </div>
+                <div class="answer">
+                    <p><strong>다른 Realm 플레이어와 함께 플레이할 수 있게 해주는 기술입니다.</strong></p>
+
+                    <p>초기 WoW (2004~2010):</p>
+                    <ul>
+                        <li>Realm 간 완전 격리</li>
+                        <li>친구가 다른 서버면 만날 방법 없음</li>
+                        <li>→ 유저 불편 증가</li>
+                    </ul>
+
+                    <p>Cross-Realm 도입 (2011~):</p>
+
+                    <div class="diagram">
+[Cross-Realm Zone (CRZ)]
+
+렐름: 스톰레이지           렐름: 아즈샤라
+┌─────────────┐           ┌─────────────┐
+│  ●  ●  ●   │           │  ●  ●      │
+│ 5명 접속    │           │ 3명 접속    │
+└─────────────┘           └─────────────┘
+       │                         │
+       └──────── 통합 ────────────┘
+                 ↓
+        ┌─────────────────┐
+        │  ●  ●  ●  ●  ● │
+        │  8명 함께 플레이 │
+        │  (가상 통합 존)  │
+        └─────────────────┘
+                    </diagram>
+
+                    <div class="code-block">
+// CRZ 시스템
+
+Zone gloomwood = GetZone("은빛소나무 숲");
+
+// 현재 존 인구 확인
+if (gloomwood.PlayerCount < MIN_POPULATION) {
+    // 다른 렐름 플레이어 끌어오기
+    List<Realm> candidateRealms = FindLowPopRealms();
+
+    foreach (Realm otherRealm in candidateRealms) {
+        // 다른 렐름 플레이어를 이 존에 배치
+        MergePlayers(gloomwood, otherRealm);
+
+        if (gloomwood.PlayerCount >= TARGET_POPULATION) {
+            break;
+        }
+    }
+}
+
+// 결과: 여러 렐름 플레이어가 같은 존에
+// 이름 표시: 플레이어-서버명
+// 예: "홍길동-스톰레이지"
+                    </code>
+
+                    <p><span class="highlight">CRZ 적용 범위</span></p>
+                    <ul>
+                        <li><strong>적용 O</strong>: 야외 필드 (과거 확장팩 지역)</li>
+                        <li><strong>적용 X</strong>: 대도시, 최신 확장팩 지역</li>
+                    </ul>
+
+                    <div class="key-point">
+                        <strong>Cross-Realm 기능들</strong>
+                        <ol>
+                            <li><strong>CRZ (Cross-Realm Zone)</strong>: 야외 지역 자동 통합</li>
+                            <li><strong>던전 파인더</strong>: 다른 렐름과 던전 매칭</li>
+                            <li><strong>Real ID</strong>: 서버 관계없이 친구 추가</li>
+                            <li><strong>Communities</strong>: 크로스 렐름 길드</li>
+                        </ol>
+                    </div>
+
+                    <div class="diagram">
+[던전 파인더 매칭]
+
+렐름 A   렐름 B   렐름 C   렐름 D
+  탱      딜      딜      힐
+  ●       ●       ●       ●
+  └───┬───┴───┬───┴───┬───┘
+      └─────── 매칭 ────────┘
+              ↓
+        ┌──────────┐
+        │ 던전 인스턴스 │
+        │ ●  ●  ●  ● │
+        │ 4명 파티   │
+        └──────────┘
+                    </diagram>
+
+                    <p>제약사항:</p>
+                    <ul>
+                        <li>길드 가입 불가 (다른 렐름 플레이어)</li>
+                        <li>거래 제한 (골드/아이템 교환 안 됨)</li>
+                        <li>우편 불가</li>
+                        <li>→ 경제 보호를 위한 제한</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Part 5 -->
+            <div class="qa-section">
+                <div class="question">
+                    <h2>Part 5: Phasing 기술은 뭔가요?</h2>
+                </div>
+                <div class="answer">
+                    <p><strong>같은 위치에 있지만 다른 세계를 보는 기술입니다.</strong></p>
+
+                    <p>문제 상황: 퀘스트로 마을을 구한 후</p>
+                    <ul>
+                        <li>내가 보는 세계: 평화로운 마을 (퀘스트 완료)</li>
+                        <li>친구가 보는 세계: 불타는 마을 (퀘스트 전)</li>
+                        <li>→ 같은 좌표, 다른 상태</li>
+                    </ul>
+
+                    <div class="diagram">
+[Phasing 개념]
+
+     같은 위치 (X: 1000, Y: 2000)
+              │
+     ┌────────┴────────┐
+     │                 │
+  Phase 1          Phase 2
+ (퀘스트 전)        (퀘스트 후)
+┌─────────┐      ┌─────────┐
+│  🔥🔥🔥 │      │  🏠🏠🏠 │
+│ 불타는 마을│      │평화로운 마을│
+│   ●친구  │      │   ●나   │
+└─────────┘      └─────────┘
+
+→ 서로 안 보임!
+                    </div>
+
+                    <div class="code-block">
+// Phasing 시스템
+
+class Player {
+    int phaseID;  // 내가 속한 Phase
+    List<int> visiblePhases;  // 볼 수 있는 Phase들
+}
+
+// 퀘스트 완료 시
+void OnQuestComplete(Player player, Quest quest) {
+    if (quest.ID == QUEST_SAVE_VILLAGE) {
+        // Phase 전환
+        player.phaseID = PHASE_VILLAGE_SAVED;
+
+        // 주변 객체 업데이트
+        HideObjects(PHASE_VILLAGE_BURNING);
+        ShowObjects(PHASE_VILLAGE_SAVED);
+
+        // NPC 교체
+        DespawnNPC("불타는 주민");
+        SpawnNPC("구조된 주민");
+    }
+}
+
+// 다른 플레이어 가시성 판단
+bool CanSee(Player viewer, Player target) {
+    return viewer.visiblePhases.Contains(target.phaseID);
+}
+                    </code>
+
+                    <div class="key-point">
+                        <strong>Phasing 활용 사례</strong>
+                        <ul>
+                            <li><strong>스토리 진행</strong>: 퀘스트에 따라 세계가 변화</li>
+                            <li><strong>개인화 경험</strong>: 같은 맵이지만 나만의 진행도</li>
+                            <li><strong>시간대 분리</strong>: 과거/현재/미래 버전</li>
+                        </ul>
+                    </div>
+
+                    <p>문제점: 친구와 파티 시</p>
+                    <ul>
+                        <li>Phase가 다르면 서로 안 보임</li>
+                        <li>→ WoW 해결책: 파티장 Phase에 자동 동기화</li>
+                    </ul>
+
+                    <div class="code-block">
+// 파티 Phase 동기화
+
+void JoinParty(Player player, Party party) {
+    Player leader = party.GetLeader();
+
+    // 파티장의 Phase로 강제 이동
+    player.phaseID = leader.phaseID;
+
+    // 세계 상태 업데이트
+    SyncWorldState(player, leader.phaseID);
+
+    // 이제 서로 보임
+}
+
+// 파티 탈퇴 시
+void LeaveParty(Player player) {
+    // 내 퀘스트 진행도에 맞는 Phase로 복귀
+    player.phaseID = CalculatePhase(player.questLog);
+}
+                    </code>
+
+                    <div class="diagram">
+[Phase 동기화]
+
+파티 전:
+  나 (Phase 2)        친구 (Phase 1)
+  ●                   ●
+  서로 안 보임
+
+파티 후:
+  나 (Phase 1로 이동)  친구 (Phase 1)
+  ●  ●
+  함께 보임!
+                    </diagram>
+                </div>
+            </div>
+
+            <!-- Part 6 -->
+            <div class="qa-section">
+                <div class="question">
+                    <h2>Part 6: 현대 MMO의 메가서버는 뭔가요?</h2>
+                </div>
+                <div class="answer">
+                    <p><strong>Realm 구분 없이 모두 한 세계에서 플레이하는 아키텍처입니다.</strong></p>
+
+                    <p><span class="highlight">Guild Wars 2, ESO 방식</span></p>
+
+                    <div class="diagram">
+[전통 MMO vs 메가서버]
+
+전통 MMO (WoW):
+렐름1  렐름2  렐름3
+ ●●    ●●    ●●
+ ││    ││    ││
+독립DB 독립DB 독립DB
+
+메가서버 (GW2):
+      모든 플레이어
+    ●  ●  ●  ●  ●  ●
+         │
+    ┌────┴────┐
+    │ 통합 DB │
+    └─────────┘
+         │
+  ┌──────┼──────┐
+Shard1 Shard2 Shard3
+(동적 생성)
+                    </diagram>
+
+                    <div class="key-point">
+                        <strong>메가서버의 핵심</strong>
+                        <ul>
+                            <li>Realm 선택 없음 → 모두 같은 서버</li>
+                            <li>Shard는 자동 배정 → 친구와 자동 매칭</li>
+                            <li>동적 인스턴싱 → 혼잡하면 자동 분할</li>
+                        </ul>
+                    </div>
+
+                    <div class="code-block">
+// 메가서버 Shard 배정 로직
+
+Zone라이온아치 = GetZone("라이온 아치");
+
+// 친구 우선 배정
+if (player.HasFriendsOnline()) {
+    Shard friendShard = GetShardWithFriends(player);
+    if (friendShard.CanJoin()) {
+        return friendShard;
+    }
+}
+
+// 길드원 우선
+if (player.IsInGuild()) {
+    Shard guildShard = GetShardWithGuildMembers(player);
+    if (guildShard.CanJoin()) {
+        return guildShard;
+    }
+}
+
+// 인구 밸런싱
+Shard bestShard = FindBalancedShard(zone);
+if (bestShard.PlayerCount > MAX_PLAYERS_PER_SHARD) {
+    // 새 Shard 생성
+    bestShard = CreateNewShard(zone);
+}
+
+return bestShard;
+                    </code>
+
+                    <p><strong>장점</strong>:</p>
+                    <ul>
+                        <li>서버 선택 고민 없음</li>
+                        <li>친구와 항상 함께 플레이 가능</li>
+                        <li>인구 자동 분산 (렉 감소)</li>
+                        <li>경제 통합 (아이템 시세 안정)</li>
+                    </ul>
+
+                    <p><strong>단점</strong>:</p>
+                    <ul>
+                        <li>서버 커뮤니티 약화 (누가 누군지 모름)</li>
+                        <li>명성 시스템 무의미 (매번 다른 사람)</li>
+                        <li>PvP 복수 어려움 (다음엔 못 만남)</li>
+                    </ul>
+
+                    <div class="diagram">
+[동적 Shard 생성]
+
+라이온 아치 입장 대기: 500명
+          ↓
+    자동 분할
+          ↓
+┌─────────┬─────────┬─────────┐
+│Shard A  │Shard B  │Shard C  │
+│ 150명   │ 150명   │ 150명   │
+└─────────┴─────────┴─────────┘
+
+// 인구 감소 시
+└────── 자동 병합 ──────┘
+          ↓
+    ┌──────────┐
+    │ Shard A  │
+    │  50명    │
+    └──────────┘
+                    </diagram>
+
+                    <p>현대 트렌드:</p>
+                    <ul>
+                        <li><strong>Final Fantasy XIV</strong>: 데이터센터 (Realm 그룹) + Cross-World</li>
+                        <li><strong>Lost Ark</strong>: 서버 통합 진행 중</li>
+                        <li><strong>Blue Protocol</strong>: 메가서버 채택</li>
+                    </ul>
+
+                    <p>결론: Realm 구분이 점점 사라지는 추세입니다.</p>
+                </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="summary-box">
+                <h3>📚 핵심 요약</h3>
+                <ul>
+                    <li><strong>서버 분할 이유</strong>: CPU/메모리 한계 + 경제/커뮤니티 분리 필요</li>
+                    <li><strong>Realm</strong>: 독립 세계 (DB 분리), <strong>Shard</strong>: 지역 분할, <strong>Channel</strong>: 복사본</li>
+                    <li><strong>WoW Realm</strong>: PvE/PvP/RP 서버 유형별 규칙 다름</li>
+                    <li><strong>Cross-Realm</strong>: 다른 서버 플레이어와 협동 가능 (던전, CRZ)</li>
+                    <li><strong>Phasing</strong>: 같은 위치, 다른 세계 (퀘스트 진행도에 따라)</li>
+                    <li><strong>메가서버</strong>: Realm 없이 통합 DB + 동적 Shard (GW2, ESO)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

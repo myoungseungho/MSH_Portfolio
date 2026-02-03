@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>내가 맞췄는데 왜 안 맞았대요? - Lag Compensation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #0EA5E9;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            color: #0284C7;
+            transform: translateX(-5px);
+        }
+
+        h1 {
+            color: #0EA5E9;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            border-bottom: 4px solid #0EA5E9;
+            padding-bottom: 15px;
+        }
+
+        .subtitle {
+            color: #0284C7;
+            font-size: 1.3em;
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        h2 {
+            color: #0284C7;
+            font-size: 1.8em;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-left: 15px;
+            border-left: 5px solid #0EA5E9;
+        }
+
+        .qa-block {
+            background: #E0F2FE;
+            padding: 25px;
+            border-radius: 12px;
+            margin: 25px 0;
+            border-left: 5px solid #0EA5E9;
+        }
+
+        .question {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #0284C7;
+            margin-bottom: 15px;
+        }
+
+        .answer {
+            color: #444;
+            line-height: 1.9;
+        }
+
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .ascii-diagram {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            overflow-x: auto;
+            border: 2px solid #0EA5E9;
+            margin: 20px 0;
+            line-height: 1.4;
+        }
+
+        .key-point {
+            background: #BAE6FD;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 5px solid #0284C7;
+        }
+
+        .key-point strong {
+            color: #0284C7;
+            font-size: 1.1em;
+        }
+
+        .highlight {
+            background: #E0F2FE;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #0284C7;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin: 30px 0;
+        }
+
+        .summary-box h3 {
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+
+        .summary-box ul {
+            margin-left: 20px;
+        }
+
+        .summary-box li {
+            margin: 8px 0;
+        }
+
+        ul, ol {
+            margin-left: 30px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        strong {
+            color: #0284C7;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">← 멀티플레이어 목록으로</a>
+
+        <h1>내가 맞췄는데 왜 안 맞았대요?</h1>
+        <p class="subtitle">Lag Compensation과 Favor the Shooter</p>
+
+        <h2>Part 1: 네트워크 지연으로 인한 불일치</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "내 화면에선 분명히 맞췄는데, 서버는 빗나갔다고 해요. 왜 그래요?"</div>
+            <div class="answer">
+                <p>A: <strong>네트워크 지연 때문에 각자 보는 게임 상태가 달라요.</strong></p>
+                <p>문제 상황:</p>
+                <ul>
+                    <li>당신의 화면: "적이 저기 있네, 쏜다!" → 명중!</li>
+                    <li>서버의 현실: "어? 그 적은 이미 0.1초 전에 움직였는데?"</li>
+                    <li>적의 화면: "나 벌써 벽 뒤로 숨었는데?"</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="ascii-diagram">
+네트워크 지연으로 인한 불일치:
+
+시간축 →
+T=0초        T=0.05초      T=0.1초       T=0.15초
+─────────────────────────────────────────────────────
+
+서버:       적 위치A      적 이동중      적 위치B     적 엄폐 완료
+            ●             →→→           ●            |█|●
+
+당신(Ping 100ms):
+  화면:     적 위치A      적 위치A      적 위치A     적 이동중
+            ●             ●             ●            →→
+  행동:                                [발사!] 💥
+
+결과: 당신 화면엔 적이 A에 있지만, 서버엔 이미 B에 있음
+        </div>
+
+        <div class="key-point">
+            <strong>핵심 문제:</strong> 빛의 속도는 유한합니다.
+            <br>서울-부산 왕복 핑: ~10ms
+            <br>한국-미국 서버 핑: ~150ms
+            <br>→ 이 시간 동안 게임 상태는 계속 변합니다.
+        </div>
+
+        <h2>Part 2: Lag Compensation 개념 (서버가 과거로 되돌린다)</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "그럼 어떻게 해결하나요? 내 화면에선 맞췄잖아요!"</div>
+            <div class="answer">
+                <p>A: <strong>서버가 '과거'로 되돌아가서 판정합니다. (Lag Compensation)</strong></p>
+                <p>핵심 아이디어:</p>
+                <ol>
+                    <li>서버는 모든 플레이어의 <span class="highlight">과거 위치를 기록</span>해둠 (보통 1초치)</li>
+                    <li>당신이 "쐈어요!"라고 보고할 때, <span class="highlight">타임스탬프</span>를 같이 보냄</li>
+                    <li>서버는 그 시점으로 <span class="highlight">시간을 되감아서</span> 판정</li>
+                    <li>"당신이 쏜 그 순간"의 적 위치를 사용</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="code-block">
+// Lag Compensation 구현
+OnClientShootRequest(shooterID, targetID, hitPosition, clientTimestamp):
+    // 1. 클라이언트가 쏜 "그 순간"의 시간 계산
+    shooter = GetPlayer(shooterID)
+    shootTime = clientTimestamp - shooter.ping / 2
+
+    // 2. 서버 히스토리에서 해당 시점 찾기
+    targetSnapshot = GetPlayerSnapshotAt(targetID, shootTime)
+
+    if targetSnapshot == null:
+        // 너무 오래된 샷 (1초 이상)
+        return REJECT
+
+    // 3. 되돌린 상태에서 히트 판정
+    ray = CreateRay(shooter.position, shooter.aimDirection)
+    serverHit = RaycastAgainst(ray, targetSnapshot)
+
+    if serverHit:
+        ApplyDamage(targetID, weapon.damage)
+        return HIT
+    else:
+        return MISS
+        </div>
+
+        <div class="ascii-diagram">
+Lag Compensation 시각화:
+
+서버의 타임라인:
+T=0      T=50ms    T=100ms   T=150ms   ← 현재
+─────────────────────────────────────
+●A       →→→B      →→→C      |█|D      (적의 실제 위치)
+
+당신의 요청 도착 (T=150ms):
+"T=50ms에 위치 A를 쏘았어요!"
+         ↓
+서버: "잠깐, T=50ms로 되감자"
+      ◀──────────┘
+      ●A  ← 이 상태로 판정
+      💥
+결과: HIT! (당신 화면과 일치)
+        </div>
+
+        <h2>Part 3: Favor the Shooter (쏜 사람 기준 판정)</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "오버워치는 '쏜 사람이 본 게 진실'이라던데, 무슨 뜻이에요?"</div>
+            <div class="answer">
+                <p>A: <strong>"Favor the Shooter" - 공격자 화면 기준으로 판정합니다.</strong></p>
+                <p>철학:</p>
+                <ul>
+                    <li>쏜 사람 화면에 적이 보였으면 → <span class="highlight">맞은 걸로 인정</span></li>
+                    <li>네트워크 문제로 맞추기 어려운 걸 보상</li>
+                    <li>공격 행위에 대한 보상 (반응성 우선)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="code-block">
+// Favor the Shooter 로직
+ValidateHit(shooter, target, clientTimestamp):
+    // 1. 쏜 사람의 "그 순간" 재구성
+    compensatedTime = clientTimestamp - shooter.ping / 2
+    targetState = GetHistoricalState(target, compensatedTime)
+
+    // 2. 쏜 사람이 본 화면에서 맞췄는지만 확인
+    if IsValidHit(shooter, targetState):
+        // ✅ 쏜 사람 화면에 맞았으면 인정
+        return HIT
+
+    // 3. 단, 물리적으로 불가능한 건 거부
+    if compensatedTime < currentTime - MAX_COMPENSATION:
+        return REJECT  // 너무 오래된 샷
+
+    if IsInsideWall(targetState):
+        return REJECT  // 벽 안에 있었음
+
+    return MISS
+        </div>
+
+        <div class="key-point">
+            <strong>왜 이렇게 하나요?</strong>
+            <br>만약 "피격자 기준"으로 판정하면:
+            <br>→ 쏜 사람: "분명히 맞췄는데 안 맞았어요!" (좌절)
+            <br>→ 게임이 답답하게 느껴짐
+            <br><br>
+            "Favor the Shooter"로 판정하면:
+            <br>→ 쏜 사람: "내가 본 대로 맞네!" (만족)
+            <br>→ 게임이 반응적으로 느껴짐
+        </div>
+
+        <h2>Part 4: 피격자 입장의 문제 ("나는 숨었는데?")</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "그럼 맞는 사람은 억울하지 않나요? 내 화면엔 벽 뒤인데..."</div>
+            <div class="answer">
+                <p>A: <strong>네, 맞아요. 이게 Lag Compensation의 가장 큰 부작용입니다.</strong></p>
+            </div>
+        </div>
+
+        <div class="ascii-diagram">
+피격자의 억울한 상황:
+
+피격자 화면 (Ping 50ms):
+T=0       T=50      T=100     T=150
+───────────────────────────────────
+적 발견   도망     엄폐 완료   안전!
+●        →→→      |█|●       |█|●
+
+하지만 서버는...
+공격자 요청: "T=0에 쏘았어요" (Ping 100ms)
+서버 판정: T=0 시점으로 되감기
+           ●  💥 HIT!
+           ↓
+피격자: "어? 나 엄폐했는데 죽었어?!" 😡
+        </div>
+
+        <div class="warning-box">
+            <strong>⚠️ "Cover Me" 현상</strong>
+            <br>피격자: "벽 뒤로 숨었는데 죽었어요!"
+            <br>실제 상황: 공격자가 쏜 순간엔 아직 안 숨었음
+            <br>→ Lag Compensation이 과거로 되돌려서 판정
+            <br>→ 피격자 화면에선 이미 숨은 상태라 억울함
+        </div>
+
+        <div class="code-block">
+// 피격자 시점 재구성 (디버깅용)
+OnPlayerComplaint("I was behind cover!"):
+    // 서버 로그 확인
+    attackerPing = 120ms
+    victimPing = 40ms
+
+    // 공격자가 쏜 시점
+    attackTime = currentTime - attackerPing / 2
+    victimStateAtAttackTime = GetSnapshot(victim, attackTime)
+
+    // 피격자가 숨은 시점
+    victimCoverTime = victimStateAtAttackTime.timestamp + 80ms
+
+    결과:
+    - 공격자가 쏜 시점 (T=0): 피격자 노출 상태 ✓
+    - 피격자 화면 (T=80): 이미 엄폐 완료
+    - 차이: 80ms (네트워크 지연 차이)
+
+    판정: 정상 (억울하지만 합법)
+        </div>
+
+        <h2>Part 5: 최대 보상 시간 제한 (250ms)</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "그럼 핑이 500ms인 사람도 과거로 되돌려주나요?"</div>
+            <div class="answer">
+                <p>A: <strong>아니요. 최대 보상 시간이 있습니다. (보통 200~300ms)</strong></p>
+                <p>제한 이유:</p>
+                <ul>
+                    <li><span class="highlight">너무 오래된 과거는 불공평</span> (1초 전에 쏘고 맞았다고 하면?)</li>
+                    <li>서버 메모리 절약 (모든 플레이어의 과거 상태 저장)</li>
+                    <li>핑이 높은 플레이어에게 페널티 (공정성)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="code-block">
+// 최대 보상 시간 적용
+const MAX_LAG_COMPENSATION = 250  // milliseconds
+
+OnShootRequest(shooter, timestamp):
+    timeDelta = currentTime - timestamp
+
+    if timeDelta > MAX_LAG_COMPENSATION:
+        // 너무 오래된 샷 거부
+        LogRejection(shooter, "Shot too old", timeDelta)
+        return REJECT
+
+    if timeDelta < 0:
+        // 미래의 샷? (클라이언트 시간 조작)
+        LogCheatAttempt(shooter, "Future timestamp")
+        return REJECT
+
+    // 정상 범위 내 보상
+    compensatedSnapshot = GetSnapshot(target, timestamp)
+    return ProcessHit(shooter, compensatedSnapshot)
+        </div>
+
+        <div class="ascii-diagram">
+보상 시간 제한 효과:
+
+핑이 낮은 플레이어 (50ms):
+  보상 범위: ◀───50ms───▶ ✅ 충분히 보상
+  공격자    서버
+
+핑이 높은 플레이어 (300ms):
+  실제 지연: ◀──────────300ms──────────▶
+  보상 범위: ◀───250ms───▶|❌ 여기부터 거부
+             ✅           ❌
+
+결과: 핑 높으면 타이밍 더 정확해야 함 (페널티)
+        </div>
+
+        <div class="key-point">
+            <strong>공정성 밸런스:</strong>
+            <br>✅ 낮은 핑 플레이어: 전체 지연 보상 → 유리함
+            <br>⚠️ 높은 핑 플레이어: 일부만 보상 → 불리함
+            <br>💡 결론: 좋은 인터넷 환경 = 게임 실력의 일부
+        </div>
+
+        <h2>Part 6: 다른 게임의 접근법</h2>
+
+        <div class="qa-block">
+            <div class="question">Q: "모든 게임이 'Favor the Shooter'를 쓰나요?"</div>
+            <div class="answer">
+                <p>A: <strong>아니요. 게임 장르와 철학에 따라 다릅니다.</strong></p>
+            </div>
+        </div>
+
+        <h3 style="color: #0284C7; margin-top: 20px;">1. 오버워치 - Favor the Shooter</h3>
+        <div class="code-block">
+철학: "공격자가 본 게 진실"
+- 쏜 사람 화면에 맞으면 → 맞은 것
+- 히트스캔 무기 (솔저, 위도우) 특히 유리
+- 트레이드오프: 피격자가 가끔 억울함
+        </div>
+
+        <h3 style="color: #0284C7; margin-top: 20px;">2. 하이퍼스케이프 - No Lag Compensation</h3>
+        <div class="code-block">
+철학: "서버의 현재 상태만 진실"
+- Lag Compensation 없음
+- 쏜 사람이 직접 예측해야 함 (리딩샷)
+- 장점: 피격자가 억울한 일 없음
+- 단점: 핑 높으면 사실상 불가능
+        </div>
+
+        <h3 style="color: #0284C7; margin-top: 20px;">3. 발로란트 - 하이브리드</h3>
+        <div class="code-block">
+철학: "중간 지점"
+- 기본은 Favor the Shooter
+- BUT: 서버가 히트 위치 재검증
+- 명백히 이상한 샷은 거부 (벽 뚫기 등)
+- 밸런스: 반응성 + 공정성
+        </div>
+
+        <div class="ascii-diagram">
+게임별 보상 스펙트럼:
+
+하이퍼스케이프        발로란트       오버워치
+    │                  │              │
+    ▼                  ▼              ▼
+보상 없음          중간 보상      전체 보상
+(서버 진실)      (검증 후 인정)  (쏜 사람 진실)
+    │                  │              │
+피격자 유리          균형          공격자 유리
+느린 반응          적당함         빠른 반응
+        </div>
+
+        <div class="summary-box">
+            <h3>📚 핵심 요약</h3>
+            <ul>
+                <li><strong>문제:</strong> 네트워크 지연으로 각자 다른 게임 상태를 봄</li>
+                <li><strong>해결책:</strong> Lag Compensation - 서버가 과거로 되돌려서 판정</li>
+                <li><strong>Favor the Shooter:</strong> 쏜 사람 화면 기준으로 판정 (공격자 우선)</li>
+                <li><strong>부작용:</strong> 피격자는 "나 숨었는데?" 억울함 (Cover Me 현상)</li>
+                <li><strong>제한:</strong> 최대 250ms까지만 보상 (핑 높으면 불리)</li>
+                <li><strong>게임별 차이:</strong> 오버워치(공격자 유리), 하이퍼스케이프(보상 없음), 발로란트(중간)</li>
+            </ul>
+            <p style="margin-top: 15px;">
+                <strong>트레이드오프:</strong>
+                반응성(쏜 사람 만족) vs 공정성(맞는 사람 만족)
+                <br>대부분 FPS는 반응성을 우선합니다. (게임이 재밌어야 하니까!)
+            </p>
+        </div>
+
+        <a href="../" class="back-link" style="margin-top: 30px; display: inline-block;">← 멀티플레이어 목록으로</a>
+    </div>
+</body>
+</html>
