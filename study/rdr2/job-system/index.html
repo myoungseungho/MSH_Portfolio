@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDR2는 스레드를 몇 개 쓸까? - RAGE 엔진의 Job System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            color: #1f2937;
+            background: linear-gradient(135deg, #FEF3C7 0%, #ffffff 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(217, 119, 6, 0.15);
+        }
+
+        .back-link {
+            display: inline-block;
+            color: #D97706;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .back-link:hover {
+            color: #B45309;
+        }
+
+        h1 {
+            color: #D97706;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            border-bottom: 4px solid #D97706;
+            padding-bottom: 15px;
+        }
+
+        .subtitle {
+            color: #B45309;
+            font-size: 1.3em;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+
+        h2 {
+            color: #D97706;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-left: 5px solid #D97706;
+            padding-left: 15px;
+        }
+
+        h3 {
+            color: #B45309;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .q {
+            background: #FEF3C7;
+            border-left: 5px solid #D97706;
+            padding: 20px;
+            margin: 25px 0;
+            font-weight: 600;
+            font-size: 1.15em;
+            color: #B45309;
+        }
+
+        .a {
+            background: #ffffff;
+            border-left: 3px solid #FDE68A;
+            padding: 20px;
+            margin: 15px 0 25px 20px;
+            line-height: 1.9;
+        }
+
+        pre {
+            background: #1f2937;
+            color: #FEF3C7;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border: 2px solid #D97706;
+        }
+
+        code {
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+        }
+
+        .diagram {
+            background: #f9fafb;
+            border: 2px solid #D97706;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #FDE68A 0%, #FEF3C7 100%);
+            border: 3px solid #D97706;
+            border-radius: 10px;
+            padding: 25px;
+            margin: 30px 0;
+            box-shadow: 0 4px 15px rgba(217, 119, 6, 0.2);
+        }
+
+        .summary-box h3 {
+            color: #B45309;
+            margin-top: 0;
+            font-size: 1.5em;
+        }
+
+        .highlight {
+            background: #FEF3C7;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #B45309;
+        }
+
+        .key-point {
+            background: #FDE68A;
+            border-left: 4px solid #D97706;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        ul, ol {
+            margin: 15px 0 15px 30px;
+        }
+
+        li {
+            margin: 10px 0;
+        }
+
+        strong {
+            color: #D97706;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border: 2px solid #D97706;
+        }
+
+        th {
+            background: #D97706;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #FDE68A;
+        }
+
+        tr:hover {
+            background: #FEF3C7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">← RDR2 연구 목록으로</a>
+
+        <h1>RDR2는 스레드를 몇 개 쓸까?</h1>
+        <p class="subtitle">RAGE 엔진의 Job System 아키텍처</p>
+
+        <h2>Part 1: 왜 스레드 개수가 궁금해지나?</h2>
+
+        <div class="q">Q: RDR2는 도대체 어떻게 이렇게 많은 걸 동시에 처리하나요?</div>
+        <div class="a">
+            Red Dead Redemption 2의 시뮬레이션 규모는 정말 엄청납니다:
+            <ul>
+                <li><strong>1500+ NPC</strong> - 각자 일과, 대화, AI 상태 업데이트</li>
+                <li><strong>200종 동물</strong> - 생태계 시뮬레이션, 먹이사슬</li>
+                <li><strong>75km² 맵</strong> - 지형 LOD, 스트리밍, 물리 시뮬레이션</li>
+                <li><strong>동적 날씨</strong> - 구름, 비, 눈, 안개</li>
+                <li><strong>Euphoria 물리</strong> - 래그돌, 천 시뮬레이션</li>
+            </ul>
+            이 모든 걸 <span class="highlight">단일 스레드로는 절대 불가능</span>합니다.
+        </div>
+
+        <div class="key-point">
+            <strong>성능 병목의 핵심:</strong><br>
+            게임은 초당 30~60프레임을 유지해야 합니다. 60 FPS라면 한 프레임당 16ms밖에 없습니다.
+            모든 작업을 순차 처리하면 0.1초도 안 걸리는 작업이 없습니다.
+            <strong>병렬 처리는 선택이 아닌 필수</strong>입니다.
+        </div>
+
+        <h2>Part 2: Thread Pool vs Job System (핵심!)</h2>
+
+        <div class="q">Q: "스레드풀이랑 잡시스템이 같은 거야?"</div>
+        <div class="a">
+            <strong>아니요, 관계가 있지만 다릅니다.</strong><br><br>
+
+            쉬운 비유:
+            <div style="margin: 15px 0; padding: 15px; background: #f9fafb; border-radius: 8px;">
+                <strong>Thread Pool</strong> = 택배 기사들 (대기 중인 배달원)<br>
+                <strong>Job System</strong> = 물류 센터 (누가 어떤 순서로 배달할지 결정)
+            </div>
+        </div>
+
+        <table>
+            <tr>
+                <th></th>
+                <th>Thread Pool</th>
+                <th>Job System</th>
+            </tr>
+            <tr>
+                <td><strong>역할</strong></td>
+                <td>스레드 재사용</td>
+                <td>작업 스케줄링</td>
+            </tr>
+            <tr>
+                <td><strong>관심사</strong></td>
+                <td>"스레드 관리"</td>
+                <td>"작업 분배"</td>
+            </tr>
+            <tr>
+                <td><strong>의존성</strong></td>
+                <td>없음</td>
+                <td>있음 (A→B→C)</td>
+            </tr>
+            <tr>
+                <td><strong>우선순위</strong></td>
+                <td>없음 (FIFO)</td>
+                <td>있음 (중요한 작업 우선)</td>
+            </tr>
+        </table>
+
+        <div class="key-point">
+            <strong>핵심 차이점:</strong><br>
+            Thread Pool은 Job System의 <strong>구현 수단</strong> 중 하나일 뿐입니다.
+            Job System은 "무엇을, 언제, 어떤 순서로 실행할지"를 결정하고,
+            Thread Pool은 "누가 실행할지"를 관리합니다.
+        </div>
+
+        <h2>Part 3: RDR2의 스레드 구조 (추정)</h2>
+
+        <div class="q">Q: 그래서 RDR2는 스레드를 몇 개 쓰나요?</div>
+        <div class="a">
+            정확한 수치는 공개되지 않았지만, RAGE 엔진 분석과 유사 게임들을 참고하면:
+            <ul>
+                <li><strong>고정 스레드</strong>: 8~12개 (역할별 전용 스레드)</li>
+                <li><strong>Worker Thread Pool</strong>: 논리 코어 수만큼 (6~16개)</li>
+                <li><strong>총 스레드 개수</strong>: PC에서 관측 시 60~100개 생성됨 (실제 활성은 20~30개)</li>
+            </ul>
+        </div>
+
+        <div class="diagram">
+[고정 스레드] ~8-12개
+├─ Main Thread          (게임 로직, 싱글스레드 보장)
+├─ Render Thread        (GPU 명령 큐 생성)
+├─ Audio Thread         (사운드 믹싱, 스트리밍)
+├─ Physics Thread       (Euphoria 래그돌)
+├─ Animation Thread     (Motion Matching, IK)
+├─ AI Thread            (NPC 행동 트리, 길찾기)
+├─ Streaming Thread     (맵, 텍스처 로딩)
+└─ Network Thread       (RDO 멀티플레이)
+
+[Worker Thread Pool] ~논리코어 수
+├─ Job: 지형 LOD 계산
+├─ Job: Frustum Culling
+├─ Job: 파티클 시뮬레이션
+├─ Job: Cloth 시뮬레이션
+├─ Job: 동물 AI 업데이트
+├─ Job: 날씨 계산
+└─ ... (수백 개 Job이 큐에 대기)
+        </div>
+
+        <div class="key-point">
+            <strong>왜 이렇게 많이?</strong>
+            <ul>
+                <li>고정 스레드: 특정 작업 전담 (지연시간 최소화)</li>
+                <li>Worker Pool: 병렬화 가능한 작업 분산</li>
+                <li>유휴 스레드: 대기 중이거나 동기화 대기</li>
+            </ul>
+        </div>
+
+        <h2>Part 4: 플랫폼별 스레드 사용</h2>
+
+        <table>
+            <tr>
+                <th>플랫폼</th>
+                <th>CPU 코어</th>
+                <th>활성 스레드</th>
+                <th>비고</th>
+            </tr>
+            <tr>
+                <td>PS4</td>
+                <td>8코어 (6개 가용)</td>
+                <td>~12-16개</td>
+                <td>OS가 2코어 예약</td>
+            </tr>
+            <tr>
+                <td>Xbox One</td>
+                <td>8코어 (7개 가용)</td>
+                <td>~12-16개</td>
+                <td>OS가 1코어 예약</td>
+            </tr>
+            <tr>
+                <td>PC (6코어)</td>
+                <td>6코어 12스레드</td>
+                <td>~20-24개</td>
+                <td>Worker Pool 증가</td>
+            </tr>
+            <tr>
+                <td>PC (8코어+)</td>
+                <td>8코어 16스레드</td>
+                <td>~30-40개</td>
+                <td>최대 병렬화</td>
+            </tr>
+        </table>
+
+        <div class="a">
+            <strong>실제 관측:</strong> Windows Task Manager에서 RDR2를 보면 60~100개 스레드가 생성되지만,
+            실제로 활성 상태(CPU 사용 중)인 스레드는 20~30개 정도입니다. 나머지는 대기 상태거나 동기화 중입니다.
+        </div>
+
+        <h2>Part 5: Job System의 의존성 관리</h2>
+
+        <div class="q">Q: Thread Pool로 그냥 작업 던지면 되는 거 아닌가요?</div>
+        <div class="a">
+            안 됩니다! <span class="highlight">작업 간 의존성</span>이 있기 때문입니다.
+        </div>
+
+        <pre><code>// 단순 Thread Pool (의존성 없음)
+threadPool.Submit([]{ DoWork(); });
+
+// Job System (의존성 관리)
+JobHandle jobA = Schedule(LoadTexture);
+JobHandle jobB = Schedule(LoadMesh);
+JobHandle jobC = Schedule(CreateObject, DependsOn(jobA, jobB));
+//                        ↑ A, B 끝나야 C 실행
+
+// A, B는 병렬 실행 가능
+// C는 A, B 완료 후에만 실행</code></pre>
+
+        <div class="key-point">
+            <strong>RDR2 실제 예시:</strong>
+            <ul>
+                <li><strong>NPC AI 순서:</strong> NPC 위치 계산 → 애니메이션 선택 → IK 적용 → 렌더링</li>
+                <li><strong>지형 렌더링:</strong> 스트리밍 → LOD 계산 → 컬링 → 렌더 명령 생성</li>
+                <li><strong>파티클 효과:</strong> 시뮬레이션 → 정렬 → 배치 생성 → GPU 제출</li>
+            </ul>
+            각 단계는 이전 단계가 완료되어야 시작할 수 있습니다.
+        </div>
+
+        <pre><code>// RDR2 스타일 Job 의존성 (의사코드)
+void UpdateNPC(NPC* npc) {
+    JobHandle aiJob = JobSystem::Schedule([=] {
+        npc->UpdateBehaviorTree();
+        npc->UpdatePathfinding();
+    });
+
+    JobHandle animJob = JobSystem::Schedule([=] {
+        npc->SelectAnimation();
+    }, DependsOn(aiJob));  // AI 완료 후
+
+    JobHandle ikJob = JobSystem::Schedule([=] {
+        npc->ApplyIK();
+    }, DependsOn(animJob));  // 애니메이션 완료 후
+
+    JobHandle renderJob = JobSystem::Schedule([=] {
+        npc->SubmitRenderCommands();
+    }, DependsOn(ikJob));  // IK 완료 후
+}
+
+// 1500명 NPC는 병렬로 처리되지만,
+// 각 NPC 내부의 단계는 순서가 보장됨</code></pre>
+
+        <h2>Part 6: 왜 6코어 이상에서 성능이 급상승할까?</h2>
+
+        <div class="q">Q: RDR2는 왜 4코어보다 8코어에서 훨씬 빠른가요?</div>
+        <div class="a">
+            Job System의 <span class="highlight">Worker Pool</span>이 코어 수에 비례해서 병렬 작업을 처리하기 때문입니다.
+        </div>
+
+        <div class="diagram">
+4코어 시스템:
+Frame 시작
+  ├─ Worker 1: NPC AI (10ms)
+  ├─ Worker 2: 지형 LOD (10ms)
+  ├─ Worker 3: 파티클 (10ms)
+  └─ Worker 4: 물리 (10ms)
+      ↓
+  다음 작업 대기 (큐에 50개 Job 남음)
+  총 프레임 시간: 40ms (25 FPS)
+
+8코어 시스템:
+Frame 시작
+  ├─ Worker 1~8: 8개 작업 동시 실행 (10ms)
+      ↓
+  ├─ Worker 1~8: 다음 8개 작업 (10ms)
+  총 프레임 시간: 20ms (50 FPS)
+        </div>
+
+        <div class="key-point">
+            <strong>병목점:</strong><br>
+            Worker 수가 적으면 Job 큐에 작업이 쌓입니다. 8코어는 단순히 "2배 빠른" 게 아니라,
+            <strong>병목이 제거되어 전체 파이프라인이 원활하게 돌아가는</strong> 효과입니다.
+        </div>
+
+        <h2>Part 7: 다른 엔진의 Job System</h2>
+
+        <table>
+            <tr>
+                <th>엔진</th>
+                <th>Job System 이름</th>
+                <th>특징</th>
+            </tr>
+            <tr>
+                <td>Unity</td>
+                <td>C# Job System</td>
+                <td>Burst Compiler로 컴파일, 안전성 검증</td>
+            </tr>
+            <tr>
+                <td>Unreal</td>
+                <td>Task Graph</td>
+                <td>그래프 기반 의존성, 자동 병렬화</td>
+            </tr>
+            <tr>
+                <td>Frostbite</td>
+                <td>Fiber Job System</td>
+                <td>경량 스레드(Fiber) 사용, 컨텍스트 스위칭 최소화</td>
+            </tr>
+            <tr>
+                <td>RAGE (RDR2)</td>
+                <td>미공개</td>
+                <td>Work-Stealing 큐, 우선순위 기반 추정</td>
+            </tr>
+        </table>
+
+        <div class="a">
+            <strong>공통점:</strong> 모두 Thread Pool + 의존성 관리 + 우선순위 스케줄링을 포함합니다.
+            차이는 구현 방식과 최적화 수준입니다.
+        </div>
+
+        <h2>Part 8: Job System의 핵심 - Work Stealing</h2>
+
+        <div class="q">Q: 어떤 Worker가 일을 덜 하면 어떻게 하나요?</div>
+        <div class="a">
+            <span class="highlight">Work Stealing</span> 알고리즘을 사용합니다.
+            바쁜 Worker의 작업을 유휴 Worker가 "훔쳐가는" 방식입니다.
+        </div>
+
+        <div class="diagram">
+Worker 1 큐: [Job A] [Job B] [Job C] [Job D]  ← 바쁨
+Worker 2 큐: [Job E]                          ← 한가함
+Worker 3 큐: []                               ← 완전 유휴
+
+Work Stealing 발동:
+Worker 3이 Worker 1의 큐 뒤쪽에서 Job D를 훔침
+Worker 1 큐: [Job A] [Job B] [Job C]
+Worker 3 큐: [Job D]
+
+결과: 작업 부하 균등화
+        </div>
+
+        <pre><code>// Work Stealing 의사코드
+class Worker {
+    Deque<Job> localQueue;  // 양방향 큐
+
+    void Run() {
+        while (running) {
+            Job job = localQueue.PopFront();  // 자기 작업 먼저
+
+            if (job == null) {
+                // 할 일이 없으면 다른 Worker 훔치기
+                job = StealFromOtherWorker();
+            }
+
+            if (job != null) {
+                job.Execute();
+            }
+        }
+    }
+
+    Job StealFromOtherWorker() {
+        for (Worker other : allWorkers) {
+            if (other != this) {
+                Job stolen = other.localQueue.PopBack();  // 뒤에서 훔침
+                if (stolen != null) return stolen;
+            }
+        }
+        return null;
+    }
+}</code></pre>
+
+        <div class="summary-box">
+            <h3>핵심 요약</h3>
+            <ol>
+                <li><strong>Job System ≠ Thread Pool:</strong> Job System = Thread Pool + 의존성 + 스케줄링</li>
+                <li><strong>RDR2 스레드 구성:</strong> 고정 스레드 8-12개 + Worker Pool (코어 수)</li>
+                <li><strong>의존성 관리:</strong> A→B→C 순서 보장하면서 병렬 처리</li>
+                <li><strong>Work Stealing:</strong> 유휴 Worker가 바쁜 Worker 작업 훔쳐 부하 균등화</li>
+                <li><strong>스레드 개수보다 중요한 것:</strong> Job 분배와 의존성 해결 품질</li>
+            </ol>
+
+            <p style="margin-top: 15px;">
+                <strong>결론:</strong> RDR2는 단순히 "스레드 많이 쓰기"가 아니라,
+                <strong>Job System으로 작업을 작은 단위로 쪼개고 의존성을 관리하여 병렬화</strong>합니다.
+                6코어 이상에서 성능이 급상승하는 이유는 Worker Pool이 병목을 제거하기 때문입니다.
+            </p>
+        </div>
+
+    </div>
+</body>
+</html>

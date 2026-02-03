@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>멀리 있는 산도 디테일해요 - RDR2 렌더링 스터디</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            line-height: 1.8;
+            color: #1f2937;
+            background: linear-gradient(135deg, #FEF3C7 0%, #ffffff 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(217, 119, 6, 0.1);
+        }
+
+        .back-link {
+            display: inline-block;
+            color: #D97706;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .back-link:hover {
+            color: #B45309;
+        }
+
+        .back-link::before {
+            content: "← ";
+        }
+
+        h1 {
+            color: #D97706;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            border-bottom: 4px solid #D97706;
+            padding-bottom: 15px;
+        }
+
+        .subtitle {
+            color: #B45309;
+            font-size: 1.3em;
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        h2 {
+            color: #D97706;
+            font-size: 1.8em;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-left: 15px;
+            border-left: 5px solid #D97706;
+        }
+
+        h3 {
+            color: #B45309;
+            font-size: 1.3em;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+
+        p {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+
+        .qa-section {
+            margin: 25px 0;
+            padding: 20px;
+            background: #FEF3C7;
+            border-radius: 8px;
+            border-left: 4px solid #D97706;
+        }
+
+        .q {
+            font-weight: 700;
+            color: #B45309;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .q::before {
+            content: "Q. ";
+            color: #D97706;
+        }
+
+        .a {
+            color: #374151;
+            padding-left: 20px;
+        }
+
+        .a::before {
+            content: "A. ";
+            font-weight: 700;
+            color: #D97706;
+        }
+
+        .key-point {
+            background: #FDE68A;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 8px;
+            border: 2px solid #D97706;
+        }
+
+        .key-point h3 {
+            color: #B45309;
+            margin-top: 0;
+        }
+
+        .highlight {
+            background: #FEF3C7;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #B45309;
+        }
+
+        pre {
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border: 2px solid #D97706;
+        }
+
+        code {
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+        }
+
+        .diagram {
+            background: #f9fafb;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 8px;
+            border: 2px solid #D97706;
+            overflow-x: auto;
+        }
+
+        .diagram pre {
+            background: transparent;
+            color: #1f2937;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 10px;
+            border: 3px solid #D97706;
+        }
+
+        .summary-box h3 {
+            color: #B45309;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        .summary-box ul {
+            margin-left: 20px;
+        }
+
+        .summary-box li {
+            margin-bottom: 10px;
+            color: #374151;
+        }
+
+        ul, ol {
+            margin-left: 25px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        strong {
+            color: #B45309;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../rdr2/" class="back-link">RDR2 렌더링 스터디로 돌아가기</a>
+
+        <h1>멀리 있는 산도 디테일해요</h1>
+        <div class="subtitle">오픈월드 LOD 시스템</div>
+
+        <p>
+            Red Dead Redemption 2의 맵은 <strong>75km²</strong>에 달하는 방대한 오픈월드입니다.
+            산꼭대기에서 바라보면 수 킬로미터 떨어진 건물, 나무, 지형이 모두 보입니다.
+            만약 모든 오브젝트를 최대 디테일로 그린다면 GPU가 녹아버릴 것입니다.
+            <span class="highlight">LOD(Level of Detail)</span> 시스템은 거리에 따라 적절한 수준의
+            디테일을 제공하여 성능과 품질의 균형을 맞춥니다.
+        </p>
+
+        <h2>Part 1: LOD의 필요성 (75km² 맵)</h2>
+
+        <div class="qa-section">
+            <div class="q">왜 모든 것을 최대 디테일로 그리면 안 되나요?</div>
+            <div class="a">
+                5km 떨어진 건물을 풀 디테일로 그리면 수백만 폴리곤을 렌더링하지만
+                화면에는 고작 10x10 픽셀로 보입니다. 이는 엄청난 낭비입니다.
+                LOD는 "보이는 크기에 맞는 디테일"만 제공하여 성능을 최적화합니다.
+            </div>
+        </div>
+
+        <div class="diagram">
+            <pre>
+거리별 화면 크기와 필요 디테일
+================================
+
+거리: 10m (카메라 근처)
+┌────────────────────┐
+│   🏠 건물          │ ← 화면의 50% 차지
+│  ╔════════╗       │   필요 폴리곤: 50,000
+│  ║        ║       │   텍스처: 2K
+│  ║  창문  ║       │
+│  ╚════════╝       │
+└────────────────────┘
+
+거리: 500m (중거리)
+┌────────────────────┐
+│                    │
+│         [🏠]       │ ← 화면의 5% 차지
+│                    │   필요 폴리곤: 5,000
+│                    │   텍스처: 512px
+└────────────────────┘
+
+거리: 5km (원거리)
+┌────────────────────┐
+│                    │
+│            •       │ ← 화면의 10x10픽셀
+│                    │   필요 폴리곤: 100
+│                    │   텍스처: 64px
+└────────────────────┘
+            </pre>
+        </div>
+
+        <div class="key-point">
+            <h3>화면 크기 기반 LOD 선택</h3>
+            <p>
+                오브젝트가 화면에서 차지하는 픽셀 수에 따라 LOD 레벨을 결정합니다:
+            </p>
+            <ul>
+                <li><strong>LOD0 (최고 디테일):</strong> 200 픽셀 이상</li>
+                <li><strong>LOD1:</strong> 100~200 픽셀</li>
+                <li><strong>LOD2:</strong> 50~100 픽셀</li>
+                <li><strong>LOD3:</strong> 20~50 픽셀</li>
+                <li><strong>Impostor:</strong> 20 픽셀 미만</li>
+            </ul>
+        </div>
+
+        <h2>Part 2: 연속적 LOD (CLOD) vs 이산적 LOD</h2>
+
+        <h3>Discrete LOD (이산적 LOD)</h3>
+
+        <p>
+            가장 단순한 방식은 미리 준비된 여러 레벨의 메시를 거리에 따라 스왑하는 것입니다.
+        </p>
+
+        <pre><code>// Discrete LOD 선택
+Mesh SelectLOD(GameObject obj, float3 cameraPos) {
+    float distance = length(obj.position - cameraPos);
+
+    if (distance < 50.0)
+        return obj.meshLOD0;      // 10,000 tris
+    else if (distance < 200.0)
+        return obj.meshLOD1;      // 2,500 tris
+    else if (distance < 1000.0)
+        return obj.meshLOD2;      // 500 tris
+    else
+        return obj.meshLOD3;      // 100 tris
+}
+</code></pre>
+
+        <div class="qa-section">
+            <div class="q">LOD 전환 시 "팝핑(Popping)" 현상이 생기지 않나요?</div>
+            <div class="a">
+                맞습니다. 메시가 갑자기 바뀌면 시각적으로 튀어 보입니다.
+                RDR2는 이를 해결하기 위해 여러 기법을 사용합니다:
+                <strong>디더링 전환</strong>, <strong>알파 블렌딩</strong>,
+                <strong>거리 임계값 하이스테리시스</strong> 등이 있습니다.
+            </div>
+        </div>
+
+        <h3>Continuous LOD (CLOD)</h3>
+
+        <p>
+            지형처럼 연속적인 표면은 <strong>동적으로 폴리곤 수를 조절</strong>하는 CLOD를 사용합니다.
+        </p>
+
+        <h2>Part 3: 지형 LOD (Quadtree, CDLOD)</h2>
+
+        <p>
+            RDR2의 광활한 지형은 <span class="highlight">CDLOD(Continuous Distance-based LOD)</span>
+            알고리즘으로 관리됩니다.
+        </p>
+
+        <div class="diagram">
+            <pre>
+Quadtree 기반 지형 LOD
+================================
+
+         카메라 위치: ★
+
+      ┌─────────────────────┐
+      │         │           │  LOD2 (낮은 해상도)
+      │    A    │     B     │  64x64 그리드
+      ├─────────┼───────────┤
+      │    C    │ LOD0      │
+      │         │ ┌───┬───┐ │  LOD0 (최고 해상도)
+      │         │ │ ★ │   │ │  256x256 그리드
+      │         │ ├───┼───┤ │
+      │         │ │   │   │ │
+      └─────────┴─┴───┴───┴─┘
+
+카메라 근처 = 세밀한 그리드
+카메라에서 멀어질수록 = 큰 그리드
+            </pre>
+        </div>
+
+        <pre><code>// CDLOD Quadtree 구현
+struct TerrainNode {
+    float2 center;         // 노드 중심
+    float size;            // 노드 크기
+    int lodLevel;          // LOD 레벨 (0 = 최고)
+    TerrainNode* children[4];  // 4개 자식 (NW, NE, SW, SE)
+};
+
+void SelectTerrainLOD(TerrainNode* node, float3 cameraPos) {
+    float distance = length(float3(node.center.x, 0, node.center.y) - cameraPos);
+
+    // 거리 기반 LOD 결정
+    int requiredLOD = CalculateLOD(distance, node.size);
+
+    if (requiredLOD < node.lodLevel) {
+        // 더 높은 디테일 필요 → 자식 노드로 분할
+        if (node.children[0] == null) {
+            SubdivideNode(node);
+        }
+
+        // 자식 노드들 재귀 처리
+        for (int i = 0; i < 4; i++) {
+            SelectTerrainLOD(node.children[i], cameraPos);
+        }
+    }
+    else {
+        // 현재 LOD 레벨로 충분 → 이 노드 렌더링
+        RenderTerrainPatch(node);
+    }
+}
+
+int CalculateLOD(float distance, float nodeSize) {
+    // 화면 공간 오차 (픽셀)
+    float screenError = (nodeSize / distance) * screenHeight;
+
+    // 오차가 작을수록 낮은 LOD (간단한 메시)
+    if (screenError < 1.0) return 3;
+    if (screenError < 5.0) return 2;
+    if (screenError < 20.0) return 1;
+    return 0;
+}
+</code></pre>
+
+        <h3>Crack 방지 (LOD 경계 틈새)</h3>
+
+        <p>
+            서로 다른 LOD 레벨의 지형 패치가 만나면 <strong>크랙(틈)</strong>이 생깁니다.
+            이를 해결하는 기법:
+        </p>
+
+        <ul>
+            <li><strong>Skirt(치마):</strong> 경계에 수직 메시 추가하여 틈 가림</li>
+            <li><strong>Stitch:</strong> 경계 버텍스를 이웃 LOD에 맞춰 스냅</li>
+            <li><strong>Transition Zone:</strong> LOD 경계에 블렌딩 영역 추가</li>
+        </ul>
+
+        <div class="diagram">
+            <pre>
+LOD 경계 크랙 방지
+================================
+
+크랙 발생 (X)
+    LOD1 (높은 해상도)   LOD2 (낮은 해상도)
+    ●─●─●─●─●            ●───────●
+    │ │ │ │ │            │       │
+    ●─●─●─●─●   [틈!]    │       │
+                ↑        │       │
+                크랙     ●───────●
+
+--------------------------------
+
+Skirt로 해결 (O)
+    LOD1                 LOD2
+    ●─●─●─●─●            ●───────●
+    │ │ │ │ │            │       │
+    ●─●─●─●─●            │       │
+    ║║║║║║║║║ ← Skirt    │       │
+                         ●───────●
+    (수직 메시로 틈 가림)
+            </pre>
+        </div>
+
+        <h2>Part 4: 오브젝트 LOD (빌딩, 나무, 바위)</h2>
+
+        <p>
+            지형 외 오브젝트들은 거리별로 <strong>미리 베이킹된 LOD 메시</strong>를 사용합니다.
+        </p>
+
+        <h3>건물 LOD 예시</h3>
+
+        <ul>
+            <li><strong>LOD0 (0~50m):</strong> 창문 프레임, 문 손잡이, 벽돌 디테일</li>
+            <li><strong>LOD1 (50~200m):</strong> 창문 단순화, 손잡이 제거</li>
+            <li><strong>LOD2 (200~1000m):</strong> 박스 형태, 텍스처로만 디테일 표현</li>
+            <li><strong>LOD3 (1km~5km):</strong> 단일 큐브, 단색 텍스처</li>
+        </ul>
+
+        <pre><code>// 오브젝트 LOD 전환 (디더링)
+float4 PS_LODTransition(
+    float3 worldPos,
+    int currentLOD,
+    int nextLOD,
+    float transitionDistance
+) {
+    float distance = length(cameraPos - worldPos);
+
+    // 전환 범위 (예: 180m~200m)
+    float transitionStart = transitionDistance * 0.9;
+    float transitionEnd = transitionDistance;
+
+    if (distance > transitionStart && distance < transitionEnd) {
+        // 디더 패턴으로 페이드
+        float t = (distance - transitionStart) / (transitionEnd - transitionStart);
+
+        // Bayer Matrix 디더링
+        float threshold = BayerMatrix4x4[pixelPos.x % 4][pixelPos.y % 4];
+
+        if (t > threshold) {
+            // nextLOD 렌더링
+            return RenderLOD(nextLOD);
+        }
+        else {
+            // currentLOD 렌더링
+            return RenderLOD(currentLOD);
+        }
+    }
+    else if (distance >= transitionEnd) {
+        return RenderLOD(nextLOD);
+    }
+    else {
+        return RenderLOD(currentLOD);
+    }
+}
+</code></pre>
+
+        <h2>Part 5: Impostor 기법 (원거리 빌보드)</h2>
+
+        <div class="key-point">
+            <h3>5km 밖 건물은 3D가 아닙니다</h3>
+            <p>
+                극원거리 오브젝트는 <strong>Impostor(빌보드)</strong>로 대체됩니다.
+                여러 각도에서 미리 렌더링한 2D 이미지를 카메라 방향에 따라 선택하는 기법입니다.
+            </p>
+        </div>
+
+        <div class="diagram">
+            <pre>
+Impostor 빌보드 시스템
+================================
+
+1. 8방향 사전 렌더링
+         N (북)
+         ↑
+      NW │ NE
+        \│/
+    W ───●─── E  ← 건물을 8방향에서 렌더링
+        /│\        각 방향별 2D 이미지 저장
+      SW │ SE
+         ↓
+         S (남)
+
+2. 런타임 - 카메라 방향에 따라 선택
+   카메라가 북동쪽에 있음
+        ↓
+   NE 이미지 사용
+   ┌─────┐
+   │ 🏠  │ ← 2D 스프라이트
+   └─────┘   (3D 메시 아님)
+
+폴리곤: 2개 (사각형 1개)
+메모리: 텍스처 8장
+            </pre>
+        </div>
+
+        <pre><code>// Impostor 방향 선택
+int SelectImpostorDirection(float3 objectPos, float3 cameraPos) {
+    // 오브젝트 → 카메라 방향 벡터
+    float3 viewDir = normalize(cameraPos - objectPos);
+
+    // 방위각 계산 (0° = 북, 90° = 동)
+    float angle = atan2(viewDir.x, viewDir.z) * (180.0 / PI);
+
+    // 8방향으로 양자화 (0, 45, 90, ..., 315)
+    int direction = int((angle + 22.5) / 45.0) % 8;
+
+    return direction;  // 0=N, 1=NE, 2=E, ..., 7=NW
+}
+
+// Impostor 렌더링
+void RenderImpostor(GameObject obj, int direction) {
+    // 방향별 텍스처 선택
+    Texture2D impostorTex = obj.impostorTextures[direction];
+
+    // 빌보드 쿼드 렌더링 (항상 카메라 바라봄)
+    float3 billboardUp = float3(0, 1, 0);
+    float3 billboardRight = normalize(cross(viewDir, billboardUp));
+
+    // 쿼드 버텍스 생성
+    float3 v0 = obj.position - billboardRight * size + billboardUp * size;
+    float3 v1 = obj.position + billboardRight * size + billboardUp * size;
+    float3 v2 = obj.position - billboardRight * size - billboardUp * size;
+    float3 v3 = obj.position + billboardRight * size - billboardUp * size;
+
+    DrawQuad(v0, v1, v2, v3, impostorTex);
+}
+</code></pre>
+
+        <h2>Part 6: LOD 전환 숨기기 (디더링, 블렌딩)</h2>
+
+        <h3>1. Temporal Dithering</h3>
+
+        <p>
+            LOD 전환 시 여러 프레임에 걸쳐 디더 패턴으로 점진적 전환합니다.
+        </p>
+
+        <pre><code>// Temporal Dithering
+float4 PS_TemporalDither(float2 pixelPos, int frameCount) {
+    // 4x4 Bayer Matrix
+    const float bayerMatrix[4][4] = {
+        { 0,  8,  2, 10},
+        {12,  4, 14,  6},
+        { 3, 11,  1,  9},
+        {15,  7, 13,  5}
+    };
+
+    // 프레임마다 변하는 임계값
+    int offsetX = (frameCount % 4);
+    int offsetY = (frameCount / 4) % 4;
+    int x = (int(pixelPos.x) + offsetX) % 4;
+    int y = (int(pixelPos.y) + offsetY) % 4;
+
+    float threshold = bayerMatrix[y][x] / 16.0;
+
+    // LOD 전환 알파
+    if (lodTransitionAlpha < threshold) {
+        // 이전 LOD
+        return RenderLOD(oldLOD);
+    }
+    else {
+        // 새 LOD
+        return RenderLOD(newLOD);
+    }
+}
+</code></pre>
+
+        <h3>2. Hysteresis (히스테리시스)</h3>
+
+        <p>
+            LOD 전환 임계값에 <strong>히스테리시스</strong>를 적용하여 떨림 방지:
+        </p>
+
+        <pre><code>// LOD 히스테리시스
+int SelectLODWithHysteresis(float distance, int currentLOD) {
+    // 상향 전환 (더 높은 디테일)
+    if (currentLOD == 1 && distance < 45.0)  // 50 - 5 (히스테리시스)
+        return 0;
+
+    // 하향 전환 (더 낮은 디테일)
+    if (currentLOD == 0 && distance > 55.0)  // 50 + 5
+        return 1;
+
+    return currentLOD;  // 유지
+}
+</code></pre>
+
+        <div class="summary-box">
+            <h3>📌 핵심 요약</h3>
+            <ul>
+                <li><strong>LOD 필요성:</strong> 75km² 맵을 실시간 렌더링하려면 거리별 디테일 조절 필수</li>
+                <li><strong>지형 LOD:</strong> Quadtree 기반 CDLOD로 연속적 폴리곤 수 조절, Skirt로 크랙 방지</li>
+                <li><strong>오브젝트 LOD:</strong> 미리 제작된 4~5단계 메시를 거리별로 스왑</li>
+                <li><strong>Impostor:</strong> 극원거리는 8방향 빌보드로 대체 (2 폴리곤)</li>
+                <li><strong>전환 숨기기:</strong> Temporal Dithering + Hysteresis로 LOD 팝핑 최소화</li>
+            </ul>
+        </div>
+
+        <div class="qa-section">
+            <div class="q">LOD 시스템이 없다면?</div>
+            <div class="a">
+                RDR2의 맵을 LOD 없이 렌더링하려면 수억 개의 폴리곤을 매 프레임 처리해야 합니다.
+                현존하는 어떤 GPU도 이를 60fps로 돌릴 수 없습니다. LOD는 오픈월드 게임의
+                생명줄입니다. 플레이어는 눈치채지 못하지만, LOD 시스템은 매 프레임
+                수천 번의 판단을 내려 성능과 품질의 균형을 맞춥니다.
+            </div>
+        </div>
+
+        <a href="../rdr2/" class="back-link">RDR2 렌더링 스터디로 돌아가기</a>
+    </div>
+</body>
+</html>

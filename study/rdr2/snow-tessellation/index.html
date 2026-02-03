@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>눈 위를 걸으면 눈이 파여요 - RDR2 기술 연구</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            color: #1f2937;
+            background: linear-gradient(135deg, #FEF3C7 0%, #ffffff 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(217, 119, 6, 0.1);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #D97706;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            color: #B45309;
+            transform: translateX(-5px);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #D97706;
+            margin-bottom: 10px;
+            border-bottom: 4px solid #D97706;
+            padding-bottom: 15px;
+        }
+
+        .subtitle {
+            font-size: 1.3em;
+            color: #B45309;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+
+        h2 {
+            font-size: 1.8em;
+            color: #D97706;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-left: 15px;
+            border-left: 5px solid #D97706;
+        }
+
+        h3 {
+            font-size: 1.3em;
+            color: #B45309;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+
+        .q {
+            background: #FEF3C7;
+            border-left: 4px solid #D97706;
+            padding: 20px;
+            margin: 25px 0;
+            font-weight: 600;
+            color: #B45309;
+            font-size: 1.1em;
+        }
+
+        .a {
+            background: #f9fafb;
+            padding: 20px;
+            margin: 15px 0 25px 20px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .key-point {
+            background: #FDE68A;
+            border-left: 4px solid #B45309;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .highlight {
+            background: #FEF3C7;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #B45309;
+        }
+
+        pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border: 2px solid #D97706;
+        }
+
+        code {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .ascii-diagram {
+            background: #f9fafb;
+            border: 2px solid #D97706;
+            padding: 20px;
+            margin: 25px 0;
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+            border-radius: 8px;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+            border: 3px solid #D97706;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+
+        .summary-box h3 {
+            color: #B45309;
+            margin-top: 0;
+            font-size: 1.4em;
+        }
+
+        .summary-box ul {
+            margin-left: 20px;
+            margin-top: 15px;
+        }
+
+        .summary-box li {
+            margin: 10px 0;
+            color: #1f2937;
+        }
+
+        ul, ol {
+            margin-left: 30px;
+            margin: 15px 0 15px 30px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        strong {
+            color: #B45309;
+        }
+
+        .note {
+            background: #fff7ed;
+            border-left: 4px solid #D97706;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">← RDR2 기술 연구 목록으로</a>
+
+        <h1>눈 위를 걸으면 눈이 파여요</h1>
+        <div class="subtitle">눈 적층/변형 시스템 (Snow Tessellation & Deformation)</div>
+
+        <div class="key-point">
+            눈은 특별합니다. 진흙이나 모래와 달리 압축되고, 쌓이고, 녹습니다. RDR2의 눈 시스템은 Tessellation으로 디테일을 동적으로 추가하고, Displacement Map을 실시간으로 수정하여 "살아있는 눈"을 구현합니다.
+        </div>
+
+        <h2>Part 1: 눈의 특수한 물성</h2>
+
+        <div class="q">Q. 눈은 진흙과 뭐가 다른가요?</div>
+        <div class="a">
+            눈은 <span class="highlight">압축 가능한 고체</span>입니다. 밟으면 공기가 빠지며 압축되고, 시간이 지나면 단단해집니다. 또한 쌓이고, 녹고, 다시 얼 수 있습니다.
+            <br><br>
+            <strong>눈의 독특한 특성:</strong>
+            <ul>
+                <li><strong>압축성:</strong> 50% 이상 압축 가능 (푹신푹신 → 단단함)</li>
+                <li><strong>적층성:</strong> 계속 쌓임 (높이가 증가)</li>
+                <li><strong>온도 민감:</strong> 0°C 이상에서 녹음</li>
+                <li><strong>시간 경화:</strong> 압축된 눈은 시간이 지나면 얼음처럼 단단해짐</li>
+                <li><strong>뽀드득 소리:</strong> -10°C 이하에서 특유의 소리</li>
+            </ul>
+        </div>
+
+        <div class="ascii-diagram">
+눈의 물리적 상태 변화:
+
+신선한 눈 (밀도 낮음):
+    ∴∵∴∵∴∵∴∵∴∵  ← 공기 많음 (80% 공기)
+    ∴ ∵ ∴ ∵ ∴ ∵
+    밀도: 0.1 g/cm³
+
+밟은 직후 (압축):
+    ▓▓▓▓▓▓▓▓▓▓  ← 공기 빠짐 (50% 공기)
+    ▓▓▓▓▓▓▓▓▓▓
+    밀도: 0.4 g/cm³
+
+1시간 후 (부분 경화):
+    ████████████  ← 결정 재배열 (30% 공기)
+    ████████████
+    밀도: 0.6 g/cm³
+
+1일 후 (완전 경화):
+    ████████████  ← 거의 얼음 (10% 공기)
+    ████████████
+    밀도: 0.9 g/cm³ (얼음에 가까움)
+
+
+온도에 따른 반응:
+
+❄ -20°C (매우 추움):
+   뽀드득 소리, 잘 안 뭉쳐짐, 날림
+
+❄ -5°C (조금 추움):
+   잘 뭉쳐짐, 눈사람 만들기 좋음
+
+🌡 0°C (녹기 시작):
+   표면 물기, 질퍽함
+
+☀ +10°C (빠른 융해):
+   물웅덩이, 진흙탕
+        </div>
+
+        <h2>Part 2: Tessellation으로 디테일 추가</h2>
+
+        <div class="q">Q. 발자국의 디테일은 어떻게 표현하나요?</div>
+        <div class="a">
+            <span class="highlight">Hardware Tessellation</span>을 사용합니다. 카메라 가까이에서는 메시를 동적으로 세분화하여 발자국의 미세한 굴곡까지 표현합니다.
+            <br><br>
+            <strong>Tessellation 단계:</strong>
+            <ol>
+                <li><strong>Hull Shader:</strong> 세분화 레벨 결정 (카메라 거리)</li>
+                <li><strong>Tessellator:</strong> 메시를 삼각형으로 세분화</li>
+                <li><strong>Domain Shader:</strong> Displacement Map으로 정점 이동</li>
+                <li><strong>Pixel Shader:</strong> Normal Map으로 음영 추가</li>
+            </ol>
+        </div>
+
+        <div class="ascii-diagram">
+Tessellation 과정:
+
+1. 원본 메시 (저해상도):
+    ╱╲╱╲
+   ╱  ╲  ╲  ← 2개의 삼각형
+  └────┘
+
+2. Hull Shader (세분화 레벨 결정):
+   카메라 가까움 → Tess Level = 4
+   카메라 멀리 → Tess Level = 1
+
+3. Tessellator (하드웨어 세분화):
+    ╱│╲╱│╲
+   ╱ │ ╲ │ ╲  ← 16개의 삼각형
+  ╱──┼──╲──┼──╲
+ └───┴───┴───┴──┘
+
+4. Domain Shader (Displacement):
+    Displacement Map 샘플링
+         ▲
+        ╱ ╲
+       ╱   ╲   ← 정점을 위/아래로 이동
+      ▼     ▼
+
+5. 최종 결과 (발자국):
+    ╱▔▔╲  ←  솟은 부분
+   ╱    ╲
+  │  ▼▼  │ ← 파인 부분 (발자국)
+  └──────┘
+
+LOD (카메라 거리에 따른 Tessellation):
+
+가까움 (2m):        중간 (10m):        멀리 (50m):
+ Tess=8             Tess=2             Tess=0
+  ▲                  ▲                  ▲
+ ╱│╲               ╱ ╲                ╱ ╲
+╱─┼─╲             ╱   ╲              ╱   ╲
+(고밀도)           (중밀도)            (원본)
+        </div>
+
+        <pre><code>// 의사코드: Tessellation Shaders
+
+// Hull Shader (세분화 레벨 결정)
+struct HullConstants {
+    float edgeTess[3];  // 각 엣지의 세분화 레벨
+    float insideTess;   // 내부 세분화 레벨
+}
+
+HullConstants CalculateTessellation(float3 worldPos) {
+    float distance = length(cameraPos - worldPos);
+
+    // 거리에 따른 Tessellation Factor
+    float tessFactor;
+    if (distance < 5.0) {
+        tessFactor = 8.0;  // 매우 디테일함
+    } else if (distance < 20.0) {
+        tessFactor = 4.0;  // 중간
+    } else if (distance < 50.0) {
+        tessFactor = 2.0;  // 낮음
+    } else {
+        tessFactor = 1.0;  // 원본 (Tessellation 안 함)
+    }
+
+    HullConstants output;
+    output.edgeTess[0] = tessFactor;
+    output.edgeTess[1] = tessFactor;
+    output.edgeTess[2] = tessFactor;
+    output.insideTess = tessFactor;
+
+    return output;
+}
+
+// Domain Shader (Displacement 적용)
+struct DomainOutput {
+    float4 position;
+    float3 normal;
+    float2 uv;
+}
+
+DomainOutput ApplyDisplacement(float3 barycentricCoords,
+                                Vertex vertices[3],
+                                Texture2D displacementMap) {
+    // 1. Barycentric Interpolation
+    float3 worldPos = BarycentricInterpolate(vertices, barycentricCoords);
+    float2 uv = BarycentricInterpolate(vertices.uv, barycentricCoords);
+
+    // 2. Displacement Map 샘플링
+    float displacement = displacementMap.SampleLevel(sampler, uv, 0).r;
+
+    // 3. 눈 깊이 적용 (0~1 → 0~30cm)
+    float snowDepth = GetSnowDepth(worldPos);  // 쌓인 눈 높이
+    float maxDisplacement = snowDepth * 0.3;   // 최대 30% 파임
+
+    // 4. 정점 이동 (Normal 방향으로)
+    float3 normal = CalculateNormal(vertices);
+    worldPos += normal * (displacement * maxDisplacement - maxDisplacement * 0.5);
+
+    DomainOutput output;
+    output.position = WorldToClip(worldPos);
+    output.normal = RecalculateNormal(worldPos, uv, displacementMap);
+    output.uv = uv;
+
+    return output;
+}
+
+// Normal 재계산 (Displacement에서 파생)
+float3 RecalculateNormal(float3 pos, float2 uv, Texture2D displacementMap) {
+    float texelSize = 1.0 / 1024.0;
+
+    // Central Difference (중앙 차분)
+    float hL = displacementMap.Sample(uv + float2(-texelSize, 0)).r;
+    float hR = displacementMap.Sample(uv + float2(+texelSize, 0)).r;
+    float hD = displacementMap.Sample(uv + float2(0, -texelSize)).r;
+    float hU = displacementMap.Sample(uv + float2(0, +texelSize)).r;
+
+    float3 tangent = normalize(float3(2.0, 0.0, hR - hL));
+    float3 bitangent = normalize(float3(0.0, 2.0, hU - hD));
+
+    return normalize(cross(tangent, bitangent));
+}</code></pre>
+
+        <h2>Part 3: Displacement Map 실시간 수정</h2>
+
+        <div class="q">Q. 발자국이 남으면 Displacement Map을 어떻게 수정하나요?</div>
+        <div class="a">
+            <span class="highlight">Render Texture</span>에 발자국 패턴을 "그려넣습니다". GPU에서 Additive Blending으로 여러 발자국을 누적시킵니다.
+        </div>
+
+        <div class="ascii-diagram">
+Displacement Map 실시간 수정:
+
+1. 초기 상태 (평평한 눈):
+   Displacement Map (R 채널):
+   ┌────────────┐
+   │ 0.5 0.5 0.5│  ← 모두 중간값 (평평)
+   │ 0.5 0.5 0.5│
+   │ 0.5 0.5 0.5│
+   └────────────┘
+
+2. 발자국 Stamp (발 모양 텍스처):
+   ┌────────────┐
+   │  0.2  0.2  │  ← 파인 부분 (어두움)
+   │ 0.1  0.1   │
+   │  0.2  0.2  │
+   └────────────┘
+
+3. GPU Render (Additive Blending):
+   발자국 위치에 Quad 렌더링
+   BlendOp: Min (어두운 값 선택)
+
+4. 최종 Displacement Map:
+   ┌────────────┐
+   │ 0.5 0.2 0.5│  ← 발자국 부분만 어두움
+   │ 0.5 0.1 0.5│
+   │ 0.5 0.2 0.5│
+   └────────────┘
+
+5. Domain Shader에서 사용:
+   평평: 0.5 → Displacement = 0cm
+   파임: 0.1 → Displacement = -12cm
+        </div>
+
+        <pre><code>// 의사코드: Displacement Map 업데이트
+
+struct SnowDisplacementSystem {
+    RenderTexture displacementRT;  // R16F
+    Texture2D footprintStamp;      // 발자국 패턴
+    Texture2D wheelStamp;          // 바퀴 자국
+}
+
+function ApplyFootprintToDisplacement(worldPos, rotation, pressure) {
+    // 1. 월드 좌표 → UV 변환
+    vec2 uv = WorldToSnowUV(worldPos);
+
+    // 2. Render Target 활성화
+    SetRenderTarget(displacementRT);
+    SetBlendMode(MIN);  // 어두운 값 선택 (더 파인 쪽)
+
+    // 3. 발자국 Quad 렌더링
+    DrawQuad(
+        position: uv,
+        size: vec2(0.1, 0.2),  // 10cm × 20cm
+        rotation: rotation,
+        texture: footprintStamp,
+        color: vec4(pressure, 0, 0, 1)  // R 채널에 깊이
+    );
+
+    // 4. Normal Map도 업데이트 필요
+    GenerateNormalFromDisplacement(displacementRT);
+}
+
+// Pixel Shader (발자국 렌더링)
+float4 FootprintPS(float2 uv) {
+    // 1. 발자국 패턴 샘플링
+    float footShape = footprintStamp.Sample(sampler, uv).r;
+
+    // 2. 가장자리 Fade (Smoothstep)
+    float edgeFade = smoothstep(0.0, 0.1, footShape) *
+                     (1.0 - smoothstep(0.9, 1.0, footShape));
+
+    // 3. 깊이 계산 (0.0 = 원본, 0.5 = 최대 파임)
+    float depth = 0.5 - (footShape * edgeFade * 0.4);  // 최대 40% 파임
+
+    return float4(depth, 0, 0, 1);
+}
+
+// Normal Map 자동 생성 (Compute Shader)
+[numthreads(8, 8, 1)]
+void GenerateNormalCS(uint3 id : SV_DispatchThreadID) {
+    float2 uv = id.xy / float2(1024, 1024);
+
+    // Sobel Filter (엣지 검출)
+    float hL = displacementRT[id.xy + int2(-1, 0)].r;
+    float hR = displacementRT[id.xy + int2(+1, 0)].r;
+    float hD = displacementRT[id.xy + int2(0, -1)].r;
+    float hU = displacementRT[id.xy + int2(0, +1)].r;
+
+    float3 normal = normalize(float3(hL - hR, hD - hU, 0.5));
+
+    normalRT[id.xy] = float4(normal * 0.5 + 0.5, 1.0);
+}</code></pre>
+
+        <h2>Part 4: 발자국 깊이 계산 (무게, 속도)</h2>
+
+        <div class="q">Q. 달리는 것과 걷는 것의 발자국 깊이가 다른가요?</div>
+        <div class="a">
+            당연합니다! <span class="highlight">무게, 속도, 눈 상태</span>를 모두 고려합니다.
+            <br><br>
+            <strong>깊이 결정 요소:</strong>
+            <ul>
+                <li><strong>무게:</strong> 캐릭터/동물/마차 무게</li>
+                <li><strong>속도:</strong> 달릴수록 깊게 파임 (운동 에너지)</li>
+                <li><strong>눈 밀도:</strong> 신선한 눈 vs 압축된 눈</li>
+                <li><strong>온도:</strong> -10°C (단단) vs 0°C (무름)</li>
+            </ul>
+        </div>
+
+        <div class="ascii-diagram">
+발자국 깊이 비교:
+
+걷기 (1 m/s, 70kg):
+   ━━━━━━━━━━━━
+   ░░░▁▂▂▁░░░░  ← 얕은 발자국 (3cm)
+   ░░░░░░░░░░░
+
+달리기 (5 m/s, 70kg):
+   ━━━━━━━━━━━━
+   ░░▂▄██▄▂░░░  ← 깊은 발자국 (8cm)
+   ░░░░░░░░░░░
+
+말 (3 m/s, 500kg):
+   ━━━━━━━━━━━━
+   ░░▄████▄░░░  ← 매우 깊음 (15cm)
+   ░░░░░░░░░░░
+
+마차 (2 m/s, 1000kg):
+   ━━━━━━━━━━━━
+   ░▄██████▄░░  ← 극도로 깊음 (20cm)
+   ░░░░░░░░░░░
+
+눈 상태별:
+
+신선한 눈 (밀도 0.1):
+   깊이 × 2.0  ← 푹 빠짐
+
+압축된 눈 (밀도 0.5):
+   깊이 × 1.0  ← 보통
+
+얼어붙은 눈 (밀도 0.9):
+   깊이 × 0.3  ← 거의 안 빠짐
+        </div>
+
+        <pre><code>// 의사코드: 발자국 깊이 계산
+
+struct FootprintParams {
+    float weight;           // 무게 (kg)
+    float velocity;         // 속도 (m/s)
+    float footArea;         // 발 면적 (m²)
+    float snowDensity;      // 눈 밀도 (0.1~0.9)
+    float temperature;      // 온도 (°C)
+}
+
+function CalculateFootprintDepth(params) {
+    // 1. 정적 압력 (Pa = N/m²)
+    float staticPressure = (params.weight * 9.8) / params.footArea;
+
+    // 2. 동적 압력 (운동 에너지)
+    float kineticEnergy = 0.5 * params.weight * params.velocity * params.velocity;
+    float dynamicPressure = kineticEnergy / params.footArea;
+
+    // 3. 총 압력
+    float totalPressure = staticPressure + dynamicPressure;
+
+    // 4. 눈 저항력 (밀도에 비례)
+    float snowResistance = params.snowDensity * 50000.0;  // Pa
+
+    // 5. 침투 깊이 (압력 > 저항일 때만 파임)
+    float penetration = 0.0;
+    if (totalPressure > snowResistance) {
+        penetration = (totalPressure - snowResistance) / snowResistance;
+        penetration = clamp(penetration, 0.0, 1.0);
+    }
+
+    // 6. 온도 보정 (0°C 근처는 부드러움)
+    float tempFactor = 1.0;
+    if (params.temperature > -5.0) {
+        tempFactor = 1.0 + (params.temperature + 5.0) / 5.0;  // 최대 2배
+    }
+
+    // 7. 최종 깊이 (cm)
+    float depth = penetration * 30.0 * tempFactor;  // 최대 30cm
+
+    // 8. 눈 밀도 업데이트 (밟은 곳은 압축됨)
+    UpdateSnowDensity(position, params.snowDensity * (1.0 + penetration * 0.5));
+
+    return depth;
+}
+
+// 발자국 타입별 파라미터
+FootprintParams GetFootprintParams(ActorType type, float velocity) {
+    switch (type) {
+        case HUMAN:
+            return {
+                weight: 70.0,
+                velocity: velocity,
+                footArea: 0.02,  // 200 cm²
+                snowDensity: GetSnowDensity(position),
+                temperature: currentTemperature
+            };
+
+        case HORSE:
+            return {
+                weight: 500.0,
+                velocity: velocity,
+                footArea: 0.01,  // 100 cm² (말굽)
+                snowDensity: GetSnowDensity(position),
+                temperature: currentTemperature
+            };
+
+        case WAGON:
+            return {
+                weight: 1000.0 / 4,  // 4개 바퀴로 분산
+                velocity: velocity,
+                footArea: 0.03,  // 300 cm² (바퀴 접지면)
+                snowDensity: GetSnowDensity(position),
+                temperature: currentTemperature
+            };
+    }
+}
+
+// 눈 밀도 추적 (Render Texture B 채널)
+function UpdateSnowDensity(vec2 uv, float newDensity) {
+    float currentDensity = snowDataRT.Sample(uv).g;
+    float blendedDensity = lerp(currentDensity, newDensity, 0.3);
+
+    snowDataRT.Write(uv, float4(depth, blendedDensity, 0, 1));
+}</code></pre>
+
+        <h2>Part 5: 눈 쌓임 시뮬레이션 (강설량)</h2>
+
+        <div class="q">Q. 눈이 계속 내리면 발자국이 덮이나요?</div>
+        <div class="a">
+            네! <span class="highlight">강설 시뮬레이션</span>이 Displacement Map을 원래대로 복원시킵니다. 시간당 강설량에 따라 발자국이 서서히 사라집니다.
+        </div>
+
+        <div class="ascii-diagram">
+강설에 의한 복원:
+
+T=0분 (발자국 직후):
+   ━━━━━━━━━━━━
+   ░░▂▄██▄▂░░░  ← 깊이: -8cm
+   Displacement: 0.2
+
+T=10분 (약한 눈 - 1cm/h):
+   ━━━━━━━━━━━━
+   ░░▁▃▅▃▁░░░░  ← 깊이: -6cm (2cm 쌓임)
+   Displacement: 0.25
+
+T=30분 (보통 눈 - 3cm/h):
+   ━━━━━━━━━━━━
+   ░░░▁▂▁░░░░░  ← 깊이: -3cm (5cm 쌓임)
+   Displacement: 0.35
+
+T=60분 (폭설 - 10cm/h):
+   ━━━━━━━━━━━━
+   ░░░░░░░░░░░  ← 완전 복원 (10cm 쌓임)
+   Displacement: 0.5
+
+전체 눈 높이도 증가:
+   원본: 10cm
+   +1시간: 20cm  ← 전체가 높아짐
+        </div>
+
+        <pre><code>// 의사코드: 강설 시뮬레이션
+
+struct SnowfallSimulation {
+    float snowfallRate;     // cm/h
+    float windDirection;    // 바람 방향
+    float windSpeed;        // 바람 세기
+    RenderTexture snowDepthRT;
+    RenderTexture displacementRT;
+}
+
+// 매 프레임 업데이트
+function UpdateSnowfall(deltaTime) {
+    if (currentWeather != SNOWING) return;
+
+    float snowfallAmount = snowfallRate * (deltaTime / 3600.0);  // cm
+
+    // 1. Compute Shader로 전체 눈 높이 증가
+    DispatchCompute(AddSnowfallCS, snowDepthRT.width / 8, snowDepthRT.height / 8, 1);
+
+    // 2. Displacement 복원 (발자국 메우기)
+    RestoreDisplacement(snowfallAmount);
+}
+
+// Compute Shader: 눈 쌓임
+[numthreads(8, 8, 1)]
+void AddSnowfallCS(uint3 id : SV_DispatchThreadID) {
+    float2 uv = id.xy / float2(1024, 1024);
+
+    // 1. 현재 눈 깊이
+    float currentDepth = snowDepthRT[id.xy].r;
+
+    // 2. 강설량 추가
+    float snowfall = snowfallRate * deltaTime / 3600.0;
+
+    // 3. 바람 영향 (경사면에서 눈이 날림)
+    float3 normal = normalRT[id.xy].rgb * 2.0 - 1.0;
+    float slope = 1.0 - normal.z;  // 0 = 평평, 1 = 수직
+
+    float windEffect = dot(normal.xy, windDirection) * windSpeed;
+    snowfall *= (1.0 - slope * 0.5);  // 경사면은 덜 쌓임
+    snowfall += windEffect * 0.01;    // 바람 불어오는 쪽은 더 쌓임
+
+    // 4. 최종 깊이
+    float newDepth = currentDepth + snowfall;
+    snowDepthRT[id.xy] = float4(newDepth, 0, 0, 1);
+}
+
+// Displacement 복원
+function RestoreDisplacement(snowfallAmount) {
+    for each pixel in displacementRT {
+        float current = displacementRT[pixel].r;
+        float original = 0.5;  // 평평한 상태
+
+        // 발자국이 있는 곳 (0.5 미만)
+        if (current < original) {
+            // 강설량만큼 복원
+            float restored = current + (snowfallAmount / maxDepth);
+            displacementRT[pixel].r = min(restored, original);
+        }
+    }
+}
+
+// 눈 녹음 (온도 > 0°C)
+function SimulateSnowMelting(deltaTime, temperature) {
+    if (temperature <= 0.0) return;
+
+    float meltRate = temperature * 0.5;  // °C당 0.5 cm/h
+
+    for each pixel in snowDepthRT {
+        float depth = snowDepthRT[pixel].r;
+        float melted = meltRate * (deltaTime / 3600.0);
+
+        depth = max(0.0, depth - melted);
+        snowDepthRT[pixel].r = depth;
+
+        // 완전히 녹으면 Displacement도 초기화
+        if (depth < 0.1) {
+            displacementRT[pixel].r = 0.5;
+        }
+    }
+}</code></pre>
+
+        <h2>Part 6: 다른 게임 비교</h2>
+
+        <div class="q">Q. 다른 게임의 눈 시스템은 어떤가요?</div>
+        <div class="a">
+            <strong>주요 게임들의 눈 시스템 비교:</strong>
+        </div>
+
+        <div class="ascii-diagram">
+게임별 눈 시스템 비교:
+
+┌─────────────────────────────────────────────────────┐
+│ 게임                   │ 기술                       │
+├─────────────────────────────────────────────────────┤
+│ RDR2                   │ Tessellation +             │
+│                        │ Real-time Displacement +   │
+│                        │ 강설 시뮬레이션            │
+│                        │ 압축/온도/시간 경화        │
+├─────────────────────────────────────────────────────┤
+│ Horizon Zero Dawn      │ Tessellation +             │
+│                        │ Pre-baked Displacement     │
+│ (2017)                 │ 단순 Decal (발자국)        │
+│                        │ ✗ 강설 없음                │
+├─────────────────────────────────────────────────────┤
+│ God of War (2018)      │ Parallax Occlusion +       │
+│                        │ Dynamic Decals             │
+│                        │ ✗ Tessellation 없음        │
+│                        │ ✓ 눈사태 효과 (스크립트)   │
+├─────────────────────────────────────────────────────┤
+│ Uncharted 4 (2016)     │ Normal Map만               │
+│                        │ Decal 발자국               │
+│                        │ ✗ 변형 없음                │
+│                        │ ✗ 강설 없음                │
+├─────────────────────────────────────────────────────┤
+│ The Last of Us 2       │ Tessellation (일부) +      │
+│ (2020)                 │ Displacement Map           │
+│                        │ ✓ 발자국 복원 (시간)       │
+│                        │ ✗ 강설 없음                │
+└─────────────────────────────────────────────────────┘
+
+RDR2의 독보적 특징:
+  ✓ 실시간 Displacement 수정 (GPU Render)
+  ✓ 강설 시뮬레이션 (발자국 자동 복원)
+  ✓ 온도/밀도 시뮬레이션 (물리적 정확도)
+  ✓ 대규모 월드에서도 동작 (Sparse Storage)
+        </div>
+
+        <div class="summary-box">
+            <h3>💡 핵심 정리</h3>
+            <ul>
+                <li><strong>눈의 특성:</strong> 압축성 (50%+), 적층성, 온도 민감, 시간 경화</li>
+                <li><strong>Tessellation:</strong> 카메라 거리에 따라 동적 세분화 (Level 1~8)</li>
+                <li><strong>Displacement Map:</strong> R16F Render Texture, Min Blend로 누적</li>
+                <li><strong>깊이 계산:</strong> 무게 + 속도 + 눈 밀도 + 온도</li>
+                <li><strong>강설 시뮬레이션:</strong> Compute Shader로 전체 눈 높이 증가</li>
+                <li><strong>바람 효과:</strong> 경사면에서 눈 날림, 바람 방향 쌓임</li>
+                <li><strong>온도 시뮬레이션:</strong> 0°C 이상에서 녹음 (Melting)</li>
+                <li><strong>최적화:</strong> Sparse Storage + LOD Tessellation</li>
+            </ul>
+
+            <div class="note" style="margin-top: 20px; border-left-color: #B45309;">
+                <strong>게임 내 적용 예시:</strong><br>
+                <ul style="margin-top: 10px;">
+                    <li>눈 덮인 산을 오를 때 무릎까지 빠지는 신선한 눈</li>
+                    <li>말을 타고 달리면 깊은 발굽 자국</li>
+                    <li>눈보라 후 이전 발자국이 모두 사라짐</li>
+                    <li>-20°C 날씨에 뽀드득 소리 (오디오 연동)</li>
+                    <li>햇빛 받은 경사면은 먼저 녹아 진흙탕</li>
+                    <li>압축된 눈길은 미끄러움 (물리 마찰력 감소)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="note">
+            <strong>참고:</strong> RDR2의 눈 시스템은 단순 렌더링을 넘어 게임플레이와 깊이 연동됩니다. 눈 깊이에 따라 이동 속도 감소, 총소리가 눈에 흡수되어 작게 들림, 발자국 추적 퀘스트 등 시스템적 활용도가 매우 높습니다.
+        </div>
+    </div>
+</body>
+</html>

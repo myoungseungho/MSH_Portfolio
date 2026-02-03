@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>물속에 들어가면 저항이 느껴져요 - RDR2 Water Physics</title>
+    <style>
+        :root {
+            --main-color: #D97706;
+            --light-color: #FEF3C7;
+            --dark-color: #B45309;
+            --key-bg: #FDE68A;
+            --highlight-bg: #FEF3C7;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background: #fafafa;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .back-link {
+            display: inline-block;
+            color: var(--main-color);
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--main-color), var(--dark-color));
+            color: white;
+            padding: 50px 30px;
+            border-radius: 12px;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1.3em;
+            opacity: 0.95;
+            font-weight: 300;
+        }
+
+        .content-section {
+            background: white;
+            padding: 35px;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+
+        h2 {
+            color: var(--main-color);
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid var(--light-color);
+        }
+
+        h3 {
+            color: var(--dark-color);
+            font-size: 1.4em;
+            margin: 25px 0 15px 0;
+        }
+
+        .q {
+            background: var(--highlight-bg);
+            padding: 20px;
+            border-left: 4px solid var(--main-color);
+            margin: 20px 0;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .a {
+            padding: 20px;
+            margin: 20px 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .diagram {
+            background: #f8f9fa;
+            border: 2px solid var(--light-color);
+            padding: 25px;
+            margin: 25px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            border-radius: 8px;
+            line-height: 1.5;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 25px;
+            margin: 25px 0;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            line-height: 1.6;
+        }
+
+        .summary-box {
+            background: var(--key-bg);
+            border: 2px solid var(--main-color);
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 10px;
+        }
+
+        .summary-box h3 {
+            color: var(--dark-color);
+            margin-top: 0;
+        }
+
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        strong {
+            color: var(--dark-color);
+        }
+
+        .highlight {
+            background: var(--highlight-bg);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th {
+            background: var(--light-color);
+            padding: 12px;
+            border: 1px solid #ddd;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../rdr2/" class="back-link">← RDR2 기술 목록으로</a>
+
+        <header>
+            <h1>물속에 들어가면 저항이 느껴져요</h1>
+            <div class="subtitle">물 시뮬레이션과 부력 시스템</div>
+        </header>
+
+        <div class="content-section">
+            <h2>Part 1: 물의 물리적 특성</h2>
+
+            <div class="q">Q: 왜 RDR2의 물은 이렇게 현실적이에요?</div>
+
+            <div class="a">
+                <p><strong>물의 3가지 물리적 특성을 모두 시뮬레이션하기 때문입니다.</strong></p>
+
+                <h3>물의 핵심 특성</h3>
+                <ol>
+                    <li><strong>부력 (Buoyancy)</strong>
+                        <ul>
+                            <li>물에 잠긴 부피만큼 위로 떠오름</li>
+                            <li>Arthur가 물에 뜨는 이유</li>
+                        </ul>
+                    </li>
+                    <li><strong>저항력 (Drag)</strong>
+                        <ul>
+                            <li>물이 움직임을 방해함</li>
+                            <li>수영이 땅보다 느린 이유</li>
+                        </ul>
+                    </li>
+                    <li><strong>표면 장력 (Surface Tension)</strong>
+                        <ul>
+                            <li>물 표면에 막이 있는 듯한 효과</li>
+                            <li>파문, 스플래시 생성</li>
+                        </ul>
+                    </li>
+                </ol>
+            </div>
+
+            <div class="diagram">
+물의 3가지 힘
+
+공기 ─────────────────────
+          ↑ 부력 (Buoyancy)
+물 ═══╪═══════════════════
+      👤 ← Arthur
+       ↓ 중력 (Gravity)
+       ↓
+       →← 저항력 (Drag)
+
+부력 > 중력 → 떠오름
+부력 < 중력 → 가라앉음
+부력 = 중력 → 떠 있음
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Part 2: 부력 계산 (Archimedes' Principle)</h2>
+
+            <div class="q">Q: 부력은 어떻게 계산해요?</div>
+
+            <div class="a">
+                <p><strong>아르키메데스 원리를 사용합니다.</strong></p>
+
+                <h3>아르키메데스 원리</h3>
+                <p>"물체가 받는 부력은 <span class="highlight">물체가 밀어낸 물의 무게</span>와 같다."</p>
+
+                <p><strong>수식:</strong></p>
+                <ul>
+                    <li>F_buoyancy = ρ_water × V_submerged × g</li>
+                    <li>ρ_water: 물의 밀도 (1000 kg/m³)</li>
+                    <li>V_submerged: 잠긴 부피</li>
+                    <li>g: 중력 가속도 (9.8 m/s²)</li>
+                </ul>
+
+                <h3>RDR2에서의 적용</h3>
+                <p>Arthur의 몸을 <span class="highlight">여러 개의 Sphere Collider</span>로 나눠서
+                각각의 잠긴 부피를 계산합니다.</p>
+            </div>
+
+            <div class="code-block">
+// 부력 계산 (의사코드)
+const WATER_DENSITY = 1000.0  // kg/m³
+const GRAVITY = 9.8           // m/s²
+
+function CalculateBuoyancy(rigidbody, waterLevel):
+    totalBuoyancy = Vector3.Zero
+
+    // 캐릭터를 여러 collider로 분할
+    for collider in rigidbody.colliders:
+        // 물에 잠긴 부분 계산
+        submergedVolume = CalculateSubmergedVolume(collider, waterLevel)
+
+        if submergedVolume > 0:
+            // 부력 = 밀도 × 부피 × 중력
+            buoyancyForce = WATER_DENSITY * submergedVolume * GRAVITY
+
+            // 위로 향하는 힘
+            totalBuoyancy += Vector3(0, buoyancyForce, 0)
+
+            // 부력의 작용점 (잠긴 부분 중심)
+            centerOfBuoyancy = CalculateSubmergedCenter(collider, waterLevel)
+
+            // 힘 적용
+            rigidbody.AddForceAtPosition(
+                Vector3(0, buoyancyForce, 0),
+                centerOfBuoyancy
+            )
+
+    return totalBuoyancy
+
+// 구형 Collider의 잠긴 부피
+function CalculateSubmergedVolume(sphereCollider, waterLevel):
+    center = sphereCollider.center
+    radius = sphereCollider.radius
+
+    // 물 표면까지의 거리
+    distanceToSurface = waterLevel - center.y
+
+    // 완전히 물 위
+    if distanceToSurface < -radius:
+        return 0.0
+
+    // 완전히 물 속
+    if distanceToSurface > radius:
+        return (4.0/3.0) * PI * radius³
+
+    // 부분적으로 잠김 (구의 일부 부피)
+    h = radius + distanceToSurface  // 잠긴 높이
+
+    // 구관(spherical cap) 부피 공식
+    volume = PI * h² * (3*radius - h) / 3.0
+
+    return volume
+            </code-block>
+
+            <div class="diagram">
+부력 계산 시각화
+
+[완전히 물 위]
+     공기
+  ─────────  ← waterLevel
+      ●      ← collider
+     물
+  부피 = 0 → 부력 = 0
+
+[반쯤 잠김]
+     공기
+  ───●────  ← waterLevel
+     ◐      ← 절반 잠김
+     물
+  부피 = 50% → 부력 = 중력의 50%
+
+[완전히 잠김]
+     공기
+  ─────────  ← waterLevel
+      ●      ← 완전 잠김
+     물
+  부피 = 100% → 부력 = 중력의 100%+
+
+결과:
+  Arthur (밀도 ~950 kg/m³ < 1000)
+    → 물에 뜸
+
+  돌 (밀도 ~2500 kg/m³ > 1000)
+    → 가라앉음
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Part 3: 물 저항력 (Drag Force)</h2>
+
+            <div class="q">Q: 왜 물속에서 느리게 움직여요?</div>
+
+            <div class="a">
+                <p><strong>물의 저항력(Drag) 때문입니다.</strong></p>
+
+                <h3>Drag Force 수식</h3>
+                <p>F_drag = -0.5 × ρ × C_d × A × v²</p>
+                <ul>
+                    <li><strong>ρ</strong>: 유체 밀도 (물 = 1000 kg/m³)</li>
+                    <li><strong>C_d</strong>: 항력 계수 (인체 ≈ 1.0~1.2)</li>
+                    <li><strong>A</strong>: 단면적</li>
+                    <li><strong>v</strong>: 속도</li>
+                </ul>
+
+                <p><strong>핵심: 속도의 제곱에 비례!</strong></p>
+                <p>→ 빠를수록 저항이 급격히 증가</p>
+            </div>
+
+            <div class="code-block">
+// 물 저항력 계산
+const WATER_DENSITY = 1000.0
+const DRAG_COEFFICIENT = 1.1  // 인체
+const CROSS_SECTION_AREA = 0.5  // m² (어깨 넓이)
+
+function ApplyWaterDrag(rigidbody, waterLevel):
+    velocity = rigidbody.velocity
+
+    // 물에 잠긴 정도 (0~1)
+    submersionRatio = CalculateSubmersionRatio(rigidbody, waterLevel)
+
+    if submersionRatio > 0:
+        // 속도 방향
+        velocityDirection = velocity.Normalized()
+
+        // 속도 크기의 제곱
+        speedSquared = velocity.LengthSquared()
+
+        // Drag 계산
+        dragMagnitude = 0.5 * WATER_DENSITY * DRAG_COEFFICIENT *
+                        CROSS_SECTION_AREA * speedSquared
+
+        // 속도 반대 방향으로 작용
+        dragForce = -velocityDirection * dragMagnitude * submersionRatio
+
+        rigidbody.AddForce(dragForce)
+
+// 각 방향별 다른 저항
+function ApplyDirectionalDrag(rigidbody, waterLevel):
+    velocity = rigidbody.velocity
+
+    // 수평 저항 (큼)
+    horizontalDrag = velocity.Horizontal() * -5.0
+
+    // 수직 저항 (상대적으로 작음)
+    verticalDrag = velocity.y * -2.0
+
+    rigidbody.AddForce(horizontalDrag + Vector3(0, verticalDrag, 0))
+
+// 회전 저항 (Angular Drag)
+function ApplyAngularDrag(rigidbody):
+    angularVelocity = rigidbody.angularVelocity
+
+    // 물속에서 회전 저항
+    angularDragCoefficient = 8.0  // 공기(0.05)보다 훨씬 큼
+
+    torque = -angularVelocity * angularDragCoefficient
+
+    rigidbody.AddTorque(torque)
+            </code-block>
+
+            <div class="diagram">
+저항력 시각화
+
+[공기 중 - 저항 작음]
+  👤 →→→→→  (5 m/s)
+  Drag = 0.05 N
+
+[물 속 - 저항 큼]
+  👤 →→  (2 m/s)
+  Drag = 20 N
+
+  속도가 절반이 되어도
+  저항은 40배 (밀도 차이)
+
+[속도 vs 저항]
+  1 m/s  → Drag = 1 N
+  2 m/s  → Drag = 4 N   (4배)
+  3 m/s  → Drag = 9 N   (9배)
+  5 m/s  → Drag = 25 N  (25배!)
+
+  → 속도의 제곱에 비례
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Part 4: 물결 시뮬레이션 (Gerstner Waves)</h2>
+
+            <div class="q">Q: 물결은 어떻게 만들어요?</div>
+
+            <div class="a">
+                <p><strong>Gerstner Wave 알고리즘을 사용합니다.</strong></p>
+
+                <h3>Gerstner Wave란?</h3>
+                <p>실제 해양 파도와 유사한 파형을 만드는 수학적 모델입니다.</p>
+
+                <p><strong>특징:</strong></p>
+                <ul>
+                    <li>파도 정점이 <strong>뾰족</strong>하고 골이 <strong>완만</strong>함 (현실과 같음)</li>
+                    <li>여러 파도를 <strong>합성</strong> 가능</li>
+                    <li>GPU에서 계산 가능 (Vertex Shader)</li>
+                </ul>
+            </div>
+
+            <div class="code-block">
+// Gerstner Wave 구현
+struct Wave:
+    float amplitude   // 진폭 (파도 높이)
+    float wavelength  // 파장 (파도 간격)
+    float speed       // 속도
+    Vector2 direction // 진행 방향
+
+function GerstnerWave(position, wave, time):
+    // 파수 (k = 2π / λ)
+    k = 2.0 * PI / wave.wavelength
+
+    // 각주파수 (ω = 2π / T)
+    omega = wave.speed * k
+
+    // 방향 벡터
+    D = wave.direction.Normalized()
+
+    // 위상
+    phase = Dot(D, position.xz) * k - omega * time
+
+    // X, Z 변위 (원형 운동)
+    offsetX = wave.amplitude * D.x * cos(phase)
+    offsetZ = wave.amplitude * D.y * cos(phase)
+
+    // Y 변위 (높이)
+    offsetY = wave.amplitude * sin(phase)
+
+    return Vector3(offsetX, offsetY, offsetZ)
+
+// 여러 파도 합성
+function CalculateWaterSurface(position, time):
+    waves = [
+        Wave{amplitude: 0.5, wavelength: 10.0, speed: 2.0, direction: (1,0)},
+        Wave{amplitude: 0.3, wavelength: 5.0, speed: 3.0, direction: (0.7,0.7)},
+        Wave{amplitude: 0.2, wavelength: 2.0, speed: 5.0, direction: (0,1)}
+    ]
+
+    totalOffset = Vector3.Zero
+
+    for wave in waves:
+        totalOffset += GerstnerWave(position, wave, time)
+
+    return position + totalOffset
+
+// Vertex Shader에서 실행
+VertexShader:
+    input: vertex position
+    output: displaced position
+
+    newPosition = CalculateWaterSurface(vertex.position, time)
+    gl_Position = MVP * newPosition
+            </code-block>
+
+            <div class="diagram">
+Gerstner Wave vs Sin Wave
+
+[Sin Wave - 부자연스러움]
+    ∧     ∧     ∧
+   ∕ ∖   ∕ ∖   ∕ ∖
+  ∕   ∖ ∕   ∖ ∕   ∖
+ ∕     ∨     ∨     ∖
+
+  정점과 골이 동일한 모양
+
+[Gerstner Wave - 현실적]
+    ∧∧    ∧∧    ∧∧
+   ∕  ∖  ∕  ∖  ∕  ∖
+  ∕    ⌒⌒    ⌒⌒    ∖
+
+  정점은 뾰족, 골은 완만
+
+[여러 파도 합성]
+  Wave 1: ∧∧∧∧∧  (큰 파도)
+  Wave 2:  ∧ ∧ ∧  (중간)
+  Wave 3:  ∧∧∧∧   (작은 잔물결)
+
+  합성:   ∧∧∧∧∧
+          ∧ ∧∧∧  ← 복잡한 형태
+            </diagram>
+        </div>
+
+        <div class="content-section">
+            <h2>Part 5: 물 진입 효과 (Splash & Ripple)</h2>
+
+            <div class="q">Q: 물에 뛰어들면 왜 물보라가 튀어요?</div>
+
+            <div class="a">
+                <p><strong>충돌 감지 + 파티클 시스템 조합입니다.</strong></p>
+
+                <h3>물 진입 시뮬레이션 단계</h3>
+                <ol>
+                    <li><strong>충돌 감지</strong>: Raycast로 물 표면 충돌 확인</li>
+                    <li><strong>충격량 계산</strong>: 속도 × 질량</li>
+                    <li><strong>Splash 생성</strong>: 파티클 이미터 활성화</li>
+                    <li><strong>Ripple 전파</strong>: 동심원 파문</li>
+                    <li><strong>사운드</strong>: 충격량에 따른 물소리</li>
+                </ol>
+            </div>
+
+            <div class="code-block">
+// 물 진입 감지
+function OnWaterEntry(object, waterSurface):
+    // 진입 속도
+    velocity = object.velocity
+
+    // 물에 수직인 속도 성분
+    verticalSpeed = Abs(velocity.y)
+
+    // 질량
+    mass = object.mass
+
+    // 충격량 (Impulse)
+    impulse = mass * verticalSpeed
+
+    // Splash 크기 결정
+    splashScale = Clamp(impulse / 100.0, 0.1, 5.0)
+
+    // Splash 파티클 생성
+    CreateSplash(object.position, splashScale)
+
+    // Ripple (파문) 생성
+    CreateRipple(object.position, splashScale)
+
+    // 사운드 재생
+    PlayWaterSound(impulse)
+
+// Splash 파티클
+function CreateSplash(position, scale):
+    emitter = ParticleEmitter{
+        position: position,
+        emissionRate: 100 * scale,
+        particleLifetime: 1.0,
+        startSpeed: 5.0 * scale,
+        startSize: 0.2 * scale,
+        gravity: -9.8
+    }
+
+    // 위쪽으로 분출
+    emitter.shape = "Cone"
+    emitter.direction = Vector3(0, 1, 0)
+    emitter.angle = 30  // 30도 원뿔
+
+    emitter.Emit(50 * scale)  // 입자 개수
+
+// Ripple (파문) 시뮬레이션
+function CreateRipple(position, scale):
+    ripple = {
+        center: position,
+        radius: 0.0,
+        maxRadius: 5.0 * scale,
+        speed: 2.0,
+        amplitude: 0.3 * scale,
+        lifetime: 3.0
+    }
+
+    activeRipples.Add(ripple)
+
+function UpdateRipples(deltaTime):
+    for ripple in activeRipples:
+        // 반지름 확장
+        ripple.radius += ripple.speed * deltaTime
+
+        // 진폭 감쇠
+        ripple.amplitude *= 0.95
+
+        // 수명 감소
+        ripple.lifetime -= deltaTime
+
+        if ripple.lifetime <= 0:
+            activeRipples.Remove(ripple)
+
+// 물 메쉬에 Ripple 적용 (Shader)
+function ApplyRippleToWater(vertexPosition):
+    height = 0.0
+
+    for ripple in activeRipples:
+        distance = Distance(vertexPosition.xz, ripple.center.xz)
+
+        // 파문 범위 내
+        if distance < ripple.radius:
+            // Sin 파형
+            wavePhase = (distance - ripple.radius) * 10.0
+            height += sin(wavePhase) * ripple.amplitude
+
+    return height
+            </code-block>
+
+            <div class="diagram">
+물 진입 시퀀스
+
+프레임 0: [공중]
+     👤  ↓ 5 m/s
+  ─────────  ← 물 표면
+
+프레임 1: [충돌 순간]
+     💥
+  ═══👤═══
+    Splash!
+
+  impulse = 80 kg × 5 m/s = 400 N·s
+  → Splash scale = 4.0
+
+프레임 5: [Splash + Ripple]
+    ∧ ∧ ∧  ← 물보라
+  ═══👤═══
+   ))  ))  ← 파문 전파
+
+프레임 20: [파문만 남음]
+  ─────────
+  )))))) ← 파문 확산 중
+   👤 (물속)
+
+파문 전파:
+  t=0.0s: 반지름 0m
+  t=0.5s: 반지름 1m
+  t=1.0s: 반지름 2m (진폭 감소)
+  t=2.0s: 반지름 4m (거의 사라짐)
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Part 6: 수영 애니메이션 블렌딩</h2>
+
+            <div class="q">Q: 수영 동작이 왜 이렇게 자연스러워요?</div>
+
+            <div class="a">
+                <p><strong>물리 시뮬레이션과 애니메이션을 블렌딩하기 때문입니다.</strong></p>
+
+                <h3>하이브리드 시스템</h3>
+                <p>순수 물리만 사용하면 이상하고, 순수 애니메이션만 사용하면 물과 상호작용이 없습니다.
+                RDR2는 둘을 <span class="highlight">블렌딩</span>합니다.</p>
+
+                <table>
+                    <tr>
+                        <th>상태</th>
+                        <th>물리 비중</th>
+                        <th>애니메이션 비중</th>
+                    </tr>
+                    <tr>
+                        <td><strong>수면 위</strong></td>
+                        <td>10%</td>
+                        <td>90% (키네마틱)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>반쯤 잠김</strong></td>
+                        <td>50%</td>
+                        <td>50% (하이브리드)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>완전 잠김</strong></td>
+                        <td>80%</td>
+                        <td>20% (IK로 손 위치만)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>익사</strong></td>
+                        <td>100%</td>
+                        <td>0% (래그돌)</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="code-block">
+// 수영 애니메이션 블렌딩
+function UpdateSwimming(character, waterLevel):
+    submersion = CalculateSubmersionRatio(character, waterLevel)
+
+    // 블렌딩 가중치
+    physicsWeight = submersion * 0.8
+    animationWeight = 1.0 - physicsWeight
+
+    // 애니메이션 포즈
+    animPose = GetSwimAnimation(character.inputDirection)
+
+    // 물리 포즈 (부력, 저항 적용된 상태)
+    physicsPose = SimulatePhysics(character, waterLevel)
+
+    // 블렌딩
+    finalPose = Lerp(animPose, physicsPose, physicsWeight)
+
+    character.SetPose(finalPose)
+
+    // IK로 손 위치 보정 (물결 따라가기)
+    ApplyHandIK(character, waterLevel)
+
+// 손 IK (물 표면 터치)
+function ApplyHandIK(character, waterLevel):
+    // 양손의 목표 위치
+    leftHandTarget = character.leftHand.position
+    rightHandTarget = character.rightHand.position
+
+    // 수영 동작 중이면
+    if character.isSwimming:
+        // 손이 물 표면 근처에 있도록
+        leftHandTarget.y = waterLevel + GetWaveHeight(leftHandTarget)
+        rightHandTarget.y = waterLevel + GetWaveHeight(rightHandTarget)
+
+        // IK Solver
+        SolveIK(character.leftArm, leftHandTarget)
+        SolveIK(character.rightArm, rightHandTarget)
+
+// 입력에 따른 수영 방향
+function GetSwimAnimation(inputDirection):
+    speed = inputDirection.Length()
+
+    if speed < 0.1:
+        return "Treading_Water"  // 제자리에서 동동
+
+    angle = Atan2(inputDirection.z, inputDirection.x)
+
+    if angle < 45:
+        return "Swim_Forward"
+    elif angle > 135:
+        return "Swim_Backward"
+    else:
+        return "Swim_Strafe"
+
+// Stamina 소모
+function UpdateStamina(character):
+    if character.isSwimming:
+        // 수영은 달리기보다 2배 빨리 지침
+        staminaDrain = 2.0 * deltaTime
+
+        character.stamina -= staminaDrain
+
+        if character.stamina <= 0:
+            // 익사 시작
+            character.StartDrowning()
+            </code-block>
+
+            <div class="diagram">
+애니메이션 블렌딩 시각화
+
+[수면 위 - 애니메이션 90%]
+     👤  ← 키네마틱 (애니메이션 주도)
+  ─────────
+     물
+
+  손발 움직임: 애니메이션
+  몸 위치: 약간의 부력만 적용
+
+[반쯤 잠김 - 50/50]
+  ─────────
+    👤  ← 하이브리드
+  ═════════
+
+  손발 움직임: 애니메이션
+  몸 위치: 부력 + 저항 + 애니메이션
+
+[완전 잠김 - 물리 80%]
+  ─────────
+  ═════════
+     👤  ← 물리 주도
+  ═════════
+
+  손발 위치: IK로 보정
+  몸 위치: 부력 + 저항 (물리)
+
+[익사 - 물리 100%]
+  ─────────
+  ═════════
+     💀  ← 래그돌
+  ═════════
+
+  완전 물리 시뮬레이션
+            </diagram>
+        </div>
+
+        <div class="content-section">
+            <h2>실제 게임 예시</h2>
+
+            <div class="q">Q: 어디서 물리 시뮬레이션을 체험할 수 있어요?</div>
+
+            <div class="a">
+                <h3>1. Flat Iron Lake (평평한 호수)</h3>
+                <ul>
+                    <li>말을 타고 천천히 들어가면: <strong>점진적 부력 증가</strong></li>
+                    <li>말이 물에 뜨면서 <strong>수영 애니메이션</strong>으로 전환</li>
+                    <li>물에서 나올 때: <strong>물 떨어지는 효과</strong></li>
+                </ul>
+
+                <h3>2. Dakota River (빠른 강)</strong></h3>
+                <ul>
+                    <li>강물이 Arthur를 <strong>흐름 방향으로 밀어냄</strong></li>
+                    <li>거슬러 수영하면: <strong>속도 크게 감소</strong> (저항 2배)</li>
+                    <li>물살에 밀려 바위 부딪히면: <strong>데미지 + 래그돌</strong></li>
+                </ul>
+
+                <h3>3. Elysian Pool (깊은 웅덩이)</h3>
+                <ul>
+                    <li>높은 곳에서 뛰어내리면: <strong>큰 Splash</strong></li>
+                    <li>impulse 계산: 높이 10m → splash scale 8.0</li>
+                    <li>수심 깊어서 <strong>바닥 안 닿음</strong> → 계속 수영 필요</li>
+                </ul>
+
+                <h3>4. Kamassa River (늪지대)</h3>
+                <ul>
+                    <li>악어가 물속에서 <strong>부력 + IK</strong>로 수영</li>
+                    <li>Arthur 잡아당기면: <strong>물리 상호작용</strong></li>
+                    <li>늪 특성: 밀도 높음 → 부력 크지만 저항도 큼</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>💡 핵심 정리</h3>
+            <ul>
+                <li><strong>부력 (Buoyancy)</strong>: 아르키메데스 원리 (ρ × V × g), Sphere Collider로 부피 계산</li>
+                <li><strong>저항 (Drag)</strong>: 속도 제곱에 비례 (F = -0.5 × ρ × C_d × A × v²)</li>
+                <li><strong>Gerstner Wave</strong>: 현실적인 파도 시뮬레이션 (정점 뾰족, 골 완만)</li>
+                <li><strong>Splash & Ripple</strong>: 충격량 기반 파티클 + 동심원 파문</li>
+                <li><strong>애니메이션 블렌딩</strong>: 물리(80%) + 애니메이션(20%) 하이브리드</li>
+                <li><strong>IK</strong>: 손이 물 표면 터치하도록 실시간 보정</li>
+            </ul>
+
+            <p style="margin-top: 15px;"><strong>기술적 의의:</strong></p>
+            <p>단순히 "물속 이동"이 아니라, <span class="highlight">물의 물리적 특성</span>을 정확히 시뮬레이션했습니다.
+            부력, 저항, 파도가 모두 실시간으로 계산되어 플레이어가 물과 상호작용하는 느낌을 극대화합니다.
+            특히 애니메이션과 물리의 블렌딩으로 자연스러움과 현실성을 동시에 달성했습니다.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>구름이 진짜 하늘에 떠 있는 것 같아요 - RDR2 기술 연구</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            color: #1f2937;
+            background: linear-gradient(135deg, #FEF3C7 0%, #ffffff 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(217, 119, 6, 0.1);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #D97706;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            color: #B45309;
+            transform: translateX(-5px);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #D97706;
+            margin-bottom: 10px;
+            border-bottom: 4px solid #D97706;
+            padding-bottom: 15px;
+        }
+
+        .subtitle {
+            font-size: 1.3em;
+            color: #B45309;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+
+        h2 {
+            font-size: 1.8em;
+            color: #D97706;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-left: 15px;
+            border-left: 5px solid #D97706;
+        }
+
+        h3 {
+            font-size: 1.3em;
+            color: #B45309;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+
+        .q {
+            background: #FEF3C7;
+            border-left: 4px solid #D97706;
+            padding: 20px;
+            margin: 25px 0;
+            font-weight: 600;
+            color: #B45309;
+            font-size: 1.1em;
+        }
+
+        .a {
+            background: #f9fafb;
+            padding: 20px;
+            margin: 15px 0 25px 20px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .key-point {
+            background: #FDE68A;
+            border-left: 4px solid #B45309;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .highlight {
+            background: #FEF3C7;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #B45309;
+        }
+
+        pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border: 2px solid #D97706;
+        }
+
+        code {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .ascii-diagram {
+            background: #f9fafb;
+            border: 2px solid #D97706;
+            padding: 20px;
+            margin: 25px 0;
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+            border-radius: 8px;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+            border: 3px solid #D97706;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+
+        .summary-box h3 {
+            color: #B45309;
+            margin-top: 0;
+            font-size: 1.4em;
+        }
+
+        .summary-box ul {
+            margin-left: 20px;
+            margin-top: 15px;
+        }
+
+        .summary-box li {
+            margin: 10px 0;
+            color: #1f2937;
+        }
+
+        ul, ol {
+            margin-left: 30px;
+            margin: 15px 0 15px 30px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        strong {
+            color: #B45309;
+        }
+
+        .note {
+            background: #fff7ed;
+            border-left: 4px solid #D97706;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">← RDR2 기술 연구 목록으로</a>
+
+        <h1>구름이 진짜 하늘에 떠 있는 것 같아요</h1>
+        <div class="subtitle">Volumetric Cloud 렌더링</div>
+
+        <div class="key-point">
+            Red Dead Redemption 2의 구름은 단순한 2D 텍스처가 아닙니다. 실제 3차원 공간에 존재하며, 빛이 투과하고 산란되는 물리적 시뮬레이션을 통해 렌더링됩니다. 이것이 게임 내에서 구름 사이를 날아다니거나, 산 정상에서 구름 아래를 내려다볼 때 압도적인 현실감을 주는 이유입니다.
+        </div>
+
+        <h2>Part 1: 빌보드 구름의 한계</h2>
+
+        <div class="q">Q. 기존 게임들의 구름은 어떻게 만들어졌나요?</div>
+        <div class="a">
+            대부분의 게임은 <span class="highlight">빌보드(Billboard)</span> 기법을 사용합니다. 구름 텍스처를 평면에 붙여서 항상 카메라를 향하도록 회전시키는 방식이죠.
+            <br><br>
+            <strong>빌보드 방식의 문제점:</strong>
+            <ul>
+                <li>옆에서 보면 납작함이 드러남</li>
+                <li>구름 사이를 통과할 수 없음 (불투명한 벽)</li>
+                <li>빛과의 상호작용 불가능 (태양 위치에 따른 변화 없음)</li>
+                <li>깊이감이 없음 (항상 같은 거리에 있는 것처럼 보임)</li>
+            </ul>
+        </div>
+
+        <div class="ascii-diagram">
+빌보드 구름의 한계:
+
+     카메라
+       👁
+        \
+         \   구름 텍스처 (평면)
+          \ ┌─────────┐
+            │  ☁☁☁  │  ← 항상 카메라를 향함
+            └─────────┘
+
+옆에서 보면:
+
+     👁 ────────→  │ ← 납작한 평면
+     카메라        구름
+
+
+RDR2의 입체 구름:
+
+     카메라
+       👁
+        \
+         \      구름 (3D 볼륨)
+          \    ╱▔▔▔▔▔╲
+           ╲  │  ☁☁☁  │  ← 실제 3차원 공간 차지
+            ╲ │ ☁☁☁☁ │
+              ╲▁▁▁▁▁╱
+
+옆에서 봐도 자연스러움:
+
+     👁 ──────→   ╱▔╲    ← 실제 부피가 있음
+     카메라       │☁☁│
+                  ╲▁╱
+        </div>
+
+        <h2>Part 2: Ray Marching 기초</h2>
+
+        <div class="q">Q. 3D 구름은 어떻게 그리나요?</div>
+        <div class="a">
+            <span class="highlight">Ray Marching</span> 기법을 사용합니다. 카메라에서 픽셀 방향으로 광선을 쏘고, 일정 간격으로 "샘플링"하면서 구름 밀도를 누적합니다.
+            <br><br>
+            <strong>Ray Marching 단계:</strong>
+            <ol>
+                <li>카메라에서 픽셀 방향으로 광선(Ray) 생성</li>
+                <li>광선을 따라 일정 간격(Step)으로 이동</li>
+                <li>각 지점에서 구름 밀도 샘플링</li>
+                <li>밀도에 따라 색상과 투명도 누적</li>
+                <li>누적값이 불투명해지면 중단 (조기 종료)</li>
+            </ol>
+        </div>
+
+        <div class="ascii-diagram">
+Ray Marching 과정:
+
+카메라      구름 볼륨
+  👁 ════════════════════════════════╗
+   ╲                                 ║  ← 구름 시작 지점
+    ╲   Step 1  Step 2  Step 3      ║
+     ╲    ●────→●────→●────→●       ║  ← 샘플 지점
+      ╲                     ╲        ║
+       ╲                     ●───→●  ║  ← 밀도 누적
+        ╲                            ║
+         ╲═══════════════════════════╝
+
+각 Step에서:
+  밀도 = SampleNoise(position)
+  누적_색상 += 밀도 × 빛_색상
+  누적_투명도 += 밀도
+
+  if (누적_투명도 > 0.95) break;  // 조기 종료
+        </div>
+
+        <pre><code>// 의사코드: Ray Marching
+function RenderVolumetricCloud(rayOrigin, rayDirection) {
+    color = vec3(0, 0, 0);
+    transmittance = 1.0;  // 투과율 (1 = 완전 투명)
+
+    float stepSize = 50.0;  // 50m 간격
+    float maxDistance = 10000.0;  // 최대 10km
+
+    for (float distance = 0; distance < maxDistance; distance += stepSize) {
+        vec3 samplePos = rayOrigin + rayDirection * distance;
+
+        // 구름 밀도 샘플링 (0~1)
+        float density = SampleCloudDensity(samplePos);
+
+        if (density > 0.01) {
+            // 빛 계산
+            vec3 lightColor = CalculateLighting(samplePos, density);
+
+            // 색상 누적 (Beer-Lambert Law)
+            color += transmittance * density * lightColor * stepSize;
+            transmittance *= exp(-density * stepSize * 0.01);
+
+            // 조기 종료 (거의 불투명)
+            if (transmittance < 0.05) break;
+        }
+    }
+
+    return color;
+}</code></pre>
+
+        <h2>Part 3: 노이즈로 구름 모양 만들기</h2>
+
+        <div class="q">Q. 구름의 자연스러운 모양은 어떻게 만드나요?</div>
+        <div class="a">
+            여러 종류의 <span class="highlight">노이즈 함수</span>를 조합합니다. RDR2는 Perlin Noise와 Worley Noise를 혼합하여 사용합니다.
+            <br><br>
+            <strong>노이즈 종류:</strong>
+            <ul>
+                <li><strong>Perlin Noise:</strong> 부드러운 언덕 형태, 구름의 큰 덩어리</li>
+                <li><strong>Worley Noise:</strong> 셀 패턴, 구름의 뭉게뭉게한 디테일</li>
+                <li><strong>다중 옥타브:</strong> 큰 패턴 + 작은 디테일 조합</li>
+            </ul>
+        </div>
+
+        <div class="ascii-diagram">
+노이즈 조합 과정:
+
+1. Base Shape (Perlin Noise - 저주파)
+   ╭─────────╮
+   │  ▄▄▄▄▄  │  ← 큰 덩어리
+   │ ███████ │
+   ╰─────────╯
+
+2. Detail (Worley Noise - 고주파)
+   ╭─────────╮
+   │ ●  ● ●  │  ← 작은 디테일
+   │  ● ●  ● │
+   ╰─────────╯
+
+3. 조합 결과
+   ╭─────────╮
+   │  ▄●▄●▄  │  ← 자연스러운 구름
+   │ ██●██●█ │
+   ╰─────────╯
+
+옥타브 누적:
+   Octave 1 (큰 패턴)     Octave 2 (중간)       Octave 3 (디테일)
+   ~~~~~~~~~~~           ∼∼∼∼∼∼∼∼∼∼∼         ˙˙˙˙˙˙˙˙˙˙˙
+                                      ↓
+                           최종 = O1 + O2×0.5 + O3×0.25
+        </div>
+
+        <pre><code>// 의사코드: 구름 밀도 계산
+function SampleCloudDensity(position) {
+    // 1. Base Shape (큰 덩어리)
+    float baseNoise = PerlinNoise3D(position * 0.0001);  // 매우 큰 스케일
+
+    // 2. 고도에 따른 감쇠 (구름 층 경계)
+    float heightGradient = smoothstep(2000, 3000, position.y) *
+                           (1.0 - smoothstep(6000, 8000, position.y));
+
+    // 3. Base 밀도
+    float baseDensity = baseNoise * heightGradient;
+    if (baseDensity < 0.1) return 0.0;  // 조기 종료
+
+    // 4. Detail Erosion (디테일 침식)
+    float worleyNoise1 = WorleyNoise3D(position * 0.001);
+    float worleyNoise2 = WorleyNoise3D(position * 0.003);
+    float worleyNoise3 = WorleyNoise3D(position * 0.009);
+
+    float detailNoise = worleyNoise1 * 0.5 +
+                        worleyNoise2 * 0.3 +
+                        worleyNoise3 * 0.2;
+
+    // 5. 디테일로 Base를 깎아냄 (Erosion)
+    float finalDensity = baseDensity - detailNoise * 0.3;
+
+    return max(0.0, finalDensity);
+}
+
+// Worley Noise (Cellular Noise)
+function WorleyNoise3D(position) {
+    vec3 cellID = floor(position);
+    vec3 localPos = fract(position);
+
+    float minDist = 999.0;
+
+    // 주변 27개 셀 검사
+    for (int z = -1; z <= 1; z++) {
+        for (int y = -1; y <= 1; y++) {
+            for (int x = -1; x <= 1; x++) {
+                vec3 neighbor = vec3(x, y, z);
+                vec3 point = Random3D(cellID + neighbor);  // 각 셀의 랜덤 점
+
+                float dist = length(neighbor + point - localPos);
+                minDist = min(minDist, dist);
+            }
+        }
+    }
+
+    return minDist;  // 가장 가까운 점까지의 거리
+}</code></pre>
+
+        <h2>Part 4: 빛 산란 (Light Scattering)</h2>
+
+        <div class="q">Q. 구름이 태양 빛을 받아 빛나는 효과는?</div>
+        <div class="a">
+            <span class="highlight">Beer-Lambert Law</span>로 빛의 흡수를, <span class="highlight">Henyey-Greenstein Phase Function</span>으로 빛의 산란 방향을 계산합니다.
+            <br><br>
+            <strong>핵심 개념:</strong>
+            <ul>
+                <li><strong>Beer-Lambert:</strong> 밀도가 높을수록 빛이 덜 통과함</li>
+                <li><strong>Henyey-Greenstein:</strong> 전방 산란 (빛이 주로 앞으로 나아감)</li>
+                <li><strong>Second Ray:</strong> 빛 방향으로도 Ray Marching (그림자)</li>
+            </ul>
+        </div>
+
+        <div class="ascii-diagram">
+빛 산란 과정:
+
+          태양 ☀
+             │
+             │  빛 방향
+             ▼
+         ╭───────╮
+         │  ☁☁  │  ← 구름
+         │ ☁☁☁☁ │
+         ╰───────╯
+            ╱ ╲
+          ╱     ╲   산란광
+        ╱         ╲
+    👁 카메라
+
+Secondary Ray (그림자 계산):
+
+  ☀ 태양
+   ╲
+    ╲  Secondary Ray
+     ╲   (빛 방향으로 Ray March)
+      ▼
+    ┌─●─────┐
+    │ ☁▓▓☁  │  ← 샘플 지점에서 태양 방향으로
+    │☁▓▓▓☁  │     밀도 누적 = 그림자
+    └────────┘
+
+Beer-Lambert Law:
+    투과율 = e^(-밀도 × 거리)
+
+    밀도 높음 → 투과율 낮음 → 어두움
+    밀도 낮음 → 투과율 높음 → 밝음
+        </div>
+
+        <pre><code>// 의사코드: 빛 계산
+function CalculateLighting(position, density) {
+    vec3 sunDirection = normalize(vec3(0.5, 0.8, 0.3));
+    vec3 sunColor = vec3(1.0, 0.95, 0.8);
+
+    // 1. 태양 방향으로 Ray March (그림자)
+    float lightEnergy = 1.0;
+    float stepSize = 100.0;
+
+    for (int i = 0; i < 6; i++) {  // 6 steps만 (성능)
+        vec3 samplePos = position + sunDirection * stepSize * i;
+        float sampleDensity = SampleCloudDensity(samplePos);
+
+        // Beer-Lambert Law
+        lightEnergy *= exp(-sampleDensity * stepSize * 0.01);
+
+        if (lightEnergy < 0.01) break;
+    }
+
+    // 2. Henyey-Greenstein Phase Function
+    float cosTheta = dot(normalize(cameraDir), sunDirection);
+    float g = 0.6;  // 전방 산란 계수
+    float phase = (1.0 - g * g) /
+                  pow(1.0 + g * g - 2.0 * g * cosTheta, 1.5);
+
+    // 3. 최종 색상
+    vec3 ambient = vec3(0.4, 0.5, 0.6) * 0.3;  // 하늘색 환경광
+    vec3 directLight = sunColor * lightEnergy * phase;
+
+    return ambient + directLight;
+}
+
+// Henyey-Greenstein Phase Function
+// g = -1: 후방 산란, g = 0: 등방 산란, g = 1: 전방 산란
+function HGPhase(cosTheta, g) {
+    return (1.0 - g * g) / (4.0 * PI * pow(1.0 + g * g - 2.0 * g * cosTheta, 1.5));
+}</code></pre>
+
+        <h2>Part 5: 성능 최적화 (Temporal Reprojection)</h2>
+
+        <div class="q">Q. Ray Marching은 너무 느리지 않나요?</div>
+        <div class="a">
+            맞습니다. 매 프레임 모든 픽셀에서 Ray Marching을 하면 성능이 감당 안 됩니다. RDR2는 <span class="highlight">Temporal Reprojection</span>을 사용합니다.
+            <br><br>
+            <strong>최적화 기법:</strong>
+            <ul>
+                <li><strong>1/4 해상도 렌더링:</strong> 960×540으로 먼저 그림</li>
+                <li><strong>이전 프레임 재사용:</strong> 70%는 이전 프레임 결과</li>
+                <li><strong>Upsampling:</strong> 1080p로 업스케일</li>
+                <li><strong>Jittering:</strong> 매 프레임 샘플 위치를 살짝 이동</li>
+            </ul>
+        </div>
+
+        <div class="ascii-diagram">
+Temporal Reprojection 흐름:
+
+프레임 N-1:
+    ┌─────────────┐
+    │  구름 렌더  │  (1/4 해상도)
+    │   결과 A    │
+    └─────────────┘
+          │
+          ▼
+    [History Buffer에 저장]
+          │
+          ▼
+프레임 N:
+    ┌─────────────┐
+    │  새 샘플    │  (30%)  ←─ 새로 계산
+    │   결과 B    │
+    └─────────────┘
+          │
+          ▼
+    [History Buffer에서 70% 가져옴]
+          │
+          ▼
+    ┌─────────────┐
+    │ 혼합 결과   │  = B × 0.3 + A × 0.7
+    │  (최종)     │
+    └─────────────┘
+          │
+          ▼
+    [Upsampling to 1080p]
+
+카메라 움직임 보정:
+    이전 프레임 픽셀 위치 = 현재 위치 - 카메라 이동량
+        </div>
+
+        <pre><code>// 의사코드: Temporal Reprojection
+struct CloudRenderPass {
+    RenderTarget currentFrame;
+    RenderTarget historyBuffer;
+    int frameIndex = 0;
+}
+
+function RenderCloudsWithTemporal() {
+    // 1. 1/4 해상도로 렌더링 (960×540)
+    RenderTarget lowRes = CreateRenderTarget(960, 540);
+
+    // 2. Jittered Ray Marching
+    vec2 jitter = HaltonSequence(frameIndex % 16);  // 0~16 순환
+
+    for each pixel in lowRes {
+        // 픽셀 중심에서 살짝 이동 (Temporal AA)
+        vec2 uv = (pixelCoord + jitter) / resolution;
+        vec3 rayDir = CalculateRayDirection(uv);
+
+        // 30%만 새로 계산
+        if (frameIndex % 3 == pixelCoord.x % 3) {
+            color = RenderVolumetricCloud(cameraPos, rayDir);
+        } else {
+            // 70%는 이전 프레임에서 가져옴
+            vec2 prevUV = ReprojectToLastFrame(uv, cameraMatrix);
+            color = historyBuffer.Sample(prevUV);
+        }
+
+        currentFrame[pixel] = color;
+    }
+
+    // 3. Temporal Blend (모션 감지 시 가중치 조정)
+    for each pixel {
+        vec2 prevUV = Reproject(pixel);
+        float motion = length(currentVelocity);
+
+        float blendFactor = motion > 0.1 ? 0.5 : 0.3;  // 움직임 많으면 새 샘플 더 사용
+
+        finalColor = currentFrame[pixel] * blendFactor +
+                     historyBuffer[prevUV] * (1.0 - blendFactor);
+    }
+
+    // 4. Upsampling (1080p)
+    RenderTarget fullRes = BilateralUpsample(lowRes, depthBuffer);
+
+    // 5. History 업데이트
+    historyBuffer = currentFrame;
+    frameIndex++;
+
+    return fullRes;
+}
+
+// Halton Sequence (저차원 준난수 생성)
+function HaltonSequence(index) {
+    return vec2(Halton(index, 2), Halton(index, 3));
+}
+
+function Halton(index, base) {
+    float result = 0.0;
+    float f = 1.0;
+    int i = index;
+    while (i > 0) {
+        f = f / base;
+        result += f * (i % base);
+        i = floor(i / base);
+    }
+    return result;
+}</code></pre>
+
+        <h2>Part 6: 시간에 따른 구름 변화</h2>
+
+        <div class="q">Q. 구름이 시간에 따라 변하는 건 어떻게?</div>
+        <div class="a">
+            노이즈 샘플링 위치에 <span class="highlight">시간 오프셋</span>을 더합니다. 풍향과 속도를 시뮬레이션하여 자연스러운 구름 이동을 구현합니다.
+        </div>
+
+        <div class="ascii-diagram">
+시간에 따른 노이즈 이동:
+
+시간 T=0:
+    position = (x, y, z)
+    noise = Sample(position)
+
+시간 T=10:
+    windVector = (2, 0, 0.5)  // 동쪽으로 2m/s
+    offset = windVector × time
+    position = (x + offset.x, y, z + offset.z)
+    noise = Sample(position)  ← 구름이 이동한 것처럼 보임
+
+다층 구름 (고도별 다른 풍속):
+
+  ▲ 고도
+  │
+8km┤  ☁☁  →→→  (30 m/s, 제트기류)
+  │
+5km┤   ☁☁☁ →→  (15 m/s, 중간 바람)
+  │
+2km┤  ☁☁☁☁ →   (5 m/s, 낮은 바람)
+  │
+  └─────────────→ 시간
+        </div>
+
+        <pre><code>// 의사코드: 구름 애니메이션
+struct CloudAnimationParams {
+    vec3 baseWindVelocity = vec3(10, 0, 3);  // 10m/s 동쪽, 3m/s 북쪽
+    float timeScale = 0.1;  // 시간 스케일 (느리게)
+}
+
+function SampleCloudDensityAnimated(position, gameTime) {
+    // 1. 고도에 따른 풍속 (높을수록 빠름)
+    float heightFactor = position.y / 8000.0;  // 0~1
+    vec3 wind = baseWindVelocity * (1.0 + heightFactor * 2.0);
+
+    // 2. 시간에 따른 오프셋
+    float t = gameTime * timeScale;
+    vec3 offset = wind * t;
+
+    // 3. 다중 스케일 이동 (큰 패턴은 느리게, 디테일은 빠르게)
+    vec3 basePos = position + offset * 0.3;      // Base Shape (느림)
+    vec3 detailPos = position + offset * 1.0;    // Detail (빠름)
+
+    // 4. 샘플링
+    float baseNoise = PerlinNoise3D(basePos * 0.0001);
+    float detailNoise = WorleyNoise3D(detailPos * 0.003);
+
+    // 5. 추가 변화: 시간에 따라 밀도 변화 (생성/소멸)
+    float lifeCycle = sin(gameTime * 0.001 + position.x * 0.0001) * 0.5 + 0.5;
+
+    float finalDensity = (baseNoise - detailNoise * 0.3) * lifeCycle;
+    return max(0.0, finalDensity);
+}
+
+// 날씨 시스템 연동
+function WeatherBasedClouds(position, weatherState) {
+    switch (weatherState) {
+        case CLEAR_SKY:
+            return SampleDensity(position) * 0.3;  // 옅은 구름
+
+        case PARTLY_CLOUDY:
+            return SampleDensity(position) * 0.7;
+
+        case OVERCAST:
+            return SampleDensity(position) * 1.2;  // 짙은 구름
+
+        case STORM:
+            // 먹구름 (Cumulonimbus)
+            float stormDensity = SampleDensity(position) * 1.5;
+            stormDensity += WorleyNoise3D(position * 0.01) * 0.5;  // 추가 디테일
+            return stormDensity;
+    }
+}</code></pre>
+
+        <div class="summary-box">
+            <h3>💡 핵심 정리</h3>
+            <ul>
+                <li><strong>빌보드 구름:</strong> 평면 텍스처, 옆에서 보면 납작함</li>
+                <li><strong>Ray Marching:</strong> 광선을 따라 샘플링하며 밀도 누적</li>
+                <li><strong>노이즈 조합:</strong> Perlin (큰 덩어리) + Worley (디테일)</li>
+                <li><strong>Beer-Lambert Law:</strong> 밀도에 따른 빛 흡수 (투과율 = e^(-밀도×거리))</li>
+                <li><strong>Henyey-Greenstein:</strong> 전방 산란 (빛이 앞으로 나아감)</li>
+                <li><strong>Temporal Reprojection:</strong> 이전 프레임 70% 재사용, 1/4 해상도</li>
+                <li><strong>시간 애니메이션:</strong> 노이즈 샘플링 위치에 풍향×시간 오프셋</li>
+            </ul>
+
+            <div class="note" style="margin-top: 20px; border-left-color: #B45309;">
+                <strong>게임 내 적용 예시:</strong><br>
+                <ul style="margin-top: 10px;">
+                    <li>산 정상에서 구름 아래를 내려다볼 때 실제 깊이감</li>
+                    <li>비행선을 타고 구름 사이를 통과할 때 안개처럼 시야 감소</li>
+                    <li>일출/일몰 시 구름 가장자리가 빛남 (Rim Lighting)</li>
+                    <li>폭풍 전 먹구름이 점점 짙어지는 효과</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="note">
+            <strong>참고:</strong> 실제 RDR2는 이 기법들을 훨씬 더 복잡하게 조합합니다. Multiple Scattering (다중 산란), 구름 종류별 파라미터 (적운, 층운, 난층운), God Rays (빛줄기) 등이 추가됩니다. 여기서는 핵심 원리만 설명했습니다.
+        </div>
+    </div>
+</body>
+</html>

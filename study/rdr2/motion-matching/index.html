@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>아서가 걷다가 자연스럽게 뛰는 법 - RDR2 Motion Matching</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            color: #1f2937;
+            background: linear-gradient(135deg, #FEF3C7 0%, #ffffff 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(217, 119, 6, 0.15);
+        }
+
+        .back-link {
+            display: inline-block;
+            color: #D97706;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .back-link:hover {
+            color: #B45309;
+        }
+
+        h1 {
+            color: #D97706;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            border-bottom: 4px solid #D97706;
+            padding-bottom: 15px;
+        }
+
+        .subtitle {
+            color: #B45309;
+            font-size: 1.3em;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+
+        h2 {
+            color: #D97706;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-left: 5px solid #D97706;
+            padding-left: 15px;
+        }
+
+        h3 {
+            color: #B45309;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .q {
+            background: #FEF3C7;
+            border-left: 5px solid #D97706;
+            padding: 20px;
+            margin: 25px 0;
+            font-weight: 600;
+            font-size: 1.15em;
+            color: #B45309;
+        }
+
+        .a {
+            background: #ffffff;
+            border-left: 3px solid #FDE68A;
+            padding: 20px;
+            margin: 15px 0 25px 20px;
+            line-height: 1.9;
+        }
+
+        pre {
+            background: #1f2937;
+            color: #FEF3C7;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border: 2px solid #D97706;
+        }
+
+        code {
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+        }
+
+        .diagram {
+            background: #f9fafb;
+            border: 2px solid #D97706;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #FDE68A 0%, #FEF3C7 100%);
+            border: 3px solid #D97706;
+            border-radius: 10px;
+            padding: 25px;
+            margin: 30px 0;
+            box-shadow: 0 4px 15px rgba(217, 119, 6, 0.2);
+        }
+
+        .summary-box h3 {
+            color: #B45309;
+            margin-top: 0;
+            font-size: 1.5em;
+        }
+
+        .highlight {
+            background: #FEF3C7;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #B45309;
+        }
+
+        .key-point {
+            background: #FDE68A;
+            border-left: 4px solid #D97706;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        ul, ol {
+            margin: 15px 0 15px 30px;
+        }
+
+        li {
+            margin: 10px 0;
+        }
+
+        strong {
+            color: #D97706;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../rdr2/" class="back-link">← RDR2 연구 목록으로</a>
+
+        <h1>아서가 걷다가 자연스럽게 뛰는 법</h1>
+        <p class="subtitle">Motion Matching 애니메이션 시스템</p>
+
+        <div class="q">Q: 다른 게임보다 아서의 움직임이 왜 더 자연스러운가요?</div>
+        <div class="a">
+            대부분의 게임은 <strong>FSM (Finite State Machine)</strong>을 사용합니다.
+            "걷기" 상태에서 "뛰기" 상태로 전환할 때 <span class="highlight">딱딱하게 끊깁니다</span>.
+            하지만 RDR2는 <strong>Motion Matching</strong>이라는 최신 기술로,
+            수천 개의 애니메이션 프레임 중에서 현재 상황에 가장 자연스러운 프레임을 실시간으로 찾아 재생합니다.
+        </div>
+
+        <h2>Part 1: 기존 FSM 애니메이션의 한계</h2>
+
+        <div class="q">Q: FSM이 뭐가 문제인가요?</div>
+        <div class="a">
+            <strong>FSM (Finite State Machine) 방식:</strong>
+            <ol>
+                <li>애니메이션을 "걷기", "뛰기", "점프" 등 <strong>상태로 분리</strong></li>
+                <li>상태 간 전환은 <strong>미리 정의된 조건</strong>으로만 가능</li>
+                <li>전환 시점에 <strong>블렌딩 (Blending)</strong>으로 부드럽게 연결</li>
+            </ol>
+        </div>
+
+        <div class="diagram">
+FSM 예시
+
+     ┌─────────┐
+     │  Idle   │  (서있기)
+     └────┬────┘
+          │ 스틱 기울임 > 0.1
+          ▼
+     ┌─────────┐
+     │  Walk   │  (걷기)
+     └────┬────┘
+          │ 스틱 기울임 > 0.7
+          ▼
+     ┌─────────┐
+     │  Run    │  (뛰기)
+     └────┬────┘
+          │ 스페이스바
+          ▼
+     ┌─────────┐
+     │  Jump   │  (점프)
+     └─────────┘
+
+문제점:
+  1. 전환이 "딱딱" 끊김
+     Walk → Run 전환 시 0.3초 블렌딩
+     → 그 0.3초 동안 어색함
+
+  2. 방향 전환이 부자연스러움
+     앞으로 뛰다가 뒤로 뛰기 → FSM에 없음
+     → 먼저 Idle로 돌아갔다가 다시 Run
+     → 2단계 전환 = 매우 어색
+
+  3. 지형 적응 불가
+     경사, 계단, 돌 등
+     → 같은 "Walk" 애니메이션만 재생
+        </diagram>
+
+        <div class="key-point">
+            <strong>FSM의 근본적 한계:</strong>
+            <ul>
+                <li>애니메이션을 <strong>"상자"에 가둠</strong> (Walk 상자, Run 상자)</li>
+                <li>현실은 연속적이지만, FSM은 이산적</li>
+                <li>새로운 상황마다 새로운 상태 추가 → 복잡도 폭증</li>
+            </ul>
+        </div>
+
+        <h2>Part 2: Motion Matching 개념</h2>
+
+        <div class="q">Q: Motion Matching은 뭐가 다른가요?</div>
+        <div class="a">
+            <strong>Motion Matching의 핵심:</strong>
+            <span class="highlight">애니메이션을 "상태"로 나누지 않습니다.</span>
+            대신 <strong>거대한 데이터베이스</strong>에 수천 개의 프레임을 저장하고,
+            매 프레임마다 "지금 이 상황에 가장 잘 맞는 프레임"을 검색해서 재생합니다.
+        </div>
+
+        <div class="diagram">
+Motion Matching 방식
+
+애니메이션 데이터베이스 (50,000+ 프레임)
+┌──────────────────────────────────────────┐
+│ Frame 1: Walk_Forward_Flat_0001          │
+│ Frame 2: Walk_Forward_Flat_0002          │
+│ Frame 3: Walk_Forward_Uphill_0001        │
+│ Frame 4: Walk_Turning_Left_0001          │
+│ Frame 5: Run_Forward_Flat_0001           │
+│ ... (계속)                               │
+│ Frame 50000: Jump_Landing_Rock_0120      │
+└──────────────────────────────────────────┘
+                │
+                ▼ (실시간 검색)
+┌─────────────────────────────────────┐
+│ 현재 상황:                          │
+│ - 플레이어 속도: 3.5 m/s            │
+│ - 방향: 북쪽으로 15° 회전 중        │
+│ - 지형: 5° 오르막                   │
+│ - 입력: 스틱 100% 앞으로            │
+└─────────────────────────────────────┘
+                │
+                ▼ (특징 벡터 매칭)
+┌─────────────────────────────────────┐
+│ 검색 결과:                          │
+│ 1위: Frame 2847 (유사도 98%)        │
+│     Walk_Forward_Uphill_0057        │
+│ 2위: Frame 3201 (유사도 95%)        │
+│ 3위: Frame 1923 (유사도 92%)        │
+└─────────────────────────────────────┘
+                │
+                ▼
+         Frame 2847 재생!
+        </diagram>
+
+        <h2>Part 3: Feature Vector (특징 벡터)</h2>
+
+        <div class="q">Q: "가장 잘 맞는 프레임"은 어떻게 찾나요?</div>
+        <div class="a">
+            각 프레임을 <span class="highlight">Feature Vector</span>로 표현합니다.
+            위치, 속도, 방향, 각속도 등을 숫자 배열로 만들고, 현재 상황과 가장 유사한 벡터를 찾습니다.
+        </div>
+
+        <pre><code>// 의사코드: Feature Vector
+struct MotionFeatureVector {
+    // 1. 현재 상태
+    Vector3 rootPosition;         // 캐릭터 위치
+    Quaternion rootRotation;      // 방향
+    Vector3 rootVelocity;         // 속도 (m/s)
+    Vector3 rootAngularVelocity;  // 회전 속도 (rad/s)
+
+    // 2. 미래 궤적 (Trajectory)
+    //    0.1초, 0.3초, 0.5초 후 예상 위치/방향
+    Vector3[] futurePositions = new Vector3[3];
+    Vector3[] futureDirections = new Vector3[3];
+
+    // 3. 조인트 위치 (주요 관절만)
+    Vector3 leftFootPosition;
+    Vector3 rightFootPosition;
+    Vector3 leftHandPosition;
+    Vector3 rightHandPosition;
+    Vector3 hipPosition;
+
+    // 4. 조인트 속도
+    Vector3 leftFootVelocity;
+    Vector3 rightFootVelocity;
+
+    // 5. 지형 정보
+    float groundSlope;            // 경사도 (°)
+    float groundHeight;           // 높이
+
+    // 벡터를 1차원 배열로 평탄화
+    float[] ToArray() {
+        return [
+            rootPosition.x, rootPosition.y, rootPosition.z,
+            rootRotation.x, rootRotation.y, rootRotation.z, rootRotation.w,
+            rootVelocity.x, rootVelocity.y, rootVelocity.z,
+            // ... 총 50~100개 float 값
+        ];
+    }
+}
+
+// 유사도 계산 (거리)
+float CalculateSimilarity(MotionFeatureVector a, MotionFeatureVector b) {
+    float[] arrA = a.ToArray();
+    float[] arrB = b.ToArray();
+
+    float distance = 0.0f;
+
+    // 가중치 적용 유클리드 거리
+    for (int i = 0; i < arrA.Length; i++) {
+        float weight = GetFeatureWeight(i);  // 중요도에 따라 가중치
+        float diff = arrA[i] - arrB[i];
+        distance += weight * diff * diff;
+    }
+
+    return Sqrt(distance);
+}
+
+float GetFeatureWeight(int index) {
+    // 미래 궤적 = 가장 중요 (가중치 5.0)
+    if (IsFutureTrajectory(index)) return 5.0f;
+
+    // 발 위치 = 중요 (가중치 3.0)
+    if (IsFootPosition(index)) return 3.0f;
+
+    // 속도 = 보통 (가중치 2.0)
+    if (IsVelocity(index)) return 2.0f;
+
+    // 나머지 = 낮음 (가중치 1.0)
+    return 1.0f;
+}</code></pre>
+
+        <h2>Part 4: 실시간 검색 최적화 (KD-Tree)</h2>
+
+        <div class="q">Q: 50,000개 프레임을 매 프레임마다 검색하면 느리지 않나요?</div>
+        <div class="a">
+            매우 느립니다. 선형 검색하면 60fps에서 50,000번 비교 = 불가능.
+            그래서 <span class="highlight">KD-Tree (K-Dimensional Tree)</span>를 사용합니다.
+            검색 시간을 O(N) → O(log N)으로 줄입니다.
+        </div>
+
+        <div class="diagram">
+KD-Tree 구조 (단순화된 2D 예시)
+
+특징 공간 (속도 vs 회전속도)
+
+    회전속도 (rad/s)
+    ↑
+ 2.0│       ●        ●●●
+    │     ●   ●    ●    ●
+ 1.0│───────┼──────────────
+    │   ●● │ ●●       ●
+ 0.0│●●●   │     ●●
+    └───────┼──────────────→ 속도 (m/s)
+         2.0     4.0     6.0
+
+KD-Tree로 분할:
+  1. 속도 기준으로 분할 (중앙값 3.5)
+  2. 각 반쪽을 회전속도로 분할
+  3. 재귀적으로 반복
+
+검색 시:
+  - 현재 특징: (속도=3.0, 회전=1.5)
+  - 트리 탐색: 왼쪽 → 위쪽 → ...
+  - 50,000개 중 실제 비교: 약 200개만
+  - 시간: 0.05ms (60fps 유지 가능)
+        </diagram>
+
+        <pre><code>// 의사코드: KD-Tree 검색
+class MotionDatabase {
+    struct AnimFrame {
+        MotionFeatureVector features;
+        AnimationClip clip;
+        float time;  // 클립 내 시간
+    };
+
+    KDTree<AnimFrame> kdTree;  // 50,000+ 프레임
+
+    AnimFrame FindBestMatch(MotionFeatureVector currentFeatures) {
+        // KD-Tree 검색 (O(log N))
+        AnimFrame[] candidates = kdTree.NearestNeighbors(
+            currentFeatures,
+            k: 10  // 상위 10개만
+        );
+
+        // 상위 후보 중 최종 선택
+        AnimFrame best = null;
+        float bestScore = float.MaxValue;
+
+        for (AnimFrame candidate : candidates) {
+            float distance = CalculateSimilarity(currentFeatures, candidate.features);
+
+            // 추가 조건: 최근에 재생한 프레임은 피함 (반복 방지)
+            if (WasRecentlyPlayed(candidate, seconds: 2.0f)) {
+                distance *= 1.5f;  // 페널티
+            }
+
+            if (distance < bestScore) {
+                bestScore = distance;
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    void Update(float deltaTime) {
+        // 1. 현재 특징 계산
+        MotionFeatureVector current = BuildCurrentFeatures();
+
+        // 2. 최적 프레임 검색
+        AnimFrame bestFrame = FindBestMatch(current);
+
+        // 3. 애니메이션 재생
+        PlayAnimation(bestFrame.clip, bestFrame.time);
+
+        // 4. 다음 프레임 준비 (예측)
+        PredictNextFrame(bestFrame);
+    }
+
+    MotionFeatureVector BuildCurrentFeatures() {
+        MotionFeatureVector features = new MotionFeatureVector();
+
+        // 현재 상태
+        features.rootPosition = character.transform.position;
+        features.rootRotation = character.transform.rotation;
+        features.rootVelocity = character.rigidbody.velocity;
+
+        // 미래 궤적 예측 (입력 기반)
+        Vector3 inputDirection = GetPlayerInput();
+        for (int i = 0; i < 3; i++) {
+            float time = 0.1f * (i + 1);  // 0.1, 0.2, 0.3초 후
+            features.futurePositions[i] = PredictPosition(time, inputDirection);
+            features.futureDirections[i] = inputDirection;
+        }
+
+        // 조인트 위치
+        features.leftFootPosition = character.skeleton.GetBone("LeftFoot").position;
+        features.rightFootPosition = character.skeleton.GetBone("RightFoot").position;
+
+        // 지형
+        RaycastHit hit;
+        if (Physics.Raycast(character.position, Vector3.Down, out hit)) {
+            features.groundSlope = Vector3.Angle(hit.normal, Vector3.Up);
+            features.groundHeight = hit.point.y;
+        }
+
+        return features;
+    }
+}</code></pre>
+
+        <h2>Part 5: 블렌딩과 Inertialization</h2>
+
+        <div class="q">Q: 프레임을 바꿀 때 딱딱 끊기지 않나요?</div>
+        <div class="a">
+            끊길 수 있습니다. 그래서 <span class="highlight">Inertialization</span>이라는 기술을 사용합니다.
+            일반 블렌딩보다 훨씬 부드럽게 전환됩니다.
+        </div>
+
+        <div class="key-point">
+            <strong>블렌딩 방식 비교:</strong>
+            <ul>
+                <li><strong>Linear Blend (일반):</strong> 두 애니메이션을 0~1로 섞음 → 중간에 이상한 포즈 나옴</li>
+                <li><strong>Cross-Fade:</strong> 시간에 따라 비율 조정 → 여전히 어색</li>
+                <li><strong>Inertialization:</strong> 속도와 가속도까지 고려 → 완전히 자연스러움</li>
+            </ul>
+        </div>
+
+        <pre><code>// 의사코드: Inertialization
+class InertialBlending {
+    struct BoneState {
+        Vector3 position;
+        Quaternion rotation;
+        Vector3 velocity;         // 속도 (m/s)
+        Vector3 angularVelocity;  // 각속도 (rad/s)
+    };
+
+    BoneState[] currentState;
+    BoneState[] targetState;
+    float blendDuration = 0.2f;
+    float blendTime = 0.0f;
+
+    void StartBlend(AnimationPose from, AnimationPose to) {
+        // 1. 현재 상태 저장 (위치 + 속도)
+        for (int i = 0; i < boneCount; i++) {
+            currentState[i].position = from.bones[i].position;
+            currentState[i].rotation = from.bones[i].rotation;
+
+            // 속도 계산 (이전 프레임과 차이)
+            currentState[i].velocity = (from.bones[i].position - prevPosition[i]) / deltaTime;
+            currentState[i].angularVelocity = CalculateAngularVelocity(from.bones[i].rotation, prevRotation[i]);
+        }
+
+        // 2. 목표 상태
+        for (int i = 0; i < boneCount; i++) {
+            targetState[i].position = to.bones[i].position;
+            targetState[i].rotation = to.bones[i].rotation;
+        }
+
+        blendTime = 0.0f;
+    }
+
+    AnimationPose Update(float deltaTime) {
+        blendTime += deltaTime;
+        float t = Clamp(blendTime / blendDuration, 0, 1);
+
+        // Smoothstep (부드러운 곡선)
+        float smoothT = Smoothstep(0, 1, t);
+
+        AnimationPose result = new AnimationPose();
+
+        for (int i = 0; i < boneCount; i++) {
+            // 위치: 2차 보간 (속도 고려)
+            Vector3 posOffset = currentState[i].velocity * blendTime * (1 - smoothT);
+            result.bones[i].position = Lerp(
+                currentState[i].position + posOffset,
+                targetState[i].position,
+                smoothT
+            );
+
+            // 회전: Slerp (구면 보간)
+            result.bones[i].rotation = Slerp(
+                currentState[i].rotation,
+                targetState[i].rotation,
+                smoothT
+            );
+        }
+
+        return result;
+    }
+
+    float Smoothstep(float edge0, float edge1, float x) {
+        float t = Clamp((x - edge0) / (edge1 - edge0), 0, 1);
+        return t * t * (3 - 2 * t);  // 부드러운 S-커브
+    }
+}</code></pre>
+
+        <h2>Part 6: 지형 적응 (Foot IK)</h2>
+
+        <div class="q">Q: 경사나 계단에서도 자연스럽게 걷나요?</div>
+        <div class="a">
+            네! <strong>Inverse Kinematics (IK)</strong>로 발이 실제 지형에 닿게 조정합니다.
+            애니메이션은 평지 기준인데, IK가 자동으로 발을 경사에 맞춰 배치합니다.
+        </div>
+
+        <div class="diagram">
+Foot IK (발 역운동학)
+
+평지 애니메이션 (원본)         실제 지형 (경사)
+
+      ●  머리                      ●  머리
+      │                            │
+    ──┼──  몸통                  ──┼──  몸통
+     / \                          / \
+    /   \                        /   \
+   /     \                      /     \
+  ●       ● 발                 /       \
+ [평면]                      ●/        \● 발 (IK 조정)
+                          [경사면: 15°]
+
+IK 알고리즘:
+  1. 발 원래 위치에서 아래로 Ray 쏘기
+  2. 지형과 충돌점 찾기
+  3. 발을 충돌점으로 이동
+  4. 발목 각도 조정 (지형 법선에 맞춤)
+  5. 무릎 굽히기 (거리 보정)
+        </diagram>
+
+        <pre><code>// 의사코드: Foot IK
+class FootIK {
+    Transform leftFoot;
+    Transform rightFoot;
+    Transform leftKnee;
+    Transform rightKnee;
+
+    float rayDistance = 1.5f;
+    float ikWeight = 1.0f;
+
+    void LateUpdate() {
+        // 애니메이션 재생 후 실행 (Late Update)
+
+        // 왼발 IK
+        ApplyFootIK(leftFoot, leftKnee);
+
+        // 오른발 IK
+        ApplyFootIK(rightFoot, rightKnee);
+    }
+
+    void ApplyFootIK(Transform foot, Transform knee) {
+        // 1. 지형 검사 (Raycast)
+        Vector3 rayStart = foot.position + Vector3.Up * 0.5f;
+        RaycastHit hit;
+
+        if (Physics.Raycast(rayStart, Vector3.Down, out hit, rayDistance)) {
+            // 2. 발 위치 조정
+            Vector3 targetPosition = hit.point;
+            foot.position = Vector3.Lerp(foot.position, targetPosition, ikWeight);
+
+            // 3. 발목 회전 (지형 법선에 맞춤)
+            Vector3 footForward = foot.forward;
+            Vector3 footUp = hit.normal;  // 지형 법선
+            Quaternion targetRotation = Quaternion.LookRotation(footForward, footUp);
+            foot.rotation = Quaternion.Slerp(foot.rotation, targetRotation, ikWeight);
+
+            // 4. 무릎 조정 (2-Bone IK)
+            AdjustKnee(foot, knee, targetPosition);
+        }
+    }
+
+    void AdjustKnee(Transform foot, Transform knee, Vector3 footTarget) {
+        // 2-Bone IK (엉덩이 → 무릎 → 발)
+        Transform hip = knee.parent;
+
+        Vector3 hipPos = hip.position;
+        Vector3 kneePos = knee.position;
+        Vector3 footPos = footTarget;
+
+        // 거리 계산
+        float upperLegLength = Distance(hipPos, kneePos);
+        float lowerLegLength = Distance(kneePos, footPos);
+        float targetDistance = Distance(hipPos, footPos);
+
+        // 다리 길이 제한
+        float maxLength = upperLegLength + lowerLegLength;
+        if (targetDistance > maxLength) {
+            targetDistance = maxLength * 0.99f;  // 약간 짧게 (완전 펴지면 부자연스러움)
+        }
+
+        // 법칙: 코사인 법칙으로 무릎 각도 계산
+        float cosAngle = (upperLegLength * upperLegLength + targetDistance * targetDistance
+                         - lowerLegLength * lowerLegLength)
+                        / (2 * upperLegLength * targetDistance);
+
+        float kneeAngle = Acos(Clamp(cosAngle, -1, 1));
+
+        // 무릎 회전 적용
+        Vector3 hipToFoot = (footPos - hipPos).Normalized();
+        Vector3 kneeDirection = Quaternion.AngleAxis(kneeAngle * Rad2Deg, Vector3.Right) * hipToFoot;
+
+        knee.position = hipPos + kneeDirection * upperLegLength;
+    }
+}</code></pre>
+
+        <div class="summary-box">
+            <h3>핵심 요약</h3>
+            <ol>
+                <li><strong>Motion Matching:</strong> FSM 대신 데이터베이스 검색 방식 (50,000+ 프레임)</li>
+                <li><strong>Feature Vector:</strong> 위치/속도/방향을 숫자 배열로 표현 → 유사도 계산</li>
+                <li><strong>KD-Tree 최적화:</strong> 검색 시간 O(N) → O(log N), 0.05ms 이내 처리</li>
+                <li><strong>Inertialization:</strong> 속도/가속도 고려한 블렌딩 → 완전히 자연스러운 전환</li>
+                <li><strong>Foot IK:</strong> 지형 법선에 맞춰 발 위치/각도 자동 조정</li>
+            </ol>
+
+            <p style="margin-top: 15px;">
+                <strong>게임 내 체험:</strong> RDR2에서 아서를 조작하면서 스틱을 천천히 기울여보세요.
+                서있다가 → 걷다가 → 빨리 걷다가 → 뛰는 과정이 완전히 부드럽게 이어집니다.
+                중간에 방향을 바꿔도 발이 미끄러지지 않고, 계단을 오를 때 발이 정확히 계단 면에 닿습니다.
+            </p>
+
+            <p style="margin-top: 10px;">
+                <strong>비교:</strong> GTA 5 (FSM)에서는 걷기→뛰기 전환이 딱 끊기지만,
+                RDR2에서는 전환 순간을 의식할 수 없을 정도로 자연스럽습니다.
+                Motion Matching의 위력입니다.
+            </p>
+
+            <p style="margin-top: 10px;">
+                <strong>기술적 의의:</strong> Motion Matching은 현재 최신 AAA 게임의 표준이 되었습니다.
+                (The Last of Us Part 2, Ghost of Tsushima 등). RDR2는 오픈월드에서
+                이 기술을 성공적으로 적용한 선구자입니다.
+            </p>
+        </div>
+
+    </div>
+</body>
+</html>

@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>총 맞은 자리에서 피가 나요 - RDR2 렌더링 스터디</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            line-height: 1.8;
+            color: #1f2937;
+            background: linear-gradient(135deg, #FEF3C7 0%, #ffffff 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(217, 119, 6, 0.1);
+        }
+
+        .back-link {
+            display: inline-block;
+            color: #D97706;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .back-link:hover {
+            color: #B45309;
+        }
+
+        .back-link::before {
+            content: "← ";
+        }
+
+        h1 {
+            color: #D97706;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            border-bottom: 4px solid #D97706;
+            padding-bottom: 15px;
+        }
+
+        .subtitle {
+            color: #B45309;
+            font-size: 1.3em;
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        h2 {
+            color: #D97706;
+            font-size: 1.8em;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-left: 15px;
+            border-left: 5px solid #D97706;
+        }
+
+        h3 {
+            color: #B45309;
+            font-size: 1.3em;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+
+        p {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+
+        .qa-section {
+            margin: 25px 0;
+            padding: 20px;
+            background: #FEF3C7;
+            border-radius: 8px;
+            border-left: 4px solid #D97706;
+        }
+
+        .q {
+            font-weight: 700;
+            color: #B45309;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .q::before {
+            content: "Q. ";
+            color: #D97706;
+        }
+
+        .a {
+            color: #374151;
+            padding-left: 20px;
+        }
+
+        .a::before {
+            content: "A. ";
+            font-weight: 700;
+            color: #D97706;
+        }
+
+        .key-point {
+            background: #FDE68A;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 8px;
+            border: 2px solid #D97706;
+        }
+
+        .key-point h3 {
+            color: #B45309;
+            margin-top: 0;
+        }
+
+        .highlight {
+            background: #FEF3C7;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #B45309;
+        }
+
+        pre {
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border: 2px solid #D97706;
+        }
+
+        code {
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+        }
+
+        .diagram {
+            background: #f9fafb;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 8px;
+            border: 2px solid #D97706;
+            overflow-x: auto;
+        }
+
+        .diagram pre {
+            background: transparent;
+            color: #1f2937;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+            padding: 25px;
+            margin: 30px 0;
+            border-radius: 10px;
+            border: 3px solid #D97706;
+        }
+
+        .summary-box h3 {
+            color: #B45309;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        .summary-box ul {
+            margin-left: 20px;
+        }
+
+        .summary-box li {
+            margin-bottom: 10px;
+            color: #374151;
+        }
+
+        ul, ol {
+            margin-left: 25px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        strong {
+            color: #B45309;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../rdr2/" class="back-link">RDR2 렌더링 스터디로 돌아가기</a>
+
+        <h1>총 맞은 자리에서 피가 나요</h1>
+        <div class="subtitle">데칼 시스템 (Dynamic Decal)</div>
+
+        <p>
+            RDR2에서 총을 쏘면 벽에 총탄 자국이 남고, 적에게 맞으면 피가 흐르며,
+            진흙탕을 걸으면 옷에 진흙이 묻습니다. 이 모든 것은
+            <span class="highlight">Dynamic Decal(동적 데칼)</span> 시스템으로 구현됩니다.
+            기존 지오메트리를 수정하지 않고도 표면에 텍스처를 "붙이는" 기술입니다.
+        </p>
+
+        <h2>Part 1: 데칼이란? (표면에 붙이는 텍스처)</h2>
+
+        <div class="qa-section">
+            <div class="q">왜 메시를 직접 수정하지 않나요?</div>
+            <div class="a">
+                총탄 자국 하나마다 메시를 수정하면 버텍스/삼각형이 폭발적으로 증가합니다.
+                데칼은 기존 메시 위에 텍스처만 투영하므로 성능 부담이 거의 없습니다.
+                또한 런타임에 동적으로 추가/제거가 가능합니다.
+            </div>
+        </div>
+
+        <div class="diagram">
+            <pre>
+메시 수정 vs 데칼 투영
+================================
+
+메시 수정 방식 (X)
+    벽 메시
+    ┌────────────┐
+    │            │  ← 총탄 자국마다
+    │  ●  ●     │     버텍스 추가
+    │    ●   ●  │     (메모리 폭증)
+    └────────────┘
+    버텍스 수: 수천 개
+
+--------------------------------
+
+데칼 투영 방식 (O)
+    벽 메시 (원본 유지)
+    ┌────────────┐
+    │            │
+    │            │  ← 기존 메시 그대로
+    │            │
+    └────────────┘
+         ↑
+    데칼 박스 투영
+    [●] [●] [●]  ← 텍스처만 추가
+    버텍스 수: 변화 없음
+            </pre>
+        </div>
+
+        <h2>Part 2: Deferred Decal 기법</h2>
+
+        <p>
+            RDR2는 <strong>Deferred Rendering</strong>을 사용하므로,
+            <span class="highlight">Deferred Decal</span> 기법이 최적입니다.
+            G-Buffer에 직접 데칼을 "그려넣는" 방식입니다.
+        </p>
+
+        <div class="key-point">
+            <h3>Deferred Decal 파이프라인</h3>
+            <ol>
+                <li><strong>G-Buffer Pass:</strong> 씬을 먼저 렌더링 (Albedo, Normal, Depth)</li>
+                <li><strong>Decal Pass:</strong> 데칼 볼륨(박스)을 렌더링하며 G-Buffer 수정</li>
+                <li><strong>Lighting Pass:</strong> 수정된 G-Buffer로 최종 라이팅</li>
+            </ol>
+        </div>
+
+        <pre><code>// Deferred Decal 셰이더 (Pixel Shader)
+struct DecalInput {
+    float4 positionCS : SV_POSITION;  // 클립 공간 위치
+    float3 positionWS : TEXCOORD0;    // 월드 공간 위치
+};
+
+// G-Buffer 텍스처들
+Texture2D gBufferAlbedo;   // 색상
+Texture2D gBufferNormal;   // 노멀
+Texture2D gBufferDepth;    // 깊이
+
+// 데칼 텍스처
+Texture2D decalAlbedo;
+Texture2D decalNormal;
+
+float4 PS_Decal(DecalInput input) : SV_TARGET {
+    // 1. 화면 UV 계산
+    float2 screenUV = input.positionCS.xy / screenSize;
+
+    // 2. 깊이에서 월드 위치 복원
+    float depth = gBufferDepth.Sample(sampler, screenUV).r;
+    float3 worldPos = ReconstructWorldPosition(screenUV, depth);
+
+    // 3. 데칼 로컬 공간으로 변환
+    float3 decalLocal = mul(worldPos, decalInverseMatrix);
+
+    // 범위 체크 [-0.5, 0.5]
+    if (abs(decalLocal.x) > 0.5 ||
+        abs(decalLocal.y) > 0.5 ||
+        abs(decalLocal.z) > 0.5) {
+        discard;  // 데칼 박스 밖
+    }
+
+    // 4. 데칼 UV (XY 평면 투영)
+    float2 decalUV = decalLocal.xy + 0.5;
+
+    // 5. 데칼 텍스처 샘플링
+    float4 decalColor = decalAlbedo.Sample(sampler, decalUV);
+    float3 decalNorm = decalNormal.Sample(sampler, decalUV).xyz;
+
+    // 6. 알파 블렌딩으로 G-Buffer에 합성
+    float3 baseColor = gBufferAlbedo.Sample(sampler, screenUV).rgb;
+    float3 finalColor = lerp(baseColor, decalColor.rgb, decalColor.a);
+
+    return float4(finalColor, 1.0);
+}
+</code></pre>
+
+        <div class="diagram">
+            <pre>
+Deferred Decal 투영 과정
+================================
+
+1. G-Buffer에서 월드 위치 복원
+   Screen UV → Depth → World Position
+
+2. 데칼 로컬 공간 변환
+         월드 공간              데칼 로컬 공간
+      ┌───────────┐           ┌─────┐
+      │           │           │  Y  │
+      │  [Decal]  │  ──→      │ │   │
+      │           │           │─┼─X │
+      └───────────┘           │ Z   │
+                              └─────┘
+                              범위: [-0.5, 0.5]³
+
+3. UV 계산 및 텍스처 샘플링
+   decalUV = (local.xy + 0.5)
+   ┌──────────┐
+   │  🩸 피   │ ← 데칼 텍스처
+   └──────────┘
+
+4. G-Buffer 혼합
+   Albedo = lerp(base, decal, alpha)
+            </pre>
+        </div>
+
+        <h2>Part 3: 피, 총탄 자국, 진흙 묻음</h2>
+
+        <h3>1. 피 데칼 (Blood Splatter)</h3>
+
+        <p>
+            적에게 총을 쏘면 <strong>충격 지점</strong>과 <strong>표면 노멀</strong>을 기준으로
+            피 데칼이 생성됩니다.
+        </p>
+
+        <pre><code>// 피 데칼 생성
+void SpawnBloodDecal(float3 hitPosition, float3 hitNormal) {
+    // 데칼 방향 (노멀 방향으로 투영)
+    float3 decalForward = -hitNormal;
+    float3 decalUp = float3(0, 1, 0);
+    float3 decalRight = normalize(cross(decalUp, decalForward));
+    decalUp = cross(decalForward, decalRight);
+
+    // 데칼 변환 행렬
+    float4x4 decalMatrix = BuildMatrix(hitPosition, decalRight, decalUp, decalForward);
+
+    // 데칼 크기 (랜덤)
+    float size = RandomRange(0.2, 0.5);
+
+    // 데칼 텍스처 선택 (여러 피 패턴 중)
+    int textureIndex = RandomInt(0, 4);
+
+    // 데칼 생성
+    CreateDecal(decalMatrix, size, bloodTextures[textureIndex]);
+}
+</code></pre>
+
+        <h3>2. 총탄 자국 (Bullet Holes)</h3>
+
+        <p>
+            총탄 자국은 표면 재질에 따라 다른 텍스처를 사용합니다:
+        </p>
+
+        <ul>
+            <li><strong>나무:</strong> 패인 자국 + 나무 조각</li>
+            <li><strong>돌/벽돌:</strong> 부서진 파편 + 검은 그을림</li>
+            <li><strong>금속:</strong> 찌그러짐 + 긁힌 자국</li>
+        </ul>
+
+        <pre><code>// 표면 재질별 총탄 자국
+void SpawnBulletHole(float3 hitPos, float3 hitNormal, SurfaceType surface) {
+    Texture2D decalTexture;
+
+    switch (surface) {
+        case SURFACE_WOOD:
+            decalTexture = bulletHoleWood;
+            break;
+        case SURFACE_STONE:
+            decalTexture = bulletHoleStone;
+            break;
+        case SURFACE_METAL:
+            decalTexture = bulletHoleMetal;
+            break;
+    }
+
+    CreateDecal(hitPos, hitNormal, 0.1, decalTexture);
+}
+</code></pre>
+
+        <h3>3. 진흙 묻음 (Mud Splatter)</h3>
+
+        <p>
+            캐릭터가 진흙탕을 걸으면 옷과 신발에 진흙이 묻습니다.
+            이는 <strong>캐릭터 메시에 붙는 데칼</strong>로 구현됩니다.
+        </p>
+
+        <div class="diagram">
+            <pre>
+캐릭터 메시 데칼
+================================
+
+     캐릭터 (측면)
+       ┌─┐
+       │머│
+       ├─┤
+       │몸│  ← 원본 메시
+       ├─┤
+       │다│
+       ├┬┤
+       ││││ ← 바지
+       ││││
+       └┴┘
+        ↓
+    진흙탕 통과
+        ↓
+       ┌─┐
+       │머│
+       ├─┤
+       │몸│
+       ├─┤
+       │다│
+       ├┬┤
+       │▓││ ← 진흙 데칼 추가
+       │▓││   (다리 부분만)
+       └┴┘
+            </pre>
+        </div>
+
+        <h2>Part 4: 시간에 따른 변화 (마름, 흐름)</h2>
+
+        <div class="key-point">
+            <h3>피 데칼의 생명 주기</h3>
+            <ol>
+                <li><strong>생성 (0초):</strong> 선명한 붉은 피</li>
+                <li><strong>응고 (10초):</strong> 색이 어두워짐</li>
+                <li><strong>건조 (30초):</strong> 갈색으로 변함</li>
+                <li><strong>소멸 (60초):</strong> 페이드 아웃</li>
+            </ol>
+        </div>
+
+        <pre><code>// 데칼 에이징 (시간 경과 효과)
+float4 ApplyDecalAging(float4 decalColor, float age) {
+    // age: 생성 후 경과 시간 (초)
+
+    if (age < 10.0) {
+        // 0~10초: 신선한 피
+        return decalColor;
+    }
+    else if (age < 30.0) {
+        // 10~30초: 응고 (어두워짐)
+        float t = (age - 10.0) / 20.0;
+        float3 coagulatedColor = decalColor.rgb * lerp(1.0, 0.6, t);
+        return float4(coagulatedColor, decalColor.a);
+    }
+    else if (age < 60.0) {
+        // 30~60초: 건조 (갈색으로 변함)
+        float t = (age - 30.0) / 30.0;
+        float3 driedColor = lerp(float3(0.4, 0.0, 0.0), float3(0.3, 0.15, 0.1), t);
+        float alpha = lerp(decalColor.a, 0.0, t);  // 점점 투명
+        return float4(driedColor, alpha);
+    }
+    else {
+        // 60초 이상: 소멸
+        discard;
+    }
+}
+</code></pre>
+
+        <h3>피 흐름 효과 (Blood Drip)</h3>
+
+        <p>
+            수직 벽에 맞은 피는 중력에 의해 아래로 흐릅니다.
+            이는 UV 오프셋으로 시뮬레이션합니다.
+        </p>
+
+        <pre><code>// 피 흐름 UV 왜곡
+float2 BloodDripUV(float2 originalUV, float age, float3 surfaceNormal) {
+    // 수직면에서만 흐름
+    float verticalness = abs(dot(surfaceNormal, float3(0, 1, 0)));
+    if (verticalness > 0.8) return originalUV;  // 바닥은 안 흐름
+
+    // 시간에 따른 흐름 거리
+    float dripDistance = saturate(age / 5.0) * 0.3;
+
+    // UV Y축 이동 (아래로)
+    float2 drippedUV = originalUV;
+    drippedUV.y += dripDistance;
+
+    return drippedUV;
+}
+</code></pre>
+
+        <h2>Part 5: 메모리 관리 (데칼 풀링)</h2>
+
+        <div class="qa-section">
+            <div class="q">총을 계속 쏘면 데칼이 무한정 쌓이나요?</div>
+            <div class="a">
+                아니요. 데칼은 <strong>Object Pool</strong>로 관리됩니다.
+                최대 개수(예: 256개)를 정해두고, 초과하면 가장 오래된 데칼을 재사용합니다.
+            </div>
+        </div>
+
+        <pre><code>// 데칼 풀 관리
+class DecalPool {
+    static const int MAX_DECALS = 256;
+    Decal decals[MAX_DECALS];
+    int oldestIndex = 0;
+
+    void SpawnDecal(DecalParams params) {
+        // 가장 오래된 데칼 슬롯 재사용
+        decals[oldestIndex].Initialize(params);
+
+        // 인덱스 순환
+        oldestIndex = (oldestIndex + 1) % MAX_DECALS;
+    }
+
+    void Update(float deltaTime) {
+        for (int i = 0; i < MAX_DECALS; i++) {
+            decals[i].age += deltaTime;
+
+            // 수명이 다한 데칼은 비활성화
+            if (decals[i].age > decals[i].lifetime) {
+                decals[i].active = false;
+            }
+        }
+    }
+
+    void Render() {
+        for (int i = 0; i < MAX_DECALS; i++) {
+            if (decals[i].active) {
+                RenderDecal(decals[i]);
+            }
+        }
+    }
+};
+</code></pre>
+
+        <div class="key-point">
+            <h3>메모리 최적화 전략</h3>
+            <ul>
+                <li><strong>거리 기반 컬링:</strong> 카메라에서 50m 이상 떨어진 데칼은 렌더링 생략</li>
+                <li><strong>LOD:</strong> 원거리 데칼은 저해상도 텍스처 사용</li>
+                <li><strong>Atlas 텍스처:</strong> 여러 데칼 텍스처를 하나의 Atlas에 합쳐 드로우콜 절감</li>
+                <li><strong>인스턴싱:</strong> 같은 텍스처의 데칼들을 한 번에 렌더링</li>
+            </ul>
+        </div>
+
+        <h2>Part 6: 캐릭터에 붙는 데칼 (옷에 묻은 피)</h2>
+
+        <p>
+            캐릭터 메시는 스키닝 애니메이션으로 변형되므로, 정적 데칼과 다른 처리가 필요합니다.
+        </p>
+
+        <h3>Skinned Mesh Decal</h3>
+
+        <pre><code>// 스키닝된 메시에 데칼 적용
+float4 PS_SkinnedDecal(DecalInput input) : SV_TARGET {
+    // 1. 캐릭터 메시의 월드 위치 (스키닝 후)
+    float3 worldPos = input.positionWS;
+
+    // 2. 데칼 로컬 공간으로 변환
+    //    (데칼은 본에 부착되어 함께 움직임)
+    float3 decalLocal = mul(worldPos, decalBoneInverseMatrix);
+
+    // 범위 체크
+    if (abs(decalLocal.x) > 0.5 ||
+        abs(decalLocal.y) > 0.5 ||
+        abs(decalLocal.z) > 0.5) {
+        discard;
+    }
+
+    // 3. UV 계산 및 텍스처 샘플링
+    float2 decalUV = decalLocal.xy + 0.5;
+    float4 decalColor = decalTexture.Sample(sampler, decalUV);
+
+    // 4. 옷 색상과 혼합
+    return decalColor;
+}
+</code></pre>
+
+        <div class="diagram">
+            <pre>
+스키닝 데칼 적용 과정
+================================
+
+1. 데칼 생성 시점
+   캐릭터 [T-Pose]
+       ┌─┐
+       │머│
+     ╱─┼─╲
+    ╱  │  ╲  ← 피 맞음!
+   │   ├   │     [데칼 생성]
+   │   │   │     본에 부착
+   └───┴───┘
+
+2. 애니메이션 시
+   캐릭터 [달리기]
+       ┌─┐
+       │머│
+      ╱─┼
+     ╱  │╲   ← 데칼이 본과 함께 이동
+    │   ├ ╲     (찢어지지 않음)
+    │   │  │
+    └───┴──┘
+            </pre>
+        </div>
+
+        <div class="summary-box">
+            <h3>📌 핵심 요약</h3>
+            <ul>
+                <li><strong>Deferred Decal:</strong> G-Buffer에 직접 그려넣어 메시 수정 없이 텍스처 추가</li>
+                <li><strong>동적 생성:</strong> 충격 지점과 노멀로 런타임에 데칼 투영</li>
+                <li><strong>재질 기반:</strong> 표면 타입(나무, 돌, 금속)에 따라 다른 텍스처 사용</li>
+                <li><strong>시간 변화:</strong> 피가 응고 → 건조 → 소멸하는 생명 주기 시뮬레이션</li>
+                <li><strong>풀링 관리:</strong> 최대 개수 제한, 오래된 데칼 재사용으로 메모리 최적화</li>
+                <li><strong>스키닝 데칼:</strong> 캐릭터 애니메이션과 함께 움직이는 데칼</li>
+            </ul>
+        </div>
+
+        <div class="qa-section">
+            <div class="q">왜 데칼이 중요한가요?</div>
+            <div class="a">
+                데칼은 게임 세계가 "살아있다"는 느낌을 줍니다. 총격전 후 벽에 남은 자국,
+                비 온 후 진흙 묻은 옷, 전투 후 피로 얼룩진 바닥... 이런 디테일들이 쌓여
+                플레이어는 "내가 이 세계에 영향을 미쳤다"는 몰입감을 느낍니다.
+                RDR2의 디테일 집착은 바로 이런 작은 요소들에서 빛납니다.
+            </div>
+        </div>
+
+        <a href="../rdr2/" class="back-link">RDR2 렌더링 스터디로 돌아가기</a>
+    </div>
+</body>
+</html>

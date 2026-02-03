@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>비 오다가 갬, 안개 끼다가 맑음 - RDR2 기술 연구</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            color: #1f2937;
+            background: linear-gradient(135deg, #FEF3C7 0%, #ffffff 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(217, 119, 6, 0.1);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #D97706;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            color: #B45309;
+            transform: translateX(-5px);
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #D97706;
+            margin-bottom: 10px;
+            border-bottom: 4px solid #D97706;
+            padding-bottom: 15px;
+        }
+
+        .subtitle {
+            font-size: 1.3em;
+            color: #B45309;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+
+        h2 {
+            font-size: 1.8em;
+            color: #D97706;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-left: 15px;
+            border-left: 5px solid #D97706;
+        }
+
+        h3 {
+            font-size: 1.3em;
+            color: #B45309;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+
+        .q {
+            background: #FEF3C7;
+            border-left: 4px solid #D97706;
+            padding: 20px;
+            margin: 25px 0;
+            font-weight: 600;
+            color: #B45309;
+            font-size: 1.1em;
+        }
+
+        .a {
+            background: #f9fafb;
+            padding: 20px;
+            margin: 15px 0 25px 20px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .key-point {
+            background: #FDE68A;
+            border-left: 4px solid #B45309;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .highlight {
+            background: #FEF3C7;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #B45309;
+        }
+
+        pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            border: 2px solid #D97706;
+        }
+
+        code {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .ascii-diagram {
+            background: #f9fafb;
+            border: 2px solid #D97706;
+            padding: 20px;
+            margin: 25px 0;
+            font-family: 'Courier New', monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+            border-radius: 8px;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+            border: 3px solid #D97706;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+
+        .summary-box h3 {
+            color: #B45309;
+            margin-top: 0;
+            font-size: 1.4em;
+        }
+
+        .summary-box ul {
+            margin-left: 20px;
+            margin-top: 15px;
+        }
+
+        .summary-box li {
+            margin: 10px 0;
+            color: #1f2937;
+        }
+
+        ul, ol {
+            margin-left: 30px;
+            margin: 15px 0 15px 30px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        strong {
+            color: #B45309;
+        }
+
+        .note {
+            background: #fff7ed;
+            border-left: 4px solid #D97706;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../" class="back-link">← RDR2 기술 연구 목록으로</a>
+
+        <h1>비 오다가 갬, 안개 끼다가 맑음</h1>
+        <div class="subtitle">동적 날씨 전환 시스템 (Dynamic Weather Transition)</div>
+
+        <div class="key-point">
+            Red Dead Redemption 2의 날씨는 "살아 숨십니다". 맑은 하늘에서 갑자기 먹구름이 몰려오고, 빗방울이 떨어지기 시작하다가 폭우가 되었다가, 다시 소나기가 그치고 무지개가 뜹니다. 이 모든 전환이 부드럽고 자연스럽게 이어집니다.
+        </div>
+
+        <h2>Part 1: 정적 vs 동적 날씨</h2>
+
+        <div class="q">Q. 기존 게임의 날씨는 뭐가 문제였나요?</div>
+        <div class="a">
+            대부분의 게임은 <span class="highlight">"날씨 프리셋"</span>을 순간 전환합니다. 맑음 버튼 → 비 버튼처럼 즉시 바뀌어서 현실감이 떨어집니다.
+            <br><br>
+            <strong>정적 날씨의 문제점:</strong>
+            <ul>
+                <li>순간 전환 (구름이 갑자기 생김)</li>
+                <li>중간 상태 없음 (맑음 or 비, 둘 중 하나)</li>
+                <li>전조 현상 없음 (비 오기 전 구름 모임)</li>
+                <li>후속 효과 없음 (비 그친 후 웅덩이 증발)</li>
+            </ul>
+        </div>
+
+        <div class="ascii-diagram">
+기존 게임의 정적 날씨:
+
+시간: 10:00          10:01          10:02
+날씨:  맑음   →→→   비 (순간전환)  →→→   비
+       ☀                🌧             🌧
+       │                │              │
+       ▼                ▼              ▼
+    [프리셋 A]      [프리셋 B]      [프리셋 B]
+
+
+RDR2의 동적 날씨:
+
+시간:   10:00    →    10:30    →    11:00    →    11:30
+날씨:    맑음          구름 낌        보슬비        폭우
+         ☀            ☁☁           🌦           🌧🌧
+         │            │            │            │
+         ▼            ▼            ▼            ▼
+      구름 0%       구름 40%     구름 70%     구름 100%
+      빗방울 0      빗방울 10    빗방울 100   빗방울 1000
+      바람 0       바람 5 m/s   바람 10 m/s  바람 15 m/s
+
+       └──────── 연속적 보간 (Smooth Transition) ────────┘
+        </div>
+
+        <h2>Part 2: 날씨 상태 머신 (State Machine)</h2>
+
+        <div class="q">Q. 날씨 전환은 어떤 규칙으로 동작하나요?</div>
+        <div class="a">
+            <span class="highlight">FSM (Finite State Machine)</span>으로 관리합니다. 각 날씨 상태는 특정 상태로만 전환 가능하며, 전환 조건과 시간이 정의되어 있습니다.
+            <br><br>
+            <strong>주요 날씨 상태:</strong>
+            <ul>
+                <li><strong>CLEAR:</strong> 맑음 (구름 < 20%)</li>
+                <li><strong>PARTLY_CLOUDY:</strong> 약간 흐림 (구름 20~50%)</li>
+                <li><strong>OVERCAST:</strong> 흐림 (구름 50~80%)</li>
+                <li><strong>DRIZZLE:</strong> 보슬비 (강수 10~30%)</li>
+                <li><strong>RAIN:</strong> 비 (강수 30~70%)</li>
+                <li><strong>STORM:</strong> 폭풍 (강수 70~100%, 번개)</li>
+                <li><strong>FOG:</strong> 안개 (가시거리 < 100m)</li>
+            </ul>
+        </div>
+
+        <div class="ascii-diagram">
+날씨 상태 전환 다이어그램:
+
+            ┌──────────┐
+            │  CLEAR   │  맑음
+            └────┬─────┘
+                 │ 30분~2시간
+                 ▼
+         ┌───────────────┐
+         │ PARTLY_CLOUDY │  구름 낌
+         └───┬───────┬───┘
+             │       │
+    15분~1시간│       │ 20분 (빠른 개임)
+             ▼       ▼
+     ┌──────────┐  ┌──────────┐
+     │ OVERCAST │  │  CLEAR   │
+     └────┬─────┘  └──────────┘
+          │
+   10분~30분│
+          ▼
+     ┌──────────┐
+     │ DRIZZLE  │  보슬비
+     └────┬─────┘
+          │
+     5분~15분│
+          ▼
+     ┌──────────┐       ┌──────────┐
+     │   RAIN   │←─────→│   FOG    │  안개
+     └────┬─────┘ 상호  └──────────┘
+          │       전환
+     3분~10분│
+          ▼
+     ┌──────────┐
+     │  STORM   │  폭풍 (최종)
+     └────┬─────┘
+          │
+      10분 후
+          │
+          ▼
+     [역순으로 복귀: STORM → RAIN → DRIZZLE → CLEAR]
+
+확률 기반 분기:
+  PARTLY_CLOUDY에서:
+    - 70% 확률 → OVERCAST (비로 발전)
+    - 30% 확률 → CLEAR (개임)
+        </div>
+
+        <pre><code>// 의사코드: 날씨 상태 머신
+
+enum WeatherState {
+    CLEAR,
+    PARTLY_CLOUDY,
+    OVERCAST,
+    DRIZZLE,
+    RAIN,
+    STORM,
+    FOG
+}
+
+struct WeatherTransition {
+    WeatherState from;
+    WeatherState to;
+    float minDuration;     // 최소 전환 시간 (초)
+    float maxDuration;     // 최대 전환 시간
+    float probability;     // 전환 확률 (0~1)
+}
+
+WeatherTransition transitions[] = {
+    // 맑음 → 구름 낌
+    { CLEAR, PARTLY_CLOUDY, 1800, 7200, 1.0 },  // 30분~2시간, 무조건
+
+    // 구름 낌 → 흐림 or 개임
+    { PARTLY_CLOUDY, OVERCAST, 900, 3600, 0.7 },  // 15분~1시간, 70%
+    { PARTLY_CLOUDY, CLEAR, 1200, 1200, 0.3 },    // 20분, 30%
+
+    // 흐림 → 보슬비
+    { OVERCAST, DRIZZLE, 600, 1800, 1.0 },
+
+    // 보슬비 → 비
+    { DRIZZLE, RAIN, 300, 900, 0.8 },
+    { DRIZZLE, CLEAR, 600, 600, 0.2 },  // 바로 개임 (소나기)
+
+    // 비 → 폭풍 or 안개
+    { RAIN, STORM, 180, 600, 0.3 },
+    { RAIN, FOG, 300, 300, 0.2 },       // 비 → 안개 (습도 높음)
+
+    // 폭풍 → 비 (약해짐)
+    { STORM, RAIN, 600, 600, 1.0 },
+
+    // 안개 → 맑음
+    { FOG, CLEAR, 1800, 3600, 1.0 }
+};
+
+struct WeatherSystem {
+    WeatherState currentState = CLEAR;
+    WeatherState targetState = CLEAR;
+    float transitionProgress = 1.0;  // 0~1
+    float transitionDuration = 0.0;
+    float stateTimer = 0.0;
+}
+
+function UpdateWeatherStateMachine(deltaTime) {
+    stateTimer += deltaTime;
+
+    // 1. 전환 중이면 보간
+    if (transitionProgress < 1.0) {
+        transitionProgress += deltaTime / transitionDuration;
+        transitionProgress = clamp(transitionProgress, 0.0, 1.0);
+
+        // 파라미터 보간 (Part 3에서 설명)
+        InterpolateWeatherParameters();
+
+        if (transitionProgress >= 1.0) {
+            currentState = targetState;
+        }
+    }
+    // 2. 전환 완료, 다음 상태 결정
+    else {
+        // 최소 체류 시간 확인
+        WeatherTransition[] possibleTransitions = GetPossibleTransitions(currentState);
+
+        for each transition in possibleTransitions {
+            if (stateTimer >= transition.minDuration) {
+                // 확률 체크
+                if (Random() < transition.probability) {
+                    StartTransition(transition.to, transition.maxDuration);
+                    stateTimer = 0.0;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+function StartTransition(newState, duration) {
+    targetState = newState;
+    transitionDuration = duration;
+    transitionProgress = 0.0;
+
+    Log("Weather: " + currentState + " → " + targetState + " (" + duration + "s)");
+}</code></pre>
+
+        <h2>Part 3: 부드러운 전환 (파라미터 보간)</h2>
+
+        <div class="q">Q. 맑음에서 비까지 어떤 값들이 변하나요?</div>
+        <div class="a">
+            <span class="highlight">수십 개의 파라미터</span>가 동시에 보간됩니다. 구름 밀도, 빗방울 개수, 바람 세기, 하늘 색상, 조명 강도 등.
+        </div>
+
+        <div class="ascii-diagram">
+CLEAR → STORM 전환 시 변화하는 파라미터:
+
+진행도:     0%        25%       50%       75%      100%
+상태:      맑음   →  구름 낌  →  비   →  폭우  →  폭풍
+          ☀         ☁         🌧        🌧🌧      ⛈
+
+구름 밀도:  ░          ░░░       ░░░░░     ▓▓▓▓▓     ████
+           0%         30%       60%       85%       100%
+
+빗방울:     0개        5개       50개      200개     1000개
+           ─          ˙         ˙˙˙       |||       |||||||
+
+바람:       0 m/s      3 m/s     8 m/s     12 m/s    20 m/s
+           ─          →         →→        →→→       →→→→
+
+하늘 색:    #87CEEB   #6B8BA8   #4A5D73   #2C3E50   #1C1C1C
+           (밝은파랑) (회색빛)  (어두운회) (검은회)  (거의검정)
+
+조명:       1.0       0.8       0.5       0.3       0.1
+           밝음       약간어두움  어두움    매우어두움 거의암흑
+
+시야거리:   10km      5km       2km       500m      200m
+           ━━━━━━    ━━━━━     ━━━      ━━        ━
+
+번개:       없음      없음      없음      가끔      자주
+                                         (10초마다) (3초마다)
+        </div>
+
+        <pre><code>// 의사코드: 날씨 파라미터 보간
+
+struct WeatherParameters {
+    float cloudCoverage;      // 구름 커버리지 (0~1)
+    float cloudDensity;       // 구름 밀도
+    float rainIntensity;      // 강우 강도 (0~1)
+    int raindropCount;        // 빗방울 파티클 개수
+    vec3 windVelocity;        // 바람 방향+세기
+    vec3 skyColor;            // 하늘 색상
+    float sunIntensity;       // 태양 밝기
+    float ambientIntensity;   // 환경광 밝기
+    float fogDensity;         // 안개 밀도
+    float visibility;         // 가시거리 (m)
+    float lightningFreq;      // 번개 빈도 (초)
+    float wetness;            // 젖음 정도 (표면)
+}
+
+// 상태별 파라미터 프리셋
+WeatherParameters presets[] = {
+    // CLEAR (맑음)
+    {
+        cloudCoverage: 0.0,
+        cloudDensity: 0.0,
+        rainIntensity: 0.0,
+        raindropCount: 0,
+        windVelocity: vec3(0, 0, 0),
+        skyColor: vec3(0.53, 0.81, 0.92),  // #87CEEB
+        sunIntensity: 1.0,
+        ambientIntensity: 0.8,
+        fogDensity: 0.0,
+        visibility: 10000.0,
+        lightningFreq: 0.0,
+        wetness: 0.0
+    },
+    // STORM (폭풍)
+    {
+        cloudCoverage: 1.0,
+        cloudDensity: 0.9,
+        rainIntensity: 1.0,
+        raindropCount: 1000,
+        windVelocity: vec3(15, 0, 10),  // 15 m/s 동쪽+북쪽
+        skyColor: vec3(0.11, 0.11, 0.11),  // #1C1C1C
+        sunIntensity: 0.1,
+        ambientIntensity: 0.2,
+        fogDensity: 0.3,
+        visibility: 200.0,
+        lightningFreq: 3.0,  // 3초마다
+        wetness: 1.0
+    }
+    // ... 다른 상태들
+};
+
+function InterpolateWeatherParameters() {
+    WeatherParameters current = presets[currentState];
+    WeatherParameters target = presets[targetState];
+
+    // 1. 선형 보간 (대부분의 파라미터)
+    activeParams.cloudCoverage = lerp(current.cloudCoverage,
+                                      target.cloudCoverage,
+                                      transitionProgress);
+
+    activeParams.rainIntensity = lerp(current.rainIntensity,
+                                      target.rainIntensity,
+                                      transitionProgress);
+
+    // 2. Smoothstep 보간 (부드러운 가속/감속)
+    float smoothT = smoothstep(0.0, 1.0, transitionProgress);
+    activeParams.skyColor = lerp(current.skyColor,
+                                 target.skyColor,
+                                 smoothT);
+
+    // 3. 정수 값 (빗방울 개수) - 단계적 증가
+    activeParams.raindropCount = floor(lerp(current.raindropCount,
+                                            target.raindropCount,
+                                            transitionProgress));
+
+    // 4. 지연 보간 (번개는 90% 이후 시작)
+    if (transitionProgress > 0.9) {
+        float lightningT = (transitionProgress - 0.9) / 0.1;
+        activeParams.lightningFreq = lerp(current.lightningFreq,
+                                          target.lightningFreq,
+                                          lightningT);
+    } else {
+        activeParams.lightningFreq = 0.0;
+    }
+
+    // 5. 시스템 업데이트
+    UpdateCloudSystem(activeParams.cloudCoverage, activeParams.cloudDensity);
+    UpdateRainSystem(activeParams.rainIntensity, activeParams.raindropCount);
+    UpdateWindSystem(activeParams.windVelocity);
+    UpdateLighting(activeParams.sunIntensity, activeParams.ambientIntensity);
+    UpdateFog(activeParams.fogDensity, activeParams.visibility);
+}
+
+// Smoothstep (부드러운 보간)
+function smoothstep(edge0, edge1, x) {
+    float t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}</code></pre>
+
+        <h2>Part 4: 지역별 날씨 (Regional Weather)</h2>
+
+        <div class="q">Q. 게임 맵 전체가 같은 날씨인가요?</div>
+        <div class="a">
+            아닙니다! <span class="highlight">지역별로 다른 날씨</span>가 적용됩니다. 산악 지대는 눈, 평원은 맑음, 늪지는 안개가 자주 낍니다.
+        </div>
+
+        <div class="ascii-diagram">
+RDR2 맵 지역별 날씨 (예시):
+
+┌─────────────────────────────────────────────┐
+│                                             │
+│  ❄ 산악 (Grizzlies)                        │
+│  ├─ 눈 확률: 70%                            │
+│  ├─ 기온: -10°C ~ +5°C                      │
+│  └─ 바람: 강함 (15 m/s)                     │
+│         ▲                                   │
+│        ╱│╲   🌲🌲                           │
+│       ╱ │ ╲  🌲                             │
+│      ╱  │  ╲                                │
+│     ╱───┴───╲─────────────────────────      │
+│                                             │
+│  ☀ 평원 (Heartlands)                        │
+│  ├─ 맑음 확률: 60%                          │
+│  ├─ 기온: +15°C ~ +30°C                     │
+│  └─ 바람: 약함 (3 m/s)                      │
+│     ░░░░░░░░░  🐎  ░░░░░░                   │
+│                                             │
+│  🌫 늪지 (Bayou)                            │
+│  ├─ 안개 확률: 80%                          │
+│  ├─ 기온: +20°C ~ +35°C                     │
+│  ├─ 습도: 90%                               │
+│  └─ 바람: 거의 없음                         │
+│     ∼∼∼∼∼∼  🐊  ∼∼∼∼∼∼                    │
+│                                             │
+└─────────────────────────────────────────────┘
+
+날씨 전환 경계 (Blend Zone):
+
+  산악 (눈)       평원 (맑음)
+    ❄              ☀
+     ╲            ╱
+      ╲          ╱
+       ╲ ┌────┐ ╱   ← 500m Blend Zone
+        ╲│ 🤠 │╱       (두 날씨를 섞음)
+         └────┘
+    눈 60% + 맑음 40%
+        </div>
+
+        <pre><code>// 의사코드: 지역별 날씨
+
+enum Region {
+    GRIZZLIES,      // 산악
+    HEARTLANDS,     // 평원
+    BAYOU,          // 늪지
+    DESERT,         // 사막
+    FOREST          // 숲
+}
+
+struct RegionalWeatherConfig {
+    Region region;
+    float[] stateProbabilities;  // 각 날씨 상태 확률
+    float minTemperature;
+    float maxTemperature;
+    float baseHumidity;
+    float elevationFactor;       // 고도에 따른 변화
+}
+
+RegionalWeatherConfig regionConfigs[] = {
+    // 산악 (Grizzlies)
+    {
+        region: GRIZZLIES,
+        stateProbabilities: {
+            CLEAR: 0.2,
+            PARTLY_CLOUDY: 0.1,
+            OVERCAST: 0.3,
+            RAIN: 0.1,
+            STORM: 0.05,
+            SNOW: 0.25  // 눈 확률 높음
+        },
+        minTemperature: -10.0,
+        maxTemperature: 5.0,
+        baseHumidity: 0.6,
+        elevationFactor: 1.5
+    },
+    // 평원 (Heartlands)
+    {
+        region: HEARTLANDS,
+        stateProbabilities: {
+            CLEAR: 0.6,
+            PARTLY_CLOUDY: 0.2,
+            OVERCAST: 0.1,
+            RAIN: 0.08,
+            STORM: 0.02
+        },
+        minTemperature: 15.0,
+        maxTemperature: 30.0,
+        baseHumidity: 0.4,
+        elevationFactor: 1.0
+    },
+    // 늪지 (Bayou)
+    {
+        region: BAYOU,
+        stateProbabilities: {
+            CLEAR: 0.1,
+            FOG: 0.5,   // 안개 확률 매우 높음
+            RAIN: 0.3,
+            STORM: 0.1
+        },
+        minTemperature: 20.0,
+        maxTemperature: 35.0,
+        baseHumidity: 0.9,  // 매우 높은 습도
+        elevationFactor: 0.5
+    }
+};
+
+function GetRegionAtPosition(vec3 worldPosition) {
+    // 1. 월드 좌표 → 지역 ID
+    // (실제로는 Texture2D 지역 맵 사용)
+    if (worldPosition.y > 1500.0) {
+        return GRIZZLIES;  // 고산 지대
+    } else if (worldPosition.z < -2000.0) {
+        return BAYOU;      // 남쪽 늪지
+    } else {
+        return HEARTLANDS; // 기본 평원
+    }
+}
+
+function GetBlendedWeatherAtPosition(vec3 worldPosition) {
+    // 1. 현재 위치 지역
+    Region currentRegion = GetRegionAtPosition(worldPosition);
+
+    // 2. 인접 지역 검사 (500m 반경)
+    float blendRadius = 500.0;
+    List<Region> nearbyRegions = GetRegionsInRadius(worldPosition, blendRadius);
+
+    if (nearbyRegions.Count == 1) {
+        // 단일 지역 - 블렌딩 불필요
+        return activeWeather[currentRegion];
+    } else {
+        // 경계 지역 - 블렌딩 필요
+        WeatherParameters blended = new WeatherParameters();
+
+        for each region in nearbyRegions {
+            float distance = DistanceToRegion(worldPosition, region);
+            float weight = 1.0 - (distance / blendRadius);
+
+            blended += activeWeather[region] * weight;
+        }
+
+        return blended / nearbyRegions.Count;
+    }
+}
+
+// 고도에 따른 날씨 변화
+function ApplyElevationEffect(WeatherParameters params, float altitude) {
+    // 높을수록 추움
+    params.temperature -= altitude / 200.0;  // 200m당 1도 감소
+
+    // 높을수록 바람 강함
+    params.windVelocity *= (1.0 + altitude / 1000.0);
+
+    // 높을수록 구름 밀도 증가
+    params.cloudDensity = min(1.0, params.cloudDensity * (1.0 + altitude / 2000.0));
+
+    return params;
+}</code></pre>
+
+        <h2>Part 5: 시각적 효과 체인</h2>
+
+        <div class="q">Q. 비가 내리면 땅이 젖는 건 어떻게?</div>
+        <div class="a">
+            <span class="highlight">효과 체인</span>이 연쇄적으로 발동됩니다. 비 → 빗방울 파티클 → 물웅덩이 → 표면 젖음 → 반사 증가.
+        </div>
+
+        <div class="ascii-diagram">
+비 효과 체인 (Rain Effect Chain):
+
+1. 비 시작 (rainIntensity = 0.5)
+   │
+   ├─→ [파티클 시스템] 빗방울 생성 (500개)
+   │   └─→ 땅 충돌 → 튕김 파티클
+   │
+   ├─→ [표면 젖음] Wetness Map 증가 (0.0 → 0.8)
+   │   └─→ Albedo 어두워짐
+   │   └─→ Roughness 감소 (반사 증가)
+   │
+   ├─→ [물웅덩이] Puddle 시스템 활성화
+   │   └─→ 낮은 곳에 물 고임
+   │   └─→ Planar Reflection (거울 반사)
+   │
+   ├─→ [오디오] 빗소리 (볼륨: 0.5)
+   │   └─→ 지붕/나뭇잎 충돌음
+   │
+   ├─→ [라이팅] 전체 밝기 감소 (60%)
+   │   └─→ 하늘색 변화 (파랑 → 회색)
+   │
+   └─→ [Post-Process] 채도 감소
+       └─→ Wet Camera Lens (렌즈 물방울)
+
+2. 비 그침 (rainIntensity = 0.0)
+   │
+   ├─→ [파티클] 빗방울 서서히 감소
+   │   └─→ 10초에 걸쳐 0개
+   │
+   ├─→ [표면 젖음] 시간에 따라 건조
+   │   └─→ 햇빛: 5분 → 0.0
+   │   └─→ 그늘: 20분 → 0.0
+   │
+   ├─→ [물웅덩이] 증발 시작
+   │   └─→ 온도 20°C: 30분
+   │   └─→ 온도 30°C: 10분
+   │
+   └─→ [무지개] 조건 만족 시 생성
+       └─→ 태양각 < 42도
+       └─→ 카메라 반대편에 비
+        </div>
+
+        <pre><code>// 의사코드: 날씨 효과 체인
+
+struct WeatherEffectSystem {
+    ParticleSystem rainParticles;
+    Texture2D wetnessMap;           // 표면 젖음
+    PuddleSystem puddles;           // 물웅덩이
+    AudioSource rainAudio;
+    PostProcessVolume postProcess;
+}
+
+function UpdateWeatherEffects(deltaTime) {
+    float rain = activeParams.rainIntensity;
+
+    // 1. 빗방울 파티클
+    if (rain > 0.01) {
+        int targetCount = rain * 1000;  // 최대 1000개
+        rainParticles.SetEmissionRate(targetCount);
+        rainParticles.SetVelocity(vec3(
+            windVelocity.x,
+            -10.0 - rain * 5.0,  // 비 세기에 따라 낙하속도
+            windVelocity.z
+        ));
+    } else {
+        rainParticles.SetEmissionRate(0);
+    }
+
+    // 2. 표면 젖음 (Wetness Map)
+    UpdateWetnessMap(rain, deltaTime);
+
+    // 3. 물웅덩이
+    if (rain > 0.3) {
+        puddles.Accumulate(deltaTime * rain * 0.01);  // 시간당 1cm
+    } else {
+        puddles.Evaporate(deltaTime * 0.001);  // 증발
+    }
+
+    // 4. 오디오
+    rainAudio.volume = rain;
+    rainAudio.pitch = 1.0 + rain * 0.2;  // 폭우일수록 높은음
+
+    // 5. 라이팅
+    directionalLight.intensity = lerp(1.0, 0.3, rain);
+    skybox.tint = lerp(vec3(1, 1, 1), vec3(0.5, 0.5, 0.6), rain);
+
+    // 6. Post-Process
+    postProcess.saturation = lerp(1.0, 0.7, rain);  // 채도 감소
+    postProcess.brightness = lerp(1.0, 0.8, rain);
+
+    // 7. 카메라 렌즈 물방울
+    if (rain > 0.5) {
+        wetLensEffect.intensity = (rain - 0.5) * 2.0;
+    }
+
+    // 8. 무지개 (비 그칠 때)
+    if (rain < 0.1 && previousRain > 0.3) {
+        CheckRainbowConditions();
+    }
+
+    previousRain = rain;
+}
+
+// Wetness Map 업데이트
+function UpdateWetnessMap(float rainIntensity, float deltaTime) {
+    for each pixel in wetnessMap {
+        vec3 worldPos = PixelToWorld(pixel);
+
+        // 1. 비에 의한 젖음 증가
+        if (rainIntensity > 0.01 && !IsUnderRoof(worldPos)) {
+            float wetIncrease = rainIntensity * deltaTime * 0.1;
+            wetnessMap[pixel] += wetIncrease;
+        }
+
+        // 2. 건조 (햇빛, 바람)
+        if (rainIntensity < 0.01) {
+            float dryRate = 0.01 * deltaTime;
+
+            // 햇빛 받으면 빠르게 건조
+            if (InSunlight(worldPos)) {
+                dryRate *= 5.0;
+            }
+
+            // 바람 세면 빠르게 건조
+            dryRate *= (1.0 + windSpeed / 10.0);
+
+            wetnessMap[pixel] = max(0.0, wetnessMap[pixel] - dryRate);
+        }
+
+        // 3. Material Property 변경
+        float wetness = wetnessMap[pixel];
+        material.albedo *= (1.0 - wetness * 0.3);    // 어두워짐
+        material.roughness *= (1.0 - wetness * 0.5); // 반사 증가
+        material.metallic += wetness * 0.2;          // 금속성 증가
+    }
+}
+
+// 무지개 조건 체크
+function CheckRainbowConditions() {
+    float sunAngle = GetSunAngle();
+
+    // 태양 각도가 42도 이하 (지평선 근처)
+    if (sunAngle < 42.0 && sunAngle > 0.0) {
+        vec3 sunDir = GetSunDirection();
+        vec3 camDir = GetCameraDirection();
+
+        // 카메라 반대편에 비
+        if (dot(sunDir, camDir) < -0.5 && IsRainingBehindCamera()) {
+            SpawnRainbow(sunAngle);
+        }
+    }
+}</code></pre>
+
+        <h2>Part 6: 게임플레이 연동</h2>
+
+        <div class="q">Q. 날씨가 게임플레이에 영향을 주나요?</div>
+        <div class="a">
+            크게 영향을 줍니다! <span class="highlight">시야, 이동속도, NPC 행동, 발자국</span> 등이 모두 날씨에 반응합니다.
+        </div>
+
+        <div class="ascii-diagram">
+날씨별 게임플레이 변화:
+
+┌──────────────────────────────────────────────────┐
+│ 날씨        │ 시야   │ 이동  │ NPC 행동          │
+├──────────────────────────────────────────────────┤
+│ 맑음 ☀     │ 10km   │ 100%  │ 정상 활동          │
+│             │        │       │                    │
+│ 안개 🌫     │ 100m   │ 100%  │ 실내 대피          │
+│             │        │       │ 시야 감소 (AI)     │
+│             │        │       │                    │
+│ 비 🌧       │ 2km    │ 90%   │ 우산 쓰기          │
+│             │        │       │ 빠른 걸음          │
+│             │        │       │                    │
+│ 폭풍 ⛈      │ 500m   │ 70%   │ 실내 대피          │
+│             │        │       │ 공포 반응          │
+│             │        │       │                    │
+│ 눈 ❄        │ 5km    │ 60%   │ 추위 반응          │
+│             │        │       │ 모닥불 근처        │
+└──────────────────────────────────────────────────┘
+
+발자국 지속 시간:
+  맑음: 10분 (마름)
+  비: 즉시 사라짐 (물에 씻김)
+  눈: 영구 (새 눈 쌓일 때까지)
+
+추적 퀘스트:
+  맑음: 발자국 선명, 쉬움
+  비: 발자국 없음, 불가능
+  눈: 발자국 너무 많음, 어려움
+        </div>
+
+        <pre><code>// 의사코드: 날씨 게임플레이 연동
+
+function ApplyWeatherGameplayEffects() {
+    float rain = activeParams.rainIntensity;
+    float fog = activeParams.fogDensity;
+    float snow = GetSnowDepth(playerPosition);
+
+    // 1. 플레이어 시야 거리
+    float baseVisibility = 10000.0;
+    float weatherVisibility = activeParams.visibility;
+    camera.farClipPlane = min(baseVisibility, weatherVisibility);
+
+    // 2. 이동 속도
+    float speedMultiplier = 1.0;
+    if (rain > 0.5) {
+        speedMultiplier *= 0.9;  // 비 - 10% 감소
+    }
+    if (snow > 0.2) {
+        speedMultiplier *= (1.0 - snow * 0.5);  // 눈 - 최대 50% 감소
+    }
+    player.movementSpeed *= speedMultiplier;
+
+    // 3. NPC 행동 변화
+    for each npc in activeNPCs {
+        if (rain > 0.7 || fog > 0.5) {
+            // 실내로 대피
+            npc.SetBehavior(SEEK_SHELTER);
+        } else if (rain > 0.3) {
+            // 우산 꺼내기
+            npc.EquipUmbrella();
+        } else if (activeParams.temperature < 0.0) {
+            // 추위 반응
+            npc.PlayAnimation(SHIVERING);
+            npc.SeekWarmth();
+        }
+    }
+
+    // 4. 발자국 시스템
+    if (rain > 0.3) {
+        // 비에 발자국 빠르게 사라짐
+        footprintDecayRate = 10.0;  // 초당
+    } else if (snow > 0.1) {
+        // 눈에 발자국 영구 (새 눈 쌓일 때까지)
+        footprintDecayRate = 0.0;
+    } else {
+        // 일반 (서서히 마름)
+        footprintDecayRate = 0.01;
+    }
+
+    // 5. 추적 퀘스트
+    if (activeQuest.type == TRACKING) {
+        if (rain > 0.3) {
+            ShowMessage("비가 발자국을 씻어내고 있습니다.");
+            activeQuest.trackingDifficulty = IMPOSSIBLE;
+        } else if (snow > 0.1) {
+            activeQuest.trackingDifficulty = EASY;  // 눈에 선명함
+        }
+    }
+
+    // 6. 총소리 전파 거리
+    float soundTravelDistance = 1000.0;
+    if (fog > 0.5) {
+        soundTravelDistance *= 0.5;  // 안개에 소리 흡수
+    }
+    if (rain > 0.5) {
+        soundTravelDistance *= 0.7;  // 빗소리에 묻힘
+    }
+    audioSystem.maxDistance = soundTravelDistance;
+
+    // 7. 조준 난이도 (바람)
+    float windEffect = length(activeParams.windVelocity);
+    if (windEffect > 10.0) {
+        // 강풍 - 총알 궤적 영향
+        player.aimSway += windEffect * 0.01;
+    }
+
+    // 8. 동물 행동
+    for each animal in activeAnimals {
+        if (activeParams.lightningFreq > 0.0) {
+            // 번개 - 동물 놀람
+            animal.Flee();
+        }
+        if (rain > 0.5) {
+            // 비 - 나무 아래 대피
+            animal.SeekShelter();
+        }
+    }
+}
+
+// 번개에 플레이어 맞기 (극히 드묾)
+function CheckLightningStrike() {
+    if (activeParams.lightningFreq > 0.0 && Random() < 0.0001) {
+        if (player.IsInOpenArea() && player.HasMetalEquipped()) {
+            // 번개 맞음 (체력 50% 감소)
+            player.TakeDamage(player.maxHealth * 0.5);
+            PlayLightningStrikeEffect(player.position);
+            player.PlayAnimation(ELECTROCUTED);
+        }
+    }
+}</code></pre>
+
+        <div class="summary-box">
+            <h3>💡 핵심 정리</h3>
+            <ul>
+                <li><strong>FSM:</strong> 7개 날씨 상태, 확률 기반 전환, 체류 시간</li>
+                <li><strong>파라미터 보간:</strong> 구름, 비, 바람, 하늘색, 조명 등 동시 보간</li>
+                <li><strong>Smoothstep:</strong> 부드러운 가속/감속 (선형 아님)</li>
+                <li><strong>지역별 날씨:</strong> 산악 눈, 평원 맑음, 늪지 안개, 500m Blend Zone</li>
+                <li><strong>효과 체인:</strong> 비 → 빗방울 → 표면 젖음 → 물웅덩이 → 반사</li>
+                <li><strong>게임플레이 연동:</strong> 시야, 이동속도, NPC 행동, 발자국, 추적</li>
+                <li><strong>고도 효과:</strong> 200m당 1도 감소, 바람 증가</li>
+                <li><strong>무지개 조건:</strong> 태양각 < 42도, 카메라 뒤 비</li>
+            </ul>
+
+            <div class="note" style="margin-top: 20px; border-left-color: #B45309;">
+                <strong>게임 내 적용 예시:</strong><br>
+                <ul style="margin-top: 10px;">
+                    <li>산에서 비 맞다가 정상 올라가니 눈으로 바뀜</li>
+                    <li>늪지 근처에 가니 갑자기 안개 자욱 (100m 시야)</li>
+                    <li>폭풍 오기 전 바람 세지고, 하늘 어두워지고, NPC들 실내 대피</li>
+                    <li>비 그친 후 무지개, 물웅덩이 반사, 10분 후 마름</li>
+                    <li>눈 쌓인 곳에서 달리면 속도 50% 감소</li>
+                    <li>안개 낀 날 사냥하면 동물 발견 어려움</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="note">
+            <strong>참고:</strong> RDR2의 날씨 시스템은 시간(낮/밤), 계절(봄/여름/가을/겨울), 지역, 고도를 모두 고려한 복합 시스템입니다. 실제로는 머신러닝 기반 날씨 예측 모델도 사용하여 플레이어의 위치를 예측하고, 극적인 순간에 폭풍이 오도록 연출합니다.
+        </div>
+    </div>
+</body>
+</html>
