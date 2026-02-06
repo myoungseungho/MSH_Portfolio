@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8개 청크 중 변경된 것만 저장하기 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+        .code-block .bit { color: #ffcc80; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; font-weight: 600; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .bit-visual { display: flex; gap: 4px; margin: 16px 0; flex-wrap: wrap; }
+        .bit-cell { width: 60px; height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; font-family: monospace; font-size: 0.8rem; }
+        .bit-cell.on { background: #c8e6c9; border: 2px solid #4caf50; }
+        .bit-cell.off { background: #f5f5f5; border: 2px solid #e0e0e0; }
+        .bit-cell .bit-num { font-weight: 700; font-size: 1rem; }
+        .bit-cell .bit-label { font-size: 0.7rem; color: #666; }
+
+        .result-box { background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .result-box h4 { font-size: 1rem; margin-bottom: 16px; opacity: 0.9; }
+        .result-box .result-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        .result-box .result-item { text-align: center; }
+        .result-box .result-label { font-size: 0.85rem; opacity: 0.8; margin-bottom: 4px; }
+        .result-box .result-value { font-size: 1.5rem; font-weight: 700; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .real-code-box { background: linear-gradient(135deg, #37474f 0%, #263238 100%); border-radius: 16px; padding: 24px; margin: 24px 0; }
+        .real-code-box h4 { color: #80cbc4; font-size: 0.9rem; margin-bottom: 16px; }
+        .real-code-box .code-block { margin: 0; background: rgba(0,0,0,0.3); }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>8개 청크 중 변경된 것만 저장하기</h1>
+            <p>비트 플래그 저장 패턴 - 인벤토리를 효율적으로 저장하는 법</p>
+        </header>
+
+        <!-- Part 1: 문제 상황 -->
+        <div class="conversation">
+            <h2>Part 1. 인벤토리 저장 문제</h2>
+
+            <div class="chat">
+                <div class="q">인벤토리 저장할 때 뭐가 문제야?</div>
+                <div class="a">
+                    <p>인벤토리 슬롯이 몇 개야?</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">200칸? 300칸?</div>
+                <div class="a">
+                    <p>맞아. 근데 <span class="warning">한 번에 다 저장하면 데이터가 너무 커</span>.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[인벤토리 데이터 크기]
+
+한 슬롯 = 아이템 코드(4) + 수량(4) + 강화(4) + 옵션(20) + ... ≈ 80바이트
+300슬롯 = 80 × 300 = 24,000바이트 = 24KB
+
+SQL Server 컬럼 최대 크기: 8000바이트
+
+→ 한 컬럼에 못 담음!</div>
+
+            <div class="chat">
+                <div class="q">그래서 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="key-point">청크(Chunk)로 나눠서 저장해.</span></p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[청크 분할]
+
+전체 인벤토리 (300슬롯)
+├── Chunk 0: 슬롯 0~49    (binary 4000)
+├── Chunk 1: 슬롯 50~99   (binary 4000)
+├── Chunk 2: 슬롯 100~149 (binary 4000)
+├── Chunk 3: 슬롯 150~199 (binary 4000)
+├── Chunk 4: 슬롯 200~249 (binary 4000)
+└── Chunk 5: 슬롯 250~299 (binary 4000)</div>
+        </div>
+
+        <!-- Part 2: 새로운 문제 -->
+        <div class="conversation">
+            <h2>Part 2. 청크로 나눴는데...</h2>
+
+            <div class="chat">
+                <div class="q">그럼 저장할 때 6개 청크 다 저장해?</div>
+                <div class="a">
+                    <p>그러면 <span class="warning">낭비야</span>.</p>
+                    <p>유저가 1번 슬롯 아이템만 사용했는데 6개 청크 다 저장할 필요 있어?</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[시나리오: 유저가 1번 슬롯의 포션 사용]
+
+변경된 곳: Chunk 0 (슬롯 0~49) 중 1번 슬롯
+변경 안 된 곳: Chunk 1, 2, 3, 4, 5
+
+전체 저장: 24KB 전송 + 6번 UPDATE
+필요한 저장: 4KB 전송 + 1번 UPDATE
+
+→ 6배 낭비!</div>
+
+            <div class="chat">
+                <div class="q">어떤 청크가 변경됐는지 어떻게 알아?</div>
+                <div class="a">
+                    <p><span class="key-point">비트 플래그!</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 비트 플래그 설명 -->
+        <div class="conversation">
+            <h2>Part 3. 비트 플래그가 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">비트 플래그?</div>
+                <div class="a">
+                    <p>숫자 하나로 여러 개의 ON/OFF 상태를 표현하는 방법이야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[비트 플래그 기초]
+
+1바이트(TINYINT) = 8비트 = 8개의 ON/OFF 표현 가능
+
+비트 위치:  7  6  5  4  3  2  1  0
+값:         0  0  1  0  0  1  0  1  = 37 (십진수)
+
+의미:
+- 비트 0 (값 1): Chunk 0 변경됨 ✓
+- 비트 1 (값 2): Chunk 1 변경 안 됨
+- 비트 2 (값 4): Chunk 2 변경됨 ✓
+- 비트 5 (값 32): Chunk 5 변경됨 ✓
+
+37 = 1 + 4 + 32 = Chunk 0, 2, 5가 변경됨</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>비트 연산 기초:</strong></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>연산</th>
+                    <th>기호</th>
+                    <th>설명</th>
+                    <th>예시</th>
+                </tr>
+                <tr>
+                    <td>AND</td>
+                    <td>&</td>
+                    <td>특정 비트 확인</td>
+                    <td>37 & 4 = 4 (비트2 ON)</td>
+                </tr>
+                <tr>
+                    <td>OR</td>
+                    <td>|</td>
+                    <td>비트 설정</td>
+                    <td>37 | 8 = 45 (비트3 추가)</td>
+                </tr>
+                <tr>
+                    <td>Left Shift</td>
+                    <td>&lt;&lt;</td>
+                    <td>비트 이동</td>
+                    <td>1 &lt;&lt; 3 = 8 (비트3 마스크)</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 4: SQL에서 사용 -->
+        <div class="conversation">
+            <h2>Part 4. SQL에서 비트 플래그 사용</h2>
+
+            <div class="chat">
+                <div class="q">프로시저에서 어떻게 써?</div>
+                <div class="a">
+                    <p>파라미터로 비트 플래그를 받아서 조건 체크해.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="keyword">CREATE PROCEDURE</span> gp_save_inventory
+    @charunique BIGINT,
+    <span class="bit">@bySaveBits TINYINT</span>,  <span class="comment">-- 비트 플래그!</span>
+    @Inventory0 BINARY(<span class="number">4000</span>),
+    @Inventory1 BINARY(<span class="number">4000</span>),
+    @Inventory2 BINARY(<span class="number">4000</span>),
+    ...
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="comment">-- Chunk 0이 변경됐으면 (비트 0 체크)</span>
+    <span class="keyword">IF</span> (<span class="bit">@bySaveBits & 1</span>) > 0
+        <span class="keyword">UPDATE</span> TInventory <span class="keyword">SET</span> data0 = @Inventory0 <span class="keyword">WHERE</span> ...
+
+    <span class="comment">-- Chunk 1이 변경됐으면 (비트 1 체크)</span>
+    <span class="keyword">IF</span> (<span class="bit">@bySaveBits & 2</span>) > 0
+        <span class="keyword">UPDATE</span> TInventory <span class="keyword">SET</span> data1 = @Inventory1 <span class="keyword">WHERE</span> ...
+
+    <span class="comment">-- Chunk 2가 변경됐으면 (비트 2 체크)</span>
+    <span class="keyword">IF</span> (<span class="bit">@bySaveBits & 4</span>) > 0
+        <span class="keyword">UPDATE</span> TInventory <span class="keyword">SET</span> data2 = @Inventory2 <span class="keyword">WHERE</span> ...
+<span class="keyword">END</span></div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="highlight">@bySaveBits & N</span>: N번 비트가 1인지 확인</p>
+                    <p>결과가 0보다 크면 해당 청크 저장!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 우리 프로젝트 실제 코드 -->
+        <div class="conversation">
+            <h2>Part 5. 우리 프로젝트 실제 코드</h2>
+
+            <div class="real-code-box">
+                <h4>실제 코드 - gp_save_pc_inventory</h4>
+                <div class="code-block"><span class="keyword">ALTER PROCEDURE</span> gp_save_pc_inventory
+    @pc_uid BIGINT,
+    <span class="bit">@bySaveBits TINYINT</span>,
+    @Inventory1 BINARY(<span class="number">8000</span>),
+    @Inventory2 BINARY(<span class="number">8000</span>),
+    ...
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="keyword">SET NOCOUNT ON</span>;
+    <span class="keyword">SET XACT_ABORT ON</span>;
+
+    <span class="keyword">BEGIN TRAN</span>
+        <span class="comment">-- 변경된 청크만 SELECT해서 UPDATE</span>
+        <span class="keyword">UPDATE</span> TInventory
+        <span class="keyword">SET</span>
+            chunk_id = src.chunk_id,
+            data = src.data
+        <span class="keyword">FROM</span> TInventory t
+        <span class="keyword">INNER JOIN</span> (
+            <span class="keyword">SELECT</span> <span class="number">0</span> <span class="keyword">AS</span> chunk_id, @Inventory1 <span class="keyword">AS</span> data
+            <span class="keyword">WHERE</span> (<span class="bit">@bySaveBits & 1</span>) > 0
+            <span class="keyword">UNION ALL</span>
+            <span class="keyword">SELECT</span> <span class="number">1</span>, @Inventory2
+            <span class="keyword">WHERE</span> (<span class="bit">@bySaveBits & 2</span>) > 0
+            <span class="keyword">UNION ALL</span>
+            <span class="keyword">SELECT</span> <span class="number">2</span>, @Inventory3
+            <span class="keyword">WHERE</span> (<span class="bit">@bySaveBits & 4</span>) > 0
+            ...
+        ) src <span class="keyword">ON</span> t.chunk_id = src.chunk_id
+        <span class="keyword">WHERE</span> t.charunique = @pc_uid
+    <span class="keyword">COMMIT TRAN</span>
+<span class="keyword">END</span></div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>이 코드의 특징:</strong></p>
+                    <p>• UNION ALL로 변경된 청크만 선택</p>
+                    <p>• 한 번의 UPDATE로 여러 청크 처리</p>
+                    <p>• 비트 플래그로 불필요한 데이터 전송 방지</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 게임 서버 측 -->
+        <div class="conversation">
+            <h2>Part 6. 게임 서버에서는?</h2>
+
+            <div class="chat">
+                <div class="q">C++에서는 어떻게 비트 플래그를 만들어?</div>
+                <div class="a">
+                    <p>인벤토리 변경될 때마다 해당 청크의 비트를 켜.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">// C++ 게임 서버 코드 (개념)</span>
+
+<span class="comment">// 인벤토리 변경 시</span>
+void OnInventoryChanged(int slotIndex) {
+    int chunkIndex = slotIndex / SLOTS_PER_CHUNK;  <span class="comment">// 50</span>
+    m_byDirtyBits |= (<span class="number">1</span> << chunkIndex);  <span class="comment">// 해당 비트 ON</span>
+}
+
+<span class="comment">// 저장 시</span>
+void SaveInventory() {
+    if (m_byDirtyBits == <span class="number">0</span>) return;  <span class="comment">// 변경 없으면 스킵</span>
+
+    <span class="comment">// m_byDirtyBits와 변경된 청크 데이터만 전송</span>
+    DBCall_SaveInventory(m_byDirtyBits, ...);
+
+    m_byDirtyBits = <span class="number">0</span>;  <span class="comment">// 저장 후 초기화</span>
+}</div>
+        </div>
+
+        <!-- Part 7: 성능 효과 -->
+        <div class="conversation">
+            <h2>Part 7. 얼마나 효과가 있어?</h2>
+
+            <div class="result-box">
+                <h4>인벤토리 저장 최적화 효과</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">전체 저장</div>
+                        <div class="result-value">48KB</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">비트 플래그 (평균)</div>
+                        <div class="result-value">~8KB</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>실제 시나리오별 효과:</strong></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>변경 청크</th>
+                    <th>비트값</th>
+                    <th>절약률</th>
+                </tr>
+                <tr>
+                    <td>포션 1개 사용</td>
+                    <td>1개</td>
+                    <td class="good">1 (0x01)</td>
+                    <td class="good">83%</td>
+                </tr>
+                <tr>
+                    <td>장비 교체</td>
+                    <td>2개</td>
+                    <td class="good">3 (0x03)</td>
+                    <td class="good">67%</td>
+                </tr>
+                <tr>
+                    <td>대량 아이템 획득</td>
+                    <td>6개</td>
+                    <td>63 (0x3F)</td>
+                    <td>0%</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>청크 분할</strong>: 큰 데이터를 여러 조각으로 나눠 저장</li>
+                <li><strong>비트 플래그</strong>: 1바이트로 8개의 ON/OFF 상태 표현</li>
+                <li><strong>@bySaveBits & N</strong>: N번 비트가 켜져있는지 확인</li>
+                <li><strong>우리 프로젝트</strong>: gp_save_pc_inventory에서 이 패턴 사용</li>
+                <li><strong>효과</strong>: 평균 60~80% 데이터 전송량 감소</li>
+                <li><strong>활용</strong>: 인벤토리, 스킬, 퀘스트 등 대용량 binary 데이터</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../dirty-checking/">← 이전: Dirty Checking</a>
+            <a href="../lock-escalation/">다음: Lock Escalation →</a>
+        </div>
+    </div>
+</body>
+</html>

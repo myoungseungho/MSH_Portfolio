@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8000바이트 Binary, 어떻게 효율적으로? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>8000바이트 Binary, 어떻게 효율적으로?</h1>
+            <p>Binary 대용량 파라미터 최적화 - 구조체 직렬화부터 압축까지</p>
+        </header>
+
+        <!-- Part 1: 왜 Binary를 쓰나 -->
+        <div class="conversation">
+            <h2>Part 1. 왜 Binary 파라미터를 쓸까?</h2>
+
+            <div class="chat">
+                <div class="q">인벤토리를 저장할 때 왜 Binary로 보내?</div>
+                <div class="a">
+                    <p>아이템 100개를 개별 컬럼으로 보내면?</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">❌ 개별 파라미터로 100개 아이템:
+
+EXEC gp_SaveInventory
+    @Item1_ID, @Item1_Count, @Item1_Opt1, @Item1_Opt2...
+    @Item2_ID, @Item2_Count, @Item2_Opt1, @Item2_Opt2...
+    ...
+    @Item100_ID, @Item100_Count...
+
+→ 파라미터 400개+
+→ 프로시저 정의 불가능 (2100개 제한이지만 관리 불가)
+→ 코드 유지보수 지옥</div>
+
+            <div class="chat">
+                <div class="q">아, 그래서 묶어서 보내는구나.</div>
+                <div class="a">
+                    <p>맞아. <span class="highlight">구조체를 Binary로 직렬화</span>해서 한 파라미터로.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">// C++ 구조체</span>
+<span class="keyword">struct</span> TInventoryItem
+{
+    <span class="keyword">int</span> i32ItemID;      <span class="comment">// 4 bytes</span>
+    <span class="keyword">int</span> i32Count;       <span class="comment">// 4 bytes</span>
+    <span class="keyword">int</span> i32Option[<span class="number">5</span>];   <span class="comment">// 20 bytes</span>
+};  <span class="comment">// 총 28 bytes/아이템</span>
+
+<span class="comment">// 100개 = 2800 bytes → Binary(3000)으로 전송</span></div>
+        </div>
+
+        <!-- Part 2: SQL Server Binary 타입 -->
+        <div class="conversation">
+            <h2>Part 2. SQL Server의 Binary 타입</h2>
+
+            <div class="chat">
+                <div class="q">Binary 타입이 뭐가 있어?</div>
+                <div class="a">
+                    <p>크기에 따라 다른 타입을 사용해.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>타입</th>
+                    <th>최대 크기</th>
+                    <th>저장 방식</th>
+                    <th>사용처</th>
+                </tr>
+                <tr>
+                    <td>binary(n)</td>
+                    <td>8,000 bytes</td>
+                    <td class="good">고정 길이</td>
+                    <td>항상 같은 크기</td>
+                </tr>
+                <tr>
+                    <td>varbinary(n)</td>
+                    <td>8,000 bytes</td>
+                    <td class="good">가변 길이</td>
+                    <td>크기 변동</td>
+                </tr>
+                <tr>
+                    <td>varbinary(max)</td>
+                    <td>2GB</td>
+                    <td class="bad">LOB 저장</td>
+                    <td>대용량</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">우리는 주로 뭘 써?</div>
+                <div class="a">
+                    <p><span class="key-point">varbinary(8000)</span>이 가장 많아.</p>
+                    <p>8000바이트면 아이템 280개 정도 담을 수 있어.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 8000바이트 제한 -->
+        <div class="conversation">
+            <h2>Part 3. 8000바이트 제한 대응</h2>
+
+            <div class="chat">
+                <div class="q">8000바이트가 넘으면 어떡해?</div>
+                <div class="a">
+                    <p>세 가지 방법이 있어:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">📦 8000바이트 초과 시 대응:
+
+방법 1️⃣ 분할 전송
+└─ 8000바이트씩 나눠서 여러 번 호출
+└─ 우리 서버가 쓰는 방식 (Chunk 패턴)
+
+방법 2️⃣ varbinary(max) 사용
+└─ 최대 2GB까지 가능
+└─ 단, LOB 처리로 성능 저하
+
+방법 3️⃣ 압축
+└─ 데이터 압축 후 전송
+└─ CPU vs 네트워크 트레이드오프</div>
+
+            <div class="chat">
+                <div class="q">Chunk 패턴이 뭐야?</div>
+                <div class="a">
+                    <p>이전에 봤던 <span class="highlight">비트 플래그 저장</span>에서 쓴 방식.</p>
+                    <p>인벤토리를 50개씩 나눠서 저장.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">// Chunk 분할 저장</span>
+<span class="keyword">void</span> SaveInventory(<span class="keyword">int</span> CharSID, TItem* items, <span class="keyword">int</span> count)
+{
+    <span class="keyword">const int</span> CHUNK_SIZE = <span class="number">50</span>;  <span class="comment">// 50개씩</span>
+
+    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i < count; i += CHUNK_SIZE)
+    {
+        <span class="keyword">int</span> chunkCount = min(CHUNK_SIZE, count - i);
+        <span class="keyword">int</span> dataSize = chunkCount * <span class="keyword">sizeof</span>(TItem);
+
+        <span class="comment">// Binary 파라미터로 전송</span>
+        CallProcedure(<span class="string">"gp_SaveInventory_Chunk"</span>,
+            CharSID,
+            i / CHUNK_SIZE,  <span class="comment">// Chunk 번호</span>
+            &items[i],       <span class="comment">// Binary 데이터</span>
+            dataSize);
+    }
+}</div>
+        </div>
+
+        <!-- Part 4: Binary 직렬화 최적화 -->
+        <div class="conversation">
+            <h2>Part 4. 직렬화 최적화</h2>
+
+            <div class="chat">
+                <div class="q">직렬화할 때 최적화 포인트가 있어?</div>
+                <div class="a">
+                    <p>구조체 <span class="highlight">패딩(Padding)</span>을 주의해야 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">// ❌ 비효율적인 구조체 (패딩 발생)</span>
+<span class="keyword">struct</span> TItemBad
+{
+    <span class="keyword">char</span> byType;     <span class="comment">// 1 byte</span>
+    <span class="comment">// 패딩 3 bytes (정렬 맞추려고)</span>
+    <span class="keyword">int</span> i32ID;       <span class="comment">// 4 bytes</span>
+    <span class="keyword">char</span> byGrade;    <span class="comment">// 1 byte</span>
+    <span class="comment">// 패딩 3 bytes</span>
+    <span class="keyword">int</span> i32Count;    <span class="comment">// 4 bytes</span>
+};  <span class="comment">// 실제: 16 bytes (데이터 10, 패딩 6)</span>
+
+<span class="comment">// ✅ 효율적인 구조체 (정렬 고려)</span>
+<span class="keyword">struct</span> TItemGood
+{
+    <span class="keyword">int</span> i32ID;       <span class="comment">// 4 bytes</span>
+    <span class="keyword">int</span> i32Count;    <span class="comment">// 4 bytes</span>
+    <span class="keyword">char</span> byType;     <span class="comment">// 1 byte</span>
+    <span class="keyword">char</span> byGrade;    <span class="comment">// 1 byte</span>
+    <span class="keyword">char</span> byPad[<span class="number">2</span>];   <span class="comment">// 명시적 패딩 2 bytes</span>
+};  <span class="comment">// 실제: 12 bytes (효율적)</span></div>
+
+            <div class="chat">
+                <div class="q">패딩이 뭔데?</div>
+                <div class="a">
+                    <p>CPU가 데이터를 빠르게 읽으려고 <span class="warning">정렬을 맞추는 빈 공간</span>.</p>
+                    <p>4바이트 단위로 정렬하면 4의 배수 주소에 위치.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">📐 패딩 시각화:
+
+❌ TItemBad:
+| byType(1) | 패딩(3) | i32ID(4) | byGrade(1) | 패딩(3) | i32Count(4) |
+0          1         4         8          9         12          16
+
+✅ TItemGood:
+| i32ID(4) | i32Count(4) | byType(1) | byGrade(1) | Pad(2) |
+0         4            8          9          10        12
+
+💡 100개 아이템: 400바이트 절약!</div>
+        </div>
+
+        <!-- Part 5: 압축 사용 -->
+        <div class="conversation">
+            <h2>Part 5. 데이터 압축</h2>
+
+            <div class="chat">
+                <div class="q">압축하면 얼마나 줄어?</div>
+                <div class="a">
+                    <p>게임 데이터는 보통 <span class="key-point">30~50% 압축률</span>.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">📉 압축 효과 예시:
+
+인벤토리 200개 (5600 bytes)
+├── 압축 전: 5600 bytes
+├── zlib 압축: 2200 bytes (60% 감소)
+└── LZ4 압축: 3000 bytes (46% 감소, 더 빠름)
+
+⚠️ 압축 비용:
+├── 압축: CPU 시간 필요
+├── 해제: DB에서 또는 프로시저에서
+└── 트레이드오프: CPU vs 네트워크/저장공간</div>
+
+            <div class="chat">
+                <div class="q">언제 압축을 써야 해?</div>
+                <div class="a">
+                    <p>데이터가 <span class="highlight">큰 경우에만</span>. 작으면 오버헤드가 더 커.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>데이터 크기</th>
+                    <th>압축 효과</th>
+                    <th>추천</th>
+                </tr>
+                <tr>
+                    <td>~1KB</td>
+                    <td class="bad">오버헤드 > 절약</td>
+                    <td>압축 안 함</td>
+                </tr>
+                <tr>
+                    <td>1~8KB</td>
+                    <td>상황에 따라</td>
+                    <td>테스트 필요</td>
+                </tr>
+                <tr>
+                    <td>8KB+</td>
+                    <td class="good">효과적</td>
+                    <td>압축 추천</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 6: 프로시저에서 Binary 파싱 -->
+        <div class="conversation">
+            <h2>Part 6. 프로시저에서 Binary 파싱</h2>
+
+            <div class="chat">
+                <div class="q">프로시저에서 Binary를 어떻게 풀어?</div>
+                <div class="a">
+                    <p><span class="highlight">SUBSTRING</span>으로 바이트 단위 추출.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- Binary에서 데이터 추출</span>
+<span class="keyword">CREATE PROCEDURE</span> gp_ParseInventory
+    @binData <span class="keyword">varbinary</span>(<span class="number">8000</span>),
+    @i32ItemSize <span class="keyword">int</span> = <span class="number">28</span>  <span class="comment">-- 아이템당 28바이트</span>
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="keyword">DECLARE</span> @i <span class="keyword">int</span> = <span class="number">1</span>
+    <span class="keyword">DECLARE</span> @totalLen <span class="keyword">int</span> = <span class="keyword">DATALENGTH</span>(@binData)
+
+    <span class="keyword">WHILE</span> @i <= @totalLen
+    <span class="keyword">BEGIN</span>
+        <span class="comment">-- 아이템 ID (offset 0, 4 bytes)</span>
+        <span class="keyword">DECLARE</span> @ItemID <span class="keyword">int</span> =
+            <span class="keyword">CAST</span>(<span class="keyword">SUBSTRING</span>(@binData, @i, <span class="number">4</span>) <span class="keyword">AS int</span>)
+
+        <span class="comment">-- 아이템 개수 (offset 4, 4 bytes)</span>
+        <span class="keyword">DECLARE</span> @Count <span class="keyword">int</span> =
+            <span class="keyword">CAST</span>(<span class="keyword">SUBSTRING</span>(@binData, @i + <span class="number">4</span>, <span class="number">4</span>) <span class="keyword">AS int</span>)
+
+        <span class="comment">-- INSERT 또는 UPDATE</span>
+        <span class="comment">-- ...</span>
+
+        <span class="keyword">SET</span> @i = @i + @i32ItemSize
+    <span class="keyword">END</span>
+<span class="keyword">END</span></div>
+
+            <div class="chat">
+                <div class="q">WHILE 루프가 느리지 않아?</div>
+                <div class="a">
+                    <p><span class="warning">맞아, 느릴 수 있어</span>. 대안:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🚀 Binary 파싱 최적화:
+
+1️⃣ Numbers 테이블 활용 (Set-based)
+   └─ WHILE 대신 JOIN으로 한번에 파싱
+
+2️⃣ CLR 함수 사용
+   └─ C#으로 파싱 함수 작성 → SQL에서 호출
+
+3️⃣ 애플리케이션에서 파싱
+   └─ Binary 저장만 하고, 읽을 때 C++에서 파싱
+   └─ 우리 서버가 쓰는 방식!</div>
+        </div>
+
+        <!-- Part 7: 애플리케이션 파싱 패턴 -->
+        <div class="conversation">
+            <h2>Part 7. 애플리케이션에서 파싱 (우리 방식)</h2>
+
+            <div class="chat">
+                <div class="q">우리 서버는 어떻게 해?</div>
+                <div class="a">
+                    <p>DB는 저장만, <span class="key-point">파싱은 C++에서</span>.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 프로시저: 그냥 Binary로 저장</span>
+<span class="keyword">CREATE PROCEDURE</span> gp_SaveInventory
+    @i32CharSID <span class="keyword">int</span>,
+    @i32Chunk <span class="keyword">int</span>,
+    @binData <span class="keyword">varbinary</span>(<span class="number">8000</span>)
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="keyword">UPDATE</span> TInventory
+    <span class="keyword">SET</span> binItemData = @binData
+    <span class="keyword">WHERE</span> i32CharSID = @i32CharSID
+      <span class="keyword">AND</span> i32ChunkNo = @i32Chunk
+<span class="keyword">END</span></div>
+
+            <div class="code-block"><span class="comment">// C++: Binary → 구조체로 변환</span>
+<span class="keyword">void</span> ParseInventory(<span class="keyword">BYTE</span>* pData, <span class="keyword">int</span> dataLen)
+{
+    <span class="keyword">int</span> itemCount = dataLen / <span class="keyword">sizeof</span>(TItem);
+    TItem* pItems = (TItem*)pData;
+
+    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i < itemCount; i++)
+    {
+        <span class="comment">// 직접 구조체로 접근</span>
+        <span class="keyword">int</span> itemID = pItems[i].i32ItemID;
+        <span class="keyword">int</span> count = pItems[i].i32Count;
+        <span class="comment">// ...</span>
+    }
+}</div>
+
+            <div class="chat">
+                <div class="q">왜 이렇게 해?</div>
+                <div class="a">
+                    <p><span class="key-point">성능이 훨씬 좋아</span>.</p>
+                    <p>C++은 포인터로 바로 구조체 접근 (0ms)</p>
+                    <p>SQL은 SUBSTRING + CAST 반복 (느림)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 8: 엔디안 주의 -->
+        <div class="conversation">
+            <h2>Part 8. 바이트 순서 (Endianness)</h2>
+
+            <div class="chat">
+                <div class="q">Binary 다룰 때 주의할 게 더 있어?</div>
+                <div class="a">
+                    <p><span class="warning">엔디안(바이트 순서)</span>을 알아야 해.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">📐 엔디안이란?
+
+숫자 0x12345678 저장 방식:
+
+Little-Endian (Intel x86, 우리 서버):
+주소:  [0]  [1]  [2]  [3]
+값:    78   56   34   12   ← 뒤집혀 저장!
+
+Big-Endian (네트워크 순서):
+주소:  [0]  [1]  [2]  [3]
+값:    12   34   56   78   ← 순서대로 저장
+
+💡 Windows + SQL Server = 둘 다 Little-Endian
+   → 같은 환경이면 문제 없음!</div>
+
+            <div class="chat">
+                <div class="q">그럼 신경 안 써도 돼?</div>
+                <div class="a">
+                    <p>Windows-to-Windows면 OK.</p>
+                    <p>다른 플랫폼(Linux, 모바일)과 통신하면 주의.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 실전 가이드 -->
+        <div class="conversation">
+            <h2>실전 가이드: Binary 파라미터 최적화</h2>
+
+            <div class="code-block"><span class="comment">// 최적화된 Binary 저장 패턴</span>
+
+<span class="comment">// 1. 구조체 정렬 최적화</span>
+<span class="keyword">#pragma pack(push, 1)</span>  <span class="comment">// 패딩 제거</span>
+<span class="keyword">struct</span> TItemCompact
+{
+    <span class="keyword">int</span> i32ID;
+    <span class="keyword">short</span> i16Count;   <span class="comment">// 65535개면 충분</span>
+    <span class="keyword">BYTE</span> byType;
+    <span class="keyword">BYTE</span> byGrade;
+};  <span class="comment">// 8 bytes (원래 16 → 50% 절약)</span>
+<span class="keyword">#pragma pack(pop)</span>
+
+<span class="comment">// 2. 변경분만 저장 (Dirty Checking)</span>
+<span class="keyword">if</span> (IsSlotDirty(slotNo))
+{
+    dirtyItems.push_back(items[slotNo]);
+}
+
+<span class="comment">// 3. 적절한 Chunk 크기</span>
+<span class="keyword">const int</span> CHUNK_SIZE = <span class="number">50</span>;  <span class="comment">// 50 × 8 = 400 bytes/chunk</span>
+<span class="comment">// 8000 / 400 = 20 chunk까지 가능</span></div>
+        </div>
+
+        <div class="warning-box">
+            <h4>⚠️ Binary 파라미터 주의사항</h4>
+            <p>1. <strong>8000바이트 초과 시 Chunk 분할</strong> - varbinary(max)는 느림</p>
+            <p>2. <strong>구조체 패딩 확인</strong> - #pragma pack으로 제어</p>
+            <p>3. <strong>프로시저에서 WHILE 파싱 피하기</strong> - 애플리케이션에서 처리</p>
+            <p>4. <strong>NULL 데이터 처리</strong> - Binary 전체가 NULL이면 프로시저 오류 가능</p>
+        </div>
+
+        <div class="summary-box">
+            <h3>📝 핵심 정리</h3>
+            <ul>
+                <li>Binary = 구조체 배열을 한 파라미터로 전송</li>
+                <li>varbinary(8000) = 가장 효율적 (LOB 아님)</li>
+                <li>8000바이트 초과 시 Chunk로 분할</li>
+                <li>구조체 패딩 최적화로 공간 절약</li>
+                <li>파싱은 C++에서 (포인터 캐스팅으로 빠르게)</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../batch-fetch/">← Batch Fetch 튜닝</a>
+            <a href="../category-db/">DB / 캐시 목록으로 →</a>
+        </div>
+    </div>
+</body>
+</html>

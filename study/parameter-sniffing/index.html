@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>왜 같은 프로시저가 어제는 빠르고 오늘은 느릴까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>왜 같은 프로시저가 어제는 빠르고 오늘은 느릴까?</h1>
+            <p>Parameter Sniffing - 첫 번째 파라미터가 운명을 결정한다</p>
+        </header>
+
+        <!-- Part 1: 이상한 현상 -->
+        <div class="conversation">
+            <h2>Part 1. 이상한 현상</h2>
+
+            <div class="chat">
+                <div class="q">프로시저가 어제는 0.1초 걸렸는데 오늘 갑자기 5초 걸려. 코드 안 바꿨는데?</div>
+                <div class="a">
+                    <p><span class="warning">Parameter Sniffing</span> 문제일 가능성이 높아.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">파라미터 스니핑?</div>
+                <div class="a">
+                    <p><span class="highlight">"첫 실행 때 들어온 파라미터"</span>로 실행 계획을 만들고 캐싱하는 것.</p>
+                    <p>그 계획이 다른 파라미터에는 안 맞을 수 있어.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 어떻게 발생해? -->
+        <div class="conversation">
+            <h2>Part 2. 어떻게 발생해?</h2>
+
+            <div class="chat">
+                <div class="q">자세히 설명해줘.</div>
+                <div class="a">
+                    <p>프로시저 실행 과정을 보자.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[프로시저 첫 실행 시]
+
+1. gp_LoadCharacter(charunique=1) 호출
+2. SQL Server: "처음 보는 프로시저네, 실행 계획 만들자"
+3. 파라미터 1로 최적의 계획 생성 (Index Seek)
+4. 이 계획을 캐시에 저장
+5. 실행: 0.1초
+
+[이후 실행들]
+
+6. gp_LoadCharacter(charunique=999999) 호출
+7. SQL Server: "아, 이미 계획 있네. 그거 쓰자"
+8. 캐시된 계획 사용 (Index Seek)
+9. 실행: 0.1초 ← 여기까진 OK</div>
+
+            <div class="chat">
+                <div class="q">뭐가 문제인 거야? 잘 동작하는데?</div>
+                <div class="a">
+                    <p>문제는 <span class="warning">"첫 파라미터가 특이한 경우"</span>야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[문제 시나리오]
+
+서버 재시작 후 첫 호출:
+gp_GetCharacterByGuild(guildID=1)  ← 길드 1 = 회원 5만 명!
+
+SQL Server: "guildID=1이면 5만 행이네. Table Scan이 낫겠다"
+계획 생성: Table Scan
+계획 캐시 저장
+
+이후 호출:
+gp_GetCharacterByGuild(guildID=12345)  ← 길드 12345 = 회원 10명
+
+SQL Server: "이미 계획 있네. Table Scan으로 실행"
+결과: 10명 찾는데 Table Scan?? → 느림!</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="warning">5만 명용 계획으로 10명을 찾는 꼴</span>이야.</p>
+                    <p>반대의 경우도 마찬가지.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 게임에서 예시 -->
+        <div class="conversation">
+            <h2>Part 3. 게임에서 실제 예시</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>프로시저</th>
+                    <th>위험 파라미터</th>
+                    <th>문제 상황</th>
+                </tr>
+                <tr>
+                    <td>gp_GetGuildMembers</td>
+                    <td>guildID</td>
+                    <td class="bad">첫 호출이 대형 길드면 소형 길드 느림</td>
+                </tr>
+                <tr>
+                    <td>gp_GetMailByDate</td>
+                    <td>startDate</td>
+                    <td class="bad">첫 호출이 1년치면 하루치도 느림</td>
+                </tr>
+                <tr>
+                    <td>gp_GetRankByLevel</td>
+                    <td>minLevel</td>
+                    <td class="bad">첫 호출이 level>1이면 모든 호출 느림</td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <h4>⚠️ 특히 위험한 상황</h4>
+                <p>서버 재시작/DB 재시작 직후</p>
+                <p>→ 모든 계획 캐시 초기화</p>
+                <p>→ 첫 호출의 파라미터가 모든 것을 결정</p>
+            </div>
+        </div>
+
+        <!-- Part 4: 해결책 -->
+        <div class="conversation">
+            <h2>Part 4. 해결책</h2>
+
+            <div class="chat">
+                <div class="q">어떻게 해결해?</div>
+                <div class="a">
+                    <p>여러 방법이 있어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>방법 1: OPTION (RECOMPILE)</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="keyword">CREATE PROCEDURE</span> gp_GetGuildMembers
+    @guildID int
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="keyword">SELECT</span> * <span class="keyword">FROM</span> TCharacter
+    <span class="keyword">WHERE</span> guildID = @guildID
+    <span class="keyword">OPTION (RECOMPILE)</span>  <span class="comment">-- 매번 새로 컴파일!</span>
+<span class="keyword">END</span></div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">장점</span>: 항상 최적의 계획</p>
+                    <p><span class="warning">단점</span>: 매번 컴파일 비용 발생</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>방법 2: OPTIMIZE FOR</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 특정 값으로 최적화</span>
+<span class="keyword">SELECT</span> * <span class="keyword">FROM</span> TCharacter
+<span class="keyword">WHERE</span> guildID = @guildID
+<span class="keyword">OPTION (OPTIMIZE FOR</span> (@guildID = <span class="number">100</span>)<span class="keyword">)</span>  <span class="comment">-- 100명 길드 기준</span>
+
+<span class="comment">-- 또는 "알 수 없는 값"으로</span>
+<span class="keyword">OPTION (OPTIMIZE FOR UNKNOWN)</span>  <span class="comment">-- 평균적인 분포 가정</span></div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>방법 3: 로컬 변수 사용</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="keyword">CREATE PROCEDURE</span> gp_GetGuildMembers
+    @guildID int
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="keyword">DECLARE</span> @localGuildID int = @guildID  <span class="comment">-- 로컬 변수로 복사</span>
+
+    <span class="keyword">SELECT</span> * <span class="keyword">FROM</span> TCharacter
+    <span class="keyword">WHERE</span> guildID = @localGuildID  <span class="comment">-- 로컬 변수 사용</span>
+<span class="keyword">END</span></div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>로컬 변수는 sniffing이 안 돼서 <span class="highlight">평균적인 계획</span>이 생성됨.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 언제 어떤 방법? -->
+        <div class="conversation">
+            <h2>Part 5. 언제 어떤 방법을 써?</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>권장 방법</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>파라미터에 따라 행 수 차이 큼</td>
+                    <td class="good">RECOMPILE</td>
+                    <td>매번 최적 계획 필요</td>
+                </tr>
+                <tr>
+                    <td>대부분 비슷한 행 수</td>
+                    <td class="good">OPTIMIZE FOR</td>
+                    <td>대표값으로 충분</td>
+                </tr>
+                <tr>
+                    <td>자주 호출되는 프로시저</td>
+                    <td>로컬 변수</td>
+                    <td>컴파일 비용 절약</td>
+                </tr>
+                <tr>
+                    <td>간헐적 호출</td>
+                    <td class="good">RECOMPILE</td>
+                    <td>컴파일 비용 감수 가능</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 6: 진단 방법 -->
+        <div class="conversation">
+            <h2>Part 6. Parameter Sniffing 진단</h2>
+
+            <div class="chat">
+                <div class="q">이 문제인지 어떻게 알아?</div>
+                <div class="a">
+                    <p>실행 계획을 확인해봐.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 캐시된 계획의 파라미터 확인</span>
+<span class="keyword">SELECT</span>
+    cp.objtype,
+    st.text <span class="keyword">AS</span> query,
+    qp.query_plan,
+    qs.execution_count,
+    qs.total_elapsed_time / qs.execution_count <span class="keyword">AS</span> avg_time
+<span class="keyword">FROM</span> sys.dm_exec_cached_plans cp
+<span class="keyword">CROSS APPLY</span> sys.dm_exec_query_plan(cp.plan_handle) qp
+<span class="keyword">CROSS APPLY</span> sys.dm_exec_sql_text(cp.plan_handle) st
+<span class="keyword">INNER JOIN</span> sys.dm_exec_query_stats qs
+    <span class="keyword">ON</span> cp.plan_handle = qs.plan_handle
+<span class="keyword">WHERE</span> st.text <span class="keyword">LIKE</span> <span class="string">'%gp_GetGuildMembers%'</span></div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>의심 신호:</strong></p>
+                    <p>• 같은 프로시저인데 실행 시간이 천차만별</p>
+                    <p>• 서버 재시작 후 성능 변화</p>
+                    <p>• 예상 행 수와 실제 행 수 차이가 큼</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Parameter Sniffing</strong> = 첫 파라미터로 실행 계획 결정</li>
+                <li><strong>문제</strong>: 첫 파라미터가 특이하면 다른 호출 전부 느림</li>
+                <li><strong>RECOMPILE</strong>: 매번 새 계획 (비용↑, 정확도↑)</li>
+                <li><strong>OPTIMIZE FOR</strong>: 대표값으로 계획 (균형)</li>
+                <li><strong>로컬 변수</strong>: sniffing 회피 (평균 계획)</li>
+                <li><strong>위험 시점</strong>: 서버 재시작 직후, 캐시 초기화 후</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../statistics-update/">← 이전: Statistics Update</a>
+            <a href="../covering-index/">다음: Covering Index →</a>
+        </div>
+    </div>
+</body>
+</html>

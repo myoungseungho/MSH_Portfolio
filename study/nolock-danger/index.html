@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOLOCK은 만능이 아니다 - Dirty Read의 위험 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; font-weight: 600; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .real-code-box { background: linear-gradient(135deg, #37474f 0%, #263238 100%); border-radius: 16px; padding: 24px; margin: 24px 0; }
+        .real-code-box h4 { color: #80cbc4; font-size: 0.9rem; margin-bottom: 16px; }
+        .real-code-box .code-block { margin: 0; background: rgba(0,0,0,0.3); }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>NOLOCK은 만능이 아니다</h1>
+            <p>WITH (NOLOCK)의 진짜 의미와 Dirty Read의 위험</p>
+        </header>
+
+        <!-- Part 1: 자주 보는 코드 -->
+        <div class="conversation">
+            <h2>Part 1. 자주 보는 코드</h2>
+
+            <div class="chat">
+                <div class="q">프로시저에서 이런 코드 자주 보이는데, NOLOCK이 뭐야?</div>
+                <div class="a">
+                    <p>우리 프로젝트에서 흔히 볼 수 있는 패턴이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="keyword">SELECT</span> level, exp, gold
+<span class="keyword">FROM</span> TCharacter <span class="keyword">WITH (NOLOCK)</span>
+<span class="keyword">WHERE</span> charunique = @uid</div>
+
+            <div class="chat">
+                <div class="q">"잠금 없이" 읽는다는 거야?</div>
+                <div class="a">
+                    <p>맞아. <span class="highlight">다른 트랜잭션이 잠금을 걸어도 무시하고 읽겠다</span>는 뜻이야.</p>
+                    <p>그래서 빠르지. 대기 없이 바로 읽으니까.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 항상 NOLOCK 붙이면 빨라지는 거 아니야?</div>
+                <div class="a">
+                    <p><span class="warning">거기에 함정이 있어.</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 잠금이 뭔데? -->
+        <div class="conversation">
+            <h2>Part 2. 잠깐, 잠금(Lock)이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">왜 DB는 잠금을 걸어?</div>
+                <div class="a">
+                    <p>동시에 여러 명이 같은 데이터를 건드리면 문제가 생기니까.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[상황: 유저 A가 골드를 인출 중]
+
+시간 →→→→→→→→→→→→→→→→→→→→→→→→→
+
+트랜잭션 A: BEGIN → 골드 읽기(1000) → 골드 차감(-500) → COMMIT
+                     ↑
+                     여기서 다른 사람이 읽으면?
+
+트랜잭션 B:          SELECT 골드 → ???</div>
+
+            <div class="chat">
+                <div class="q">A가 아직 커밋 안 했는데 B가 읽으면?</div>
+                <div class="a">
+                    <p>두 가지 가능성이 있어:</p>
+                    <p>1. <span class="highlight">잠금 있음</span>: B는 A가 끝날 때까지 대기</p>
+                    <p>2. <span class="warning">NOLOCK</span>: B는 A의 "작업 중인 데이터"를 읽음</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: Dirty Read -->
+        <div class="conversation">
+            <h2>Part 3. Dirty Read가 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">"작업 중인 데이터"를 읽는 게 왜 문제야?</div>
+                <div class="a">
+                    <p>그 트랜잭션이 <span class="warning">롤백되면?</span></p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[Dirty Read 시나리오]
+
+트랜잭션 A: 골드 1000 → 500으로 UPDATE → 💥 에러! ROLLBACK!
+                                ↑
+트랜잭션 B (NOLOCK):      SELECT 골드 = 500 ← 이 값을 읽음
+
+결과:
+- 실제 골드: 1000 (롤백됨)
+- B가 읽은 값: 500 (존재한 적 없는 값!)
+- B: "어? 골드가 500인데 왜 아이템을 못 사?"</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="warning">Dirty Read = 커밋되지 않은 (더러운) 데이터를 읽는 것</span></p>
+                    <p>그 데이터는 결국 롤백되어 <strong>존재한 적 없는 값</strong>이 될 수 있어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">게임에서 실제로 문제가 될 수 있어?</div>
+                <div class="a">
+                    <p><strong>예시 1: 골드 잔액 확인</strong></p>
+                    <p>• 실제 골드: 1000</p>
+                    <p>• A가 500 차감 중 (아직 커밋 안 함)</p>
+                    <p>• B가 NOLOCK으로 읽음: 500</p>
+                    <p>• "잔액 부족" 오표시 또는 이상한 계산</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>예시 2: 랭킹 조회</strong></p>
+                    <p>• 레벨 업 트랜잭션 진행 중</p>
+                    <p>• NOLOCK으로 랭킹 조회</p>
+                    <p>• 잘못된 레벨 값으로 랭킹 계산</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 더 심각한 문제들 -->
+        <div class="conversation">
+            <h2>Part 4. Dirty Read만 문제야?</h2>
+
+            <div class="chat">
+                <div class="q">NOLOCK 쓰면 Dirty Read만 조심하면 돼?</div>
+                <div class="a">
+                    <p><span class="warning">아니, 더 심각한 문제들이 있어.</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>문제</th>
+                    <th>설명</th>
+                    <th>심각도</th>
+                </tr>
+                <tr>
+                    <td>Dirty Read</td>
+                    <td>커밋 안 된 데이터 읽음</td>
+                    <td class="warn">중간</td>
+                </tr>
+                <tr>
+                    <td>행 누락</td>
+                    <td>페이지 분할 중 일부 행 못 읽음</td>
+                    <td class="bad">높음</td>
+                </tr>
+                <tr>
+                    <td>중복 읽기</td>
+                    <td>같은 행을 두 번 읽음</td>
+                    <td class="bad">높음</td>
+                </tr>
+                <tr>
+                    <td>데이터 손상</td>
+                    <td>UPDATE 중인 행의 일부만 읽음</td>
+                    <td class="bad">매우 높음</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">행 누락? 중복 읽기? 그게 뭐야?</div>
+                <div class="a">
+                    <p>인덱스 페이지 분할(Page Split) 때문이야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[페이지 분할 중 NOLOCK 읽기]
+
+Before: [Page A: 행1, 행2, 행3, 행4]
+
+INSERT 발생 → 페이지 분할 시작
+
+During: [Page A: 행1, 행2] → [Page B: 행3, 행4, 새행]
+                  ↑
+        NOLOCK SELECT가 여기서 읽으면:
+        - Page A 읽음 (행1, 행2)
+        - Page B로 이동 중 행3이 옮겨짐
+        - 행3을 못 읽거나 두 번 읽음!</div>
+
+            <div class="warning-box">
+                <h4>⚠️ 실제 발생 사례</h4>
+                <p>• SUM(골드)가 실제보다 적거나 많게 나옴</p>
+                <p>• COUNT(*)가 부정확함</p>
+                <p>• 집계 쿼리 결과가 매번 다름</p>
+            </div>
+        </div>
+
+        <!-- Part 5: 그럼 언제 써야 해? -->
+        <div class="conversation">
+            <h2>Part 5. 그럼 NOLOCK 언제 써도 돼?</h2>
+
+            <div class="chat">
+                <div class="q">NOLOCK이 이렇게 위험하면 왜 쓰는 거야?</div>
+                <div class="a">
+                    <p>적절한 상황에서는 <span class="key-point">성능 향상 효과가 크기 때문</span>이야.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>NOLOCK</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>실시간 정확성 필요</td>
+                    <td class="bad">❌ 금지</td>
+                    <td>골드/아이템 수량 등</td>
+                </tr>
+                <tr>
+                    <td>집계 쿼리 (정확해야 함)</td>
+                    <td class="bad">❌ 금지</td>
+                    <td>SUM, COUNT 등</td>
+                </tr>
+                <tr>
+                    <td>거래/결제 관련</td>
+                    <td class="bad">❌ 금지</td>
+                    <td>데이터 정합성 필수</td>
+                </tr>
+                <tr>
+                    <td>대략적인 조회 (UI용)</td>
+                    <td class="good">✅ 가능</td>
+                    <td>리스트 미리보기 등</td>
+                </tr>
+                <tr>
+                    <td>로그/히스토리 조회</td>
+                    <td class="good">✅ 가능</td>
+                    <td>INSERT만 되는 테이블</td>
+                </tr>
+                <tr>
+                    <td>마스터 데이터 조회</td>
+                    <td class="good">✅ 가능</td>
+                    <td>변경 안 되는 데이터</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>핵심 원칙:</strong></p>
+                    <p>• <span class="key-point">변경이 거의 없는 테이블</span>: NOLOCK OK</p>
+                    <p>• <span class="key-point">INSERT만 되는 테이블</span>: NOLOCK OK</p>
+                    <p>• <span class="warning">UPDATE/DELETE가 빈번한 테이블</span>: NOLOCK 위험</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 우리 프로젝트 현황 -->
+        <div class="conversation">
+            <h2>Part 6. 우리 프로젝트 현황</h2>
+
+            <div class="chat">
+                <div class="q">우리 프로젝트는 NOLOCK 어떻게 쓰고 있어?</div>
+                <div class="a">
+                    <p>분석 결과:</p>
+                </div>
+            </div>
+
+            <div class="real-code-box">
+                <h4>실제 코드 - gp_LoadCharacter</h4>
+                <div class="code-block"><span class="keyword">SELECT</span> ...
+<span class="keyword">FROM</span> TCharacter <span class="keyword">WITH (NOLOCK)</span>
+<span class="keyword">WHERE</span> charunique = @uid
+
+<span class="keyword">SELECT</span> ...
+<span class="keyword">FROM</span> TMail <span class="keyword">WITH (NOLOCK)</span>
+<span class="keyword">WHERE</span> receiver = @uid</div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>현재 사용 패턴:</strong></p>
+                    <p>• 캐릭터 로드: WITH (NOLOCK) 사용 ← 괜찮음 (로그인 시점)</p>
+                    <p>• 메일 조회: WITH (NOLOCK) 사용 ← 괜찮음</p>
+                    <p>• 랭킹 조회: WITH (NOLOCK) 사용 ← 주의 필요</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">저장 프로시저에서는?</div>
+                <div class="a">
+                    <p>저장 시에는 NOLOCK을 안 써야 해. 정합성이 중요하니까.</p>
+                    <p>대신 <span class="highlight">ROWLOCK</span>을 쓰는 경우가 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 저장 시: 행 단위 잠금으로 동시성 확보</span>
+<span class="keyword">UPDATE</span> TCharacter <span class="keyword">WITH (ROWLOCK)</span>
+<span class="keyword">SET</span> level = @level
+<span class="keyword">WHERE</span> charunique = @uid</div>
+        </div>
+
+        <!-- Part 7: 대안 -->
+        <div class="conversation">
+            <h2>Part 7. NOLOCK 대신 쓸 수 있는 것</h2>
+
+            <div class="chat">
+                <div class="q">NOLOCK 말고 다른 방법 없어?</div>
+                <div class="a">
+                    <p>있어. <span class="key-point">READ COMMITTED SNAPSHOT</span>이라는 옵션이 있어.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>방식</th>
+                    <th>Dirty Read</th>
+                    <th>블로킹</th>
+                    <th>설정</th>
+                </tr>
+                <tr>
+                    <td>기본 (READ COMMITTED)</td>
+                    <td class="good">없음</td>
+                    <td class="bad">있음</td>
+                    <td>기본값</td>
+                </tr>
+                <tr>
+                    <td>NOLOCK</td>
+                    <td class="bad">있음</td>
+                    <td class="good">없음</td>
+                    <td>쿼리 힌트</td>
+                </tr>
+                <tr>
+                    <td>RCSI (스냅샷)</td>
+                    <td class="good">없음</td>
+                    <td class="good">없음</td>
+                    <td>DB 옵션</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">RCSI가 좋아 보이는데?</div>
+                <div class="a">
+                    <p>맞아. 근데 <span class="warning">tempdb 부담이 커져</span>.</p>
+                    <p>버전 정보를 tempdb에 저장하거든.</p>
+                    <p>기존 시스템에 적용하려면 충분한 테스트 필요해.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>NOLOCK</strong> = 잠금 무시하고 읽기 (빠르지만 위험)</li>
+                <li><strong>Dirty Read</strong> = 커밋 안 된 데이터 읽기 (롤백되면 문제)</li>
+                <li><strong>페이지 분할</strong> 중에는 행 누락/중복 읽기 발생 가능</li>
+                <li><strong>사용 OK</strong>: 변경 없는 테이블, INSERT만 되는 테이블, 대략적 조회</li>
+                <li><strong>사용 금지</strong>: 정확한 집계, 거래/결제, 실시간 정합성 필요한 곳</li>
+                <li><strong>대안</strong>: RCSI (READ COMMITTED SNAPSHOT) - tempdb 부담 있음</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../output-clause/">← 이전: OUTPUT 절</a>
+            <a href="../dirty-checking/">다음: Dirty Checking 패턴 →</a>
+        </div>
+    </div>
+</body>
+</html>

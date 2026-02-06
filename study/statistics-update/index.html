@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>통계가 오래되면 옵티마이저가 잘못된 선택을 한다 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>통계가 오래되면 옵티마이저가 잘못된 선택을 한다</h1>
+            <p>Statistics Update - 쿼리 옵티마이저의 "눈"을 최신으로 유지하기</p>
+        </header>
+
+        <!-- Part 1: 통계가 뭐야? -->
+        <div class="conversation">
+            <h2>Part 1. 통계(Statistics)가 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">SQL Server에서 "통계"가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">테이블 데이터의 분포 정보</span>야.</p>
+                    <p>옵티마이저가 실행 계획을 세울 때 참고해.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[통계가 담고 있는 정보]
+
+테이블: TCharacter (10만 행)
+
+level 컬럼 통계:
+├── 최소값: 1
+├── 최대값: 300
+├── 분포:
+│   ├── level 1~50: 5만 명 (50%)
+│   ├── level 51~100: 3만 명 (30%)
+│   ├── level 101~200: 1.5만 명 (15%)
+│   └── level 201~300: 5천 명 (5%)
+└── 히스토그램 (더 상세한 분포)</div>
+
+            <div class="chat">
+                <div class="q">그걸 왜 알아야 해?</div>
+                <div class="a">
+                    <p>옵티마이저가 <span class="key-point">"어떤 방법으로 데이터를 찾을지"</span> 결정하거든.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 옵티마이저 결정 -->
+        <div class="conversation">
+            <h2>Part 2. 통계가 옵티마이저에 미치는 영향</h2>
+
+            <div class="chat">
+                <div class="q">통계 보고 뭘 결정해?</div>
+                <div class="a">
+                    <p>대표적으로 <span class="highlight">Index Seek vs Table Scan</span> 결정.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span> TCharacter <span class="keyword">WHERE</span> level > <span class="number">250</span></div>
+
+            <div class="diagram-box">
+[옵티마이저의 판단]
+
+통계에 따르면 level > 250인 행 = 약 2% (2천 행)
+
+2% = 적은 양 → Index Seek가 유리
+    → 인덱스로 빠르게 2천 행만 찾기
+
+만약 level > 10이면? = 약 95% (9.5만 행)
+95% = 거의 전부 → Table Scan이 유리
+    → 그냥 전체 읽는 게 빠름</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>옵티마이저가 참조하는 것:</strong></p>
+                    <p>• <span class="highlight">행 수 추정</span>: 조건에 맞는 행이 몇 개일지</p>
+                    <p>• <span class="highlight">선택도(Selectivity)</span>: 조건이 얼마나 좁히는지</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 오래된 통계의 문제 -->
+        <div class="conversation">
+            <h2>Part 3. 통계가 오래되면?</h2>
+
+            <div class="chat">
+                <div class="q">통계가 옛날 거면 뭐가 문제야?</div>
+                <div class="a">
+                    <p><span class="warning">옵티마이저가 잘못된 판단을 해.</span></p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[실제 사례]
+
+6개월 전 통계:
+└── level > 250인 유저: 2천 명 (2%)
+
+현재 실제 데이터:
+└── level > 250인 유저: 5만 명 (50%) ← 이벤트로 급증!
+
+옵티마이저 판단: "2% = Index Seek"
+실제로는: "50% = Table Scan이 나았는데..."
+
+결과: Index Seek로 5만 행을 하나씩 찾음 → 매우 느림!</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>반대 경우도 있어:</strong></p>
+                    <p>• 데이터가 줄었는데 통계는 "많다"고 함 → 불필요한 Table Scan</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>통계</th>
+                    <th>실제</th>
+                    <th>결과</th>
+                </tr>
+                <tr>
+                    <td>데이터 급증</td>
+                    <td>2%</td>
+                    <td>50%</td>
+                    <td class="bad">느린 Index Seek</td>
+                </tr>
+                <tr>
+                    <td>데이터 급감</td>
+                    <td>50%</td>
+                    <td>2%</td>
+                    <td class="bad">불필요한 Table Scan</td>
+                </tr>
+                <tr>
+                    <td>정확한 통계</td>
+                    <td>2%</td>
+                    <td>2%</td>
+                    <td class="good">최적의 계획</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 4: 자동 업데이트 -->
+        <div class="conversation">
+            <h2>Part 4. 통계 자동 업데이트</h2>
+
+            <div class="chat">
+                <div class="q">SQL Server가 자동으로 업데이트 안 해?</div>
+                <div class="a">
+                    <p>해. 근데 <span class="warning">조건이 있어</span>.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[AUTO_UPDATE_STATISTICS 트리거 조건]
+
+SQL Server 2016 이전:
+└── 테이블의 20% + 500행 변경 시
+
+SQL Server 2016+:
+└── 동적 임계값 (큰 테이블은 더 작은 비율로)
+
+예: 100만 행 테이블
+├── 2016 이전: 20만 행 변경 후 업데이트
+└── 2016+: 수만 행 변경 후 업데이트 (동적)</div>
+
+            <div class="chat">
+                <div class="q">20%면 너무 늦지 않아?</div>
+                <div class="a">
+                    <p><span class="warning">맞아. 큰 테이블에서 20%면 수십만 행이야.</span></p>
+                    <p>그 사이에 잘못된 플랜으로 쿼리가 실행될 수 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 자동 업데이트 설정 확인</span>
+<span class="keyword">SELECT</span>
+    name,
+    is_auto_update_stats_on
+<span class="keyword">FROM</span> sys.databases
+<span class="keyword">WHERE</span> name = DB_NAME()</div>
+        </div>
+
+        <!-- Part 5: 수동 업데이트 -->
+        <div class="conversation">
+            <h2>Part 5. 수동 업데이트</h2>
+
+            <div class="chat">
+                <div class="q">직접 업데이트하려면?</div>
+                <div class="a">
+                    <p><span class="key-point">UPDATE STATISTICS</span> 명령을 사용해.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 특정 테이블 통계 업데이트</span>
+<span class="keyword">UPDATE STATISTICS</span> TCharacter
+
+<span class="comment">-- 특정 인덱스 통계만 업데이트</span>
+<span class="keyword">UPDATE STATISTICS</span> TCharacter IX_TCharacter_Level
+
+<span class="comment">-- 전체 샘플링 (정확하지만 느림)</span>
+<span class="keyword">UPDATE STATISTICS</span> TCharacter <span class="keyword">WITH FULLSCAN</span>
+
+<span class="comment">-- 50% 샘플링 (균형)</span>
+<span class="keyword">UPDATE STATISTICS</span> TCharacter <span class="keyword">WITH SAMPLE</span> <span class="number">50</span> <span class="keyword">PERCENT</span></div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>언제 수동 업데이트?</strong></p>
+                    <p>• 대량 INSERT/DELETE 후</p>
+                    <p>• 이벤트로 데이터 분포 급변 시</p>
+                    <p>• 갑자기 쿼리가 느려졌을 때</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 통계 마지막 업데이트 시간 확인</span>
+<span class="keyword">SELECT</span>
+    t.name <span class="keyword">AS</span> table_name,
+    s.name <span class="keyword">AS</span> stat_name,
+    STATS_DATE(t.object_id, s.stats_id) <span class="keyword">AS</span> last_updated
+<span class="keyword">FROM</span> sys.tables t
+<span class="keyword">INNER JOIN</span> sys.stats s <span class="keyword">ON</span> t.object_id = s.object_id
+<span class="keyword">WHERE</span> t.name = <span class="string">'TCharacter'</span>
+<span class="keyword">ORDER BY</span> last_updated</div>
+        </div>
+
+        <!-- Part 6: 게임 서버 적용 -->
+        <div class="conversation">
+            <h2>Part 6. 게임 서버에서 적용</h2>
+
+            <div class="chat">
+                <div class="q">우리 게임에서 언제 업데이트하면 좋아?</div>
+                <div class="a">
+                    <p>다음 상황에서 고려해:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>통계 업데이트</th>
+                    <th>타이밍</th>
+                </tr>
+                <tr>
+                    <td>일일 리셋 후</td>
+                    <td class="good">권장</td>
+                    <td>새벽 점검 시</td>
+                </tr>
+                <tr>
+                    <td>대규모 이벤트 시작</td>
+                    <td class="good">권장</td>
+                    <td>이벤트 시작 전/후</td>
+                </tr>
+                <tr>
+                    <td>휴면 계정 삭제 후</td>
+                    <td class="good">필수</td>
+                    <td>삭제 직후</td>
+                </tr>
+                <tr>
+                    <td>서버 오픈 직후</td>
+                    <td class="good">권장</td>
+                    <td>유저 유입 안정화 후</td>
+                </tr>
+            </table>
+
+            <div class="code-block"><span class="comment">-- 점검 시 실행할 스크립트</span>
+<span class="keyword">EXEC</span> sp_updatestats  <span class="comment">-- 모든 테이블 통계 업데이트</span>
+
+<span class="comment">-- 또는 주요 테이블만</span>
+<span class="keyword">UPDATE STATISTICS</span> TCharacter <span class="keyword">WITH SAMPLE</span> <span class="number">30</span> <span class="keyword">PERCENT</span>
+<span class="keyword">UPDATE STATISTICS</span> TInventory <span class="keyword">WITH SAMPLE</span> <span class="number">30</span> <span class="keyword">PERCENT</span>
+<span class="keyword">UPDATE STATISTICS</span> TQuest <span class="keyword">WITH SAMPLE</span> <span class="number">30</span> <span class="keyword">PERCENT</span></div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>통계(Statistics)</strong> = 테이블 데이터 분포 정보</li>
+                <li><strong>옵티마이저</strong>가 실행 계획 세울 때 통계 참조</li>
+                <li><strong>오래된 통계</strong> = 잘못된 계획 = 느린 쿼리</li>
+                <li><strong>자동 업데이트</strong>: 20% + 500행 변경 시 (느릴 수 있음)</li>
+                <li><strong>수동 업데이트</strong>: UPDATE STATISTICS, sp_updatestats</li>
+                <li><strong>권장 타이밍</strong>: 점검 시, 대량 변경 후, 이벤트 전후</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../wait-statistics/">← 이전: Wait Statistics</a>
+            <a href="../parameter-sniffing/">다음: Parameter Sniffing →</a>
+        </div>
+    </div>
+</body>
+</html>
