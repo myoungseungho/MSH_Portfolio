@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INSERT 하고 바로 ID 받기, SELECT 없이 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+        .code-block .special { color: #ffcc80; }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good {
+            background: #c8e6c9;
+            font-weight: 600;
+        }
+        .compare-table .bad {
+            background: #ffcdd2;
+        }
+
+        .diagram-box {
+            background: #f5f5f5;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            line-height: 1.8;
+            overflow-x: auto;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            margin: 24px 0;
+        }
+        .result-box h4 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .result-box .result-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .result-box .result-item {
+            text-align: center;
+        }
+        .result-box .result-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .result-box .result-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .result-box .result-note {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .real-code-box {
+            background: linear-gradient(135deg, #37474f 0%, #263238 100%);
+            border-radius: 16px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+        .real-code-box h4 {
+            color: #80cbc4;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+        .real-code-box .code-block {
+            margin: 0;
+            background: rgba(0,0,0,0.3);
+        }
+
+        .vs-box {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 16px;
+            align-items: center;
+            margin: 24px 0;
+        }
+        .vs-item {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+        }
+        .vs-item.bad {
+            border-color: #ffcdd2;
+        }
+        .vs-item.good {
+            border-color: #c8e6c9;
+        }
+        .vs-item h5 {
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+            color: #666;
+        }
+        .vs-divider {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #999;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>INSERT 하고 바로 ID 받기, SELECT 없이</h1>
+            <p>OUTPUT 절 - INSERT/UPDATE/DELETE의 숨겨진 능력</p>
+        </header>
+
+        <!-- Part 1: 문제 상황 -->
+        <div class="conversation">
+            <h2>Part 1. 흔한 상황</h2>
+
+            <div class="chat">
+                <div class="q">아이템 INSERT 하고 나서 그 아이템의 ID(자동 생성된 키)를 알고 싶어. 어떻게 해?</div>
+                <div class="a">
+                    <p>보통 이렇게 하지:</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 흔한 패턴</span>
+<span class="keyword">INSERT INTO</span> TItem (owner, itemcode, count)
+<span class="keyword">VALUES</span> (@charunique, @itemcode, @count)
+
+<span class="comment">-- 방금 생성된 ID 가져오기</span>
+<span class="keyword">SELECT</span> @newItemUID = SCOPE_IDENTITY()</div>
+
+            <div class="chat">
+                <div class="q">SCOPE_IDENTITY()? 그게 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">"현재 세션에서 마지막으로 생성된 IDENTITY 값"</span>을 반환해.</p>
+                    <p>IDENTITY는 자동 증가 컬럼이야. 1, 2, 3, 4... 자동으로 올라가는.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 이 방식이 문제가 있어?</div>
+                <div class="a">
+                    <p>작동은 해. 근데 두 가지 한계가 있어:</p>
+                    <p>1. <span class="warning">한 번에 여러 개 INSERT하면 마지막 ID만 알 수 있음</span></p>
+                    <p>2. <span class="warning">IDENTITY 컬럼에서만 동작함</span></p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 문제 상황: 여러 개 INSERT</span>
+<span class="keyword">INSERT INTO</span> TItem (owner, itemcode, count)
+<span class="keyword">VALUES</span>
+    (@char, 1001, 10),  <span class="comment">-- 이 ID는?</span>
+    (@char, 1002, 5),   <span class="comment">-- 이 ID는?</span>
+    (@char, 1003, 1)    <span class="comment">-- SCOPE_IDENTITY()는 이것만 반환</span>
+
+<span class="keyword">SELECT</span> SCOPE_IDENTITY()  <span class="comment">-- 마지막 것만!</span></div>
+        </div>
+
+        <!-- Part 2: OUTPUT 절 소개 -->
+        <div class="conversation">
+            <h2>Part 2. OUTPUT 절이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">그래서 더 좋은 방법이 있어?</div>
+                <div class="a">
+                    <p><span class="key-point">OUTPUT 절!</span> SQL Server 2005부터 추가된 기능이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="keyword">INSERT INTO</span> TItem (owner, itemcode, count)
+<span class="special">OUTPUT</span> <span class="special">inserted</span>.itemuid  <span class="comment">-- 이게 OUTPUT 절!</span>
+<span class="keyword">VALUES</span> (@charunique, @itemcode, @count)</div>
+
+            <div class="chat">
+                <div class="q">inserted가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">inserted</span>는 "방금 INSERT된 행"을 담고 있는 <strong>가상 테이블</strong>이야.</p>
+                    <p>마치 트리거에서 쓰는 것처럼.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>가상 테이블</th>
+                    <th>사용 가능한 곳</th>
+                    <th>내용</th>
+                </tr>
+                <tr>
+                    <td><code>inserted</code></td>
+                    <td>INSERT, UPDATE</td>
+                    <td>새로 추가/변경된 행</td>
+                </tr>
+                <tr>
+                    <td><code>deleted</code></td>
+                    <td>DELETE, UPDATE</td>
+                    <td>삭제된/변경 전 행</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p>UPDATE에서는 둘 다 쓸 수 있어:</p>
+                    <p>• <code>deleted</code> = 변경 <strong>전</strong> 값</p>
+                    <p>• <code>inserted</code> = 변경 <strong>후</strong> 값</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: INSERT에서 OUTPUT -->
+        <div class="conversation">
+            <h2>Part 3. INSERT에서 OUTPUT 쓰기</h2>
+
+            <div class="chat">
+                <div class="q">아까 여러 개 INSERT할 때 문제 있다고 했잖아. OUTPUT으로 어떻게 해결해?</div>
+                <div class="a">
+                    <p>OUTPUT은 <span class="key-point">INSERT된 모든 행</span>을 반환할 수 있어!</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="keyword">INSERT INTO</span> TItem (owner, itemcode, count)
+<span class="special">OUTPUT</span> <span class="special">inserted</span>.itemuid, <span class="special">inserted</span>.itemcode
+<span class="keyword">VALUES</span>
+    (@char, 1001, 10),
+    (@char, 1002, 5),
+    (@char, 1003, 1)</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>결과:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+itemuid    itemcode
+-------    --------
+50001      1001
+50002      1002
+50003      1003
+
+(3개 행 모두 반환됨!)
+</div>
+
+            <div class="chat">
+                <div class="q">오, 진짜 3개 다 나오네! 변수에 저장하려면?</div>
+                <div class="a">
+                    <p>테이블 변수에 저장할 수 있어:</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="keyword">DECLARE</span> @InsertedItems <span class="keyword">TABLE</span> (
+    itemuid bigint,
+    itemcode int
+)
+
+<span class="keyword">INSERT INTO</span> TItem (owner, itemcode, count)
+<span class="special">OUTPUT</span> <span class="special">inserted</span>.itemuid, <span class="special">inserted</span>.itemcode
+<span class="special">INTO</span> @InsertedItems  <span class="comment">-- 테이블 변수에 저장!</span>
+<span class="keyword">VALUES</span>
+    (@char, 1001, 10),
+    (@char, 1002, 5),
+    (@char, 1003, 1)
+
+<span class="comment">-- 이제 @InsertedItems에서 조회 가능</span>
+<span class="keyword">SELECT</span> * <span class="keyword">FROM</span> @InsertedItems</div>
+        </div>
+
+        <!-- Part 4: UPDATE에서 OUTPUT -->
+        <div class="conversation">
+            <h2>Part 4. UPDATE에서 OUTPUT 쓰기</h2>
+
+            <div class="chat">
+                <div class="q">UPDATE할 때도 쓸 수 있어?</div>
+                <div class="a">
+                    <p>응! 변경 <strong>전</strong>과 <strong>후</strong> 값을 동시에 알 수 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 레벨업 처리</span>
+<span class="keyword">UPDATE</span> TCharacter
+<span class="keyword">SET</span> level = level + 1
+<span class="special">OUTPUT</span>
+    <span class="special">deleted</span>.level <span class="keyword">AS</span> old_level,   <span class="comment">-- 변경 전</span>
+    <span class="special">inserted</span>.level <span class="keyword">AS</span> new_level  <span class="comment">-- 변경 후</span>
+<span class="keyword">WHERE</span> charunique = @uid</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>결과:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+old_level    new_level
+---------    ---------
+49           50
+
+한 쿼리로 "49 → 50 레벨업!" 메시지 만들 수 있음
+</div>
+
+            <div class="chat">
+                <div class="q">이거 쓸 데가 많겠다!</div>
+                <div class="a">
+                    <p><strong>활용 예시:</strong></p>
+                    <p>• 골드 차감 후 잔액 확인</p>
+                    <p>• 아이템 수량 변경 후 결과 확인</p>
+                    <p>• 상태 변경 로그 기록</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 골드 차감 + 잔액 확인 (한 쿼리로)</span>
+<span class="keyword">DECLARE</span> @result <span class="keyword">TABLE</span> (old_gold bigint, new_gold bigint)
+
+<span class="keyword">UPDATE</span> TCharacter
+<span class="keyword">SET</span> gold = gold - @price
+<span class="special">OUTPUT</span> <span class="special">deleted</span>.gold, <span class="special">inserted</span>.gold
+<span class="special">INTO</span> @result
+<span class="keyword">WHERE</span> charunique = @uid
+  <span class="keyword">AND</span> gold >= @price  <span class="comment">-- 잔액 체크</span>
+
+<span class="comment">-- 결과 확인</span>
+<span class="keyword">IF</span> @@ROWCOUNT = 0
+    <span class="keyword">RETURN</span> -1  <span class="comment">-- 잔액 부족</span>
+
+<span class="keyword">SELECT</span> @remaining = new_gold <span class="keyword">FROM</span> @result</div>
+        </div>
+
+        <!-- Part 5: DELETE에서 OUTPUT -->
+        <div class="conversation">
+            <h2>Part 5. DELETE에서 OUTPUT 쓰기</h2>
+
+            <div class="chat">
+                <div class="q">DELETE도 가능해?</div>
+                <div class="a">
+                    <p>당연하지! 삭제된 데이터를 반환받을 수 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 만료된 메일 삭제 + 뭐가 삭제됐는지 로그</span>
+<span class="keyword">DELETE FROM</span> TMail
+<span class="special">OUTPUT</span>
+    <span class="special">deleted</span>.mailuid,
+    <span class="special">deleted</span>.sender,
+    <span class="special">deleted</span>.receiver,
+    <span class="special">deleted</span>.itemcode
+<span class="keyword">WHERE</span> expiredate < GETDATE()</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>실전 활용:</strong></p>
+                    <p>• 삭제 전 백업 테이블로 복사</p>
+                    <p>• 삭제 로그 자동 기록</p>
+                    <p>• 삭제된 아이템 복구 지원</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 삭제하면서 백업 테이블로 이동</span>
+<span class="keyword">DELETE FROM</span> TItem
+<span class="special">OUTPUT</span>
+    <span class="special">deleted</span>.*,
+    GETDATE() <span class="keyword">AS</span> delete_time
+<span class="special">INTO</span> TItem_Deleted  <span class="comment">-- 백업 테이블로!</span>
+<span class="keyword">WHERE</span> owner = @charunique
+  <span class="keyword">AND</span> itemcode = @itemcode</div>
+        </div>
+
+        <!-- Part 6: 비교 -->
+        <div class="conversation">
+            <h2>Part 6. 기존 방식과 비교</h2>
+
+            <div class="chat">
+                <div class="q">SCOPE_IDENTITY()랑 뭐가 달라?</div>
+                <div class="a">
+                    <p>표로 비교해볼게:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>SCOPE_IDENTITY()</th>
+                    <th>OUTPUT 절</th>
+                </tr>
+                <tr>
+                    <td>여러 행 INSERT</td>
+                    <td class="bad">마지막 ID만</td>
+                    <td class="good">모든 ID</td>
+                </tr>
+                <tr>
+                    <td>IDENTITY 아닌 컬럼</td>
+                    <td class="bad">불가</td>
+                    <td class="good">가능</td>
+                </tr>
+                <tr>
+                    <td>UPDATE에서 사용</td>
+                    <td class="bad">불가</td>
+                    <td class="good">가능 (전/후 값)</td>
+                </tr>
+                <tr>
+                    <td>DELETE에서 사용</td>
+                    <td class="bad">불가</td>
+                    <td class="good">가능</td>
+                </tr>
+                <tr>
+                    <td>여러 컬럼 반환</td>
+                    <td class="bad">불가</td>
+                    <td class="good">가능</td>
+                </tr>
+                <tr>
+                    <td>트리거와 충돌</td>
+                    <td class="bad">가능</td>
+                    <td class="good">안전</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">OUTPUT 절이 훨씬 유연하고 안전해.</span></p>
+                </div>
+            </div>
+
+            <div class="vs-box">
+                <div class="vs-item bad">
+                    <h5>기존 방식 (2번 쿼리)</h5>
+                    <div class="code-block" style="font-size: 0.8rem;">INSERT INTO TItem ...
+
+SELECT @id = SCOPE_IDENTITY()</div>
+                </div>
+                <div class="vs-divider">VS</div>
+                <div class="vs-item good">
+                    <h5>OUTPUT (1번 쿼리)</h5>
+                    <div class="code-block" style="font-size: 0.8rem;">INSERT INTO TItem ...
+OUTPUT inserted.itemuid</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 7: 실전 예제 -->
+        <div class="conversation">
+            <h2>Part 7. 실전 예제: 아이템 지급</h2>
+
+            <div class="chat">
+                <div class="q">게임에서 실제로 어떻게 쓸 수 있어?</div>
+                <div class="a">
+                    <p>아이템 지급 프로시저를 개선해보자.</p>
+                </div>
+            </div>
+
+            <div class="real-code-box">
+                <h4>Before: 기존 방식</h4>
+                <div class="code-block"><span class="keyword">CREATE PROCEDURE</span> gp_Add_Item
+    @charunique bigint,
+    @itemcode int,
+    @count int,
+    @newItemUID bigint <span class="keyword">OUTPUT</span>  <span class="comment">-- OUTPUT 파라미터</span>
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="keyword">INSERT INTO</span> TItem (owner, itemcode, count)
+    <span class="keyword">VALUES</span> (@charunique, @itemcode, @count)
+
+    <span class="comment">-- 별도 쿼리로 ID 가져오기</span>
+    <span class="keyword">SET</span> @newItemUID = SCOPE_IDENTITY()
+<span class="keyword">END</span></div>
+            </div>
+
+            <div class="real-code-box">
+                <h4>After: OUTPUT 절 활용</h4>
+                <div class="code-block"><span class="keyword">CREATE PROCEDURE</span> gp_Add_Item
+    @charunique bigint,
+    @itemcode int,
+    @count int,
+    @newItemUID bigint <span class="keyword">OUTPUT</span>
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="keyword">SET NOCOUNT ON</span>;
+
+    <span class="keyword">DECLARE</span> @result <span class="keyword">TABLE</span> (itemuid bigint)
+
+    <span class="keyword">INSERT INTO</span> TItem (owner, itemcode, count)
+    <span class="special">OUTPUT</span> <span class="special">inserted</span>.itemuid <span class="special">INTO</span> @result
+    <span class="keyword">VALUES</span> (@charunique, @itemcode, @count)
+
+    <span class="keyword">SELECT</span> @newItemUID = itemuid <span class="keyword">FROM</span> @result
+<span class="keyword">END</span></div>
+            </div>
+
+            <div class="chat">
+                <div class="q">근데 이거 더 길어 보이는데?</div>
+                <div class="a">
+                    <p>단일 INSERT면 차이가 크지 않아. <span class="key-point">여러 개 처리할 때</span> 진가가 나타나.</p>
+                </div>
+            </div>
+
+            <div class="real-code-box">
+                <h4>응용: 여러 아이템 동시 지급</h4>
+                <div class="code-block"><span class="keyword">CREATE PROCEDURE</span> gp_Add_Items_Batch
+    @charunique bigint,
+    @items <span class="keyword">nvarchar</span>(max)  <span class="comment">-- JSON: [{"code":1001,"cnt":10},...]</span>
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="keyword">SET NOCOUNT ON</span>;
+
+    <span class="comment">-- 결과 테이블</span>
+    <span class="keyword">DECLARE</span> @result <span class="keyword">TABLE</span> (
+        itemuid bigint,
+        itemcode int,
+        count int
+    )
+
+    <span class="comment">-- JSON 파싱 + INSERT + OUTPUT 한 번에!</span>
+    <span class="keyword">INSERT INTO</span> TItem (owner, itemcode, count)
+    <span class="special">OUTPUT</span>
+        <span class="special">inserted</span>.itemuid,
+        <span class="special">inserted</span>.itemcode,
+        <span class="special">inserted</span>.count
+    <span class="special">INTO</span> @result
+    <span class="keyword">SELECT</span>
+        @charunique,
+        JSON_VALUE(value, <span class="string">'$.code'</span>),
+        JSON_VALUE(value, <span class="string">'$.cnt'</span>)
+    <span class="keyword">FROM</span> OPENJSON(@items)
+
+    <span class="comment">-- 모든 생성된 아이템 정보 반환</span>
+    <span class="keyword">SELECT</span> * <span class="keyword">FROM</span> @result
+<span class="keyword">END</span></div>
+            </div>
+        </div>
+
+        <!-- Part 8: 주의사항 -->
+        <div class="conversation">
+            <h2>Part 8. 주의사항</h2>
+
+            <div class="chat">
+                <div class="q">OUTPUT 절 쓸 때 주의할 거 있어?</div>
+                <div class="a">
+                    <p>몇 가지 있어:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>주의사항</th>
+                    <th>설명</th>
+                </tr>
+                <tr>
+                    <td>트리거와 함께 사용</td>
+                    <td>트리거가 있는 테이블에서 OUTPUT INTO 사용 시 제한</td>
+                </tr>
+                <tr>
+                    <td>원격 테이블</td>
+                    <td>링크드 서버 테이블에서는 OUTPUT 불가</td>
+                </tr>
+                <tr>
+                    <td>뷰에서 사용</td>
+                    <td>일부 뷰에서 제한</td>
+                </tr>
+                <tr>
+                    <td>OLE DB 클라이언트</td>
+                    <td>결과셋으로 반환되므로 처리 필요</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>우리 프로젝트 관련:</strong></p>
+                    <p>OLE DB로 결과셋 받을 때는 프로시저 설계를 잘 해야 해.</p>
+                    <p>OUTPUT 결과가 별도 결과셋으로 반환되니까.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- OLE DB에서 주의: OUTPUT이 결과셋으로 반환됨</span>
+<span class="keyword">INSERT INTO</span> TItem ...
+<span class="special">OUTPUT</span> <span class="special">inserted</span>.itemuid  <span class="comment">-- 이게 첫 번째 결과셋</span>
+<span class="keyword">VALUES</span> (...)
+
+<span class="keyword">SELECT</span> @result = ...  <span class="comment">-- 다른 SELECT가 있다면 두 번째 결과셋</span>
+
+<span class="comment">-- C++ 코드에서 GetFirstRecord() 호출 시</span>
+<span class="comment">-- 어떤 결과셋을 받을지 주의!</span></div>
+        </div>
+
+        <!-- Part 9: 우리 프로젝트 -->
+        <div class="conversation">
+            <h2>Part 9. 우리 프로젝트 현황</h2>
+
+            <div class="chat">
+                <div class="q">우리 프로젝트에서 OUTPUT 절 쓰고 있어?</div>
+                <div class="a">
+                    <p>분석 결과, <span class="highlight">OUTPUT 파라미터</span>는 많이 쓰지만</p>
+                    <p><span class="warning">OUTPUT 절은 거의 안 씀.</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>구분</th>
+                    <th>설명</th>
+                    <th>우리 사용</th>
+                </tr>
+                <tr>
+                    <td>OUTPUT 파라미터</td>
+                    <td>프로시저 파라미터에 OUTPUT 키워드</td>
+                    <td class="good">많이 사용</td>
+                </tr>
+                <tr>
+                    <td>OUTPUT 절</td>
+                    <td>INSERT/UPDATE/DELETE 내 OUTPUT</td>
+                    <td class="bad">거의 안 씀</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p>현재 주로 SCOPE_IDENTITY()를 사용 중.</p>
+                    <p>새 프로시저에서 OUTPUT 절 도입 고려해볼 만함.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>OUTPUT 절</strong> = INSERT/UPDATE/DELETE 결과를 즉시 반환</li>
+                <li><strong>inserted</strong> = 새로 추가/변경된 행 (INSERT, UPDATE)</li>
+                <li><strong>deleted</strong> = 삭제된/변경 전 행 (DELETE, UPDATE)</li>
+                <li><strong>여러 행</strong> 한 번에 처리할 때 진가 발휘</li>
+                <li><strong>OUTPUT INTO</strong> = 테이블 변수나 실제 테이블에 저장</li>
+                <li><strong>SCOPE_IDENTITY()보다</strong> 유연하고 안전</li>
+                <li><strong>우리 프로젝트</strong>: OUTPUT 파라미터는 많이 씀, OUTPUT 절은 도입 검토</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../xact-abort/">← 이전: XACT_ABORT ON</a>
+            <a href="../category-db/">DB / 캐시 목록 →</a>
+        </div>
+    </div>
+</body>
+</html>
