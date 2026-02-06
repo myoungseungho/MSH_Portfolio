@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>서버 틱레이트와 시간 동기화 - 게임 서버의 심장박동</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 900px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 24px; color: #666; text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
+        .back-link:hover { color: #0EA5E9; }
+        .header { margin-bottom: 48px; text-align: center; }
+        .header h1 { font-size: 2.4rem; font-weight: 800; color: #111; margin-bottom: 16px; letter-spacing: -0.02em; }
+        .header p { color: #666; font-size: 1.15rem; }
+        .conversation { background: white; border-radius: 20px; padding: 36px; margin: 28px 0; border: 1px solid #e8e8e8; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+        .conversation h2 { font-size: 1.4rem; color: #0284C7; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 3px solid #E0F2FE; display: flex; align-items: center; gap: 12px; }
+        .conversation h2::before { content: "💬"; font-size: 1.5rem; }
+        .q { background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%); border-left: 5px solid #0EA5E9; padding: 20px 24px; margin: 20px 0; border-radius: 0 16px 16px 0; font-weight: 600; font-size: 1.1rem; color: #0369A1; }
+        .a { padding: 16px 0 16px 24px; border-left: 3px solid #BAE6FD; margin: 16px 0; }
+        .a p { margin-bottom: 16px; font-size: 1.05rem; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #0284C7; }
+        .key-point { background: linear-gradient(135deg, #BAE6FD 0%, #7DD3FC 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #0369A1; }
+        .warning { background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #B91C1C; }
+        .info-box { background: #E0F2FE; border-radius: 12px; padding: 20px 24px; margin: 20px 0; border-left: 4px solid #0EA5E9; }
+        .info-box strong { color: #0284C7; }
+        .analogy-box { background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); border-radius: 16px; padding: 24px; margin: 24px 0; border: 2px solid #F59E0B; }
+        .analogy-box h4 { color: #B45309; margin-bottom: 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+        .analogy-box h4::before { content: "💡"; }
+        .game-example { background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%); border-radius: 12px; padding: 20px 24px; margin: 16px 0; border-left: 4px solid #22C55E; }
+        .game-example h4 { color: #15803D; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .step-box { background: #ECFDF5; border-radius: 12px; padding: 20px 24px; margin: 16px 0; border-left: 4px solid #10B981; }
+        .step-box h4 { color: #059669; margin-bottom: 12px; }
+        .diagram { background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%); border: 2px solid #E2E8F0; border-radius: 16px; padding: 28px; margin: 24px 0; font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 0.85rem; line-height: 1.5; overflow-x: auto; white-space: pre; color: #334155; }
+        .comparison-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.95rem; }
+        .comparison-table th { background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%); color: white; padding: 16px; text-align: left; font-weight: 600; }
+        .comparison-table td { padding: 14px 16px; border-bottom: 1px solid #BAE6FD; }
+        .comparison-table tr:nth-child(even) { background: #F0F9FF; }
+        .comparison-table tr:hover { background: #E0F2FE; }
+        .summary-box { background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%); border-radius: 20px; padding: 36px; color: white; margin: 40px 0; box-shadow: 0 4px 20px rgba(14,165,233,0.3); }
+        .summary-box h3 { font-size: 1.4rem; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+        .summary-box h3::before { content: "📝"; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 12px 0; padding-left: 28px; position: relative; font-size: 1.05rem; border-bottom: 1px solid rgba(255,255,255,0.15); }
+        .summary-box li:last-child { border-bottom: none; }
+        .summary-box li::before { content: "✓"; position: absolute; left: 0; color: #7DD3FC; font-weight: bold; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 30px; border-top: 2px solid #BAE6FD; }
+        .nav-links a { color: #0284C7; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 12px; transition: all 0.2s; }
+        .nav-links a:hover { background: #E0F2FE; }
+        .progress-indicator { display: flex; justify-content: center; gap: 8px; margin-bottom: 40px; flex-wrap: wrap; }
+        .progress-dot { width: 12px; height: 12px; border-radius: 50%; background: #BAE6FD; transition: all 0.3s; }
+        .progress-dot.active { background: #0EA5E9; transform: scale(1.2); }
+        .visual-flow { display: flex; flex-direction: column; gap: 12px; margin: 24px 0; }
+        .flow-step { background: white; border: 2px solid #BAE6FD; border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; }
+        .flow-step.highlight-step { border-color: #0EA5E9; background: #F0F9FF; }
+        .flow-number { background: linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+        .flow-arrow { text-align: center; color: #0EA5E9; font-size: 1.2rem; }
+        .concept-card { background: white; border: 2px solid #E0F2FE; border-radius: 16px; padding: 24px; margin: 16px 0; }
+        .concept-card h4 { color: #0284C7; margin-bottom: 12px; font-size: 1.1rem; }
+        .concept-card.eve { border-left: 4px solid #8B5CF6; }
+        .concept-card.lol { border-left: 4px solid #EF4444; }
+        .concept-card.valorant { border-left: 4px solid #EC4899; }
+        .concept-card.csgo { border-left: 4px solid #F59E0B; }
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.8rem; }
+            .conversation { padding: 24px; }
+            .diagram { padding: 16px; font-size: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../../게임에_적용된_기술/" class="back-link">← 게임에 적용된 기술</a>
+
+        <div class="header">
+            <h1>서버 틱레이트와 시간 동기화</h1>
+            <p>게임 서버의 심장박동 - 초당 몇 번 뛰어야 할까?</p>
+        </div>
+
+        <div class="progress-indicator">
+            <div class="progress-dot active"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+        </div>
+
+        <!-- Part 1: 틱레이트 기본 개념 -->
+        <div class="conversation">
+            <h2>Part 1. 틱(Tick)이 뭐야?</h2>
+
+            <div class="q">게이머들이 "128틱 서버 아니면 안 한다"고 하는데, 틱이 뭔가요?</div>
+            <div class="a">
+                <p><span class="highlight">틱(Tick)</span>은 서버가 게임 상태를 업데이트하는 <strong>최소 시간 단위</strong>예요.</p>
+                <p><span class="key-point">틱레이트(Tickrate)</span>는 초당 몇 번 업데이트하는지를 나타내요.</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 심장박동</h4>
+                    <p>사람의 심장이 1분에 60번 뛰면 <strong>60 BPM</strong>이죠?</p>
+                    <p>게임 서버가 1초에 64번 업데이트하면 <strong>64 Tick</strong>이에요.</p>
+                    <p>심장이 빨리 뛰면 더 민첩하듯, 틱레이트가 높으면 게임이 더 정밀해요!</p>
+                </div>
+
+                <div class="diagram">
+틱레이트 기본 개념:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   64 Tick Server (64Hz):                                    │
+│   1초를 64개로 나눔 → 1틱 = 15.625ms                        │
+│                                                             │
+│   Time: 0ms    15.6ms   31.2ms   46.9ms   62.5ms ...       │
+│   Tick: │─────►│─────►│─────►│─────►│                      │
+│         Tick 0  Tick 1  Tick 2  Tick 3                     │
+│                                                             │
+│   각 틱마다 하는 일:                                        │
+│   ✓ 플레이어 위치 업데이트                                  │
+│   ✓ 총알 발사 계산                                          │
+│   ✓ 히트박스 충돌 감지                                      │
+│   ✓ 스킬 쿨다운 감소                                        │
+│                                                             │
+│   128 Tick Server (128Hz):                                  │
+│   1초를 128개로 나눔 → 1틱 = 7.8125ms                       │
+│                                                             │
+│   │──►│──►│──►│──►│──►│──►│──►│──►│  같은 시간에 2배 계산! │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">틱레이트가 높으면 뭐가 좋아?</div>
+            <div class="a">
+                <p><span class="highlight">정밀도</span>와 <span class="highlight">반응성</span>이 좋아져요!</p>
+
+                <table class="comparison-table">
+                    <tr>
+                        <th>틱레이트</th>
+                        <th>틱 간격</th>
+                        <th>적합한 게임</th>
+                        <th>느낌</th>
+                    </tr>
+                    <tr>
+                        <td><strong>20 Tick</strong></td>
+                        <td>50ms</td>
+                        <td>옛날 MMO</td>
+                        <td>느릿느릿</td>
+                    </tr>
+                    <tr>
+                        <td><strong>30 Tick</strong></td>
+                        <td>33.3ms</td>
+                        <td>LoL, Dota 2</td>
+                        <td>전략 게임에 충분</td>
+                    </tr>
+                    <tr>
+                        <td><strong>64 Tick</strong></td>
+                        <td>15.6ms</td>
+                        <td>CS:GO 일반, 오버워치</td>
+                        <td>일반 유저에겐 OK</td>
+                    </tr>
+                    <tr>
+                        <td><strong>128 Tick</strong></td>
+                        <td>7.8ms</td>
+                        <td>발로란트, CS 프로</td>
+                        <td>정밀 슈팅에 필수</td>
+                    </tr>
+                </table>
+
+                <div class="info-box">
+                    <strong>왜 MOBA는 30틱인데 FPS는 128틱?</strong><br>
+                    • MOBA: 스킬 타이밍이 0.1초 차이나도 괜찮음 (전략 위주)<br>
+                    • FPS: 0.01초 차이로 헤드샷 성패가 갈림 (반응 위주)
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 64틱 vs 128틱 실제 차이 -->
+        <div class="conversation">
+            <h2>Part 2. 64틱 vs 128틱, 진짜 차이 나?</h2>
+
+            <div class="q">7.8ms 차이가 그렇게 중요해요? 사람이 느낄 수 있나요?</div>
+            <div class="a">
+                <p>일반인은 못 느끼지만, <span class="highlight">프로 게이머나 고수</span>들은 확실히 느껴요!</p>
+                <p>특히 <span class="key-point">피킹(Peeking)</span>과 <span class="key-point">헤드샷</span>에서 큰 차이가 나요.</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 연속 사진 vs 동영상</h4>
+                    <p>64틱 = 1초에 64장 사진 (애니메이션)</p>
+                    <p>128틱 = 1초에 128장 사진 (더 부드러운 애니메이션)</p>
+                    <p>빠르게 움직이는 피사체일수록 프레임 차이가 확 느껴져요!</p>
+                </div>
+
+                <div class="diagram">
+실제 시나리오: 코너 피킹 (FPS 게임)
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   64 Tick 서버:                                             │
+│   ────────────────────────────────────────                  │
+│   Time 0ms:    플레이어가 코너에서 튀어나옴 👤              │
+│                (서버는 아직 모름, 다음 틱 대기)             │
+│                                                             │
+│   Time 7ms:    플레이어가 헤드샷 조준 완료 🎯               │
+│                (서버는 여전히 모름)                         │
+│                                                             │
+│   Time 12ms:   플레이어가 발사! 💥                          │
+│                (서버는 여전히 모름!)                        │
+│                                                             │
+│   Time 15.6ms: ← 드디어 서버 틱 발생!                       │
+│                서버가 이제야 "나왔구나" 인지                 │
+│                                                             │
+│   ⚠️ 최대 15.6ms 지연 발생!                                 │
+│                                                             │
+│   128 Tick 서버:                                            │
+│   ────────────────────────────────────────                  │
+│   Time 0ms:    플레이어가 코너에서 튀어나옴 👤              │
+│   Time 7.8ms:  ← 서버 틱! 즉시 인지 ✅                      │
+│   Time 12ms:   플레이어가 발사! 💥                          │
+│   Time 15.6ms: ← 서버 틱! 즉시 처리 ✅                      │
+│                                                             │
+│   ✅ 최대 7.8ms 지연 (절반!)                                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">실제 게임에서 얼마나 차이 나?</div>
+            <div class="a">
+                <table class="comparison-table">
+                    <tr>
+                        <th>상황</th>
+                        <th>64 Tick</th>
+                        <th>128 Tick</th>
+                        <th>영향도</th>
+                    </tr>
+                    <tr>
+                        <td><strong>빠른 피킹</strong></td>
+                        <td>히트박스 뒤쳐짐</td>
+                        <td>정확한 위치</td>
+                        <td>🔴 매우 큼</td>
+                    </tr>
+                    <tr>
+                        <td><strong>헤드샷</strong></td>
+                        <td>가끔 안 맞음</td>
+                        <td>대부분 맞음</td>
+                        <td>🔴 큼</td>
+                    </tr>
+                    <tr>
+                        <td><strong>움직이는 적</strong></td>
+                        <td>리드샷 필요</td>
+                        <td>정확히 조준 가능</td>
+                        <td>🟠 보통</td>
+                    </tr>
+                    <tr>
+                        <td><strong>유틸 타이밍</strong></td>
+                        <td>애매함</td>
+                        <td>정밀 타이밍</td>
+                        <td>🟠 보통</td>
+                    </tr>
+                </table>
+
+                <div class="game-example">
+                    <h4>🎮 프로 선수들의 증언</h4>
+                    <p>CS:GO 프로들이 매치메이킹(64틱)을 안 하고 FACEIT/ESEA(128틱)만 하는 이유:</p>
+                    <p>"감이 달라서 연습이 안 돼요. 64틱에서 맞는 건 128틱에서 안 맞고, 128틱에서 맞는 건 64틱에서 안 맞아요."</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: Deterministic Lockstep -->
+        <div class="conversation">
+            <h2>Part 3. 같은 입력 = 같은 결과? (Deterministic)</h2>
+
+            <div class="q">e스포츠에서 "같은 입력 → 같은 결과"가 왜 중요해요?</div>
+            <div class="a">
+                <p>e스포츠는 <span class="highlight">공정성이 생명</span>이에요!</p>
+                <p>같은 상황에서 같은 입력을 했는데 결과가 다르면 안 되죠.</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 주사위 vs 계산기</h4>
+                    <p><strong>Non-Deterministic</strong>: 주사위 굴리기 - 결과 예측 불가</p>
+                    <p><strong>Deterministic</strong>: 계산기 - 같은 입력 = 항상 같은 결과</p>
+                    <p>게임 서버는 계산기처럼 작동해야 리플레이도, 공정성도 보장돼요!</p>
+                </div>
+
+                <div class="diagram">
+Deterministic vs Non-Deterministic:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   ❌ Non-Deterministic (매번 달라짐)                        │
+│   ─────────────────────────────────                         │
+│   크리티컬 확률 25%를 Math.random()으로 계산               │
+│                                                             │
+│   실행 1: random() = 0.523 → 크리 발생!                     │
+│   실행 2: random() = 0.847 → 크리 안 남                     │
+│                                                             │
+│   → 리플레이할 때마다 다른 결과 😱                          │
+│                                                             │
+│   ✅ Deterministic (항상 같음)                              │
+│   ─────────────────────────────                             │
+│   Seeded Random 사용 (seed = 프레임 번호 + 플레이어 ID)    │
+│                                                             │
+│   seed=12345: seededRandom() = 0.523 → 크리 발생!          │
+│   seed=12345: seededRandom() = 0.523 → 크리 발생! (항상!)  │
+│                                                             │
+│   → 리플레이 100% 재현 가능 ✅                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">Lockstep은 뭐예요?</div>
+            <div class="a">
+                <p><span class="key-point">Lockstep</span>은 <strong>모든 클라이언트가 서로를 기다리는 방식</strong>이에요.</p>
+                <p>가장 느린 플레이어를 기준으로 게임이 진행돼요.</p>
+
+                <div class="diagram">
+Lockstep 작동 원리:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   Frame N 시작:                                             │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │ Client A: 입력 전송 → 서버 (핑 20ms)                │   │
+│   │ Client B: 입력 전송 → 서버 (핑 50ms)                │   │
+│   │ Client C: 입력 전송 → 서버 (핑 100ms)  ← 가장 느림  │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                       ↓                                     │
+│   서버: 모든 클라이언트 입력 도착까지 대기...              │
+│         (C가 도착할 때까지 100ms 대기!)                    │
+│                       ↓                                     │
+│   서버: 모든 입력을 모든 클라이언트에 브로드캐스트         │
+│                       ↓                                     │
+│   Frame N+1:                                                │
+│   모든 클라이언트가 <span class="key-point">동일한 입력</span>으로 시뮬레이션              │
+│   → Deterministic이므로 <span class="key-point">결과도 동일!</span>                       │
+│                                                             │
+│   ⚠️ 단점: 느린 플레이어에게 모두가 맞춰져야 함             │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+
+                <div class="concept-card lol">
+                    <h4>🎮 LoL의 하이브리드 접근</h4>
+                    <p>LoL은 순수 Lockstep 대신 <strong>하이브리드 방식</strong>을 써요:</p>
+                    <ul>
+                        <li><strong>Deterministic</strong>: 모든 랜덤 요소를 Seeded Random으로</li>
+                        <li><strong>서버 권위</strong>: 서버가 최종 판정 (치팅 방지)</li>
+                        <li><strong>클라이언트 예측</strong>: 즉각 반응 (느낌 개선)</li>
+                        <li><strong>Input Delay ~130ms</strong>: 핑 차이 보정</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: Input Delay (입력 지연) -->
+        <div class="conversation">
+            <h2>Part 4. 왜 버튼 누르면 바로 반응 안 해? (Input Delay)</h2>
+
+            <div class="q">MOBA 게임에서 버튼 눌러도 살짝 느린 느낌이에요. 왜 그래요?</div>
+            <div class="a">
+                <p><span class="highlight">의도적인 지연</span>이에요! 이걸 <strong>Input Delay</strong>라고 해요.</p>
+                <p>공정성을 위해 약간의 반응성을 희생하는 거예요.</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 동시 출발 신호</h4>
+                    <p>100m 달리기에서 출발 신호를 <strong>모두가 동시에 듣도록</strong> 해야 공정하죠?</p>
+                    <p>게임도 마찬가지! 핑이 다른 플레이어들이 <strong>동시에 반응</strong>하도록 일부러 지연을 넣어요.</p>
+                </div>
+
+                <div class="diagram">
+Input Delay가 필요한 이유:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   Input Delay 없이:                                         │
+│   ─────────────────                                         │
+│   Player A (핑 20ms):  Time 20ms에 스킬 발동                │
+│   Player B (핑 100ms): Time 100ms에 스킬 발동               │
+│                                                             │
+│   → 80ms 차이! A가 <span class="warning">불공평하게 유리!</span>                       │
+│                                                             │
+│   Input Delay 150ms 적용:                                   │
+│   ─────────────────────                                     │
+│   모든 입력을 150ms 뒤에 실행                               │
+│                                                             │
+│   Player A: 입력 → 150ms 후 실행                            │
+│   Player B: 입력 → 150ms 후 실행                            │
+│                                                             │
+│   → <span class="key-point">동시 실행! 공평!</span>                                        │
+│                                                             │
+│   트레이드오프:                                             │
+│   반응성 ↓ (느린 느낌) but 공정성 ↑ (핑 차이 무효화)        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+
+                <table class="comparison-table">
+                    <tr>
+                        <th>Input Delay</th>
+                        <th>장점</th>
+                        <th>단점</th>
+                        <th>적합한 게임</th>
+                    </tr>
+                    <tr>
+                        <td><strong>0ms</strong></td>
+                        <td>즉각 반응</td>
+                        <td>핑 차이로 불공평</td>
+                        <td>싱글플레이어</td>
+                    </tr>
+                    <tr>
+                        <td><strong>50ms</strong></td>
+                        <td>빠른 느낌</td>
+                        <td>여전히 불공평</td>
+                        <td>캐주얼 게임</td>
+                    </tr>
+                    <tr>
+                        <td><strong>100~150ms</strong></td>
+                        <td>균형</td>
+                        <td>약간 느림</td>
+                        <td>LoL, Dota 2</td>
+                    </tr>
+                    <tr>
+                        <td><strong>200ms+</strong></td>
+                        <td>완전 공평</td>
+                        <td>너무 느림</td>
+                        <td>턴제 게임</td>
+                    </tr>
+                </table>
+
+                <div class="info-box">
+                    <strong>💡 LoL의 "손맛"</strong><br>
+                    LoL의 Input Delay는 약 130ms. 프로 게이머들이 말하는 "손맛"이 바로 이 지연 때문에 생기는 느낌이에요!
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: Time Dilation (EVE Online) -->
+        <div class="conversation">
+            <h2>Part 5. 서버가 터질 것 같으면? 시간을 늦춘다! (Time Dilation)</h2>
+
+            <div class="q">EVE Online에서 4000명이 한 전장에서 싸우는데 서버가 안 터져요?</div>
+            <div class="a">
+                <p>EVE Online은 <span class="key-point">Time Dilation (TiDi)</span>이라는 독특한 방식을 써요!</p>
+                <p>서버가 바쁘면 <span class="highlight">게임 내 시간을 천천히 흐르게</span> 만드는 거예요.</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 영화의 슬로우 모션</h4>
+                    <p>영화에서 폭발 장면을 슬로우 모션으로 보여주면, 한 프레임에 더 많은 디테일을 담을 수 있죠?</p>
+                    <p>EVE도 마찬가지! 서버가 바쁘면 게임을 슬로우 모션으로 돌려서, 모든 계산을 처리할 시간을 벌어요.</p>
+                </div>
+
+                <div class="diagram">
+Time Dilation 원리:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   정상 상태 (TiDi 100%):                                    │
+│   ═════════════════════════════════════════                 │
+│   현실 시간  : 0초 ─────→ 1초 ─────→ 2초                   │
+│   게임 시간  : 0초 ─────→ 1초 ─────→ 2초                   │
+│   서버 부하  : ████░░░░░░ (40%)                             │
+│                                                             │
+│   과부하 상태 (TiDi 10%):                                   │
+│   ═════════════════════════════════════════                 │
+│   현실 시간  : 0초 ───────────────────────────→ 10초       │
+│   게임 시간  : 0초 ─→ 1초                                   │
+│   서버 부하  : ██████████ (100%)                            │
+│                                                             │
+│   <span class="key-point">게임 1초가 현실 10초!</span>                                      │
+│   → 서버가 여유롭게 모든 계산을 처리                        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+
+                <div class="concept-card eve">
+                    <h4>🚀 실제 사례: B-R5RB 전투 (2014)</h4>
+                    <p><strong>7,548명</strong>이 한 성계에서 전투를 벌인 역대 최대 전투!</p>
+                    <ul>
+                        <li>TiDi 10%가 대부분 → 현실 <strong>21시간</strong> 진행</li>
+                        <li>게임 내 시간으로는 약 <strong>2시간</strong>만 흐름</li>
+                        <li>미사일 발사 1초 → 현실 10초 (슬로우 모션 전투)</li>
+                        <li>서버는 안 터지고 모든 액션 처리 완료!</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="q">TiDi가 적용되면 어떤 느낌이에요?</div>
+            <div class="a">
+                <table class="comparison-table">
+                    <tr>
+                        <th>행동</th>
+                        <th>정상 시간</th>
+                        <th>TiDi 10%</th>
+                        <th>느낌</th>
+                    </tr>
+                    <tr>
+                        <td>미사일 발사</td>
+                        <td>1초</td>
+                        <td>10초</td>
+                        <td>슬로우 모션 영화</td>
+                    </tr>
+                    <tr>
+                        <td>워프 준비</td>
+                        <td>10초</td>
+                        <td>100초 (1분 40초)</td>
+                        <td>좀 답답함</td>
+                    </tr>
+                    <tr>
+                        <td>함선 폭발</td>
+                        <td>3초</td>
+                        <td>30초</td>
+                        <td>장엄한 최후</td>
+                    </tr>
+                    <tr>
+                        <td>채팅 메시지</td>
+                        <td>즉시</td>
+                        <td>즉시</td>
+                        <td>정상 (TiDi 무관)</td>
+                    </tr>
+                </table>
+
+                <div class="info-box">
+                    <strong>TiDi의 철학</strong><br>
+                    "서버 성능은 한계가 있어. 그럼 <strong>게임을 서버에 맞춰버리면</strong> 되지 않을까?"<br>
+                    → 기술적 한계를 게임 디자인으로 해결한 혁신적인 방법!
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 넷코드 비교 -->
+        <div class="conversation">
+            <h2>Part 6. Delay-based vs Rollback (넷코드 비교)</h2>
+
+            <div class="q">격투 게임에서 "롤백 넷코드"가 좋다고 하는데 뭐가 달라요?</div>
+            <div class="a">
+                <p>네트워크 지연을 처리하는 두 가지 대표적인 방식이에요:</p>
+
+                <div class="visual-flow">
+                    <div class="flow-step">
+                        <div class="flow-number">A</div>
+                        <div><strong>Delay-based</strong>: 입력을 의도적으로 늦춰서 동기화</div>
+                    </div>
+                    <div class="flow-step highlight-step">
+                        <div class="flow-number">B</div>
+                        <div><strong>Rollback</strong>: 일단 예측하고, 틀리면 되돌림</div>
+                    </div>
+                </div>
+
+                <div class="diagram">
+Delay-based vs Rollback:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   [Delay-based] 입력을 지연시킴                             │
+│   ═════════════════════════════════                         │
+│   Time 0ms:    버튼 누름                                    │
+│   Time 100ms:  서버에 도착                                  │
+│   Time 150ms:  상대에게 전달                                │
+│   Time 150ms:  ← 양쪽 모두 <span class="key-point">동시에 실행</span>                    │
+│                                                             │
+│   장점: 완벽한 동기화, 롤백 없음                            │
+│   단점: 항상 느린 느낌 (핑 ÷ 2만큼 지연)                    │
+│                                                             │
+│   [Rollback] 일단 예측, 틀리면 되돌림                       │
+│   ═════════════════════════════════                         │
+│   Time 0ms:    버튼 누름 → <span class="key-point">즉시 실행! (예측)</span>              │
+│   Time 100ms:  서버에 도착, 상대 입력 수신                  │
+│   Time 100ms:  예측이 틀렸다면? → 과거로 되돌아가 재계산   │
+│                                                             │
+│   장점: 즉각 반응, 부드러운 느낌                            │
+│   단점: 예측 실패 시 "순간이동" 현상                        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+
+                <table class="comparison-table">
+                    <tr>
+                        <th>항목</th>
+                        <th>Delay-based</th>
+                        <th>Rollback</th>
+                    </tr>
+                    <tr>
+                        <td><strong>반응 속도</strong></td>
+                        <td>느림 (핑만큼 지연)</td>
+                        <td>빠름 (즉시 반응)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>동기화</strong></td>
+                        <td>완벽</td>
+                        <td>예측 실패 시 보정</td>
+                    </tr>
+                    <tr>
+                        <td><strong>고핑 환경</strong></td>
+                        <td>매우 느려짐</td>
+                        <td>순간이동 발생</td>
+                    </tr>
+                    <tr>
+                        <td><strong>적합한 게임</strong></td>
+                        <td>MOBA, 전략</td>
+                        <td>격투, FPS</td>
+                    </tr>
+                    <tr>
+                        <td><strong>대표 게임</strong></td>
+                        <td>LoL, Dota 2</td>
+                        <td>길티기어, 모탈 컴뱃 11</td>
+                    </tr>
+                </table>
+
+                <div class="game-example">
+                    <h4>🎮 격투 게임에서 Rollback이 중요한 이유</h4>
+                    <p>격투 게임은 <strong>프레임 단위</strong>로 승부가 갈려요 (1프레임 = 16ms)</p>
+                    <p>Delay-based에서 핑 100ms면? → 6프레임 지연 → 사실상 플레이 불가!</p>
+                    <p>Rollback은 일단 즉시 반응하므로 핑이 높아도 플레이 가능!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 7: 게임별 선택 정리 -->
+        <div class="conversation">
+            <h2>Part 7. 게임별로 왜 다른 선택을 할까?</h2>
+
+            <div class="q">왜 모든 게임이 128틱 + 롤백을 안 써요?</div>
+            <div class="a">
+                <p>게임 장르, 비용, 플레이 경험에 따라 <span class="highlight">최적의 선택이 다르기 때문</span>이에요!</p>
+
+                <div class="concept-card valorant">
+                    <h4>🎯 발로란트 - 128틱의 정석</h4>
+                    <ul>
+                        <li>128틱 서버 제공 (CS:GO 대비 경쟁력)</li>
+                        <li>연간 수천만 달러 서버 비용</li>
+                        <li>마케팅 효과로 투자 회수</li>
+                        <li>"CS:GO보다 정밀하다"는 이미지 확보</li>
+                    </ul>
+                </div>
+
+                <div class="concept-card csgo">
+                    <h4>🔫 CS2 - Sub-tick 혁신</h4>
+                    <ul>
+                        <li>64틱이지만 <strong>Sub-tick</strong> 기술 도입</li>
+                        <li>틱 사이에 발생한 이벤트의 정확한 시간 기록</li>
+                        <li>64틱 비용으로 128틱 정밀도 달성</li>
+                        <li>2023년 게임 업계 화제의 기술!</li>
+                    </ul>
+                </div>
+
+                <div class="concept-card lol">
+                    <h4>⚔️ LoL / Dota 2 - 30틱으로 충분</h4>
+                    <ul>
+                        <li>MOBA는 전략 위주 → 틱레이트보다 공정성 중요</li>
+                        <li>Input Delay 130ms로 핑 차이 보정</li>
+                        <li>Deterministic으로 리플레이 100% 재현</li>
+                        <li>30틱으로 서버 비용 절감</li>
+                    </ul>
+                </div>
+
+                <div class="concept-card eve">
+                    <h4>🚀 EVE Online - Time Dilation</h4>
+                    <ul>
+                        <li>대규모 전투 지원이 핵심 가치</li>
+                        <li>틱레이트 대신 시간을 늦추는 방식</li>
+                        <li>7000명+ 동시 전투 가능</li>
+                        <li>게임 디자인으로 기술 한계 극복</li>
+                    </ul>
+                </div>
+
+                <div class="info-box">
+                    <strong>💡 핵심 교훈</strong><br>
+                    "완벽한 네트워크 모델은 없다. 게임 장르와 목표(공정성 vs 반응성 vs 규모)에 맞춰 트레이드오프를 선택해야 한다."
+                </div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>틱레이트</strong> = 서버의 초당 업데이트 횟수. 높을수록 정밀하지만 비용↑</li>
+                <li><strong>64틱 vs 128틱</strong> = FPS에서 프로는 차이 느낌. 히트박스 정확도 10% 차이</li>
+                <li><strong>Deterministic</strong> = 같은 입력 → 같은 결과. 공정성과 리플레이의 핵심</li>
+                <li><strong>Lockstep</strong> = 모든 클라이언트가 동기화. 느린 플레이어에게 맞춤</li>
+                <li><strong>Input Delay</strong> = 의도적 지연. 핑 차이로 인한 불공정 제거</li>
+                <li><strong>Time Dilation</strong> = 서버 과부하 시 게임 시간을 늦춤. EVE의 혁신</li>
+                <li><strong>Rollback</strong> = 예측 후 보정. 격투 게임에서 필수</li>
+                <li><strong>선택 기준</strong> = 게임 장르, 비용, 플레이 경험에 따라 최적이 다름</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../">← 멀티플레이어 목록</a>
+            <a href="../server-lag-compensation/">지연 보상과 히트 판정 →</a>
+        </div>
+    </div>
+</body>
+</html>
