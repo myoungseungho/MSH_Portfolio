@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>조건문을 다형성으로 | 리팩토링</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #111111;
+            --bg-tertiary: #1a1a1a;
+            --text-primary: #e5e5e5;
+            --text-secondary: #a3a3a3;
+            --text-muted: #737373;
+            --border-color: #262626;
+            --accent-primary: #8B5CF6;
+            --accent-secondary: #A78BFA;
+            --code-bg: #1e1e1e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.8;
+            font-size: 16px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: var(--accent-primary);
+        }
+
+        .document-header {
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .document-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .document-meta {
+            display: flex;
+            gap: 2rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .qa-section {
+            margin-bottom: 3rem;
+        }
+
+        .question {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--accent-secondary);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .question::before {
+            content: "Q.";
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .answer {
+            padding-left: 0;
+        }
+
+        .answer p {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .insight-box {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(167, 139, 250, 0.05) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .insight-box h4 {
+            color: var(--accent-primary);
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+        }
+
+        .insight-box p, .insight-box li {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .warning-box {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .warning-box h4 {
+            color: #ef4444;
+            margin-bottom: 0.75rem;
+        }
+
+        .success-box {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .success-box h4 {
+            color: #22c55e;
+            margin-bottom: 0.75rem;
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            border-radius: 12px;
+            margin: 1.5rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            background: #2d2d2d;
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .code-label {
+            color: var(--accent-secondary);
+            font-weight: 500;
+        }
+
+        .code-block pre {
+            padding: 1.25rem;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .step-list {
+            list-style: none;
+            margin: 1.5rem 0;
+        }
+
+        .step-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+
+        .step-number {
+            background: var(--accent-primary);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .step-content h4 {
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .step-content p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        .nav-footer {
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .nav-link {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            text-decoration: none;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .nav-link .label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .nav-link .title {
+            color: var(--accent-primary);
+            font-weight: 500;
+        }
+
+        .diagram-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            text-align: center;
+        }
+
+        .diagram-box pre {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-align: left;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-refactoring/" class="back-link">
+            ← 리팩토링 목록으로
+        </a>
+
+        <header class="document-header">
+            <h1 class="document-title">조건문을 다형성으로</h1>
+            <div class="document-meta">
+                <span>리팩토링 #10</span>
+                <span>고급 기법</span>
+                <span>Replace Conditional with Polymorphism</span>
+            </div>
+        </header>
+
+        <main>
+            <section class="qa-section">
+                <h2 class="question">switch문이 계속 커지는데 어떻게 해?</h2>
+                <div class="answer">
+                    <p>타입별로 다른 동작을 하는 switch/if-else가 여러 곳에 반복되면, <strong>다형성(Polymorphism)</strong>으로 교체하는 것이 좋습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-label">❌ 전형적인 문제 패턴</span>
+                        </div>
+                        <pre><code class="language-cpp">// 몬스터 타입별 처리가 여러 곳에 흩어져 있음
+int GetMonsterDamage(CMonster* pMon)
+{
+    switch (pMon->GetType())
+    {
+        case MONSTER_NORMAL:
+            return pMon->GetAtk() * 1;
+        case MONSTER_ELITE:
+            return pMon->GetAtk() * 2;
+        case MONSTER_BOSS:
+            return pMon->GetAtk() * 5;
+    }
+    return 0;
+}
+
+int GetMonsterExp(CMonster* pMon)
+{
+    switch (pMon->GetType())  // 또 같은 switch!
+    {
+        case MONSTER_NORMAL:
+            return 100;
+        case MONSTER_ELITE:
+            return 500;
+        case MONSTER_BOSS:
+            return 5000;
+    }
+    return 0;
+}
+
+const char* GetMonsterName(CMonster* pMon)
+{
+    switch (pMon->GetType())  // 또 또!
+    {
+        case MONSTER_NORMAL:
+            return "일반 몬스터";
+        case MONSTER_ELITE:
+            return "정예 몬스터";
+        case MONSTER_BOSS:
+            return "보스";
+    }
+    return "알 수 없음";
+}</code></pre>
+                    </div>
+
+                    <div class="warning-box">
+                        <h4>⚠️ 문제점</h4>
+                        <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                            <li>새 몬스터 타입 추가 시 <strong>모든 switch를 수정</strong>해야 함</li>
+                            <li>수정 위치를 <strong>놓치기 쉬움</strong> (버그 발생)</li>
+                            <li>타입별 로직이 <strong>여러 곳에 흩어짐</strong></li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">다형성으로 어떻게 바꿔?</h2>
+                <div class="answer">
+                    <p>각 타입을 <strong>별도 클래스</strong>로 만들고, switch 분기를 <strong>가상 함수</strong>로 대체합니다:</p>
+
+                    <div class="diagram-box">
+                        <pre>
+    ┌─────────────────┐
+    │   CMonster      │ ◀── 기반 클래스 (순수 가상 함수)
+    │  + GetDamage()  │
+    │  + GetExp()     │
+    │  + GetName()    │
+    └────────┬────────┘
+             │
+    ┌────────┼────────┬────────────────┐
+    │        │        │                │
+    ▼        ▼        ▼                ▼
+┌────────┐┌────────┐┌────────┐    ┌────────┐
+│ Normal ││ Elite  ││  Boss  │    │  New?  │
+│Monster ││Monster ││Monster │    │ 추가만 │
+└────────┘└────────┘└────────┘    │ 하면됨 │
+                                  └────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-label">✅ 다형성으로 리팩토링</span>
+                        </div>
+                        <pre><code class="language-cpp">// 기반 클래스
+class CMonster
+{
+public:
+    virtual ~CMonster() {}
+    virtual int GetDamage() const = 0;
+    virtual int GetExp() const = 0;
+    virtual const char* GetName() const = 0;
+
+protected:
+    int m_nAtk;
+};
+
+// 일반 몬스터
+class CNormalMonster : public CMonster
+{
+public:
+    int GetDamage() const override { return m_nAtk * 1; }
+    int GetExp() const override { return 100; }
+    const char* GetName() const override { return "일반 몬스터"; }
+};
+
+// 정예 몬스터
+class CEliteMonster : public CMonster
+{
+public:
+    int GetDamage() const override { return m_nAtk * 2; }
+    int GetExp() const override { return 500; }
+    const char* GetName() const override { return "정예 몬스터"; }
+};
+
+// 보스 몬스터
+class CBossMonster : public CMonster
+{
+public:
+    int GetDamage() const override { return m_nAtk * 5; }
+    int GetExp() const override { return 5000; }
+    const char* GetName() const override { return "보스"; }
+};</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-label">✅ 사용하는 곳</span>
+                        </div>
+                        <pre><code class="language-cpp">// switch 없이 깔끔하게 호출
+void ProcessDamage(CMonster* pMon, CGamePC* pPC)
+{
+    int damage = pMon->GetDamage();  // 타입에 맞는 함수가 자동 호출
+    pPC->TakeDamage(damage);
+}
+
+void GiveReward(CMonster* pMon, CGamePC* pPC)
+{
+    int exp = pMon->GetExp();        // switch 불필요!
+    pPC->AddExp(exp);
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">새 타입 추가할 때 어떻게 달라져?</h2>
+                <div class="answer">
+                    <div class="success-box">
+                        <h4>✅ Before: switch 방식</h4>
+                        <p>새 몬스터 타입 추가 시: GetDamage(), GetExp(), GetName(), 그 외 모든 switch문 수정 필요 (10곳 이상)</p>
+                    </div>
+
+                    <div class="success-box">
+                        <h4>✅ After: 다형성 방식</h4>
+                        <p>새 클래스 파일 1개 추가 + Factory에 생성 코드 1줄 추가. 끝!</p>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-label">새 타입 추가 예시: 레이드 보스</span>
+                        </div>
+                        <pre><code class="language-cpp">// 새 파일: RaidBossMonster.h
+class CRaidBossMonster : public CMonster
+{
+public:
+    int GetDamage() const override { return m_nAtk * 10; }
+    int GetExp() const override { return 50000; }
+    const char* GetName() const override { return "레이드 보스"; }
+
+    // 레이드 보스만의 특수 기능도 추가 가능
+    void EnrageMode() { m_nAtk *= 2; }
+};
+
+// MonsterFactory.cpp에 1줄 추가
+case MONSTER_RAID_BOSS:
+    return new CRaidBossMonster();</code></pre>
+                    </div>
+
+                    <div class="insight-box">
+                        <h4>🎯 핵심: 개방-폐쇄 원칙 (OCP)</h4>
+                        <p>"확장에는 열려있고, 수정에는 닫혀있다." 새 타입을 추가할 때 기존 코드를 수정하지 않아도 됩니다.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">우리 프로젝트에 적용할 곳은?</h2>
+                <div class="answer">
+                    <p>게임 서버에서 다형성이 유용한 패턴들:</p>
+
+                    <table style="width: 100%; border-collapse: collapse; margin: 1.5rem 0; background: var(--bg-secondary); border-radius: 12px; overflow: hidden;">
+                        <thead>
+                            <tr style="background: var(--bg-tertiary);">
+                                <th style="padding: 1rem; text-align: left; color: var(--text-primary);">switch 패턴</th>
+                                <th style="padding: 1rem; text-align: left; color: var(--text-primary);">다형성 클래스</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                <td style="padding: 1rem; color: var(--text-secondary);">몬스터 타입별 처리</td>
+                                <td style="padding: 1rem; color: var(--text-secondary);">CMonster → CNormal, CElite, CBoss</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                <td style="padding: 1rem; color: var(--text-secondary);">스킬 타입별 효과</td>
+                                <td style="padding: 1rem; color: var(--text-secondary);">CSkill → CAttackSkill, CBuffSkill, CHealSkill</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                <td style="padding: 1rem; color: var(--text-secondary);">아이템 타입별 사용</td>
+                                <td style="padding: 1rem; color: var(--text-secondary);">CItem → CWeapon, CArmor, CConsumable</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 1rem; color: var(--text-secondary);">퀘스트 타입별 완료조건</td>
+                                <td style="padding: 1rem; color: var(--text-secondary);">CQuest → CKillQuest, CCollectQuest, CTalkQuest</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">리팩토링 절차는?</h2>
+                <div class="answer">
+                    <ol class="step-list">
+                        <li>
+                            <span class="step-number">1</span>
+                            <div class="step-content">
+                                <h4>타입 코드 식별</h4>
+                                <p>switch/if-else에서 분기하는 타입 코드(enum, int)를 찾습니다.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="step-number">2</span>
+                            <div class="step-content">
+                                <h4>기반 클래스 생성</h4>
+                                <p>공통 인터페이스(순수 가상 함수)를 정의하는 기반 클래스를 만듭니다.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="step-number">3</span>
+                            <div class="step-content">
+                                <h4>각 타입을 서브클래스로</h4>
+                                <p>switch의 각 case를 별도 클래스로 분리하고, 가상 함수를 구현합니다.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="step-number">4</span>
+                            <div class="step-content">
+                                <h4>Factory 패턴 도입</h4>
+                                <p>타입 코드를 받아 적절한 서브클래스 인스턴스를 생성하는 Factory를 만듭니다.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="step-number">5</span>
+                            <div class="step-content">
+                                <h4>switch문 제거</h4>
+                                <p>호출부에서 switch 대신 가상 함수 호출로 교체합니다.</p>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">언제 다형성을 쓰면 안 돼?</h2>
+                <div class="answer">
+                    <div class="warning-box">
+                        <h4>⚠️ 과도한 적용 주의</h4>
+                        <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                            <li><strong>switch가 1곳</strong>뿐이면 굳이 클래스 계층 불필요</li>
+                            <li>분기가 <strong>2-3개</strong>뿐이고 확장 가능성 낮으면 switch가 나음</li>
+                            <li><strong>단순 값 반환</strong>만 하는 경우 맵/테이블이 더 적합</li>
+                            <li>레거시 코드에서 <strong>대규모 변경</strong>이 필요하면 위험</li>
+                        </ul>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-label">맵으로 충분한 경우</span>
+                        </div>
+                        <pre><code class="language-cpp">// 단순 값 매핑은 테이블이 더 간단
+std::map<int, int> MonsterExpTable = {
+    {MONSTER_NORMAL, 100},
+    {MONSTER_ELITE, 500},
+    {MONSTER_BOSS, 5000}
+};
+
+int GetExp(int type) {
+    return MonsterExpTable[type];
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">핵심 요약</h2>
+                <div class="answer">
+                    <div class="insight-box">
+                        <h4>📌 조건문→다형성 핵심</h4>
+                        <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                            <li><strong>같은 switch가 여러 곳</strong>에 반복되면 다형성 고려</li>
+                            <li>각 타입을 <strong>별도 클래스</strong>로 분리</li>
+                            <li>switch 분기를 <strong>가상 함수 오버라이드</strong>로 대체</li>
+                            <li>새 타입 추가 = <strong>새 클래스 추가</strong> (기존 코드 수정 X)</li>
+                            <li>switch 1곳, 분기 2-3개면 <strong>그냥 switch</strong> 사용</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <nav class="nav-footer">
+            <a href="../decompose-conditional/" class="nav-link prev">
+                <span class="label">이전</span>
+                <span class="title">← 조건문 분해</span>
+            </a>
+            <a href="../category-refactoring/" class="nav-link next">
+                <span class="label">다음</span>
+                <span class="title">리팩토링 목록 →</span>
+            </a>
+        </nav>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>

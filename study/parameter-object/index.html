@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파라미터 객체 도입 | 리팩토링</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #111111;
+            --bg-tertiary: #1a1a1a;
+            --text-primary: #e5e5e5;
+            --text-secondary: #a3a3a3;
+            --text-muted: #737373;
+            --border-color: #262626;
+            --accent-primary: #8B5CF6;
+            --accent-secondary: #A78BFA;
+            --code-bg: #1e1e1e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.8;
+            font-size: 16px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: var(--accent-primary);
+        }
+
+        .document-header {
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .document-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .document-meta {
+            display: flex;
+            gap: 2rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .qa-section {
+            margin-bottom: 3rem;
+        }
+
+        .question {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--accent-secondary);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .question::before {
+            content: "Q.";
+            color: var(--accent-primary);
+            font-weight: 700;
+        }
+
+        .answer {
+            padding-left: 0;
+        }
+
+        .answer p {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .insight-box {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(167, 139, 250, 0.05) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .insight-box h4 {
+            color: var(--accent-primary);
+            margin-bottom: 0.75rem;
+            font-size: 1rem;
+        }
+
+        .insight-box p, .insight-box li {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .warning-box {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .warning-box h4 {
+            color: #ef4444;
+            margin-bottom: 0.75rem;
+        }
+
+        .success-box {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .success-box h4 {
+            color: #22c55e;
+            margin-bottom: 0.75rem;
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            border-radius: 12px;
+            margin: 1.5rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            background: #2d2d2d;
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .code-label {
+            color: var(--accent-secondary);
+            font-weight: 500;
+        }
+
+        .code-block pre {
+            padding: 1.25rem;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        @media (max-width: 768px) {
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .comparison-grid .code-block {
+            margin: 0;
+        }
+
+        .step-list {
+            list-style: none;
+            margin: 1.5rem 0;
+        }
+
+        .step-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+
+        .step-number {
+            background: var(--accent-primary);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .step-content h4 {
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .step-content p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        .nav-footer {
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .nav-link {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            text-decoration: none;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .nav-link .label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .nav-link .title {
+            color: var(--accent-primary);
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-refactoring/" class="back-link">
+            ← 리팩토링 목록으로
+        </a>
+
+        <header class="document-header">
+            <h1 class="document-title">파라미터 객체 도입</h1>
+            <div class="document-meta">
+                <span>리팩토링 #8</span>
+                <span>기본 기법</span>
+                <span>Introduce Parameter Object</span>
+            </div>
+        </header>
+
+        <main>
+            <section class="qa-section">
+                <h2 class="question">파라미터가 너무 많은 함수는 어떻게 해?</h2>
+                <div class="answer">
+                    <p>파라미터가 3개를 넘어가면 함수 시그니처가 복잡해지고, 호출하는 곳에서 실수하기 쉽습니다. <strong>파라미터 객체(Parameter Object)</strong>를 도입하면 해결됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-label">❌ 파라미터가 너무 많은 함수</span>
+                        </div>
+                        <pre><code class="language-cpp">// 호출할 때마다 순서 헷갈림
+void CreateCharacter(
+    int accountId,
+    const char* name,
+    int classType,
+    int gender,
+    int hairStyle,
+    int hairColor,
+    int faceType,
+    int skinColor,
+    int startingMap,
+    int startingX,
+    int startingY
+);
+
+// 호출하는 곳 - 무슨 파라미터인지 알 수 없음
+CreateCharacter(1001, "전사", 1, 0, 3, 2, 1, 0, 100, 500, 300);</code></pre>
+                    </div>
+
+                    <div class="warning-box">
+                        <h4>⚠️ Long Parameter List 코드 스멜</h4>
+                        <p>파라미터가 4개 이상이면 "Long Parameter List" 코드 스멜입니다. 순서 실수, 가독성 저하, 확장 어려움의 원인이 됩니다.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">파라미터 객체로 어떻게 바꿔?</h2>
+                <div class="answer">
+                    <p>관련 있는 파라미터들을 하나의 구조체/클래스로 묶습니다:</p>
+
+                    <div class="comparison-grid">
+                        <div class="code-block">
+                            <div class="code-header">
+                                <span class="code-label">❌ Before</span>
+                                <span>11개 파라미터</span>
+                            </div>
+                            <pre><code class="language-cpp">void CreateCharacter(
+    int accountId,
+    const char* name,
+    int classType,
+    int gender,
+    int hairStyle,
+    int hairColor,
+    int faceType,
+    int skinColor,
+    int startingMap,
+    int startingX,
+    int startingY
+);
+
+// 호출
+CreateCharacter(
+    1001, "전사", 1, 0,
+    3, 2, 1, 0,
+    100, 500, 300
+);</code></pre>
+                        </div>
+                        <div class="code-block">
+                            <div class="code-header">
+                                <span class="code-label">✅ After</span>
+                                <span>파라미터 객체</span>
+                            </div>
+                            <pre><code class="language-cpp">struct CharacterAppearance {
+    int hairStyle;
+    int hairColor;
+    int faceType;
+    int skinColor;
+};
+
+struct SpawnPosition {
+    int mapId;
+    int x;
+    int y;
+};
+
+struct CharacterCreateParams {
+    int accountId;
+    std::string name;
+    int classType;
+    int gender;
+    CharacterAppearance appearance;
+    SpawnPosition spawn;
+};
+
+void CreateCharacter(
+    const CharacterCreateParams& params
+);</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-label">✅ 호출하는 곳</span>
+                        </div>
+                        <pre><code class="language-cpp">CharacterCreateParams params;
+params.accountId = 1001;
+params.name = "전사";
+params.classType = CLASS_WARRIOR;
+params.gender = GENDER_MALE;
+params.appearance.hairStyle = 3;
+params.appearance.hairColor = 2;
+params.appearance.faceType = 1;
+params.appearance.skinColor = 0;
+params.spawn.mapId = 100;
+params.spawn.x = 500;
+params.spawn.y = 300;
+
+CreateCharacter(params);  // 명확!</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">우리 프로젝트에서 적용할 곳이 있어?</h2>
+                <div class="answer">
+                    <p>DB 프로시저 호출 쪽에 많습니다. 실제 예시를 봅시다:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-label">❌ 실제 프로젝트 - 긴 파라미터 리스트</span>
+                        </div>
+                        <pre><code class="language-cpp">// Procedure_SavePC.h에서 발견
+void SaveCharacter(
+    DWORD dwAccUnique,
+    DWORD dwCharUnique,
+    int nLevel,
+    __int64 i64Exp,
+    int nHP,
+    int nMP,
+    int nStr,
+    int nDex,
+    int nInt,
+    int nCon,
+    int nMapId,
+    int nPosX,
+    int nPosY,
+    // ... 더 많은 파라미터들
+);</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-label">✅ 리팩토링 후</span>
+                        </div>
+                        <pre><code class="language-cpp">// 관련 데이터를 구조체로 그룹화
+struct CharacterIdentity {
+    DWORD accountId;
+    DWORD characterId;
+};
+
+struct CharacterStats {
+    int level;
+    __int64 exp;
+    int hp;
+    int mp;
+    int str;
+    int dex;
+    int intelligence;
+    int con;
+};
+
+struct CharacterPosition {
+    int mapId;
+    int x;
+    int y;
+};
+
+struct CharacterSaveData {
+    CharacterIdentity identity;
+    CharacterStats stats;
+    CharacterPosition position;
+};
+
+void SaveCharacter(const CharacterSaveData& data);</code></pre>
+                    </div>
+
+                    <div class="insight-box">
+                        <h4>💡 부가 효과</h4>
+                        <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                            <li>구조체에 <strong>검증 로직</strong>을 추가할 수 있음</li>
+                            <li>관련 데이터가 <strong>함께 이동</strong>함</li>
+                            <li>새 필드 추가 시 <strong>함수 시그니처 변경 불필요</strong></li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">리팩토링 절차는?</h2>
+                <div class="answer">
+                    <ol class="step-list">
+                        <li>
+                            <span class="step-number">1</span>
+                            <div class="step-content">
+                                <h4>관련 파라미터 식별</h4>
+                                <p>항상 함께 전달되는 파라미터 그룹을 찾습니다. (예: x, y, z 좌표)</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="step-number">2</span>
+                            <div class="step-content">
+                                <h4>파라미터 객체 클래스 생성</h4>
+                                <p>그룹을 담을 구조체나 클래스를 만듭니다. C++에서는 보통 struct가 적합합니다.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="step-number">3</span>
+                            <div class="step-content">
+                                <h4>함수 시그니처 변경</h4>
+                                <p>개별 파라미터 대신 객체를 받도록 수정합니다.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="step-number">4</span>
+                            <div class="step-content">
+                                <h4>호출부 수정</h4>
+                                <p>모든 호출 위치에서 객체를 생성하여 전달하도록 수정합니다.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span class="step-number">5</span>
+                            <div class="step-content">
+                                <h4>동작 이동 (선택)</h4>
+                                <p>파라미터와 관련된 로직이 있다면 객체 내부로 이동시킵니다.</p>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">객체에 동작도 넣을 수 있어?</h2>
+                <div class="answer">
+                    <p>네, 파라미터 객체가 단순 데이터 홀더에서 <strong>풍부한 객체</strong>로 진화할 수 있습니다:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-label">데이터 → 동작 추가</span>
+                        </div>
+                        <pre><code class="language-cpp">struct CharacterStats {
+    int level;
+    int hp;
+    int maxHp;
+    int mp;
+    int maxMp;
+
+    // 검증 로직 추가
+    bool IsValid() const {
+        return level > 0 && level <= MAX_LEVEL
+            && hp >= 0 && hp <= maxHp
+            && mp >= 0 && mp <= maxMp;
+    }
+
+    // 계산 로직 추가
+    float GetHpPercent() const {
+        return maxHp > 0 ? (float)hp / maxHp * 100.0f : 0.0f;
+    }
+
+    // 변환 로직 추가
+    bool IsDead() const {
+        return hp <= 0;
+    }
+};
+
+// 사용
+if (!saveData.stats.IsValid()) {
+    LogError("Invalid character stats");
+    return false;
+}</code></pre>
+                    </div>
+
+                    <div class="success-box">
+                        <h4>✅ 동작 추가의 장점</h4>
+                        <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                            <li>검증 로직이 데이터와 함께 있음</li>
+                            <li>중복 검증 코드 제거</li>
+                            <li>데이터 무결성 보장</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">언제 파라미터 객체를 쓰면 안 돼?</h2>
+                <div class="answer">
+                    <div class="warning-box">
+                        <h4>⚠️ 과도한 객체화 주의</h4>
+                        <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                            <li><strong>파라미터가 2-3개</strong>일 때는 굳이 객체화 불필요</li>
+                            <li><strong>함께 다니지 않는 파라미터</strong>를 억지로 묶지 말 것</li>
+                            <li><strong>성능이 극도로 중요한 핫패스</strong>에서는 구조체 복사 비용 고려</li>
+                        </ul>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-label">❌ 과도한 객체화</span>
+                        </div>
+                        <pre><code class="language-cpp">// 이건 그냥 두 개 파라미터가 나음
+struct AddParams {
+    int a;
+    int b;
+};
+int Add(const AddParams& p);  // 과하다
+
+// 이게 낫다
+int Add(int a, int b);</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <section class="qa-section">
+                <h2 class="question">핵심 요약</h2>
+                <div class="answer">
+                    <div class="insight-box">
+                        <h4>📌 파라미터 객체 핵심</h4>
+                        <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                            <li>파라미터 <strong>4개 이상</strong>이면 객체화 고려</li>
+                            <li><strong>함께 다니는 파라미터</strong>를 그룹으로 묶기</li>
+                            <li>객체에 <strong>검증/계산 로직</strong> 추가 가능</li>
+                            <li>새 필드 추가 시 <strong>시그니처 변경 불필요</strong></li>
+                            <li>2-3개 파라미터는 그냥 두기</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <nav class="nav-footer">
+            <a href="../magic-number/" class="nav-link prev">
+                <span class="label">이전</span>
+                <span class="title">← 매직 넘버 제거</span>
+            </a>
+            <a href="../decompose-conditional/" class="nav-link next">
+                <span class="label">다음</span>
+                <span class="title">조건문 분해 →</span>
+            </a>
+        </nav>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</body>
+</html>
