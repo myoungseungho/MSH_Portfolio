@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOLOCK 없이도 빠르게 읽는 방법 - RCSI - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 진행 표시 */
+        .progress-bar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 48px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e0e0e0;
+        }
+        .progress-step {
+            text-align: center;
+            flex: 1;
+            font-size: 0.75rem;
+            color: #999;
+        }
+        .progress-step.active { color: #2e7d32; font-weight: 600; }
+        .progress-step .num {
+            display: block;
+            width: 24px;
+            height: 24px;
+            margin: 0 auto 4px;
+            background: #e0e0e0;
+            border-radius: 50%;
+            line-height: 24px;
+            font-size: 0.7rem;
+        }
+        .progress-step.active .num { background: #4caf50; color: white; }
+
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #2e7d32;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #c8e6c9;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e8f5e9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1b5e20;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .compare-table .good { background: #e8f5e9; color: #2e7d32; }
+        .compare-table .bad { background: #ffebee; color: #c62828; }
+        .compare-table .warn { background: #fff8e1; color: #f57c00; }
+
+        .analogy-box {
+            background: #f3e5f5;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #9c27b0;
+        }
+        .analogy-box strong {
+            color: #7b1fa2;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            margin: 24px 0;
+        }
+        .result-box h4 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
+        .result-box .result-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        .result-box .result-item {
+            text-align: center;
+        }
+        .result-box .result-label {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .result-box .result-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+        .result-box .result-note {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        .warning-box {
+            background: #fff3e0;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #ff9800;
+        }
+        .warning-box strong {
+            color: #e65100;
+        }
+
+        .danger-box {
+            background: #ffebee;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #f44336;
+        }
+        .danger-box strong {
+            color: #c62828;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            border-left: 4px solid #2196f3;
+        }
+        .info-box strong {
+            color: #1565c0;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: #a5d6a7;
+        }
+
+        .diagram-box {
+            background: #fafafa;
+            border: 2px dashed #c8e6c9;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+            text-align: center;
+        }
+        .diagram-box pre {
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            text-align: left;
+            display: inline-block;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #2e7d32;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>NOLOCK 없이도 빠르게 읽는 방법</h1>
+            <p>RCSI(Read Committed Snapshot Isolation)로 Dirty Read 없이 성능 유지하기</p>
+        </header>
+
+        <!-- 진행 표시 -->
+        <div class="progress-bar">
+            <div class="progress-step active"><span class="num">1</span>NOLOCK 문제</div>
+            <div class="progress-step active"><span class="num">2</span>RCSI 원리</div>
+            <div class="progress-step active"><span class="num">3</span>적용 방법</div>
+            <div class="progress-step active"><span class="num">4</span>장단점</div>
+            <div class="progress-step active"><span class="num">5</span>게임 적용</div>
+            <div class="progress-step active"><span class="num">6</span>마이그레이션</div>
+        </div>
+
+        <!-- Part 1: NOLOCK의 문제 -->
+        <div class="conversation">
+            <h2>Part 1. NOLOCK, 정말 괜찮을까?</h2>
+
+            <div class="chat">
+                <div class="q">게임 서버 쿼리에 WITH (NOLOCK) 왜 다 붙어있어?</div>
+                <div class="a">
+                    <p><span class="highlight">락 경합을 피하려고</span>야.</p>
+                    <p>SELECT가 UPDATE를 기다리면 느려지니까, 락 없이 읽는 거지.</p>
+                </div>
+            </div>
+
+            <div class="code-block">-- 우리 게임 DB의 전형적인 패턴
+SELECT * FROM TCharacter WITH (NOLOCK)
+WHERE i32CharSID = @CharSID;
+
+SELECT * FROM TInventory WITH (NOLOCK)
+WHERE charunique = @CharID;</div>
+
+            <div class="chat">
+                <div class="q">그러면 뭐가 문제야?</div>
+                <div class="a">
+                    <p><span class="warning">Dirty Read</span>가 발생할 수 있어!</p>
+                </div>
+            </div>
+
+            <div class="danger-box">
+                <strong>Dirty Read란?</strong><br><br>
+                <strong>트랜잭션이 아직 커밋하지 않은 데이터를 읽는 것</strong><br><br>
+                예시:<br>
+                1. 트랜잭션 A: 골드 100 → 200으로 UPDATE (아직 COMMIT 안 함)<br>
+                2. 트랜잭션 B: NOLOCK으로 읽음 → 200 반환<br>
+                3. 트랜잭션 A: ROLLBACK (100으로 복구)<br>
+                4. 트랜잭션 B는 <strong>존재하지 않는 200골드를 읽은 것</strong>
+            </div>
+
+            <div class="chat">
+                <div class="q">게임에서 그게 실제로 문제가 될까?</div>
+                <div class="a">
+                    <p>드물지만 <span class="warning">심각한 버그</span>로 이어질 수 있어.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>NOLOCK 문제</th>
+                    <th>결과</th>
+                </tr>
+                <tr>
+                    <td>거래 중 조회</td>
+                    <td class="bad">롤백될 아이템을 읽음</td>
+                    <td>아이템 복사 버그</td>
+                </tr>
+                <tr>
+                    <td>순위 계산 중</td>
+                    <td class="warn">일관성 없는 데이터</td>
+                    <td>순위 꼬임</td>
+                </tr>
+                <tr>
+                    <td>재화 검증</td>
+                    <td class="bad">커밋 안 된 골드 읽음</td>
+                    <td>재화 복사 가능성</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 2: RCSI 원리 -->
+        <div class="conversation">
+            <h2>Part 2. RCSI가 뭔데?</h2>
+
+            <div class="analogy-box">
+                <strong>📸 스냅샷 비유</strong><br><br>
+                <strong>NOLOCK:</strong> "지금 작업 중인 것도 그냥 봐버림" (공사 현장 침입)<br><br>
+                <strong>RCSI:</strong> "마지막으로 완성된 사진을 봄" (완공된 상태 스냅샷)<br><br>
+                RCSI는 <strong>커밋된 버전의 스냅샷</strong>을 읽어!
+            </div>
+
+            <div class="chat">
+                <div class="q">스냅샷을 어떻게 만들어?</div>
+                <div class="a">
+                    <p>SQL Server가 <span class="key-point">TempDB에 이전 버전을 저장</span>해.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+                <pre>
+┌─────────────────────────────────────────────────────┐
+│                 RCSI 동작 원리                       │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  [트랜잭션 A - UPDATE]                              │
+│      골드: 100 → 200 (UPDATE 실행)                  │
+│              ↓                                      │
+│      TempDB에 이전값(100) 저장                      │
+│              ↓                                      │
+│      데이터 페이지에 200 기록                       │
+│                                                     │
+│  [트랜잭션 B - SELECT]                              │
+│      "골드 읽어줘"                                  │
+│              ↓                                      │
+│      A가 아직 COMMIT 안 했네?                       │
+│              ↓                                      │
+│      TempDB에서 커밋된 버전(100) 읽음               │
+│              ↓                                      │
+│      100 반환 ✅ (Dirty Read 없음!)                 │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+                </pre>
+            </div>
+
+            <div class="chat">
+                <div class="q">락은 안 걸려?</div>
+                <div class="a">
+                    <p><span class="key-point">SELECT는 락을 안 걸어.</span></p>
+                    <p>이전 버전을 읽으니까 UPDATE를 기다릴 필요가 없어!</p>
+                </div>
+            </div>
+
+            <div class="result-box">
+                <h4>RCSI의 핵심</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">Dirty Read</div>
+                        <div class="result-value">없음</div>
+                        <div class="result-note">커밋된 버전만 읽음</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">읽기 락</div>
+                        <div class="result-value">없음</div>
+                        <div class="result-note">스냅샷에서 읽음</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">쓰기 대기</div>
+                        <div class="result-value">없음</div>
+                        <div class="result-note">동시 실행 가능</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 적용 방법 -->
+        <div class="conversation">
+            <h2>Part 3. RCSI 켜는 방법</h2>
+
+            <div class="chat">
+                <div class="q">어떻게 적용해?</div>
+                <div class="a">
+                    <p><span class="highlight">DB 레벨에서 한 줄</span>이면 돼.</p>
+                </div>
+            </div>
+
+            <div class="code-block">-- RCSI 활성화 (DB 레벨 설정)
+ALTER DATABASE chosun_game11
+SET READ_COMMITTED_SNAPSHOT ON;
+
+-- 현재 설정 확인
+SELECT name, is_read_committed_snapshot_on
+FROM sys.databases
+WHERE name = 'chosun_game11';</div>
+
+            <div class="warning-box">
+                <strong>주의: 활성화 시 배타적 접근 필요</strong><br><br>
+                • 다른 연결이 없을 때 실행해야 함<br>
+                • 서비스 점검 시간에 적용 권장<br>
+                • 즉시 적용되지만, 기존 트랜잭션은 완료될 때까지 기다림
+            </div>
+
+            <div class="chat">
+                <div class="q">기존 코드는 수정 안 해도 돼?</div>
+                <div class="a">
+                    <p><span class="key-point">코드 수정 없이 동작해!</span></p>
+                    <p>기존 SELECT 쿼리가 자동으로 스냅샷 읽기로 바뀜.</p>
+                </div>
+            </div>
+
+            <div class="code-block">-- RCSI 적용 전
+SELECT * FROM TCharacter WITH (NOLOCK) ...
+-- → Dirty Read 가능
+
+-- RCSI 적용 후 (NOLOCK 없이도 OK)
+SELECT * FROM TCharacter ...
+-- → 커밋된 스냅샷 읽기, 락 없음
+
+-- 기존 NOLOCK 쿼리도 그대로 동작
+SELECT * FROM TCharacter WITH (NOLOCK) ...
+-- → 여전히 동작하지만, 제거 권장</div>
+
+            <div class="info-box">
+                <strong>NOLOCK 제거는 점진적으로</strong><br><br>
+                RCSI 켜도 기존 NOLOCK 코드는 문제없이 동작해.<br>
+                하지만 <strong>새 코드부터 NOLOCK 없이 작성</strong>하고,<br>
+                기존 코드는 리팩토링 시 점진적으로 제거하면 돼.
+            </div>
+        </div>
+
+        <!-- Part 4: 장단점 -->
+        <div class="conversation">
+            <h2>Part 4. RCSI의 장단점</h2>
+
+            <div class="chat">
+                <div class="q">단점은 없어?</div>
+                <div class="a">
+                    <p><span class="warning">TempDB 부하가 증가</span>해.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>NOLOCK</th>
+                    <th>RCSI</th>
+                </tr>
+                <tr>
+                    <td>Dirty Read</td>
+                    <td class="bad">발생 가능</td>
+                    <td class="good">발생 안 함</td>
+                </tr>
+                <tr>
+                    <td>읽기 락</td>
+                    <td class="good">없음</td>
+                    <td class="good">없음</td>
+                </tr>
+                <tr>
+                    <td>데이터 일관성</td>
+                    <td class="bad">보장 안 됨</td>
+                    <td class="good">보장됨</td>
+                </tr>
+                <tr>
+                    <td>TempDB 사용</td>
+                    <td class="good">추가 없음</td>
+                    <td class="warn">버전 저장으로 증가</td>
+                </tr>
+                <tr>
+                    <td>쓰기 오버헤드</td>
+                    <td class="good">없음</td>
+                    <td class="warn">이전 버전 저장</td>
+                </tr>
+                <tr>
+                    <td>코드 수정</td>
+                    <td class="warn">매번 WITH (NOLOCK)</td>
+                    <td class="good">자동 적용</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">TempDB 부하가 많이 늘어?</div>
+                <div class="a">
+                    <p>UPDATE가 많으면 늘어나지만, <span class="highlight">대부분의 게임 DB에서는 감당 가능</span>해.</p>
+                    <p>읽기가 쓰기보다 훨씬 많거든.</p>
+                </div>
+            </div>
+
+            <div class="code-block">-- TempDB 버전 스토어 사용량 확인
+SELECT
+    SUM(version_store_reserved_page_count) * 8 / 1024 AS VersionStoreMB
+FROM sys.dm_db_file_space_usage;
+
+-- 장기 트랜잭션이 버전을 많이 쌓게 하니 주의
+SELECT
+    transaction_id,
+    elapsed_time_seconds
+FROM sys.dm_tran_active_snapshot_database_transactions
+ORDER BY elapsed_time_seconds DESC;</div>
+        </div>
+
+        <!-- Part 5: 게임 서버 적용 -->
+        <div class="conversation">
+            <h2>Part 5. 게임 서버에 적용할 때</h2>
+
+            <div class="chat">
+                <div class="q">우리 게임 DB에 바로 적용해도 돼?</div>
+                <div class="a">
+                    <p>몇 가지 <span class="highlight">사전 점검</span>이 필요해.</p>
+                </div>
+            </div>
+
+            <div class="info-box">
+                <strong>적용 전 체크리스트</strong><br><br>
+                1. <strong>TempDB 디스크 공간</strong>: 여유 있는지 확인 (10~20% 증가 예상)<br>
+                2. <strong>TempDB 성능</strong>: SSD 권장 (버전 스토어 I/O)<br>
+                3. <strong>장기 트랜잭션</strong>: BEGIN TRAN ~ COMMIT이 오래 걸리는 곳 확인<br>
+                4. <strong>테스트 환경</strong>: 먼저 개발 DB에서 테스트
+            </div>
+
+            <div class="chat">
+                <div class="q">장기 트랜잭션이 왜 문제야?</div>
+                <div class="a">
+                    <p>트랜잭션이 끝나야 이전 버전을 정리할 수 있거든.</p>
+                    <p><span class="warning">트랜잭션이 오래 열려있으면 버전이 계속 쌓임</span>.</p>
+                </div>
+            </div>
+
+            <div class="code-block">-- 문제 되는 패턴 (장기 트랜잭션)
+BEGIN TRANSACTION
+    UPDATE TCharacter SET ...
+    -- 여기서 외부 API 호출하느라 10초 대기 ← 문제!
+    UPDATE TInventory SET ...
+COMMIT
+
+-- 개선 패턴 (짧은 트랜잭션)
+-- 외부 API는 트랜잭션 밖에서 호출
+UPDATE TCharacter SET ...  -- 자동 커밋
+-- 외부 API 호출
+UPDATE TInventory SET ...  -- 자동 커밋</div>
+
+            <div class="chat">
+                <div class="q">게임 DB에서 어떤 효과가 있어?</div>
+                <div class="a">
+                    <p><strong>읽기-쓰기 경합이 줄어들어.</strong></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>시나리오</th>
+                    <th>개선 효과</th>
+                </tr>
+                <tr>
+                    <td>캐릭터 저장 + 조회 동시 발생</td>
+                    <td class="good">조회가 저장 완료를 안 기다림</td>
+                </tr>
+                <tr>
+                    <td>랭킹 계산 중 다른 쿼리</td>
+                    <td class="good">락 경합 없이 동시 진행</td>
+                </tr>
+                <tr>
+                    <td>거래 로그 조회 + 기록</td>
+                    <td class="good">일관된 스냅샷으로 조회</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 6: 마이그레이션 전략 -->
+        <div class="conversation">
+            <h2>Part 6. 안전한 마이그레이션 전략</h2>
+
+            <div class="chat">
+                <div class="q">라이브 서비스에 적용하려면?</div>
+                <div class="a">
+                    <p><span class="key-point">단계별로 진행</span>해야 안전해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">-- Phase 1: 테스트 환경에서 검증
+-- 1. 개발 DB에 RCSI 활성화
+ALTER DATABASE chosun_game_dev SET READ_COMMITTED_SNAPSHOT ON;
+
+-- 2. 부하 테스트 실행
+-- 3. TempDB 사용량 모니터링
+-- 4. 성능 비교 (응답 시간, CPU, I/O)
+
+-- Phase 2: 스테이징 환경 적용
+-- 1. 실제 서비스와 유사한 환경에서 테스트
+-- 2. 1주일 이상 안정성 확인
+
+-- Phase 3: 라이브 적용
+-- 1. 점검 시간에 활성화
+ALTER DATABASE chosun_game11 SET READ_COMMITTED_SNAPSHOT ON;
+-- 2. 모니터링 강화 (첫 1주일)
+-- 3. NOLOCK 점진적 제거 (선택)</div>
+
+            <div class="warning-box">
+                <strong>롤백 방법</strong><br><br>
+                문제 발생 시 다시 끌 수 있어:<br>
+                <code>ALTER DATABASE chosun_game11 SET READ_COMMITTED_SNAPSHOT OFF;</code><br><br>
+                단, 활성 트랜잭션이 없어야 함.
+            </div>
+
+            <div class="chat">
+                <div class="q">NOLOCK 코드는 언제 제거해?</div>
+                <div class="a">
+                    <p>RCSI 안정화 후 <span class="highlight">점진적으로 제거</span>해도 돼.</p>
+                    <p>급하지 않아. NOLOCK이 있어도 RCSI가 더 안전하게 동작해.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리: RCSI</h3>
+            <ul>
+                <li><strong>NOLOCK 문제</strong> = Dirty Read (커밋 안 된 데이터 읽음)</li>
+                <li><strong>RCSI</strong> = 커밋된 스냅샷을 읽어서 Dirty Read 방지</li>
+                <li><strong>락 없이 읽기</strong> = NOLOCK처럼 빠르지만 안전함</li>
+                <li><strong>적용 방법</strong> = DB 레벨 설정 한 줄 (코드 수정 불필요)</li>
+                <li><strong>TempDB 부하</strong> = 버전 저장으로 약간 증가</li>
+                <li><strong>장기 트랜잭션</strong> = 피해야 함 (버전 쌓임)</li>
+                <li><strong>마이그레이션</strong> = 테스트 → 스테이징 → 라이브 단계별 적용</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">← DB / 캐시</a>
+            <a href="../../">메인으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
