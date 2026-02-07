@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>커스텀 할당자 & PMR - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 900px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 24px; color: #666; text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
+        .back-link:hover { color: #5E35B1; }
+        .header { margin-bottom: 48px; text-align: center; }
+        .header h1 { font-size: 2.4rem; font-weight: 800; color: #111; margin-bottom: 16px; letter-spacing: -0.02em; }
+        .header p { color: #666; font-size: 1.15rem; }
+        .conversation { background: white; border-radius: 20px; padding: 36px; margin: 28px 0; border: 1px solid #e8e8e8; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+        .conversation h2 { font-size: 1.4rem; color: #5E35B1; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 3px solid #EDE7F6; display: flex; align-items: center; gap: 12px; }
+        .conversation h2::before { content: "💬"; font-size: 1.5rem; }
+        .q { background: linear-gradient(135deg, #EDE7F6 0%, #D1C4E9 100%); border-left: 5px solid #7E57C2; padding: 20px 24px; margin: 20px 0; border-radius: 0 16px 16px 0; font-weight: 600; font-size: 1.1rem; color: #4527A0; }
+        .a { padding: 16px 0 16px 24px; border-left: 3px solid #D1C4E9; margin: 16px 0; }
+        .a p { margin-bottom: 16px; font-size: 1.05rem; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: linear-gradient(135deg, #EDE7F6 0%, #D1C4E9 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #5E35B1; }
+        .key-point { background: linear-gradient(135deg, #D1C4E9 0%, #B39DDB 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #4527A0; }
+        .warning { background: linear-gradient(135deg, #FFCDD2 0%, #EF9A9A 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #B71C1C; }
+        .info-box { background: #EDE7F6; border-radius: 12px; padding: 20px 24px; margin: 20px 0; border-left: 4px solid #7E57C2; }
+        .info-box strong { color: #5E35B1; }
+        .analogy-box { background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%); border-radius: 16px; padding: 24px; margin: 24px 0; border: 2px solid #FFB74D; }
+        .analogy-box h4 { color: #E65100; margin-bottom: 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+        .analogy-box h4::before { content: "💡"; }
+        .step-box { background: #E8F5E9; border-radius: 12px; padding: 20px 24px; margin: 16px 0; border-left: 4px solid #4CAF50; }
+        .step-box h4 { color: #2E7D32; margin-bottom: 12px; }
+        .code-block { background: #1a1a2e; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 0.88rem; color: #E2E8F0; overflow-x: auto; line-height: 1.8; border: 1px solid #2d2d4a; white-space: pre; }
+        .code-block .comment { color: #6A9955; }
+        .code-block .keyword { color: #C586C0; }
+        .code-block .function { color: #DCDCAA; }
+        .code-block .type { color: #4EC9B0; }
+        .code-block .number { color: #B5CEA8; }
+        .code-block .string { color: #CE9178; }
+        .diagram { background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%); border: 2px solid #E2E8F0; border-radius: 16px; padding: 28px; margin: 24px 0; font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 0.85rem; line-height: 1.5; overflow-x: auto; white-space: pre; color: #334155; }
+        .comparison-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.95rem; }
+        .comparison-table th { background: linear-gradient(135deg, #7E57C2 0%, #5E35B1 100%); color: white; padding: 16px; text-align: left; font-weight: 600; }
+        .comparison-table td { padding: 14px 16px; border-bottom: 1px solid #D1C4E9; }
+        .comparison-table tr:nth-child(even) { background: #EDE7F6; }
+        .comparison-table tr:hover { background: #D1C4E9; }
+        .comparison-table .good { background: #C8E6C9; color: #2E7D32; font-weight: 600; }
+        .comparison-table .bad { background: #FFCDD2; color: #C62828; }
+        .comparison-table .neutral { background: #FFF3E0; color: #E65100; }
+        .summary-box { background: linear-gradient(135deg, #7E57C2 0%, #5E35B1 100%); border-radius: 20px; padding: 36px; color: white; margin: 40px 0; box-shadow: 0 4px 20px rgba(126,87,194,0.3); }
+        .summary-box h3 { font-size: 1.4rem; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+        .summary-box h3::before { content: "📝"; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 12px 0; padding-left: 28px; position: relative; font-size: 1.05rem; border-bottom: 1px solid rgba(255,255,255,0.15); }
+        .summary-box li:last-child { border-bottom: none; }
+        .summary-box li::before { content: "✓"; position: absolute; left: 0; color: #B39DDB; font-weight: bold; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 30px; border-top: 2px solid #D1C4E9; }
+        .nav-links a { color: #5E35B1; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 12px; transition: all 0.2s; }
+        .nav-links a:hover { background: #EDE7F6; }
+        .progress-indicator { display: flex; justify-content: center; gap: 8px; margin-bottom: 40px; flex-wrap: wrap; }
+        .progress-dot { width: 12px; height: 12px; border-radius: 50%; background: #D1C4E9; transition: all 0.3s; }
+        .progress-dot.active { background: #7E57C2; transform: scale(1.2); }
+        .progress-dot.completed { background: #5E35B1; }
+        .visual-flow { display: flex; flex-direction: column; gap: 16px; margin: 24px 0; }
+        .flow-step { background: white; border: 2px solid #D1C4E9; border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; }
+        .flow-step.highlight-step { border-color: #7E57C2; background: #EDE7F6; }
+        .flow-number { background: linear-gradient(135deg, #7E57C2 0%, #5E35B1 100%); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+        .flow-arrow { text-align: center; color: #7E57C2; font-size: 1.5rem; }
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.8rem; }
+            .conversation { padding: 24px; }
+            .code-block { padding: 16px; font-size: 0.8rem; }
+            .diagram { padding: 16px; font-size: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../../cpp-modern/" class="back-link">← Modern C++</a>
+
+        <div class="header">
+            <h1>커스텀 할당자 & PMR</h1>
+            <p>게임 서버에서 메모리 할당을 최적화하는 방법</p>
+        </div>
+
+        <div class="progress-indicator">
+            <div class="progress-dot active"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+        </div>
+
+        <!-- Part 1: 왜 커스텀 할당자가 필요해? -->
+        <div class="conversation">
+            <h2>Part 1. 왜 커스텀 할당자가 필요해?</h2>
+
+            <div class="q">new/delete 쓰면 안 돼?</div>
+            <div class="a">
+                <p>쓸 수는 있지만, <span class="warning">게임 서버에서는 문제가 됩니다!</span></p>
+
+                <div class="analogy-box">
+                    <h4>비유: 창고 관리</h4>
+                    <p><strong>new/delete (범용 할당자)</strong> = 대형 창고 관리 회사</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>어떤 크기든 맡아줌 (범용)</li>
+                        <li>빈 공간 찾느라 창고 전체 탐색</li>
+                        <li>물건 크기가 제각각이라 정리가 어려움 (단편화)</li>
+                        <li>여러 사람이 동시에 요청하면 줄 서야 함 (락)</li>
+                    </ul>
+                    <p><strong>커스텀 할당자</strong> = 내 물건 전용 선반</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>같은 크기 물건만 담아서 정리 쉬움</li>
+                        <li>빈 칸 찾기 = O(1)</li>
+                        <li>내 선반이라 기다릴 필요 없음</li>
+                    </ul>
+                </div>
+
+                <div class="diagram">
+new/delete의 문제점:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [1] 할당 비용                                              │
+│  ─────────────────────────────────────────────              │
+│  new → 힙 탐색 → 빈 공간 찾기 → 메타데이터 업데이트        │
+│  비용: ~100-1000 cycles                                     │
+│                                                             │
+│  [2] 멀티스레드 경합                                        │
+│  ─────────────────────────────────────────────              │
+│  Thread A: new ──┐                                          │
+│  Thread B: new ──┼─→ [Lock 대기] → [힙 접근] → [해제]      │
+│  Thread C: new ──┘                                          │
+│  → 동시 할당 시 직렬화됨!                                   │
+│                                                             │
+│  [3] 메모리 단편화                                          │
+│  ─────────────────────────────────────────────              │
+│  할당 전: [        빈 공간        ]                         │
+│  사용 후: [A][빈][BB][빈][C][빈빈빈][D]                     │
+│  → 빈 공간은 있는데 큰 할당 실패!                           │
+│                                                             │
+│  [4] 캐시 비친화적                                          │
+│  ─────────────────────────────────────────────              │
+│  같은 타입 객체들이 메모리에 흩어짐                         │
+│  → Cache Miss 증가                                          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">게임 서버에서 얼마나 문제가 돼?</div>
+            <div class="a">
+                <table class="comparison-table">
+                    <tr>
+                        <th>상황</th>
+                        <th>new/delete</th>
+                        <th>커스텀 할당자</th>
+                    </tr>
+                    <tr>
+                        <td>패킷 100만 개 할당</td>
+                        <td class="bad">~500ms</td>
+                        <td class="good">~10ms</td>
+                    </tr>
+                    <tr>
+                        <td>16스레드 동시 할당</td>
+                        <td class="bad">락 경합 심각</td>
+                        <td class="good">스레드별 풀</td>
+                    </tr>
+                    <tr>
+                        <td>24시간 운영 후</td>
+                        <td class="bad">단편화 심각</td>
+                        <td class="good">단편화 없음</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Part 2: 오브젝트 풀 -->
+        <div class="conversation">
+            <h2>Part 2. 오브젝트 풀 (Object Pool)</h2>
+
+            <div class="q">오브젝트 풀이 뭐야?</div>
+            <div class="a">
+                <p><span class="key-point">미리 만들어두고 재사용!</span> 가장 흔한 커스텀 할당 방식이에요.</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 볼링장 신발</h4>
+                    <p>볼링장에서 신발을 빌려주잖아요?</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>미리 여러 사이즈 신발을 준비 (Pool 초기화)</li>
+                        <li>손님 오면 빈 신발 줌 (Alloc)</li>
+                        <li>손님 가면 신발 회수 (Free)</li>
+                        <li>신발을 새로 사거나 버리지 않음!</li>
+                    </ul>
+                </div>
+
+                <div class="code-block"><span class="comment">// 간단한 오브젝트 풀 구현</span>
+<span class="keyword">template</span><<span class="keyword">typename</span> <span class="type">T</span>, <span class="type">size_t</span> PoolSize = <span class="number">1024</span>>
+<span class="keyword">class</span> <span class="type">ObjectPool</span> {
+    <span class="type">T</span> objects[PoolSize];
+    <span class="type">bool</span> used[PoolSize] = {<span class="keyword">false</span>};
+    <span class="type">size_t</span> nextFree = <span class="number">0</span>;
+
+<span class="keyword">public</span>:
+    <span class="type">T</span>* <span class="function">Alloc</span>() {
+        <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i < PoolSize; i++) {
+            <span class="type">size_t</span> idx = (nextFree + i) % PoolSize;
+            <span class="keyword">if</span> (!used[idx]) {
+                used[idx] = <span class="keyword">true</span>;
+                nextFree = (idx + <span class="number">1</span>) % PoolSize;
+                <span class="keyword">return</span> &objects[idx];
+            }
+        }
+        <span class="keyword">return</span> <span class="keyword">nullptr</span>;  <span class="comment">// 풀 가득 참</span>
+    }
+
+    <span class="keyword">void</span> <span class="function">Free</span>(<span class="type">T</span>* obj) {
+        <span class="type">size_t</span> idx = obj - objects;
+        <span class="keyword">if</span> (idx < PoolSize) {
+            used[idx] = <span class="keyword">false</span>;
+        }
+    }
+};
+
+<span class="comment">// 사용 예시</span>
+<span class="type">ObjectPool</span><<span class="type">Packet</span>, <span class="number">10000</span>> packetPool;
+
+<span class="type">Packet</span>* pkt = packetPool.<span class="function">Alloc</span>();  <span class="comment">// O(1)!</span>
+<span class="comment">// 사용...</span>
+packetPool.<span class="function">Free</span>(pkt);              <span class="comment">// O(1)!</span></div>
+            </div>
+
+            <div class="q">더 효율적인 방법은?</div>
+            <div class="a">
+                <p><span class="highlight">Free List</span>를 사용하면 항상 O(1)!</p>
+
+                <div class="code-block"><span class="comment">// Free List 기반 오브젝트 풀</span>
+<span class="keyword">template</span><<span class="keyword">typename</span> <span class="type">T</span>, <span class="type">size_t</span> PoolSize = <span class="number">1024</span>>
+<span class="keyword">class</span> <span class="type">FreeListPool</span> {
+    <span class="keyword">union</span> <span class="type">Slot</span> {
+        <span class="type">T</span> object;
+        <span class="type">Slot</span>* next;  <span class="comment">// 비어있을 때: 다음 빈 슬롯 포인터</span>
+    };
+
+    <span class="type">Slot</span> slots[PoolSize];
+    <span class="type">Slot</span>* freeList = <span class="keyword">nullptr</span>;
+
+<span class="keyword">public</span>:
+    <span class="function">FreeListPool</span>() {
+        <span class="comment">// 초기화: 모든 슬롯을 연결 리스트로</span>
+        <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i < PoolSize - <span class="number">1</span>; i++) {
+            slots[i].next = &slots[i + <span class="number">1</span>];
+        }
+        slots[PoolSize - <span class="number">1</span>].next = <span class="keyword">nullptr</span>;
+        freeList = &slots[<span class="number">0</span>];
+    }
+
+    <span class="type">T</span>* <span class="function">Alloc</span>() {
+        <span class="keyword">if</span> (!freeList) <span class="keyword">return</span> <span class="keyword">nullptr</span>;
+
+        <span class="type">Slot</span>* slot = freeList;
+        freeList = slot->next;
+        <span class="keyword">return</span> <span class="keyword">new</span>(&slot->object) <span class="type">T</span>();  <span class="comment">// placement new</span>
+    }
+
+    <span class="keyword">void</span> <span class="function">Free</span>(<span class="type">T</span>* obj) {
+        obj->~<span class="type">T</span>();  <span class="comment">// 소멸자 호출</span>
+        <span class="type">Slot</span>* slot = <span class="keyword">reinterpret_cast</span><<span class="type">Slot</span>*>(obj);
+        slot->next = freeList;
+        freeList = slot;
+    }
+};</div>
+
+                <div class="diagram">
+Free List 동작:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [초기 상태]                                                │
+│  freeList → [0] → [1] → [2] → [3] → [4] → nullptr          │
+│                                                             │
+│  [Alloc() 3번 호출 후]                                      │
+│  freeList → [3] → [4] → nullptr                             │
+│             [0] [1] [2] 사용 중                              │
+│                                                             │
+│  [Free([1]) 호출]                                           │
+│  freeList → [1] → [3] → [4] → nullptr                       │
+│             ^                                               │
+│             반환된 슬롯이 맨 앞으로!                         │
+│                                                             │
+│  → Alloc: O(1) - 맨 앞에서 꺼냄                             │
+│  → Free:  O(1) - 맨 앞에 추가                               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <!-- Part 3: 스택 할당자 -->
+        <div class="conversation">
+            <h2>Part 3. 스택/선형 할당자</h2>
+
+            <div class="q">스택 할당자는 뭐야?</div>
+            <div class="a">
+                <p><span class="key-point">순차적으로 할당하고, 한 번에 리셋!</span></p>
+
+                <div class="analogy-box">
+                    <h4>비유: 칠판에 글쓰기</h4>
+                    <p>칠판에 왼쪽부터 쭉 글을 써나가다가...</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>중간에 지우기 어려움</li>
+                        <li>대신 한 번에 싹 지우면 끝!</li>
+                        <li>매 프레임 시작할 때 칠판을 지우고 새로 시작</li>
+                    </ul>
+                </div>
+
+                <div class="code-block"><span class="comment">// 스택/선형 할당자</span>
+<span class="keyword">class</span> <span class="type">StackAllocator</span> {
+    <span class="type">char</span>* buffer;
+    <span class="type">size_t</span> capacity;
+    <span class="type">size_t</span> offset = <span class="number">0</span>;
+
+<span class="keyword">public</span>:
+    <span class="function">StackAllocator</span>(<span class="type">size_t</span> size) {
+        buffer = <span class="keyword">new</span> <span class="type">char</span>[size];
+        capacity = size;
+    }
+
+    <span class="keyword">void</span>* <span class="function">Alloc</span>(<span class="type">size_t</span> size, <span class="type">size_t</span> alignment = <span class="number">8</span>) {
+        <span class="comment">// 정렬</span>
+        <span class="type">size_t</span> alignedOffset = (offset + alignment - <span class="number">1</span>) & ~(alignment - <span class="number">1</span>);
+
+        <span class="keyword">if</span> (alignedOffset + size > capacity)
+            <span class="keyword">return</span> <span class="keyword">nullptr</span>;  <span class="comment">// 공간 부족</span>
+
+        <span class="keyword">void</span>* ptr = buffer + alignedOffset;
+        offset = alignedOffset + size;
+        <span class="keyword">return</span> ptr;
+    }
+
+    <span class="keyword">void</span> <span class="function">Reset</span>() {
+        offset = <span class="number">0</span>;  <span class="comment">// 한 번에 리셋! O(1)!</span>
+    }
+
+    ~<span class="function">StackAllocator</span>() {
+        <span class="keyword">delete</span>[] buffer;
+    }
+};
+
+<span class="comment">// 사용 예시: 프레임 임시 데이터</span>
+<span class="type">StackAllocator</span> frameAlloc(<span class="number">1024</span> * <span class="number">1024</span>);  <span class="comment">// 1MB</span>
+
+<span class="keyword">void</span> <span class="function">OnFrame</span>() {
+    <span class="comment">// 프레임 동안 임시 할당</span>
+    <span class="keyword">auto</span>* temp1 = frameAlloc.<span class="function">Alloc</span>(<span class="number">1000</span>);
+    <span class="keyword">auto</span>* temp2 = frameAlloc.<span class="function">Alloc</span>(<span class="number">500</span>);
+    <span class="comment">// 사용...</span>
+
+    <span class="comment">// 프레임 끝: 한 번에 정리!</span>
+    frameAlloc.<span class="function">Reset</span>();
+}</div>
+
+                <div class="info-box">
+                    <strong>스택 할당자 특징</strong><br>
+                    • 할당: O(1) - 포인터 증가만<br>
+                    • 개별 해제: 불가능 (또는 LIFO 순서만)<br>
+                    • 리셋: O(1) - 포인터만 0으로<br>
+                    • 용도: 프레임 임시 데이터, 파티클 시스템
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: PMR (Polymorphic Memory Resource) -->
+        <div class="conversation">
+            <h2>Part 4. PMR - C++17의 선물</h2>
+
+            <div class="q">PMR이 뭐야?</div>
+            <div class="a">
+                <p><span class="key-point">표준 라이브러리에서 커스텀 할당자를 쉽게 쓰게 해주는 것!</span></p>
+
+                <div class="analogy-box">
+                    <h4>비유: USB 포트</h4>
+                    <p>예전에는 각 기기마다 전용 케이블이 필요했어요.</p>
+                    <p>USB가 나오면서? → 아무 기기나 꽂으면 됨!</p>
+                    <p style="margin-top: 12px;">PMR = 메모리 할당자의 "USB 표준"</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>어떤 할당자든 같은 인터페이스</li>
+                        <li>STL 컨테이너에 바로 연결 가능</li>
+                    </ul>
+                </div>
+
+                <div class="code-block"><span class="comment">// PMR 기본 사용법</span>
+#include <memory_resource>
+#include <vector>
+
+<span class="comment">// 스택 버퍼 사용</span>
+<span class="type">char</span> buffer[<span class="number">1024</span>];
+std::pmr::monotonic_buffer_resource pool{buffer, <span class="keyword">sizeof</span>(buffer)};
+
+<span class="comment">// PMR 버전 vector - 커스텀 메모리 사용!</span>
+std::pmr::vector<<span class="type">int</span>> numbers{&pool};
+
+numbers.<span class="function">push_back</span>(<span class="number">1</span>);  <span class="comment">// buffer에서 할당!</span>
+numbers.<span class="function">push_back</span>(<span class="number">2</span>);  <span class="comment">// 힙 할당 없음!</span>
+
+<span class="comment">// 여러 컨테이너가 같은 메모리 풀 공유</span>
+std::pmr::string str{&pool};
+std::pmr::map<<span class="type">int</span>, std::pmr::string> map{&pool};</div>
+            </div>
+
+            <div class="q">PMR의 종류는?</div>
+            <div class="a">
+                <table class="comparison-table">
+                    <tr>
+                        <th>Memory Resource</th>
+                        <th>특징</th>
+                        <th>용도</th>
+                    </tr>
+                    <tr>
+                        <td><strong>monotonic_buffer_resource</strong></td>
+                        <td>스택 할당자, 리셋만 가능</td>
+                        <td>프레임 임시 데이터</td>
+                    </tr>
+                    <tr>
+                        <td><strong>unsynchronized_pool_resource</strong></td>
+                        <td>싱글스레드 풀</td>
+                        <td>스레드 로컬 할당</td>
+                    </tr>
+                    <tr>
+                        <td><strong>synchronized_pool_resource</strong></td>
+                        <td>멀티스레드 풀</td>
+                        <td>공유 데이터</td>
+                    </tr>
+                    <tr>
+                        <td><strong>new_delete_resource</strong></td>
+                        <td>기본 new/delete</td>
+                        <td>fallback</td>
+                    </tr>
+                </table>
+
+                <div class="code-block"><span class="comment">// monotonic_buffer_resource - 프레임 할당용</span>
+<span class="keyword">class</span> <span class="type">FrameAllocator</span> {
+    <span class="type">char</span> buffer[<span class="number">1024</span> * <span class="number">1024</span>];  <span class="comment">// 1MB</span>
+    std::pmr::monotonic_buffer_resource resource{buffer, <span class="keyword">sizeof</span>(buffer)};
+
+<span class="keyword">public</span>:
+    std::pmr::memory_resource* <span class="function">Get</span>() { <span class="keyword">return</span> &resource; }
+
+    <span class="keyword">void</span> <span class="function">Reset</span>() {
+        resource.release();  <span class="comment">// 한 번에 해제!</span>
+    }
+};
+
+<span class="comment">// 게임 루프에서 사용</span>
+<span class="type">FrameAllocator</span> frameAlloc;
+
+<span class="keyword">void</span> <span class="function">GameLoop</span>() {
+    <span class="keyword">while</span> (running) {
+        <span class="comment">// 프레임 시작</span>
+        std::pmr::vector<<span class="type">Enemy</span>*> visibleEnemies{frameAlloc.<span class="function">Get</span>()};
+        std::pmr::string debugInfo{frameAlloc.<span class="function">Get</span>()};
+
+        <span class="comment">// 게임 로직...</span>
+
+        <span class="comment">// 프레임 끝: 모든 메모리 한 번에 해제</span>
+        frameAlloc.<span class="function">Reset</span>();
+    }
+}</div>
+            </div>
+        </div>
+
+        <!-- Part 5: 실전 패턴 -->
+        <div class="conversation">
+            <h2>Part 5. 게임 서버 실전 패턴</h2>
+
+            <div class="q">실제로 어떻게 조합해서 써?</div>
+            <div class="a">
+                <div class="diagram">
+게임 서버 메모리 구조:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [영구 데이터] - 전역 할당자                                │
+│  ─────────────────────────────────────────────              │
+│  • 플레이어 정보, 아이템 DB                                 │
+│  • 서버 시작 시 할당, 종료 시 해제                          │
+│  • synchronized_pool_resource 또는 new/delete               │
+│                                                             │
+│  [세션 데이터] - 세션별 풀                                  │
+│  ─────────────────────────────────────────────              │
+│  • 접속 중인 플레이어 상태                                  │
+│  • 세션 시작 시 풀 생성, 종료 시 풀 해제                    │
+│  • unsynchronized_pool_resource (세션별)                    │
+│                                                             │
+│  [프레임 데이터] - 스택 할당자                              │
+│  ─────────────────────────────────────────────              │
+│  • 임시 계산, 디버그 정보                                   │
+│  • 매 프레임 리셋                                           │
+│  • monotonic_buffer_resource                                │
+│                                                             │
+│  [패킷 데이터] - 오브젝트 풀                                │
+│  ─────────────────────────────────────────────              │
+│  • 네트워크 패킷                                            │
+│  • 고정 크기, 대량 생성/소멸                                │
+│  • Free List 기반 Object Pool                               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">코드로 보여줘!</div>
+            <div class="a">
+                <div class="code-block"><span class="comment">// 게임 서버 메모리 매니저</span>
+<span class="keyword">class</span> <span class="type">MemoryManager</span> {
+    <span class="comment">// 패킷 풀</span>
+    <span class="type">FreeListPool</span><<span class="type">Packet</span>, <span class="number">100000</span>> packetPool;
+
+    <span class="comment">// 프레임 할당자 (스레드별)</span>
+    <span class="keyword">thread_local</span> <span class="keyword">static</span> <span class="type">char</span> frameBuffer[<span class="number">1</span> * <span class="number">1024</span> * <span class="number">1024</span>];
+    <span class="keyword">thread_local</span> <span class="keyword">static</span> std::pmr::monotonic_buffer_resource frameResource;
+
+<span class="keyword">public</span>:
+    <span class="comment">// 패킷 할당</span>
+    <span class="type">Packet</span>* <span class="function">AllocPacket</span>() {
+        <span class="keyword">return</span> packetPool.<span class="function">Alloc</span>();
+    }
+
+    <span class="keyword">void</span> <span class="function">FreePacket</span>(<span class="type">Packet</span>* pkt) {
+        packetPool.<span class="function">Free</span>(pkt);
+    }
+
+    <span class="comment">// 프레임 할당자 얻기</span>
+    std::pmr::memory_resource* <span class="function">GetFrameAllocator</span>() {
+        <span class="keyword">return</span> &frameResource;
+    }
+
+    <span class="comment">// 프레임 끝에 호출</span>
+    <span class="keyword">void</span> <span class="function">ResetFrameAllocator</span>() {
+        frameResource.release();
+        <span class="keyword">new</span>(&frameResource) std::pmr::monotonic_buffer_resource{
+            frameBuffer, <span class="keyword">sizeof</span>(frameBuffer)
+        };
+    }
+};
+
+<span class="comment">// 사용 예시</span>
+<span class="type">MemoryManager</span> g_memoryManager;
+
+<span class="keyword">void</span> <span class="function">ProcessPacket</span>() {
+    <span class="type">Packet</span>* pkt = g_memoryManager.<span class="function">AllocPacket</span>();
+    <span class="comment">// 처리...</span>
+    g_memoryManager.<span class="function">FreePacket</span>(pkt);
+}
+
+<span class="keyword">void</span> <span class="function">OnFrame</span>() {
+    <span class="keyword">auto</span>* alloc = g_memoryManager.<span class="function">GetFrameAllocator</span>();
+    std::pmr::vector<<span class="type">int</span>> tempData{alloc};
+    <span class="comment">// 프레임 작업...</span>
+
+    g_memoryManager.<span class="function">ResetFrameAllocator</span>();
+}</div>
+            </div>
+        </div>
+
+        <!-- Part 6: 성능 측정 -->
+        <div class="conversation">
+            <h2>Part 6. 성능 측정</h2>
+
+            <div class="q">실제로 얼마나 빨라져?</div>
+            <div class="a">
+                <table class="comparison-table">
+                    <tr>
+                        <th>작업</th>
+                        <th>new/delete</th>
+                        <th>Object Pool</th>
+                        <th>개선율</th>
+                    </tr>
+                    <tr>
+                        <td>단일 할당</td>
+                        <td>~200 cycles</td>
+                        <td class="good">~20 cycles</td>
+                        <td class="good">10x</td>
+                    </tr>
+                    <tr>
+                        <td>100만 할당/해제</td>
+                        <td>~500ms</td>
+                        <td class="good">~50ms</td>
+                        <td class="good">10x</td>
+                    </tr>
+                    <tr>
+                        <td>16스레드 동시</td>
+                        <td class="bad">락 경합</td>
+                        <td class="good">스레드별 풀</td>
+                        <td class="good">20x+</td>
+                    </tr>
+                </table>
+
+                <div class="info-box">
+                    <strong>측정 팁</strong><br>
+                    • 단일 호출보다 <strong>패턴</strong>을 측정 (100만 회 루프)<br>
+                    • 멀티스레드 환경에서 <strong>경합</strong> 측정<br>
+                    • 장시간 운영 후 <strong>단편화</strong> 확인<br>
+                    • 실제 워크로드와 유사하게 테스트
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 7: 면접 대비 -->
+        <div class="conversation">
+            <h2>Part 7. 면접에서 물어보면?</h2>
+
+            <div class="q">"커스텀 할당자를 써본 적 있나요?"</div>
+            <div class="a">
+                <div class="step-box">
+                    <h4>✅ 핵심 답변 포인트</h4>
+
+                    <p><strong>1. 필요성 설명</strong></p>
+                    <p style="margin-left: 20px;">"new/delete는 범용이라 할당 비용, 멀티스레드 락, 단편화 문제가 있습니다. 게임 서버처럼 대량의 동일 객체를 다루면 커스텀 할당자가 유리합니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>2. 종류별 설명</strong></p>
+                    <p style="margin-left: 20px;">"오브젝트 풀은 고정 크기 객체용, 스택 할당자는 프레임 임시 데이터용, PMR은 표준 컨테이너와 통합용으로 사용합니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>3. 실제 경험</strong></p>
+                    <p style="margin-left: 20px;">"패킷 처리에 오브젝트 풀을 적용해서 할당 시간을 10배 개선했습니다." (경험 있다면)</p>
+
+                    <p style="margin-top: 16px;"><strong>4. 트레이드오프</strong></p>
+                    <p style="margin-left: 20px;">"메모리를 미리 예약해야 해서 초기 메모리 사용량이 증가합니다. 풀 크기 튜닝이 필요합니다."</p>
+                </div>
+            </div>
+
+            <div class="q">핵심 숫자는?</div>
+            <div class="a">
+                <div class="diagram">
+핵심 숫자 정리:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [할당 비용]                                                │
+│  • new/delete: ~100-1000 cycles                             │
+│  • Object Pool: ~10-20 cycles                               │
+│  • Stack Allocator: ~5 cycles                               │
+│                                                             │
+│  [멀티스레드]                                               │
+│  • 전역 힙 락: ~1000+ cycles (경합 시)                      │
+│  • 스레드 로컬 풀: 락 없음                                  │
+│                                                             │
+│  [메모리 오버헤드]                                          │
+│  • new/delete: 16~32바이트/할당 (메타데이터)               │
+│  • Object Pool: 0바이트 (미리 할당)                         │
+│                                                             │
+│  [개선 효과]                                                │
+│  • 할당 속도: 10~50배 개선                                  │
+│  • 멀티스레드: 20배+ 개선 (락 제거)                         │
+│  • 단편화: 완전 제거 (풀 방식)                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>new/delete 문제</strong>: 느린 할당, 락 경합, 단편화</li>
+                <li><strong>오브젝트 풀</strong>: 고정 크기, Free List로 O(1) 할당/해제</li>
+                <li><strong>스택 할당자</strong>: 순차 할당, 한 번에 리셋 (프레임 데이터)</li>
+                <li><strong>PMR</strong>: C++17 표준, STL과 쉽게 통합</li>
+                <li><strong>monotonic_buffer_resource</strong>: 프레임 임시 할당용</li>
+                <li><strong>실전 패턴</strong>: 패킷=풀, 프레임=스택, 영구=표준</li>
+                <li><strong>성능 개선</strong>: 할당 10배, 멀티스레드 20배+</li>
+                <li><strong>트레이드오프</strong>: 초기 메모리 예약 필요, 풀 크기 튜닝</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../exception-vs-error-code/">← 예외 vs 에러코드</a>
+            <a href="../lua/">Lua 스크립팅 →</a>
+        </div>
+    </div>
+</body>
+</html>

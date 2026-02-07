@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>예외 처리 vs 에러 코드 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 900px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 24px; color: #666; text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
+        .back-link:hover { color: #E65100; }
+        .header { margin-bottom: 48px; text-align: center; }
+        .header h1 { font-size: 2.4rem; font-weight: 800; color: #111; margin-bottom: 16px; letter-spacing: -0.02em; }
+        .header p { color: #666; font-size: 1.15rem; }
+        .conversation { background: white; border-radius: 20px; padding: 36px; margin: 28px 0; border: 1px solid #e8e8e8; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+        .conversation h2 { font-size: 1.4rem; color: #E65100; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 3px solid #FFF3E0; display: flex; align-items: center; gap: 12px; }
+        .conversation h2::before { content: "💬"; font-size: 1.5rem; }
+        .q { background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%); border-left: 5px solid #FF9800; padding: 20px 24px; margin: 20px 0; border-radius: 0 16px 16px 0; font-weight: 600; font-size: 1.1rem; color: #E65100; }
+        .a { padding: 16px 0 16px 24px; border-left: 3px solid #FFE0B2; margin: 16px 0; }
+        .a p { margin-bottom: 16px; font-size: 1.05rem; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #E65100; }
+        .key-point { background: linear-gradient(135deg, #FFE0B2 0%, #FFCC80 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #BF360C; }
+        .warning { background: linear-gradient(135deg, #FFCDD2 0%, #EF9A9A 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #B71C1C; }
+        .info-box { background: #FFF3E0; border-radius: 12px; padding: 20px 24px; margin: 20px 0; border-left: 4px solid #FF9800; }
+        .info-box strong { color: #E65100; }
+        .analogy-box { background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); border-radius: 16px; padding: 24px; margin: 24px 0; border: 2px solid #64B5F6; }
+        .analogy-box h4 { color: #1565C0; margin-bottom: 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+        .analogy-box h4::before { content: "💡"; }
+        .step-box { background: #E8F5E9; border-radius: 12px; padding: 20px 24px; margin: 16px 0; border-left: 4px solid #4CAF50; }
+        .step-box h4 { color: #2E7D32; margin-bottom: 12px; }
+        .code-block { background: #1a1a2e; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 0.88rem; color: #E2E8F0; overflow-x: auto; line-height: 1.8; border: 1px solid #2d2d4a; white-space: pre; }
+        .code-block .comment { color: #6A9955; }
+        .code-block .keyword { color: #C586C0; }
+        .code-block .function { color: #DCDCAA; }
+        .code-block .type { color: #4EC9B0; }
+        .code-block .number { color: #B5CEA8; }
+        .code-block .string { color: #CE9178; }
+        .diagram { background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%); border: 2px solid #E2E8F0; border-radius: 16px; padding: 28px; margin: 24px 0; font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 0.85rem; line-height: 1.5; overflow-x: auto; white-space: pre; color: #334155; }
+        .comparison-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.95rem; }
+        .comparison-table th { background: linear-gradient(135deg, #FF9800 0%, #E65100 100%); color: white; padding: 16px; text-align: left; font-weight: 600; }
+        .comparison-table td { padding: 14px 16px; border-bottom: 1px solid #FFE0B2; }
+        .comparison-table tr:nth-child(even) { background: #FFF3E0; }
+        .comparison-table tr:hover { background: #FFE0B2; }
+        .comparison-table .good { background: #C8E6C9; color: #2E7D32; font-weight: 600; }
+        .comparison-table .bad { background: #FFCDD2; color: #C62828; }
+        .comparison-table .neutral { background: #FFF3E0; color: #E65100; }
+        .summary-box { background: linear-gradient(135deg, #FF9800 0%, #E65100 100%); border-radius: 20px; padding: 36px; color: white; margin: 40px 0; box-shadow: 0 4px 20px rgba(255,152,0,0.3); }
+        .summary-box h3 { font-size: 1.4rem; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+        .summary-box h3::before { content: "📝"; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 12px 0; padding-left: 28px; position: relative; font-size: 1.05rem; border-bottom: 1px solid rgba(255,255,255,0.15); }
+        .summary-box li:last-child { border-bottom: none; }
+        .summary-box li::before { content: "✓"; position: absolute; left: 0; color: #FFCC80; font-weight: bold; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 30px; border-top: 2px solid #FFE0B2; }
+        .nav-links a { color: #E65100; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 12px; transition: all 0.2s; }
+        .nav-links a:hover { background: #FFF3E0; }
+        .progress-indicator { display: flex; justify-content: center; gap: 8px; margin-bottom: 40px; flex-wrap: wrap; }
+        .progress-dot { width: 12px; height: 12px; border-radius: 50%; background: #FFE0B2; transition: all 0.3s; }
+        .progress-dot.active { background: #FF9800; transform: scale(1.2); }
+        .progress-dot.completed { background: #E65100; }
+        .visual-flow { display: flex; flex-direction: column; gap: 16px; margin: 24px 0; }
+        .flow-step { background: white; border: 2px solid #FFE0B2; border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; }
+        .flow-step.highlight-step { border-color: #FF9800; background: #FFF3E0; }
+        .flow-number { background: linear-gradient(135deg, #FF9800 0%, #E65100 100%); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+        .flow-arrow { text-align: center; color: #FF9800; font-size: 1.5rem; }
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.8rem; }
+            .conversation { padding: 24px; }
+            .code-block { padding: 16px; font-size: 0.8rem; }
+            .diagram { padding: 16px; font-size: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../../cpp-modern/" class="back-link">← Modern C++</a>
+
+        <div class="header">
+            <h1>예외 처리 vs 에러 코드</h1>
+            <p>게임 서버에서 에러를 다루는 두 가지 철학</p>
+        </div>
+
+        <div class="progress-indicator">
+            <div class="progress-dot active"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+        </div>
+
+        <!-- Part 1: 에러 처리가 왜 중요해? -->
+        <div class="conversation">
+            <h2>Part 1. 에러 처리가 왜 중요해?</h2>
+
+            <div class="q">에러 처리를 왜 그렇게 신경 써?</div>
+            <div class="a">
+                <p><span class="highlight">게임 서버에서 에러 = 유저 이탈</span>이기 때문이에요!</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 놀이공원 운영</h4>
+                    <p><strong>에러가 발생했을 때...</strong></p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li><strong>무시</strong>: 롤러코스터가 고장났는데 계속 운영 → 사고!</li>
+                        <li><strong>모두 정지</strong>: 한 기구 고장에 전체 놀이공원 폐쇄 → 과잉 대응</li>
+                        <li><strong>적절한 처리</strong>: 해당 기구만 정지, 대기열 안내, 나머지 정상 운영</li>
+                    </ul>
+                    <p style="margin-top: 12px;">게임 서버도 마찬가지! <strong>어떤 에러를 어떻게 처리할지</strong>가 중요해요.</p>
+                </div>
+
+                <div class="diagram">
+에러 처리 실패의 결과:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [에러 무시]                                                │
+│  • 데이터 손상                                              │
+│  • 보안 취약점                                              │
+│  • 유저 불만 폭발                                           │
+│                                                             │
+│  [과잉 대응 - 서버 크래시]                                  │
+│  • 모든 유저 강제 종료                                      │
+│  • 매출 손실                                                │
+│  • 유저 이탈                                                │
+│                                                             │
+│  [적절한 처리]                                              │
+│  • 문제 있는 요청만 거절                                    │
+│  • 에러 로깅                                                │
+│  • 다른 유저는 정상 플레이                                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">에러 처리 방법이 뭐가 있어?</div>
+            <div class="a">
+                <p>크게 <span class="highlight">두 가지 철학</span>이 있어요.</p>
+
+                <table class="comparison-table">
+                    <tr>
+                        <th>방식</th>
+                        <th>특징</th>
+                        <th>예시 언어</th>
+                    </tr>
+                    <tr>
+                        <td><strong>예외 (Exception)</strong></td>
+                        <td>에러 발생 시 특별한 경로로 탈출</td>
+                        <td>Java, C#, Python, C++</td>
+                    </tr>
+                    <tr>
+                        <td><strong>에러 코드</strong></td>
+                        <td>반환값으로 성공/실패 전달</td>
+                        <td>C, Go, Rust (Result)</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Part 2: 예외 처리가 뭐야? -->
+        <div class="conversation">
+            <h2>Part 2. 예외(Exception)란?</h2>
+
+            <div class="q">예외가 정확히 뭐야?</div>
+            <div class="a">
+                <p><span class="key-point">"정상적인 흐름"을 벗어난 상황을 처리하는 메커니즘</span>이에요.</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 긴급 탈출구</h4>
+                    <p><strong>일반 코드</strong> = 건물의 복도 (정상 이동)</p>
+                    <p><strong>예외</strong> = 비상구로 바로 탈출!</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>복도(일반 코드)를 따라가지 않고</li>
+                        <li>바로 비상구(catch 블록)로 점프!</li>
+                    </ul>
+                </div>
+
+                <div class="code-block"><span class="comment">// 예외 기본 사용법</span>
+<span class="keyword">void</span> <span class="function">ProcessPayment</span>(<span class="type">int</span> amount) {
+    <span class="keyword">if</span> (amount <= <span class="number">0</span>) {
+        <span class="keyword">throw</span> std::invalid_argument(<span class="string">"금액이 잘못됨!"</span>);
+    }
+    <span class="keyword">if</span> (amount > userBalance) {
+        <span class="keyword">throw</span> std::runtime_error(<span class="string">"잔액 부족!"</span>);
+    }
+    <span class="comment">// 정상 처리...</span>
+}
+
+<span class="comment">// 호출 측</span>
+<span class="keyword">try</span> {
+    <span class="function">ProcessPayment</span>(<span class="number">1000</span>);
+    <span class="function">SendItem</span>();
+    <span class="function">SaveToDB</span>();
+} <span class="keyword">catch</span> (<span class="keyword">const</span> std::invalid_argument& e) {
+    <span class="function">Log</span>(<span class="string">"입력 에러: %s"</span>, e.<span class="function">what</span>());
+} <span class="keyword">catch</span> (<span class="keyword">const</span> std::exception& e) {
+    <span class="function">Log</span>(<span class="string">"에러 발생: %s"</span>, e.<span class="function">what</span>());
+}</div>
+
+                <div class="diagram">
+예외 발생 시 스택 언와인딩:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  호출 스택:                                                 │
+│                                                             │
+│  ┌─────────────────────┐                                    │
+│  │ ProcessPayment()    │ ← throw! 예외 발생!               │
+│  └─────────────────────┘                                    │
+│           ↑                                                 │
+│  ┌─────────────────────┐                                    │
+│  │ SendItem()          │ ← 건너뜀!                         │
+│  └─────────────────────┘                                    │
+│           ↑                                                 │
+│  ┌─────────────────────┐                                    │
+│  │ SaveToDB()          │ ← 건너뜀!                         │
+│  └─────────────────────┘                                    │
+│           ↑                                                 │
+│  ┌─────────────────────┐                                    │
+│  │ try { ... }         │                                    │
+│  │ catch (exception)   │ ← 여기로 바로 점프!               │
+│  └─────────────────────┘                                    │
+│                                                             │
+│  스택 언와인딩 중:                                          │
+│  • 각 함수의 지역 변수 소멸자 호출                          │
+│  • RAII 객체 정리 (파일 닫기, 락 해제 등)                   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <!-- Part 3: 예외의 비용 -->
+        <div class="conversation">
+            <h2>Part 3. 예외의 비용</h2>
+
+            <div class="q">예외가 느리다고 하던데?</div>
+            <div class="a">
+                <p><span class="highlight">"예외를 던지면" 느려요. 그냥 try-catch는 거의 공짜!</span></p>
+
+                <div class="diagram">
+예외 비용 분석 (Zero-Cost Exception Model):
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [예외가 발생하지 않을 때]                                  │
+│  ─────────────────────────────────────────────              │
+│  try {                                                      │
+│      NormalCode();  // 추가 비용 거의 0!                    │
+│  } catch (...) { }                                          │
+│                                                             │
+│  컴파일러가 정상 경로는 최적화                              │
+│  테이블 기반으로 예외 처리 정보만 저장                      │
+│  → <span class="key-point">정상 경로 비용: ~0</span>                                      │
+│                                                             │
+│  [예외가 발생했을 때]                                       │
+│  ─────────────────────────────────────────────              │
+│  throw exception;                                           │
+│                                                             │
+│  1. 예외 객체 생성 (힙 할당 가능)                           │
+│  2. 스택 언와인딩 (각 프레임 정리)                          │
+│  3. catch 블록 탐색                                         │
+│  4. 핸들러 실행                                             │
+│  → <span class="warning">비용: 수천~수만 cycles</span>                                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">구체적으로 얼마나 느려?</div>
+            <div class="a">
+                <table class="comparison-table">
+                    <tr>
+                        <th>상황</th>
+                        <th>비용</th>
+                        <th>비고</th>
+                    </tr>
+                    <tr>
+                        <td>try 블록 (예외 없음)</td>
+                        <td class="good">~0 cycles</td>
+                        <td>Zero-cost</td>
+                    </tr>
+                    <tr>
+                        <td>예외 throw</td>
+                        <td class="bad">~10,000 cycles</td>
+                        <td>스택 언와인딩</td>
+                    </tr>
+                    <tr>
+                        <td>에러 코드 반환</td>
+                        <td class="good">~1-5 cycles</td>
+                        <td>그냥 return</td>
+                    </tr>
+                    <tr>
+                        <td>에러 코드 검사</td>
+                        <td class="neutral">~2 cycles</td>
+                        <td>조건문</td>
+                    </tr>
+                </table>
+
+                <div class="info-box">
+                    <strong>핵심 결론</strong><br>
+                    • 예외가 <strong>"예외적"일 때</strong>: 예외 사용 OK (더 깔끔한 코드)<br>
+                    • 예외가 <strong>"자주 발생"할 때</strong>: 에러 코드가 낫다<br>
+                    • 게임 서버: 대부분 에러는 <strong>예상 가능</strong>해서 에러 코드 선호
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 에러 코드 방식 -->
+        <div class="conversation">
+            <h2>Part 4. 에러 코드 방식</h2>
+
+            <div class="q">에러 코드가 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">함수 반환값으로 성공/실패를 알려주는 방식</span>이에요!</p>
+
+                <div class="code-block"><span class="comment">// 에러 코드 정의</span>
+<span class="keyword">enum class</span> <span class="type">ErrorCode</span> {
+    Success = <span class="number">0</span>,
+    InvalidAmount,
+    InsufficientBalance,
+    ItemNotFound,
+    InventoryFull,
+    NetworkError,
+    DatabaseError
+};
+
+<span class="comment">// 함수에서 에러 코드 반환</span>
+<span class="type">ErrorCode</span> <span class="function">ProcessPayment</span>(<span class="type">int</span> amount) {
+    <span class="keyword">if</span> (amount <= <span class="number">0</span>)
+        <span class="keyword">return</span> <span class="type">ErrorCode</span>::InvalidAmount;
+
+    <span class="keyword">if</span> (amount > userBalance)
+        <span class="keyword">return</span> <span class="type">ErrorCode</span>::InsufficientBalance;
+
+    <span class="comment">// 처리...</span>
+    <span class="keyword">return</span> <span class="type">ErrorCode</span>::Success;
+}
+
+<span class="comment">// 호출 측</span>
+<span class="type">ErrorCode</span> result = <span class="function">ProcessPayment</span>(<span class="number">1000</span>);
+<span class="keyword">if</span> (result != <span class="type">ErrorCode</span>::Success) {
+    <span class="function">HandleError</span>(result);
+    <span class="keyword">return</span>;
+}
+<span class="comment">// 성공 시 다음 로직...</span></div>
+            </div>
+
+            <div class="q">에러 코드의 문제점은?</div>
+            <div class="a">
+                <p><span class="warning">무시하기 쉽고, 코드가 지저분해질 수 있어요!</span></p>
+
+                <div class="code-block"><span class="comment">// 에러 코드의 문제점</span>
+
+<span class="comment">// 1. 에러 무시 가능 😱</span>
+<span class="function">ProcessPayment</span>(<span class="number">1000</span>);  <span class="comment">// 반환값 무시!</span>
+<span class="function">SendItem</span>();            <span class="comment">// 결제 실패했는데 아이템 지급?!</span>
+
+<span class="comment">// 2. 에러 체크 지옥 (Error Checking Hell)</span>
+<span class="type">ErrorCode</span> err;
+err = <span class="function">Step1</span>();
+<span class="keyword">if</span> (err != <span class="type">ErrorCode</span>::Success) { <span class="keyword">return</span> err; }
+
+err = <span class="function">Step2</span>();
+<span class="keyword">if</span> (err != <span class="type">ErrorCode</span>::Success) { <span class="keyword">return</span> err; }
+
+err = <span class="function">Step3</span>();
+<span class="keyword">if</span> (err != <span class="type">ErrorCode</span>::Success) { <span class="keyword">return</span> err; }
+
+err = <span class="function">Step4</span>();
+<span class="keyword">if</span> (err != <span class="type">ErrorCode</span>::Success) { <span class="keyword">return</span> err; }
+
+<span class="comment">// 비즈니스 로직이 에러 체크에 묻힘...</span></div>
+
+                <div class="diagram">
+예외 vs 에러 코드 코드 비교:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [예외 방식] - 깔끔한 정상 경로                             │
+│  ─────────────────────────────────────────────              │
+│  try {                                                      │
+│      Step1();                                               │
+│      Step2();                                               │
+│      Step3();                                               │
+│      Step4();                                               │
+│      // 비즈니스 로직이 명확!                               │
+│  } catch (const Error& e) {                                 │
+│      HandleError(e);                                        │
+│  }                                                          │
+│                                                             │
+│  [에러 코드 방식] - 에러 체크가 끼어듦                      │
+│  ─────────────────────────────────────────────              │
+│  if (Step1() != OK) return err;                             │
+│  if (Step2() != OK) return err;                             │
+│  if (Step3() != OK) return err;                             │
+│  if (Step4() != OK) return err;                             │
+│  // 에러 체크와 로직이 섞임...                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <!-- Part 5: 모던 C++ 대안들 -->
+        <div class="conversation">
+            <h2>Part 5. 모던 C++ 대안들</h2>
+
+            <div class="q">더 좋은 방법 없어?</div>
+            <div class="a">
+                <p><span class="key-point">std::optional, std::expected!</span> 두 방식의 장점을 결합해요.</p>
+
+                <div class="code-block"><span class="comment">// std::optional - "값이 있거나 없거나"</span>
+#include <optional>
+
+std::optional<<span class="type">Item</span>> <span class="function">FindItem</span>(<span class="type">int</span> itemId) {
+    <span class="keyword">auto</span> it = items.<span class="function">find</span>(itemId);
+    <span class="keyword">if</span> (it == items.<span class="function">end</span>())
+        <span class="keyword">return</span> std::nullopt;  <span class="comment">// 없음!</span>
+
+    <span class="keyword">return</span> it->second;  <span class="comment">// 있음!</span>
+}
+
+<span class="comment">// 사용</span>
+<span class="keyword">auto</span> item = <span class="function">FindItem</span>(<span class="number">1001</span>);
+<span class="keyword">if</span> (item) {
+    <span class="function">UseItem</span>(*item);  <span class="comment">// 값 사용</span>
+} <span class="keyword">else</span> {
+    <span class="comment">// 아이템 없음 처리</span>
+}
+
+<span class="comment">// 또는</span>
+<span class="keyword">auto</span> item = <span class="function">FindItem</span>(<span class="number">1001</span>).<span class="function">value_or</span>(defaultItem);</div>
+
+                <div class="code-block"><span class="comment">// std::expected (C++23) - "값 또는 에러"</span>
+#include <expected>
+
+std::expected<<span class="type">int</span>, <span class="type">ErrorCode</span>> <span class="function">ProcessPayment</span>(<span class="type">int</span> amount) {
+    <span class="keyword">if</span> (amount <= <span class="number">0</span>)
+        <span class="keyword">return</span> std::unexpected(<span class="type">ErrorCode</span>::InvalidAmount);
+
+    <span class="keyword">if</span> (amount > balance)
+        <span class="keyword">return</span> std::unexpected(<span class="type">ErrorCode</span>::InsufficientBalance);
+
+    balance -= amount;
+    <span class="keyword">return</span> amount;  <span class="comment">// 성공 시 처리된 금액 반환</span>
+}
+
+<span class="comment">// 사용</span>
+<span class="keyword">auto</span> result = <span class="function">ProcessPayment</span>(<span class="number">1000</span>);
+<span class="keyword">if</span> (result) {
+    <span class="function">Log</span>(<span class="string">"결제 완료: %d"</span>, *result);
+} <span class="keyword">else</span> {
+    <span class="function">HandleError</span>(result.<span class="function">error</span>());  <span class="comment">// 에러 코드 접근</span>
+}
+
+<span class="comment">// 체이닝도 가능! (모나딕 연산)</span>
+<span class="keyword">auto</span> final = <span class="function">ProcessPayment</span>(<span class="number">1000</span>)
+    .<span class="function">and_then</span>([](<span class="type">int</span> amount) { <span class="keyword">return</span> <span class="function">SendItem</span>(amount); })
+    .<span class="function">and_then</span>([](<span class="type">Item</span> item) { <span class="keyword">return</span> <span class="function">SaveToDB</span>(item); });</div>
+
+                <div class="info-box">
+                    <strong>모던 C++ 에러 처리 장점</strong><br>
+                    • <strong>컴파일 타임 체크</strong>: 결과 무시 시 경고<br>
+                    • <strong>값과 에러 동시 표현</strong>: 타입 시스템으로 강제<br>
+                    • <strong>함수형 체이닝</strong>: 에러 체크 지옥 탈출<br>
+                    • <strong>예외만큼 표현력</strong> + <strong>에러 코드만큼 빠름</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 게임 서버 실전 가이드 -->
+        <div class="conversation">
+            <h2>Part 6. 게임 서버 실전 가이드</h2>
+
+            <div class="q">게임 서버에서는 어떻게 써?</div>
+            <div class="a">
+                <p><span class="key-point">상황에 따라 다르게!</span></p>
+
+                <div class="diagram">
+게임 서버 에러 처리 가이드:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [예외 사용 (드물게)]                                       │
+│  ─────────────────────────────────────────────              │
+│  • 서버 초기화 실패 (설정 파일 없음 등)                     │
+│  • 복구 불가능한 치명적 오류                                │
+│  • 프로그래밍 에러 (assert 대체)                            │
+│  • 라이브러리 인터페이스 (예외 사용 라이브러리)             │
+│                                                             │
+│  [에러 코드 사용 (대부분)]                                  │
+│  ─────────────────────────────────────────────              │
+│  • 클라이언트 요청 검증 실패 (잘못된 입력)                  │
+│  • 비즈니스 로직 실패 (잔액 부족, 인벤토리 꽉 참)           │
+│  • 예상 가능한 실패 (아이템 없음, 권한 없음)                │
+│  • 성능 중요 경로 (패킷 처리, 틱 업데이트)                  │
+│                                                             │
+│  [하이브리드]                                               │
+│  ─────────────────────────────────────────────              │
+│  • 내부: 에러 코드                                          │
+│  • 경계(API): 필요시 예외로 변환                            │
+│  • 로깅: 모든 에러 기록                                     │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">실제 코드 패턴 보여줘!</div>
+            <div class="a">
+                <div class="code-block"><span class="comment">// 게임 서버 에러 처리 패턴</span>
+
+<span class="comment">// 1. 패킷 처리 - 에러 코드 사용</span>
+<span class="keyword">void</span> <span class="function">OnBuyItem</span>(<span class="type">Player</span>* player, <span class="type">BuyItemPacket</span>* packet) {
+    <span class="comment">// 검증</span>
+    <span class="keyword">if</span> (!<span class="function">ValidatePacket</span>(packet)) {
+        <span class="function">SendError</span>(player, <span class="type">ErrorCode</span>::InvalidPacket);
+        <span class="keyword">return</span>;
+    }
+
+    <span class="comment">// 비즈니스 로직</span>
+    <span class="keyword">auto</span> result = shop.<span class="function">BuyItem</span>(player, packet->itemId, packet->count);
+
+    <span class="keyword">if</span> (result != <span class="type">ErrorCode</span>::Success) {
+        <span class="function">SendError</span>(player, result);
+        <span class="keyword">return</span>;
+    }
+
+    <span class="function">SendBuyItemSuccess</span>(player, packet->itemId);
+}
+
+<span class="comment">// 2. 서버 초기화 - 예외 사용</span>
+<span class="keyword">void</span> <span class="function">InitializeServer</span>() {
+    <span class="keyword">try</span> {
+        config.<span class="function">Load</span>(<span class="string">"server.ini"</span>);      <span class="comment">// 실패하면 예외</span>
+        db.<span class="function">Connect</span>(config.<span class="function">GetDBInfo</span>()); <span class="comment">// 실패하면 예외</span>
+        network.<span class="function">Start</span>(config.<span class="function">GetPort</span>());
+    } <span class="keyword">catch</span> (<span class="keyword">const</span> std::exception& e) {
+        <span class="function">FatalError</span>(<span class="string">"서버 초기화 실패: %s"</span>, e.<span class="function">what</span>());
+        std::<span class="function">exit</span>(<span class="number">1</span>);  <span class="comment">// 프로그램 종료</span>
+    }
+}
+
+<span class="comment">// 3. Result 타입 패턴 (Rust 스타일)</span>
+<span class="keyword">template</span><<span class="keyword">typename</span> <span class="type">T</span>>
+<span class="keyword">struct</span> <span class="type">Result</span> {
+    <span class="type">ErrorCode</span> error;
+    <span class="type">T</span> value;
+
+    <span class="keyword">bool</span> <span class="function">IsOk</span>() <span class="keyword">const</span> { <span class="keyword">return</span> error == <span class="type">ErrorCode</span>::Success; }
+    <span class="keyword">bool</span> <span class="function">IsErr</span>() <span class="keyword">const</span> { <span class="keyword">return</span> !<span class="function">IsOk</span>(); }
+};
+
+<span class="type">Result</span><<span class="type">Item</span>> <span class="function">CreateItem</span>(<span class="type">int</span> itemId) {
+    <span class="keyword">if</span> (!<span class="function">IsValidItemId</span>(itemId))
+        <span class="keyword">return</span> {<span class="type">ErrorCode</span>::InvalidItemId, {}};
+
+    <span class="type">Item</span> item = <span class="function">GenerateItem</span>(itemId);
+    <span class="keyword">return</span> {<span class="type">ErrorCode</span>::Success, item};
+}</div>
+            </div>
+        </div>
+
+        <!-- Part 7: 면접 대비 -->
+        <div class="conversation">
+            <h2>Part 7. 면접에서 물어보면?</h2>
+
+            <div class="q">"예외와 에러 코드 중 뭘 선택하시겠습니까?"</div>
+            <div class="a">
+                <div class="step-box">
+                    <h4>✅ 핵심 답변 포인트</h4>
+
+                    <p><strong>1. 트레이드오프 설명</strong></p>
+                    <p style="margin-left: 20px;">"예외는 정상 경로가 깔끔하고 에러 전파가 자동이지만, throw 시 비용이 큽니다. 에러 코드는 빠르지만 무시될 수 있고 코드가 복잡해집니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>2. 상황별 선택 기준</strong></p>
+                    <p style="margin-left: 20px;">"예외적 상황(설정 파일 없음, 복구 불가 오류)에는 예외를, 예상 가능한 실패(입력 검증, 비즈니스 로직)에는 에러 코드를 사용합니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>3. 게임 서버 특성</strong></p>
+                    <p style="margin-left: 20px;">"게임 서버는 패킷 처리가 hot path이고 실패가 흔해서 에러 코드를 주로 사용합니다. 초기화나 설정 로딩에만 예외를 씁니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>4. 모던 C++ 언급</strong></p>
+                    <p style="margin-left: 20px;">"C++17의 optional, C++23의 expected 같은 타입으로 에러 코드의 단점을 보완할 수 있습니다."</p>
+                </div>
+            </div>
+
+            <div class="q">핵심 숫자는?</div>
+            <div class="a">
+                <div class="diagram">
+핵심 숫자 정리:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [비용 비교]                                                │
+│  • try 블록 (예외 없음): ~0 cycles                          │
+│  • throw 발생: ~10,000+ cycles                              │
+│  • 에러 코드 반환: ~1-5 cycles                              │
+│  • if 검사: ~2 cycles                                       │
+│                                                             │
+│  [벤치마크 (100만 회)]                                      │
+│  • 예외 0% 발생: 에러 코드와 비슷                           │
+│  • 예외 1% 발생: 에러 코드보다 ~10배 느림                   │
+│  • 예외 10% 발생: 에러 코드보다 ~100배 느림                 │
+│                                                             │
+│  [게임 서버 기준]                                           │
+│  • 패킷 처리: 초당 수만~수십만 건                           │
+│  • 검증 실패율: 1~10% (해킹 시도, 잘못된 요청)              │
+│  • → 예외 사용 시 심각한 성능 저하                          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>예외</strong>: 정상 경로 깔끔, throw 비용 큼 (~10,000 cycles)</li>
+                <li><strong>에러 코드</strong>: 빠름 (~5 cycles), 무시 가능, 코드 복잡</li>
+                <li><strong>Zero-cost Exception</strong>: 예외 안 터지면 비용 0</li>
+                <li><strong>게임 서버</strong>: 대부분 에러 코드, 초기화만 예외</li>
+                <li><strong>std::optional</strong>: 값이 있거나 없거나</li>
+                <li><strong>std::expected</strong> (C++23): 값 또는 에러, 체이닝 가능</li>
+                <li><strong>실전 기준</strong>: "예외적"이면 예외, "예상 가능"하면 에러 코드</li>
+                <li><strong>모든 에러는 로깅</strong>: 디버깅과 모니터링을 위해</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../sso-string-optimization/">← 문자열 최적화</a>
+            <a href="../allocator/">커스텀 할당자 →</a>
+        </div>
+    </div>
+</body>
+</html>

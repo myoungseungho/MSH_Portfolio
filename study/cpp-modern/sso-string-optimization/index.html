@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>왜 string 복사가 그렇게 비쌀까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 900px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 24px; color: #666; text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
+        .back-link:hover { color: #00897B; }
+        .header { margin-bottom: 48px; text-align: center; }
+        .header h1 { font-size: 2.4rem; font-weight: 800; color: #111; margin-bottom: 16px; letter-spacing: -0.02em; }
+        .header p { color: #666; font-size: 1.15rem; }
+        .conversation { background: white; border-radius: 20px; padding: 36px; margin: 28px 0; border: 1px solid #e8e8e8; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+        .conversation h2 { font-size: 1.4rem; color: #00897B; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 3px solid #E0F2F1; display: flex; align-items: center; gap: 12px; }
+        .conversation h2::before { content: "💬"; font-size: 1.5rem; }
+        .q { background: linear-gradient(135deg, #E0F2F1 0%, #B2DFDB 100%); border-left: 5px solid #009688; padding: 20px 24px; margin: 20px 0; border-radius: 0 16px 16px 0; font-weight: 600; font-size: 1.1rem; color: #004D40; }
+        .a { padding: 16px 0 16px 24px; border-left: 3px solid #B2DFDB; margin: 16px 0; }
+        .a p { margin-bottom: 16px; font-size: 1.05rem; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: linear-gradient(135deg, #E0F2F1 0%, #B2DFDB 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #00897B; }
+        .key-point { background: linear-gradient(135deg, #B2DFDB 0%, #80CBC4 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #004D40; }
+        .warning { background: linear-gradient(135deg, #FFCDD2 0%, #EF9A9A 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #B71C1C; }
+        .info-box { background: #E0F2F1; border-radius: 12px; padding: 20px 24px; margin: 20px 0; border-left: 4px solid #009688; }
+        .info-box strong { color: #00897B; }
+        .analogy-box { background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%); border-radius: 16px; padding: 24px; margin: 24px 0; border: 2px solid #FFB74D; }
+        .analogy-box h4 { color: #E65100; margin-bottom: 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+        .analogy-box h4::before { content: "💡"; }
+        .step-box { background: #E8F5E9; border-radius: 12px; padding: 20px 24px; margin: 16px 0; border-left: 4px solid #4CAF50; }
+        .step-box h4 { color: #2E7D32; margin-bottom: 12px; }
+        .code-block { background: #1a1a2e; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 0.88rem; color: #E2E8F0; overflow-x: auto; line-height: 1.8; border: 1px solid #2d2d4a; white-space: pre; }
+        .code-block .comment { color: #6A9955; }
+        .code-block .keyword { color: #C586C0; }
+        .code-block .function { color: #DCDCAA; }
+        .code-block .type { color: #4EC9B0; }
+        .code-block .number { color: #B5CEA8; }
+        .code-block .string { color: #CE9178; }
+        .diagram { background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%); border: 2px solid #E2E8F0; border-radius: 16px; padding: 28px; margin: 24px 0; font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 0.85rem; line-height: 1.5; overflow-x: auto; white-space: pre; color: #334155; }
+        .comparison-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.95rem; }
+        .comparison-table th { background: linear-gradient(135deg, #009688 0%, #00897B 100%); color: white; padding: 16px; text-align: left; font-weight: 600; }
+        .comparison-table td { padding: 14px 16px; border-bottom: 1px solid #B2DFDB; }
+        .comparison-table tr:nth-child(even) { background: #E0F2F1; }
+        .comparison-table tr:hover { background: #B2DFDB; }
+        .comparison-table .good { background: #C8E6C9; color: #2E7D32; font-weight: 600; }
+        .comparison-table .bad { background: #FFCDD2; color: #C62828; }
+        .comparison-table .neutral { background: #FFF3E0; color: #E65100; }
+        .summary-box { background: linear-gradient(135deg, #009688 0%, #00897B 100%); border-radius: 20px; padding: 36px; color: white; margin: 40px 0; box-shadow: 0 4px 20px rgba(0,150,136,0.3); }
+        .summary-box h3 { font-size: 1.4rem; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+        .summary-box h3::before { content: "📝"; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 12px 0; padding-left: 28px; position: relative; font-size: 1.05rem; border-bottom: 1px solid rgba(255,255,255,0.15); }
+        .summary-box li:last-child { border-bottom: none; }
+        .summary-box li::before { content: "✓"; position: absolute; left: 0; color: #80CBC4; font-weight: bold; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 30px; border-top: 2px solid #B2DFDB; }
+        .nav-links a { color: #00897B; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 12px; transition: all 0.2s; }
+        .nav-links a:hover { background: #E0F2F1; }
+        .progress-indicator { display: flex; justify-content: center; gap: 8px; margin-bottom: 40px; flex-wrap: wrap; }
+        .progress-dot { width: 12px; height: 12px; border-radius: 50%; background: #B2DFDB; transition: all 0.3s; }
+        .progress-dot.active { background: #009688; transform: scale(1.2); }
+        .progress-dot.completed { background: #00897B; }
+        .visual-flow { display: flex; flex-direction: column; gap: 16px; margin: 24px 0; }
+        .flow-step { background: white; border: 2px solid #B2DFDB; border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; }
+        .flow-step.highlight-step { border-color: #009688; background: #E0F2F1; }
+        .flow-number { background: linear-gradient(135deg, #009688 0%, #00897B 100%); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+        .flow-arrow { text-align: center; color: #009688; font-size: 1.5rem; }
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.8rem; }
+            .conversation { padding: 24px; }
+            .code-block { padding: 16px; font-size: 0.8rem; }
+            .diagram { padding: 16px; font-size: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../../cpp-modern/" class="back-link">← Modern C++</a>
+
+        <div class="header">
+            <h1>왜 string 복사가 그렇게 비쌀까?</h1>
+            <p>SSO, Move Semantics, 그리고 게임 서버 문자열 최적화</p>
+        </div>
+
+        <div class="progress-indicator">
+            <div class="progress-dot active"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+        </div>
+
+        <!-- Part 1: 문자열 복사가 왜 비싸? -->
+        <div class="conversation">
+            <h2>Part 1. 문자열 복사가 왜 비싸?</h2>
+
+            <div class="q">std::string 복사가 느리다고?</div>
+            <div class="a">
+                <p><span class="highlight">네, 특히 긴 문자열은요!</span> 내부적으로 무슨 일이 일어나는지 봐요.</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 책 복사하기</h4>
+                    <p><strong>int 복사</strong> = 메모장에 숫자 하나 적기</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>4바이트 그냥 복사 끝!</li>
+                    </ul>
+                    <p><strong>string 복사</strong> = 책 전체를 복사기로 복사</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>새 종이 준비 (메모리 할당)</li>
+                        <li>한 글자씩 복사 (데이터 복사)</li>
+                        <li>원본이 100페이지면 100페이지 다 복사!</li>
+                    </ul>
+                </div>
+
+                <div class="code-block"><span class="comment">// string 복사 시 내부 동작</span>
+std::string original = <span class="string">"Hello, World! This is a test string."</span>;
+std::string copy = original;  <span class="comment">// 여기서 무슨 일이?</span>
+
+<span class="comment">// 1단계: 메모리 할당 (malloc 호출!)</span>
+<span class="comment">//   - 시스템 콜 가능성</span>
+<span class="comment">//   - 힙 탐색 오버헤드</span>
+<span class="comment">//   - 락 경합 가능 (멀티스레드)</span>
+
+<span class="comment">// 2단계: 데이터 복사 (memcpy)</span>
+<span class="comment">//   - 36바이트 복사</span>
+<span class="comment">//   - 캐시 라인 오염</span>
+
+<span class="comment">// 3단계: null terminator 처리</span>
+
+<span class="comment">// 만약 소멸되면?</span>
+<span class="comment">// 4단계: 메모리 해제 (free 호출!)</span></div>
+            </div>
+
+            <div class="q">메모리 할당이 왜 그렇게 느려?</div>
+            <div class="a">
+                <p><span class="warning">힙 할당은 복잡한 작업입니다!</span></p>
+
+                <div class="diagram">
+메모리 할당 과정:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [스택 할당 - int a = 5;]                                   │
+│  ─────────────────────────────────────────────              │
+│  스택 포인터 이동 끝! (1 CPU 명령어)                        │
+│                                                             │
+│  [힙 할당 - new char[100]]                                  │
+│  ─────────────────────────────────────────────              │
+│  1. 힙 자료구조 탐색 (빈 공간 찾기)                         │
+│  2. 적절한 크기의 블록 선택                                 │
+│  3. 블록 분할 (필요시)                                      │
+│  4. 메타데이터 업데이트                                     │
+│  5. 멀티스레드면 락 획득/해제!                              │
+│                                                             │
+│  비용 비교:                                                 │
+│  • 스택 할당: ~1 cycle                                      │
+│  • 힙 할당: ~100-1000 cycles                                │
+│  • 락 경합 시: ~10,000+ cycles                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">그럼 string 쓰지 말라는 거야?</div>
+            <div class="a">
+                <p>아뇨! <span class="highlight">최적화 기법들</span>이 있어요. 첫 번째가 <strong>SSO</strong>입니다!</p>
+            </div>
+        </div>
+
+        <!-- Part 2: SSO가 뭐야? -->
+        <div class="conversation">
+            <h2>Part 2. SSO (Small String Optimization)</h2>
+
+            <div class="q">SSO가 뭐야?</div>
+            <div class="a">
+                <p><span class="key-point">짧은 문자열은 힙 할당 없이 객체 안에 직접 저장!</span></p>
+
+                <div class="analogy-box">
+                    <h4>비유: 지갑 vs 가방</h4>
+                    <p><strong>긴 문자열</strong> = 큰 짐 → 가방(힙)에 넣어야 함</p>
+                    <p><strong>짧은 문자열</strong> = 동전 몇 개 → 지갑(객체 내부)에 그냥 넣음</p>
+                    <p style="margin-top: 12px;">굳이 가방 꺼내지 않고 지갑에서 바로 꺼내는 게 빠르잖아요!</p>
+                </div>
+
+                <div class="diagram">
+SSO 메모리 구조:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  std::string 객체 (보통 24~32바이트)                        │
+│                                                             │
+│  [긴 문자열 모드]                                           │
+│  ┌────────────────────────────────┐                         │
+│  │ ptr ──────────────────────→ [힙: "Hello, World!..."]    │
+│  │ size = 100                     │                         │
+│  │ capacity = 128                 │                         │
+│  └────────────────────────────────┘                         │
+│                                                             │
+│  [SSO 모드 - 짧은 문자열]                                   │
+│  ┌────────────────────────────────┐                         │
+│  │ buffer: "Hello"                │  ← 힙 할당 없이         │
+│  │         (내부 버퍼에 직접!)    │    객체 안에 저장!      │
+│  │ size = 5                       │                         │
+│  └────────────────────────────────┘                         │
+│                                                             │
+│  SSO 임계값 (구현마다 다름):                                │
+│  • MSVC: 15자                                               │
+│  • GCC: 15자                                                │
+│  • Clang/libc++: 22자                                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">SSO면 복사도 빠른 거야?</div>
+            <div class="a">
+                <p><span class="key-point">네!</span> 힙 할당 없이 그냥 객체만 복사하면 됩니다!</p>
+
+                <div class="code-block"><span class="comment">// SSO가 적용되는 경우</span>
+std::string name = <span class="string">"Player"</span>;  <span class="comment">// 6자 → SSO!</span>
+std::string copy = name;      <span class="comment">// 힙 할당 없이 복사!</span>
+
+<span class="comment">// 내부적으로:</span>
+<span class="comment">// memcpy(&copy, &name, sizeof(string));  // 24~32바이트만!</span>
+<span class="comment">// 힙 할당 없음, free도 필요 없음!</span>
+
+<span class="comment">// SSO가 적용 안 되는 경우</span>
+std::string message = <span class="string">"This is a very long message that exceeds SSO limit"</span>;
+std::string copy2 = message;  <span class="comment">// 힙 할당 발생! 😢</span></div>
+
+                <table class="comparison-table">
+                    <tr>
+                        <th>문자열 길이</th>
+                        <th>SSO 적용</th>
+                        <th>복사 비용</th>
+                    </tr>
+                    <tr>
+                        <td>1~15자</td>
+                        <td class="good">✓ 적용</td>
+                        <td class="good">~20 cycles</td>
+                    </tr>
+                    <tr>
+                        <td>16~100자</td>
+                        <td class="bad">✗ 미적용</td>
+                        <td class="neutral">~200 cycles</td>
+                    </tr>
+                    <tr>
+                        <td>100자 이상</td>
+                        <td class="bad">✗ 미적용</td>
+                        <td class="bad">~500+ cycles</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Part 3: Move Semantics -->
+        <div class="conversation">
+            <h2>Part 3. Move Semantics (이동 의미론)</h2>
+
+            <div class="q">긴 문자열은 방법이 없어?</div>
+            <div class="a">
+                <p><span class="highlight">Move!</span> 복사 대신 <strong>소유권을 넘기는</strong> 방법이 있어요!</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 이사</h4>
+                    <p><strong>복사 (Copy)</strong> = 집에 있는 물건 다 똑같이 새로 사기</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>돈도 많이 들고, 시간도 오래 걸림</li>
+                    </ul>
+                    <p><strong>이동 (Move)</strong> = 물건을 그냥 새 집으로 옮기기</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>원래 집은 빈 집이 됨</li>
+                        <li>물건은 그대로, 주소만 바뀜!</li>
+                    </ul>
+                </div>
+
+                <div class="code-block"><span class="comment">// 복사 vs 이동</span>
+
+std::string original = <span class="string">"This is a very long string..."</span>;
+
+<span class="comment">// 복사: 새 메모리 할당 + 전체 복사</span>
+std::string copy = original;
+<span class="comment">// original: "This is a very long string..."</span>
+<span class="comment">// copy:     "This is a very long string..." (새로 할당!)</span>
+
+<span class="comment">// 이동: 포인터만 옮김!</span>
+std::string moved = std::<span class="function">move</span>(original);
+<span class="comment">// original: "" (빈 문자열이 됨!)</span>
+<span class="comment">// moved:    "This is a very long string..." (원래 메모리 그대로!)</span></div>
+
+                <div class="diagram">
+Move의 내부 동작:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [복사 전]                                                  │
+│                                                             │
+│  original:                                                  │
+│  ┌──────────────────┐     ┌─────────────────────────────┐   │
+│  │ ptr ─────────────│────→│ "This is a very long..."    │   │
+│  │ size = 50        │     └─────────────────────────────┘   │
+│  └──────────────────┘                                       │
+│                                                             │
+│  [복사 후 - copy = original]                                │
+│                                                             │
+│  original:                copy:                             │
+│  ┌─────────────┐          ┌─────────────┐                   │
+│  │ ptr ────────│──→ [A]   │ ptr ────────│──→ [B] (새 할당!)│
+│  └─────────────┘          └─────────────┘                   │
+│                                                             │
+│  [이동 후 - moved = std::move(original)]                    │
+│                                                             │
+│  original:                moved:                            │
+│  ┌─────────────┐          ┌─────────────┐                   │
+│  │ ptr → null  │          │ ptr ────────│──→ [A] (같은 메모리!)│
+│  │ size = 0    │          │ size = 50   │                   │
+│  └─────────────┘          └─────────────┘                   │
+│                                                             │
+│  <span class="key-point">Move = 포인터 3개 복사 끝! (힙 할당 없음)</span>                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">언제 Move가 자동으로 일어나?</div>
+            <div class="a">
+                <div class="info-box">
+                    <strong>자동 Move 발생 조건</strong><br>
+                    • 함수에서 지역 변수 <code>return</code> 할 때 (NRVO/RVO)<br>
+                    • 임시 객체 (rvalue) 대입할 때<br>
+                    • <code>std::move()</code> 명시적 호출<br>
+                    • STL 컨테이너 재할당 시
+                </div>
+
+                <div class="code-block"><span class="comment">// 자동 Move 예시</span>
+
+<span class="comment">// 1. 함수 반환 (RVO/NRVO)</span>
+std::string <span class="function">CreateMessage</span>() {
+    std::string msg = <span class="string">"Hello"</span>;
+    <span class="keyword">return</span> msg;  <span class="comment">// 자동으로 Move!</span>
+}
+
+<span class="comment">// 2. 임시 객체</span>
+std::string name = std::string(<span class="string">"Player"</span>) + <span class="string">"_001"</span>;
+<span class="comment">// 임시 객체가 Move됨!</span>
+
+<span class="comment">// 3. 명시적 Move</span>
+std::vector<std::string> names;
+std::string temp = <span class="string">"LongName..."</span>;
+names.<span class="function">push_back</span>(std::<span class="function">move</span>(temp));  <span class="comment">// temp는 이제 빈 문자열</span></div>
+            </div>
+        </div>
+
+        <!-- Part 4: string_view -->
+        <div class="conversation">
+            <h2>Part 4. string_view - 복사 자체를 피하기</h2>
+
+            <div class="q">복사도, 이동도 없이 문자열 다루는 방법은?</div>
+            <div class="a">
+                <p><span class="key-point">std::string_view!</span> 읽기 전용 "창문" 같은 거예요.</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 전시장 유리창</h4>
+                    <p><strong>string 복사</strong> = 그림을 통째로 복제해서 가져가기</p>
+                    <p><strong>string_view</strong> = 유리창 너머로 그림 보기</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>그림(원본)은 그대로</li>
+                        <li>나는 포인터(유리창 위치)만 기억</li>
+                        <li>비용: 거의 0!</li>
+                    </ul>
+                </div>
+
+                <div class="code-block"><span class="comment">// string_view 사용</span>
+
+<span class="keyword">void</span> <span class="function">ProcessName</span>(<span class="keyword">const</span> std::string& name);   <span class="comment">// 참조 전달</span>
+<span class="keyword">void</span> <span class="function">ProcessName</span>(std::string_view name);       <span class="comment">// 더 좋음!</span>
+
+<span class="comment">// 왜 string_view가 더 좋아?</span>
+
+<span class="comment">// Case 1: string 전달</span>
+std::string s = <span class="string">"Hello"</span>;
+<span class="function">ProcessName</span>(s);  <span class="comment">// 둘 다 OK</span>
+
+<span class="comment">// Case 2: 문자열 리터럴 전달</span>
+<span class="function">ProcessName</span>(<span class="string">"Hello"</span>);
+
+<span class="comment">// const string& 버전:</span>
+<span class="comment">//   "Hello" → 임시 std::string 생성 (힙 할당 가능!)</span>
+<span class="comment">//   → 함수 호출</span>
+<span class="comment">//   → 임시 객체 파괴</span>
+
+<span class="comment">// string_view 버전:</span>
+<span class="comment">//   "Hello"의 포인터 + 길이만 전달</span>
+<span class="comment">//   → 힙 할당 없음!</span></div>
+
+                <div class="diagram">
+string_view 내부 구조:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  string_view = 포인터 + 길이 (16바이트!)                    │
+│                                                             │
+│  ┌──────────────────┐                                       │
+│  │ ptr ─────────────│────→ "Hello, World!"                 │
+│  │ length = 13      │       (어딘가에 있는 원본)           │
+│  └──────────────────┘                                       │
+│                                                             │
+│  원본이 string이든, char[]이든, 리터럴이든 상관없음!        │
+│                                                             │
+│  <span class="warning">주의: 원본이 사라지면 dangling pointer!</span>                   │
+│                                                             │
+│  // 위험한 코드!                                            │
+│  std::string_view GetView() {                               │
+│      std::string temp = "Hello";                            │
+│      return temp;  // temp가 사라짐!                        │
+│  }  // 반환된 view는 dangling!                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">string_view 주의사항은?</div>
+            <div class="a">
+                <div class="info-box">
+                    <strong>⚠️ string_view 주의사항</strong><br>
+                    • <strong>소유권 없음</strong>: 원본이 사라지면 dangling!<br>
+                    • <strong>null-terminated 아님</strong>: C 함수에 직접 전달 불가<br>
+                    • <strong>저장하지 말 것</strong>: 멤버 변수로 저장 위험<br><br>
+                    <strong>✓ 안전한 사용</strong><br>
+                    • 함수 매개변수로 사용<br>
+                    • 지역 범위에서만 사용<br>
+                    • 원본 수명이 확실할 때만 사용
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 게임 서버 실전 최적화 -->
+        <div class="conversation">
+            <h2>Part 5. 게임 서버 실전 최적화</h2>
+
+            <div class="q">게임 서버에서 문자열 어떻게 다뤄?</div>
+            <div class="a">
+                <p><span class="key-point">여러 기법을 조합합니다!</span></p>
+
+                <div class="diagram">
+게임 서버 문자열 최적화 전략:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [1] 고정 크기 버퍼 사용                                    │
+│  ─────────────────────────────────────────────              │
+│  struct PlayerName {                                        │
+│      char name[16];  // 힙 할당 없음!                       │
+│  };                                                         │
+│                                                             │
+│  [2] 문자열 인터닝 (Interning)                              │
+│  ─────────────────────────────────────────────              │
+│  같은 문자열은 하나만 저장하고 ID로 참조                    │
+│  "Warrior" → ID: 1001                                       │
+│  "Mage"    → ID: 1002                                       │
+│                                                             │
+│  [3] 문자열 풀 (String Pool)                                │
+│  ─────────────────────────────────────────────              │
+│  미리 할당된 버퍼에서 문자열 관리                           │
+│  힙 단편화 방지, 할당 속도 향상                             │
+│                                                             │
+│  [4] 포맷 문자열 최소화                                     │
+│  ─────────────────────────────────────────────              │
+│  sprintf보다 미리 만들어둔 템플릿 사용                      │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">실제 코드로 보여줘!</div>
+            <div class="a">
+                <div class="code-block"><span class="comment">// 1. 고정 크기 버퍼</span>
+<span class="keyword">struct</span> <span class="type">ChatMessage</span> {
+    <span class="type">uint32_t</span> senderId;
+    <span class="type">char</span> content[<span class="number">256</span>];     <span class="comment">// 힙 할당 없음!</span>
+    <span class="type">uint8_t</span> contentLength;
+};
+
+<span class="comment">// 2. 문자열 ID 매핑 (인터닝)</span>
+<span class="keyword">class</span> <span class="type">StringTable</span> {
+    std::unordered_map<std::string, <span class="type">uint32_t</span>> stringToId;
+    std::vector<std::string> idToString;
+
+<span class="keyword">public</span>:
+    <span class="type">uint32_t</span> <span class="function">GetId</span>(<span class="keyword">const</span> std::string& str) {
+        <span class="keyword">auto</span> it = stringToId.<span class="function">find</span>(str);
+        <span class="keyword">if</span> (it != stringToId.<span class="function">end</span>())
+            <span class="keyword">return</span> it->second;
+
+        <span class="type">uint32_t</span> newId = idToString.<span class="function">size</span>();
+        stringToId[str] = newId;
+        idToString.<span class="function">push_back</span>(str);
+        <span class="keyword">return</span> newId;
+    }
+};
+
+<span class="comment">// 캐릭터 이름을 ID로 저장</span>
+<span class="keyword">struct</span> <span class="type">Player</span> {
+    <span class="type">uint32_t</span> nameId;     <span class="comment">// 4바이트! (vs string 32바이트)</span>
+    <span class="comment">// ...</span>
+};
+
+<span class="comment">// 3. 로그 메시지 최적화</span>
+<span class="comment">// Bad: 매번 포맷</span>
+<span class="function">Log</span>(<span class="string">"Player %s joined channel %d"</span>, name, channelId);
+
+<span class="comment">// Good: 구조화된 로그</span>
+<span class="keyword">struct</span> <span class="type">JoinChannelLog</span> {
+    <span class="type">uint32_t</span> playerId;
+    <span class="type">uint16_t</span> channelId;
+    <span class="type">uint64_t</span> timestamp;
+};
+<span class="function">LogStruct</span>(<span class="type">JoinChannelLog</span>{playerId, channelId, Now()});</div>
+            </div>
+        </div>
+
+        <!-- Part 6: 벤치마크와 측정 -->
+        <div class="conversation">
+            <h2>Part 6. 벤치마크로 확인하기</h2>
+
+            <div class="q">실제로 얼마나 차이나?</div>
+            <div class="a">
+                <table class="comparison-table">
+                    <tr>
+                        <th>작업</th>
+                        <th>소요 시간 (100만 회)</th>
+                        <th>상대 비용</th>
+                    </tr>
+                    <tr>
+                        <td>짧은 string 복사 (SSO)</td>
+                        <td class="good">~15ms</td>
+                        <td class="good">1x</td>
+                    </tr>
+                    <tr>
+                        <td>긴 string 복사</td>
+                        <td class="bad">~120ms</td>
+                        <td class="bad">8x</td>
+                    </tr>
+                    <tr>
+                        <td>string Move</td>
+                        <td class="good">~10ms</td>
+                        <td class="good">0.7x</td>
+                    </tr>
+                    <tr>
+                        <td>string_view 전달</td>
+                        <td class="good">~5ms</td>
+                        <td class="good">0.3x</td>
+                    </tr>
+                    <tr>
+                        <td>고정 버퍼 복사</td>
+                        <td class="good">~8ms</td>
+                        <td class="good">0.5x</td>
+                    </tr>
+                </table>
+
+                <div class="info-box">
+                    <strong>핵심 인사이트</strong><br>
+                    • SSO 범위(~15자)면 복사해도 빠름<br>
+                    • 긴 문자열은 <strong>Move 또는 참조</strong> 사용<br>
+                    • 읽기만 하면 <strong>string_view</strong><br>
+                    • 패킷 데이터는 <strong>고정 버퍼</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 7: 면접 대비 -->
+        <div class="conversation">
+            <h2>Part 7. 면접에서 물어보면?</h2>
+
+            <div class="q">"string 최적화 방법을 설명하세요"라고 하면?</div>
+            <div class="a">
+                <div class="step-box">
+                    <h4>✅ 핵심 답변 포인트</h4>
+
+                    <p><strong>1. 문제 인식</strong></p>
+                    <p style="margin-left: 20px;">"string 복사는 힙 할당 + 데이터 복사가 필요해서 비용이 큽니다. 특히 멀티스레드 환경에서 할당자 락 경합도 발생합니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>2. SSO</strong></p>
+                    <p style="margin-left: 20px;">"15자 이하 문자열은 SSO로 객체 내부 버퍼에 저장되어 힙 할당이 없습니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>3. Move Semantics</strong></p>
+                    <p style="margin-left: 20px;">"긴 문자열은 std::move로 소유권만 이전하면 포인터 복사로 끝납니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>4. string_view</strong></p>
+                    <p style="margin-left: 20px;">"읽기 전용이면 string_view로 포인터+길이만 전달합니다. 다만 원본 수명에 주의해야 합니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>5. 게임 서버 특화</strong></p>
+                    <p style="margin-left: 20px;">"고정 크기 버퍼, 문자열 인터닝, 구조화된 로그 등으로 힙 할당 자체를 최소화합니다."</p>
+                </div>
+            </div>
+
+            <div class="q">핵심 숫자는?</div>
+            <div class="a">
+                <div class="diagram">
+핵심 숫자 정리:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [SSO 임계값]                                               │
+│  • MSVC/GCC: 15자                                           │
+│  • libc++: 22자                                             │
+│                                                             │
+│  [string 객체 크기]                                         │
+│  • 보통 24~32바이트 (구현마다 다름)                         │
+│                                                             │
+│  [비용 비교]                                                │
+│  • 스택 할당: ~1 cycle                                      │
+│  • 힙 할당: ~100-1000 cycles                                │
+│  • Move: ~5 cycles (포인터 3개 복사)                        │
+│  • string_view: ~2 cycles (포인터+길이)                     │
+│                                                             │
+│  [100만 회 벤치마크]                                        │
+│  • SSO 복사: ~15ms                                          │
+│  • 긴 문자열 복사: ~120ms (8배 느림)                        │
+│  • Move: ~10ms                                              │
+│  • string_view: ~5ms                                        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>string 복사가 비싼 이유</strong>: 힙 할당 + 데이터 복사 + 해제</li>
+                <li><strong>SSO</strong>: 15자 이하는 객체 내부 버퍼에 저장 (힙 할당 없음)</li>
+                <li><strong>Move</strong>: 소유권 이전으로 포인터만 복사 (원본은 빈 상태)</li>
+                <li><strong>string_view</strong>: 읽기 전용, 포인터+길이만 전달 (원본 수명 주의!)</li>
+                <li><strong>게임 서버</strong>: 고정 버퍼, 인터닝, 구조화 로그로 할당 최소화</li>
+                <li><strong>측정 결과</strong>: 긴 문자열 복사는 SSO 대비 ~8배 느림</li>
+                <li><strong>실전 가이드</strong>: SSO면 복사 OK, 길면 Move/참조, 읽기만 string_view</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../vtable-overhead/">← 가상 함수 오버헤드</a>
+            <a href="../exception-vs-error-code/">예외 vs 에러코드 →</a>
+        </div>
+    </div>
+</body>
+</html>

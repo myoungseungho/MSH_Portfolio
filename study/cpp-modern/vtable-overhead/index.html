@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>왜 virtual 함수가 많으면 느려질까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 900px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 24px; color: #666; text-decoration: none; font-size: 0.95rem; transition: color 0.2s; }
+        .back-link:hover { color: #1565C0; }
+        .header { margin-bottom: 48px; text-align: center; }
+        .header h1 { font-size: 2.4rem; font-weight: 800; color: #111; margin-bottom: 16px; letter-spacing: -0.02em; }
+        .header p { color: #666; font-size: 1.15rem; }
+        .conversation { background: white; border-radius: 20px; padding: 36px; margin: 28px 0; border: 1px solid #e8e8e8; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+        .conversation h2 { font-size: 1.4rem; color: #1565C0; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 3px solid #E3F2FD; display: flex; align-items: center; gap: 12px; }
+        .conversation h2::before { content: "💬"; font-size: 1.5rem; }
+        .q { background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); border-left: 5px solid #1976D2; padding: 20px 24px; margin: 20px 0; border-radius: 0 16px 16px 0; font-weight: 600; font-size: 1.1rem; color: #0D47A1; }
+        .a { padding: 16px 0 16px 24px; border-left: 3px solid #BBDEFB; margin: 16px 0; }
+        .a p { margin-bottom: 16px; font-size: 1.05rem; }
+        .a p:last-child { margin-bottom: 0; }
+        .highlight { background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #1565C0; }
+        .key-point { background: linear-gradient(135deg, #BBDEFB 0%, #90CAF9 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #0D47A1; }
+        .warning { background: linear-gradient(135deg, #FFCDD2 0%, #EF9A9A 100%); padding: 3px 10px; border-radius: 6px; font-weight: 700; color: #B71C1C; }
+        .info-box { background: #E3F2FD; border-radius: 12px; padding: 20px 24px; margin: 20px 0; border-left: 4px solid #1976D2; }
+        .info-box strong { color: #1565C0; }
+        .analogy-box { background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%); border-radius: 16px; padding: 24px; margin: 24px 0; border: 2px solid #FFB74D; }
+        .analogy-box h4 { color: #E65100; margin-bottom: 12px; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+        .analogy-box h4::before { content: "💡"; }
+        .step-box { background: #E8F5E9; border-radius: 12px; padding: 20px 24px; margin: 16px 0; border-left: 4px solid #4CAF50; }
+        .step-box h4 { color: #2E7D32; margin-bottom: 12px; }
+        .code-block { background: #1a1a2e; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 0.88rem; color: #E2E8F0; overflow-x: auto; line-height: 1.8; border: 1px solid #2d2d4a; white-space: pre; }
+        .code-block .comment { color: #6A9955; }
+        .code-block .keyword { color: #C586C0; }
+        .code-block .function { color: #DCDCAA; }
+        .code-block .type { color: #4EC9B0; }
+        .code-block .number { color: #B5CEA8; }
+        .code-block .string { color: #CE9178; }
+        .diagram { background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%); border: 2px solid #E2E8F0; border-radius: 16px; padding: 28px; margin: 24px 0; font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 0.85rem; line-height: 1.5; overflow-x: auto; white-space: pre; color: #334155; }
+        .comparison-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.95rem; }
+        .comparison-table th { background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%); color: white; padding: 16px; text-align: left; font-weight: 600; }
+        .comparison-table td { padding: 14px 16px; border-bottom: 1px solid #BBDEFB; }
+        .comparison-table tr:nth-child(even) { background: #E3F2FD; }
+        .comparison-table tr:hover { background: #BBDEFB; }
+        .comparison-table .good { background: #C8E6C9; color: #2E7D32; font-weight: 600; }
+        .comparison-table .bad { background: #FFCDD2; color: #C62828; }
+        .comparison-table .neutral { background: #FFF3E0; color: #E65100; }
+        .summary-box { background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%); border-radius: 20px; padding: 36px; color: white; margin: 40px 0; box-shadow: 0 4px 20px rgba(25,118,210,0.3); }
+        .summary-box h3 { font-size: 1.4rem; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+        .summary-box h3::before { content: "📝"; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 12px 0; padding-left: 28px; position: relative; font-size: 1.05rem; border-bottom: 1px solid rgba(255,255,255,0.15); }
+        .summary-box li:last-child { border-bottom: none; }
+        .summary-box li::before { content: "✓"; position: absolute; left: 0; color: #90CAF9; font-weight: bold; }
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 30px; border-top: 2px solid #BBDEFB; }
+        .nav-links a { color: #1565C0; text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 12px; transition: all 0.2s; }
+        .nav-links a:hover { background: #E3F2FD; }
+        .progress-indicator { display: flex; justify-content: center; gap: 8px; margin-bottom: 40px; flex-wrap: wrap; }
+        .progress-dot { width: 12px; height: 12px; border-radius: 50%; background: #BBDEFB; transition: all 0.3s; }
+        .progress-dot.active { background: #1976D2; transform: scale(1.2); }
+        .progress-dot.completed { background: #1565C0; }
+        .visual-flow { display: flex; flex-direction: column; gap: 16px; margin: 24px 0; }
+        .flow-step { background: white; border: 2px solid #BBDEFB; border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; }
+        .flow-step.highlight-step { border-color: #1976D2; background: #E3F2FD; }
+        .flow-number { background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%); color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+        .flow-arrow { text-align: center; color: #1976D2; font-size: 1.5rem; }
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.8rem; }
+            .conversation { padding: 24px; }
+            .code-block { padding: 16px; font-size: 0.8rem; }
+            .diagram { padding: 16px; font-size: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../../cpp-modern/" class="back-link">← Modern C++</a>
+
+        <div class="header">
+            <h1>왜 virtual 함수가 많으면 느려질까?</h1>
+            <p>vtable의 비밀과 게임 서버에서 가상 함수를 다루는 법</p>
+        </div>
+
+        <div class="progress-indicator">
+            <div class="progress-dot active"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+            <div class="progress-dot"></div>
+        </div>
+
+        <!-- Part 1: 가상 함수가 뭐야? -->
+        <div class="conversation">
+            <h2>Part 1. 가상 함수가 뭐야?</h2>
+
+            <div class="q">virtual 키워드를 왜 붙이는 거야?</div>
+            <div class="a">
+                <p><span class="highlight">다형성(Polymorphism)</span>을 위해서예요. 부모 타입으로 자식을 다룰 때 필요해요.</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 리모컨과 가전제품</h4>
+                    <p><strong>"전원 켜기" 버튼</strong>이 있는 만능 리모컨이 있다고 해봐요.</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>TV를 향하면 → TV 전원이 켜짐</li>
+                        <li>에어컨을 향하면 → 에어컨 전원이 켜짐</li>
+                        <li>선풍기를 향하면 → 선풍기 전원이 켜짐</li>
+                    </ul>
+                    <p>같은 버튼인데 <strong>대상에 따라 다르게 동작</strong>해요!</p>
+                    <p><code>virtual</code>이 이걸 가능하게 합니다.</p>
+                </div>
+
+                <div class="code-block"><span class="comment">// virtual 없이</span>
+<span class="keyword">class</span> <span class="type">Monster</span> {
+<span class="keyword">public</span>:
+    <span class="keyword">void</span> <span class="function">Attack</span>() { cout << <span class="string">"기본 공격"</span>; }
+};
+
+<span class="keyword">class</span> <span class="type">Dragon</span> : <span class="keyword">public</span> <span class="type">Monster</span> {
+<span class="keyword">public</span>:
+    <span class="keyword">void</span> <span class="function">Attack</span>() { cout << <span class="string">"불 뿜기!"</span>; }
+};
+
+<span class="type">Monster</span>* m = <span class="keyword">new</span> <span class="type">Dragon</span>();
+m-><span class="function">Attack</span>();  <span class="comment">// 출력: "기본 공격" 😱</span>
+               <span class="comment">// Dragon인데 Monster의 함수가 호출됨!</span></div>
+
+                <div class="code-block"><span class="comment">// virtual 사용</span>
+<span class="keyword">class</span> <span class="type">Monster</span> {
+<span class="keyword">public</span>:
+    <span class="keyword">virtual</span> <span class="keyword">void</span> <span class="function">Attack</span>() { cout << <span class="string">"기본 공격"</span>; }
+};
+
+<span class="keyword">class</span> <span class="type">Dragon</span> : <span class="keyword">public</span> <span class="type">Monster</span> {
+<span class="keyword">public</span>:
+    <span class="keyword">void</span> <span class="function">Attack</span>() <span class="keyword">override</span> { cout << <span class="string">"불 뿜기!"</span>; }
+};
+
+<span class="type">Monster</span>* m = <span class="keyword">new</span> <span class="type">Dragon</span>();
+m-><span class="function">Attack</span>();  <span class="comment">// 출력: "불 뿜기!" ✓</span>
+               <span class="comment">// 실제 타입(Dragon)의 함수가 호출됨!</span></div>
+            </div>
+
+            <div class="q">그럼 뭐가 문제야? 항상 virtual 쓰면 안 돼?</div>
+            <div class="a">
+                <p><span class="warning">공짜가 아닙니다!</span> 편의를 위해 <strong>성능 비용</strong>을 지불해요.</p>
+
+                <div class="info-box">
+                    <strong>virtual 함수의 비용</strong><br>
+                    • 메모리: 객체마다 vptr (포인터 하나) 추가<br>
+                    • 속도: 함수 호출 시 간접 참조 필요<br>
+                    • 최적화 제한: 인라인 불가능
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: vtable이 뭐야? -->
+        <div class="conversation">
+            <h2>Part 2. vtable이 뭐야?</h2>
+
+            <div class="q">virtual을 쓰면 내부적으로 뭐가 달라지는 거야?</div>
+            <div class="a">
+                <p>컴파일러가 <span class="highlight">vtable (가상 함수 테이블)</span>을 만들어요!</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 전화번호부</h4>
+                    <p>각 클래스가 <strong>자기만의 전화번호부</strong>를 가지고 있다고 생각해요.</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>Monster 전화번호부: Attack → 기본공격 함수 주소</li>
+                        <li>Dragon 전화번호부: Attack → 불뿜기 함수 주소</li>
+                        <li>Slime 전화번호부: Attack → 점프공격 함수 주소</li>
+                    </ul>
+                    <p>객체는 자기 클래스의 전화번호부 위치(vptr)를 기억하고 있어요.</p>
+                </div>
+
+                <div class="diagram">
+vtable 구조:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [클래스별 vtable - 전역 데이터]                            │
+│                                                             │
+│  Monster_vtable:                 Dragon_vtable:             │
+│  ┌─────────────────┐            ┌─────────────────┐         │
+│  │ Attack() → 0x100│            │ Attack() → 0x200│         │
+│  │ Move()   → 0x110│            │ Move()   → 0x210│         │
+│  │ Die()    → 0x120│            │ Die()    → 0x220│         │
+│  └─────────────────┘            └─────────────────┘         │
+│                                                             │
+│  [객체 인스턴스]                                            │
+│                                                             │
+│  Monster m1:                    Dragon d1:                  │
+│  ┌─────────────────┐            ┌─────────────────┐         │
+│  │ vptr ──────────────→         │ vptr ──────────────→      │
+│  │      Monster_vtable          │      Dragon_vtable        │
+│  ├─────────────────┤            ├─────────────────┤         │
+│  │ hp = 100        │            │ hp = 500        │         │
+│  │ mp = 50         │            │ mp = 200        │         │
+│  └─────────────────┘            └─────────────────┘         │
+│                                                             │
+│  호출 과정: m->Attack()                                     │
+│  1. m의 vptr 읽기                                           │
+│  2. vtable에서 Attack 슬롯 찾기                             │
+│  3. 해당 주소로 점프                                        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">일반 함수 호출이랑 뭐가 달라?</div>
+            <div class="a">
+                <div class="visual-flow">
+                    <div class="flow-step">
+                        <div class="flow-number">1</div>
+                        <div><strong>일반 함수</strong>: 주소가 컴파일 타임에 결정됨 → <code>call 0x12345</code></div>
+                    </div>
+                    <div class="flow-step highlight-step">
+                        <div class="flow-number">2</div>
+                        <div><strong>가상 함수</strong>: 런타임에 vtable 조회 필요 → <code>call [vptr + offset]</code></div>
+                    </div>
+                </div>
+
+                <div class="code-block"><span class="comment">// 일반 함수 호출 (컴파일 결과)</span>
+<span class="comment">// 직접 점프 - 한 번에 끝!</span>
+call Monster::Attack    <span class="comment">; 주소가 고정되어 있음</span>
+
+<span class="comment">// 가상 함수 호출 (컴파일 결과)</span>
+<span class="comment">// 3단계 필요!</span>
+mov  rax, [rcx]         <span class="comment">; 1. 객체에서 vptr 읽기</span>
+mov  rax, [rax + 0]     <span class="comment">; 2. vtable에서 함수 주소 읽기</span>
+call rax                <span class="comment">; 3. 해당 주소로 점프</span></div>
+
+                <div class="info-box">
+                    <strong>추가 비용 정리</strong><br>
+                    • 메모리 읽기 2번 추가 (vptr, vtable)<br>
+                    • 캐시 미스 가능성 (vtable이 멀리 있으면)<br>
+                    • 분기 예측 어려움 (어디로 점프할지 모름)
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 얼마나 느려지는데? -->
+        <div class="conversation">
+            <h2>Part 3. 얼마나 느려지는 건데?</h2>
+
+            <div class="q">진짜 체감될 정도로 느려?</div>
+            <div class="a">
+                <p><span class="highlight">상황에 따라 다릅니다!</span></p>
+
+                <div class="diagram">
+상황별 영향:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [영향 거의 없음]                                           │
+│  ─────────────────────────────────────────────              │
+│  • 가끔 호출되는 함수 (이벤트 핸들러)                       │
+│  • 함수 내부 로직이 무거운 경우 (DB 쿼리, 파일 I/O)        │
+│  • 분기 예측이 잘 맞는 경우 (항상 같은 타입)               │
+│                                                             │
+│  [영향 심각함] ⚠️                                           │
+│  ─────────────────────────────────────────────              │
+│  • 초당 수백만 번 호출되는 hot path                         │
+│  • 함수 자체가 아주 가벼운 경우 (getter/setter)            │
+│  • 다양한 타입이 섞여서 분기 예측 실패                      │
+│  • 캐시 미스가 자주 발생                                    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">구체적인 숫자로 보여줘!</div>
+            <div class="a">
+                <div class="code-block"><span class="comment">// 벤치마크 시나리오: 1000만 번 호출</span>
+
+<span class="comment">// 테스트 1: 일반 함수</span>
+<span class="keyword">class</span> <span class="type">Normal</span> {
+    <span class="type">int</span> <span class="function">GetValue</span>() { <span class="keyword">return</span> value; }  <span class="comment">// 인라인됨!</span>
+};
+<span class="comment">// 결과: ~3ms (대부분 최적화로 사라짐)</span>
+
+<span class="comment">// 테스트 2: 가상 함수 (같은 타입만)</span>
+<span class="keyword">class</span> <span class="type">Virtual</span> {
+    <span class="keyword">virtual</span> <span class="type">int</span> <span class="function">GetValue</span>() { <span class="keyword">return</span> value; }
+};
+<span class="comment">// 결과: ~15ms (분기 예측 성공)</span>
+
+<span class="comment">// 테스트 3: 가상 함수 (타입 섞임)</span>
+<span class="comment">// monsters = {Dragon, Slime, Goblin, Dragon, Slime...}</span>
+<span class="keyword">for</span> (Monster* m : monsters) {
+    m-><span class="function">GetValue</span>();  <span class="comment">// 매번 다른 vtable!</span>
+}
+<span class="comment">// 결과: ~45ms (분기 예측 실패, 캐시 미스)</span></div>
+
+                <table class="comparison-table">
+                    <tr>
+                        <th>호출 방식</th>
+                        <th>1000만 회 소요 시간</th>
+                        <th>상대 비용</th>
+                    </tr>
+                    <tr>
+                        <td>일반 함수 (인라인)</td>
+                        <td class="good">~3ms</td>
+                        <td class="good">1x</td>
+                    </tr>
+                    <tr>
+                        <td>가상 함수 (같은 타입)</td>
+                        <td class="neutral">~15ms</td>
+                        <td class="neutral">5x</td>
+                    </tr>
+                    <tr>
+                        <td>가상 함수 (타입 혼합)</td>
+                        <td class="bad">~45ms</td>
+                        <td class="bad">15x</td>
+                    </tr>
+                </table>
+
+                <div class="info-box">
+                    <strong>핵심 인사이트</strong><br>
+                    • 단순 비교: 가상 함수가 <strong>5~15배 느림</strong><br>
+                    • 하지만! 1000만 번 호출해도 45ms<br>
+                    • 진짜 문제는 <strong>다른 타입이 섞일 때</strong> (분기 예측 실패)
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 인라인이 왜 중요해? -->
+        <div class="conversation">
+            <h2>Part 4. 인라인이 왜 안 되는 게 문제야?</h2>
+
+            <div class="q">인라인이 뭔데? 왜 중요해?</div>
+            <div class="a">
+                <p><span class="highlight">인라인</span>은 함수 호출을 함수 본문으로 대체하는 최적화예요.</p>
+
+                <div class="analogy-box">
+                    <h4>비유: 전화 vs 직접 말하기</h4>
+                    <p><strong>일반 함수 호출</strong> = 전화하기</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>전화 걸기 → 연결 대기 → 용건 말하기 → 끊기</li>
+                        <li>오버헤드가 있음</li>
+                    </ul>
+                    <p><strong>인라인</strong> = 옆에 있는 사람한테 바로 말하기</p>
+                    <ul style="margin: 10px 0 10px 20px;">
+                        <li>그냥 바로 말함</li>
+                        <li>오버헤드 없음!</li>
+                    </ul>
+                </div>
+
+                <div class="code-block"><span class="comment">// 인라인 전</span>
+<span class="keyword">int</span> <span class="function">GetHP</span>() { <span class="keyword">return</span> hp; }
+
+<span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i < <span class="number">10000</span>; i++) {
+    total += monsters[i].<span class="function">GetHP</span>();  <span class="comment">// 함수 호출 10000번!</span>
+}
+
+<span class="comment">// 인라인 후 (컴파일러가 자동 변환)</span>
+<span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i < <span class="number">10000</span>; i++) {
+    total += monsters[i].hp;  <span class="comment">// 함수 호출 없음!</span>
+}
+
+<span class="comment">// 더 나아가면 (벡터화 등 추가 최적화)</span>
+<span class="comment">// SIMD로 한 번에 여러 개 더하기도 가능!</span></div>
+            </div>
+
+            <div class="q">가상 함수는 왜 인라인이 안 돼?</div>
+            <div class="a">
+                <p><span class="warning">컴파일 시점에 어떤 함수인지 모르니까요!</span></p>
+
+                <div class="diagram">
+왜 인라인이 불가능한가:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [일반 함수]                                                │
+│                                                             │
+│  Monster m;                                                 │
+│  m.GetHP();   →   컴파일러: "Monster::GetHP()구나!"        │
+│                            "인라인 할게!"                   │
+│                            → total += m.hp;                 │
+│                                                             │
+│  [가상 함수]                                                │
+│                                                             │
+│  Monster* m = GetSomeMonster();  <span class="comment">// Dragon? Slime? 모름!</span>  │
+│  m->GetHP();  →   컴파일러: "Monster::GetHP()? 아니면      │
+│                             Dragon::GetHP()? Slime::GetHP()?│
+│                             모르겠다... 인라인 포기 😢"     │
+│                                                             │
+│  → 런타임에 vtable 봐야 알 수 있음                         │
+│  → 컴파일 타임 최적화 불가                                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+
+                <div class="info-box">
+                    <strong>인라인 실패의 연쇄 효과</strong><br>
+                    • 인라인 안 됨 → 함수 호출 오버헤드 발생<br>
+                    • 인라인 안 됨 → 후속 최적화도 막힘 (상수 전파, 벡터화 등)<br>
+                    • 인라인 안 됨 → 캐시 효율 저하 (코드가 흩어짐)
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 어떻게 해결해? -->
+        <div class="conversation">
+            <h2>Part 5. 그럼 어떻게 해결해?</h2>
+
+            <div class="q">가상 함수 대신 뭘 쓸 수 있어?</div>
+            <div class="a">
+                <p>여러 가지 대안이 있어요!</p>
+
+                <div class="visual-flow">
+                    <div class="flow-step">
+                        <div class="flow-number">1</div>
+                        <div><strong>CRTP</strong> - 컴파일 타임 다형성 (템플릿)</div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="flow-number">2</div>
+                        <div><strong>enum + switch</strong> - 타입 태그 기반</div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="flow-number">3</div>
+                        <div><strong>함수 포인터</strong> - 직접 저장</div>
+                    </div>
+                    <div class="flow-step highlight-step">
+                        <div class="flow-number">4</div>
+                        <div><strong>std::variant</strong> - 모던 C++ 방식</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="q">CRTP가 뭐야?</div>
+            <div class="a">
+                <p><span class="highlight">Curiously Recurring Template Pattern</span> - 템플릿으로 다형성 구현!</p>
+
+                <div class="code-block"><span class="comment">// CRTP 패턴</span>
+<span class="keyword">template</span><<span class="keyword">typename</span> <span class="type">Derived</span>>
+<span class="keyword">class</span> <span class="type">Monster</span> {
+<span class="keyword">public</span>:
+    <span class="keyword">void</span> <span class="function">Attack</span>() {
+        <span class="comment">// 자식 클래스의 함수를 직접 호출!</span>
+        <span class="keyword">static_cast</span><<span class="type">Derived</span>*>(<span class="keyword">this</span>)-><span class="function">AttackImpl</span>();
+    }
+};
+
+<span class="keyword">class</span> <span class="type">Dragon</span> : <span class="keyword">public</span> <span class="type">Monster</span><<span class="type">Dragon</span>> {
+<span class="keyword">public</span>:
+    <span class="keyword">void</span> <span class="function">AttackImpl</span>() { cout << <span class="string">"불 뿜기!"</span>; }
+};
+
+<span class="keyword">class</span> <span class="type">Slime</span> : <span class="keyword">public</span> <span class="type">Monster</span><<span class="type">Slime</span>> {
+<span class="keyword">public</span>:
+    <span class="keyword">void</span> <span class="function">AttackImpl</span>() { cout << <span class="string">"점프 공격!"</span>; }
+};
+
+<span class="comment">// 사용</span>
+<span class="type">Dragon</span> d;
+d.<span class="function">Attack</span>();  <span class="comment">// 컴파일 타임에 Dragon::AttackImpl()로 결정!</span>
+              <span class="comment">// 인라인 가능! vtable 없음!</span></div>
+
+                <div class="info-box">
+                    <strong>CRTP 장점</strong><br>
+                    • vtable 없음 → 메모리 절약<br>
+                    • 인라인 가능 → 성능 향상<br>
+                    • 컴파일 타임 체크<br><br>
+                    <strong>단점</strong><br>
+                    • 이기종 컬렉션 불가 (Dragon과 Slime을 같은 배열에 못 넣음)<br>
+                    • 코드가 복잡해질 수 있음
+                </div>
+            </div>
+
+            <div class="q">enum + switch 방식은?</div>
+            <div class="a">
+                <div class="code-block"><span class="comment">// enum + switch 방식</span>
+<span class="keyword">enum class</span> <span class="type">MonsterType</span> { Dragon, Slime, Goblin };
+
+<span class="keyword">struct</span> <span class="type">Monster</span> {
+    <span class="type">MonsterType</span> type;
+    <span class="type">int</span> hp;
+    <span class="type">int</span> damage;
+
+    <span class="keyword">void</span> <span class="function">Attack</span>() {
+        <span class="keyword">switch</span> (type) {
+            <span class="keyword">case</span> <span class="type">MonsterType</span>::Dragon:
+                cout << <span class="string">"불 뿜기! 데미지: "</span> << damage * <span class="number">2</span>;
+                <span class="keyword">break</span>;
+            <span class="keyword">case</span> <span class="type">MonsterType</span>::Slime:
+                cout << <span class="string">"점프 공격! 데미지: "</span> << damage;
+                <span class="keyword">break</span>;
+            <span class="keyword">case</span> <span class="type">MonsterType</span>::Goblin:
+                cout << <span class="string">"칼 공격! 데미지: "</span> << damage;
+                <span class="keyword">break</span>;
+        }
+    }
+};
+
+<span class="comment">// 사용</span>
+<span class="type">Monster</span> monsters[<span class="number">1000</span>];  <span class="comment">// 같은 배열에 모든 타입!</span>
+<span class="keyword">for</span> (<span class="keyword">auto</span>& m : monsters) {
+    m.<span class="function">Attack</span>();  <span class="comment">// switch로 분기</span>
+}</div>
+
+                <div class="info-box">
+                    <strong>장점</strong><br>
+                    • 메모리 연속 배치 가능 (캐시 친화적)<br>
+                    • 분기 예측이 잘 될 수 있음<br>
+                    • 코드가 명확함<br><br>
+                    <strong>단점</strong><br>
+                    • 새 타입 추가 시 모든 switch 수정 필요<br>
+                    • 타입별 데이터 크기가 다르면 복잡해짐
+                </div>
+            </div>
+
+            <div class="q">std::variant는?</div>
+            <div class="a">
+                <div class="code-block"><span class="comment">// std::variant (C++17)</span>
+<span class="keyword">struct</span> <span class="type">Dragon</span> { <span class="keyword">void</span> <span class="function">Attack</span>() { cout << <span class="string">"불!"</span>; } };
+<span class="keyword">struct</span> <span class="type">Slime</span>  { <span class="keyword">void</span> <span class="function">Attack</span>() { cout << <span class="string">"점프!"</span>; } };
+<span class="keyword">struct</span> <span class="type">Goblin</span> { <span class="keyword">void</span> <span class="function">Attack</span>() { cout << <span class="string">"칼!"</span>; } };
+
+<span class="keyword">using</span> <span class="type">Monster</span> = std::variant<<span class="type">Dragon</span>, <span class="type">Slime</span>, <span class="type">Goblin</span>>;
+
+<span class="comment">// 사용</span>
+std::vector<<span class="type">Monster</span>> monsters;
+monsters.<span class="function">push_back</span>(<span class="type">Dragon</span>{});
+monsters.<span class="function">push_back</span>(<span class="type">Slime</span>{});
+
+<span class="keyword">for</span> (<span class="keyword">auto</span>& m : monsters) {
+    std::<span class="function">visit</span>([](<span class="keyword">auto</span>& monster) {
+        monster.<span class="function">Attack</span>();
+    }, m);
+}
+
+<span class="comment">// 장점:</span>
+<span class="comment">// - 타입 안전 (컴파일 타임 체크)</span>
+<span class="comment">// - 메모리 연속 배치</span>
+<span class="comment">// - 모던하고 깔끔한 문법</span></div>
+            </div>
+        </div>
+
+        <!-- Part 6: 게임 서버에서의 적용 -->
+        <div class="conversation">
+            <h2>Part 6. 게임 서버에서는 어떻게 적용해?</h2>
+
+            <div class="q">실제 게임 서버에서 어떻게 써?</div>
+            <div class="a">
+                <p><span class="key-point">상황에 맞게 선택합니다!</span></p>
+
+                <div class="diagram">
+사용 상황별 가이드:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [virtual 써도 되는 경우]                                   │
+│  ─────────────────────────────────────────────              │
+│  • 패킷 핸들러 (가끔 호출)                                  │
+│  • 이벤트 시스템 (실행 빈도 낮음)                           │
+│  • 플러그인/모듈 시스템                                     │
+│  • 확장성이 중요한 곳                                       │
+│                                                             │
+│  [virtual 피해야 하는 경우] ⚠️                              │
+│  ─────────────────────────────────────────────              │
+│  • 매 틱마다 호출되는 Update()                              │
+│  • 수천~수만 객체 순회                                      │
+│  • getter/setter 같은 작은 함수                             │
+│  • 성능 크리티컬 루프 내부                                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+
+            <div class="q">몬스터 시스템 예시를 보여줘!</div>
+            <div class="a">
+                <div class="code-block"><span class="comment">// 게임 서버 - 하이브리드 접근</span>
+
+<span class="comment">// 1. 데이터는 연속 배치 (성능)</span>
+<span class="keyword">struct</span> <span class="type">MonsterData</span> {
+    <span class="type">MonsterType</span> type;
+    <span class="type">int32_t</span> hp, mp, x, y;
+    <span class="type">uint32_t</span> state;
+};
+
+<span class="type">MonsterData</span> monsters[<span class="number">10000</span>];  <span class="comment">// 캐시 친화적!</span>
+
+<span class="comment">// 2. 매 틱 업데이트는 virtual 없이</span>
+<span class="keyword">void</span> <span class="function">UpdateAllMonsters</span>() {
+    <span class="keyword">for</span> (<span class="keyword">auto</span>& m : monsters) {
+        <span class="comment">// 타입별로 다른 로직이 필요하면 switch</span>
+        <span class="keyword">switch</span> (m.type) {
+            <span class="keyword">case</span> <span class="type">MonsterType</span>::Dragon:
+                <span class="function">UpdateDragon</span>(m);  <span class="comment">// 인라인 가능!</span>
+                <span class="keyword">break</span>;
+            <span class="comment">// ...</span>
+        }
+    }
+}
+
+<span class="comment">// 3. 복잡한 AI는 virtual 사용 (가끔 호출)</span>
+<span class="keyword">class</span> <span class="type">IMonsterAI</span> {
+<span class="keyword">public</span>:
+    <span class="keyword">virtual</span> <span class="keyword">void</span> <span class="function">Think</span>(<span class="type">MonsterData</span>& data) = <span class="number">0</span>;
+};
+
+<span class="keyword">class</span> <span class="type">DragonAI</span> : <span class="keyword">public</span> <span class="type">IMonsterAI</span> {
+<span class="keyword">public</span>:
+    <span class="keyword">void</span> <span class="function">Think</span>(<span class="type">MonsterData</span>& data) <span class="keyword">override</span> {
+        <span class="comment">// 복잡한 AI 로직... (가끔 호출되니까 OK)</span>
+    }
+};
+
+<span class="comment">// AI는 1초에 한 번만 호출</span>
+<span class="keyword">if</span> (currentTick % <span class="number">20</span> == <span class="number">0</span>) {  <span class="comment">// 20틱 = 1초</span>
+    ai-><span class="function">Think</span>(monster);
+}</div>
+            </div>
+        </div>
+
+        <!-- Part 7: 면접 대비 -->
+        <div class="conversation">
+            <h2>Part 7. 면접에서 물어보면?</h2>
+
+            <div class="q">"가상 함수의 오버헤드를 설명하세요"라고 하면?</div>
+            <div class="a">
+                <div class="step-box">
+                    <h4>✅ 핵심 답변 포인트</h4>
+
+                    <p><strong>1. vtable 메커니즘</strong></p>
+                    <p style="margin-left: 20px;">"가상 함수가 있는 클래스는 vtable을 갖고, 객체는 vptr로 vtable을 가리킵니다. 함수 호출 시 vptr → vtable → 함수 주소 순으로 간접 참조가 필요합니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>2. 오버헤드 종류</strong></p>
+                    <p style="margin-left: 20px;">"메모리(vptr), 간접 호출 비용, 캐시 미스 가능성, 그리고 <strong>인라인 불가</strong>로 인한 최적화 제한이 있습니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>3. 실제 영향</strong></p>
+                    <p style="margin-left: 20px;">"단순 호출은 5배, 타입이 섞이면 15배까지 느려질 수 있지만, 호출 빈도와 함수 무게에 따라 영향이 달라집니다."</p>
+
+                    <p style="margin-top: 16px;"><strong>4. 대안</strong></p>
+                    <p style="margin-left: 20px;">"CRTP로 컴파일 타임 다형성, enum+switch, std::variant 등이 있고, 게임 서버에서는 hot path에만 선별 적용합니다."</p>
+                </div>
+            </div>
+
+            <div class="q">핵심 숫자는?</div>
+            <div class="a">
+                <div class="diagram">
+핵심 숫자 정리:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  [메모리 오버헤드]                                          │
+│  • vptr 크기: 8바이트 (64비트)                              │
+│  • 100만 객체 × 8바이트 = 8MB                               │
+│                                                             │
+│  [호출 오버헤드]                                            │
+│  • 일반 함수: ~1 cycle (인라인 시 0)                        │
+│  • 가상 함수: ~10-25 cycles                                 │
+│  • 캐시 미스 시: +100 cycles                                │
+│                                                             │
+│  [벤치마크 결과]                                            │
+│  • 같은 타입: ~5배 느림                                     │
+│  • 타입 혼합: ~15배 느림                                    │
+│                                                             │
+│  [게임 서버 기준]                                           │
+│  • 60fps = 16.6ms/frame                                     │
+│  • 1만 몬스터 × 가상함수 Update = ~0.5ms (허용 범위)       │
+│  • 1만 몬스터 × 10개 가상함수 = ~5ms (문제!)               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘</div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>vtable</strong>: 클래스별 가상 함수 주소 테이블, 객체는 vptr로 가리킴</li>
+                <li><strong>오버헤드</strong>: 메모리(8B/객체), 간접 호출, 캐시 미스, 인라인 불가</li>
+                <li><strong>인라인 불가</strong>가 가장 큰 성능 손실 원인 (후속 최적화도 막힘)</li>
+                <li><strong>타입 혼합</strong> 시 분기 예측 실패로 15배까지 느려질 수 있음</li>
+                <li><strong>CRTP</strong>: 컴파일 타임 다형성으로 인라인 가능</li>
+                <li><strong>enum+switch</strong>: 간단하고 캐시 친화적</li>
+                <li><strong>하이브리드</strong>: 데이터는 연속 배치, 복잡한 로직만 virtual</li>
+                <li><strong>hot path</strong>에만 최적화 적용, 나머지는 virtual 사용 OK</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../why-cpp-game-server/">← C++ 선택 이유</a>
+            <a href="../sso-string-optimization/">문자열 최적화 →</a>
+        </div>
+    </div>
+</body>
+</html>

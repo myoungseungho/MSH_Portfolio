@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>왜 Enum만 쓰면 GC가 터질까? 박싱 문제 - MSH Portfolio</title>
+    <title>C# Enum 박싱 문제 - MSH Portfolio</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -12,245 +12,366 @@
             color: #333;
             line-height: 1.9;
         }
-        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .container { max-width: 900px; margin: 0 auto; padding: 60px 20px; }
+
         .back-link {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
             margin-bottom: 24px;
             color: #666;
             text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.2s;
         }
-        .back-link:hover { color: #111; }
-        .header { margin-bottom: 48px; }
-        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
-        .header p { color: #666; font-size: 1.1rem; }
+        .back-link:hover { color: #4CAF50; }
 
+        /* 헤더 */
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+            padding: 48px 20px;
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            border-radius: 24px;
+            color: white;
+        }
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin-bottom: 12px;
+            line-height: 1.3;
+        }
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.95;
+        }
         .tags {
             display: flex;
             flex-wrap: wrap;
+            justify-content: center;
             gap: 8px;
-            margin-top: 16px;
+            margin-top: 20px;
         }
         .tag {
-            background: #fce4ec;
-            color: #c2185b;
-            padding: 6px 14px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 6px 16px;
             border-radius: 20px;
             font-size: 0.85rem;
+            backdrop-filter: blur(10px);
         }
 
-        /* 대화 스타일 */
-        .conversation {
+        /* 진행 표시기 */
+        .progress-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin: 40px 0;
+            flex-wrap: wrap;
+        }
+        .progress-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+        .progress-dot.active { background: #4CAF50; transform: scale(1.2); }
+        .progress-dot:hover { background: #81C784; }
+        .progress-dot::after {
+            content: attr(data-part);
+            position: absolute;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.7rem;
+            color: #999;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .progress-dot:hover::after { opacity: 1; }
+
+        /* 파트 섹션 */
+        .part-section {
             background: white;
-            border-radius: 16px;
-            padding: 32px;
+            border-radius: 20px;
+            padding: 40px;
             margin: 32px 0;
-            border: 1px solid #e0e0e0;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            border: 1px solid #e8e8e8;
         }
-        .conversation h2 {
-            font-size: 1.3rem;
-            color: #c2185b;
-            margin-bottom: 24px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid #fce4ec;
+        .part-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 32px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #4CAF50;
+        }
+        .part-number {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            color: white;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.2rem;
+        }
+        .part-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1B5E20;
         }
 
-        .chat { margin-bottom: 20px; }
+        /* Q&A 스타일 */
+        .chat { margin-bottom: 24px; }
         .q {
-            background: #fff3e0;
-            border-left: 4px solid #ff9800;
+            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+            border-left: 4px solid #4CAF50;
             padding: 16px 20px;
             margin: 16px 0;
-            border-radius: 0 12px 12px 0;
-            font-weight: 500;
+            border-radius: 0 16px 16px 0;
+            font-weight: 600;
+            color: #1B5E20;
         }
         .q::before {
             content: "Q. ";
-            color: #e65100;
-            font-weight: 700;
+            color: #2E7D32;
+            font-weight: 800;
         }
         .a {
-            padding: 8px 0 8px 20px;
-            border-left: 4px solid #e0e0e0;
+            padding: 12px 0 12px 24px;
+            border-left: 3px solid #C8E6C9;
             margin: 12px 0;
+            color: #333;
         }
         .a p { margin-bottom: 12px; }
         .a p:last-child { margin-bottom: 0; }
 
+        /* 강조 표시 */
         .highlight {
-            background: #fce4ec;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 600;
-            color: #c2185b;
+            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+            padding: 2px 10px;
+            border-radius: 6px;
+            font-weight: 700;
+            color: #2E7D32;
         }
         .key-point {
-            background: #c8e6c9;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 600;
-            color: #2e7d32;
+            background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+            padding: 2px 10px;
+            border-radius: 6px;
+            font-weight: 700;
+            color: #1565C0;
         }
         .warning {
-            background: #ffcdd2;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 600;
-            color: #c62828;
+            background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%);
+            padding: 2px 10px;
+            border-radius: 6px;
+            font-weight: 700;
+            color: #C62828;
         }
 
         /* 코드 블록 */
         .code-block {
-            background: #263238;
-            border-radius: 8px;
-            padding: 16px 20px;
-            margin: 16px 0;
-            font-family: 'Consolas', monospace;
+            background: #1E1E1E;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
             font-size: 0.9rem;
-            color: #eceff1;
+            color: #D4D4D4;
             overflow-x: auto;
-            line-height: 1.6;
-            white-space: pre-wrap;
+            line-height: 1.7;
+            border: 1px solid #333;
         }
+        .code-block .comment { color: #6A9955; }
+        .code-block .keyword { color: #569CD6; }
+        .code-block .type { color: #4EC9B0; }
+        .code-block .string { color: #CE9178; }
+        .code-block .number { color: #B5CEA8; }
+
+        /* 다이어그램 */
+        .diagram {
+            background: linear-gradient(135deg, #F5F5F5 0%, #EEEEEE 100%);
+            border-radius: 16px;
+            padding: 32px;
+            margin: 24px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            overflow-x: auto;
+            border: 2px solid #E0E0E0;
+        }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+            border-radius: 16px;
+            padding: 24px 28px;
+            margin: 24px 0;
+            border-left: 5px solid #FF9800;
+        }
+        .analogy-box strong {
+            color: #E65100;
+            font-size: 1.1rem;
+        }
+        .analogy-box p { margin-top: 12px; }
 
         /* 비교 테이블 */
         .compare-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 16px 0;
-            font-size: 0.9rem;
+            margin: 24px 0;
+            font-size: 0.95rem;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
         .compare-table th, .compare-table td {
-            padding: 12px;
-            border: 1px solid #e0e0e0;
+            padding: 16px;
             text-align: left;
+            border: 1px solid #e0e0e0;
         }
         .compare-table th {
-            background: #fce4ec;
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            color: white;
             font-weight: 600;
-            color: #880e4f;
         }
-        .compare-table .good { background: #e8f5e9; color: #2e7d32; }
-        .compare-table .bad { background: #ffebee; color: #c62828; }
-
-        /* 비유 박스 */
-        .analogy-box {
-            background: #f3e5f5;
-            border-radius: 12px;
-            padding: 20px 24px;
-            margin: 16px 0;
-            border-left: 4px solid #9c27b0;
-        }
-        .analogy-box strong {
-            color: #7b1fa2;
-        }
+        .compare-table tr:nth-child(even) { background: #f8f8f8; }
+        .compare-table .good { background: #E8F5E9; color: #2E7D32; font-weight: 600; }
+        .compare-table .bad { background: #FFEBEE; color: #C62828; font-weight: 600; }
 
         /* 결과 박스 */
         .result-box {
-            background: #e8f5e9;
-            border-radius: 12px;
-            padding: 20px 24px;
-            margin: 16px 0;
-            border-left: 4px solid #4caf50;
+            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+            border-radius: 16px;
+            padding: 24px 28px;
+            margin: 24px 0;
+            border-left: 5px solid #4CAF50;
         }
-        .result-box strong {
-            color: #2e7d32;
-        }
+        .result-box strong { color: #1B5E20; font-size: 1.1rem; }
 
         /* 경고 박스 */
         .warning-box {
-            background: #fff3e0;
-            border-radius: 12px;
-            padding: 20px 24px;
-            margin: 16px 0;
-            border-left: 4px solid #ff9800;
-        }
-        .warning-box strong {
-            color: #e65100;
-        }
-
-        /* 가이드라인 박스 */
-        .guide-box {
-            background: #fce4ec;
-            border-radius: 12px;
-            padding: 20px 24px;
-            margin: 16px 0;
-            border-left: 4px solid #E91E63;
-        }
-        .guide-box strong {
-            color: #c2185b;
-        }
-        .guide-box ul {
-            margin-top: 12px;
-            margin-left: 20px;
-        }
-        .guide-box li {
-            margin: 8px 0;
-        }
-
-        /* 핵심 정리 박스 */
-        .summary-box {
-            background: linear-gradient(135deg, #880e4f 0%, #c2185b 100%);
+            background: linear-gradient(135deg, #FFF3E0 0%, #FFECB3 100%);
             border-radius: 16px;
-            padding: 32px;
-            color: white;
-            margin: 32px 0;
+            padding: 24px 28px;
+            margin: 24px 0;
+            border-left: 5px solid #FFC107;
         }
-        .summary-box h3 {
-            font-size: 1.2rem;
-            margin-bottom: 20px;
-        }
-        .summary-box ul {
-            list-style: none;
-        }
-        .summary-box li {
-            padding: 8px 0;
-            padding-left: 24px;
+        .warning-box strong { color: #F57F17; font-size: 1.1rem; }
+
+        /* 스텝 박스 */
+        .step-box {
+            background: white;
+            border: 2px solid #4CAF50;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
             position: relative;
         }
-        .summary-box li::before {
-            content: ">";
+        .step-box .step-num {
             position: absolute;
-            left: 0;
-            color: #f8bbd9;
+            top: -12px;
+            left: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+        .step-box .step-title {
+            color: #2E7D32;
+            font-weight: 700;
+            margin-bottom: 8px;
+            padding-top: 8px;
         }
 
+        /* 요약 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #4CAF50 0%, #1B5E20 100%);
+            border-radius: 20px;
+            padding: 36px;
+            color: white;
+            margin: 40px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.4rem;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .summary-box ul { list-style: none; }
+        .summary-box li {
+            padding: 12px 0;
+            padding-left: 28px;
+            position: relative;
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+        }
+        .summary-box li:last-child { border-bottom: none; }
+        .summary-box li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #A5D6A7;
+            font-weight: bold;
+        }
+
+        /* 네비게이션 */
         .nav-links {
             display: flex;
             justify-content: space-between;
             margin-top: 60px;
-            padding-top: 24px;
-            border-top: 1px solid #e0e0e0;
+            padding-top: 32px;
+            border-top: 2px solid #e0e0e0;
         }
         .nav-links a {
-            color: #c2185b;
+            color: #4CAF50;
             text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
         }
-        .nav-links a:hover { text-decoration: underline; }
+        .nav-links a:hover { color: #2E7D32; }
 
+        /* 출처 링크 */
         .source-link {
             display: inline-block;
             margin-top: 16px;
-            padding: 12px 24px;
-            background: #E91E63;
+            padding: 14px 28px;
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
             color: white;
             text-decoration: none;
-            border-radius: 8px;
-            font-weight: 500;
-            transition: all 0.2s;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s;
         }
         .source-link:hover {
-            background: #c2185b;
             transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(76, 175, 80, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.7rem; }
+            .part-section { padding: 24px; }
+            .part-header { flex-direction: column; text-align: center; gap: 12px; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <a href="../cpp-modern/" class="back-link">< 언어 카테고리</a>
+        <a href="../cpp-modern/" class="back-link">← 언어 카테고리</a>
 
         <header class="header">
-            <h1>왜 Enum만 쓰면 GC가 터질까? 박싱 문제</h1>
-            <p>C# Enum의 숨겨진 성능 함정 - NDC 2019 정리</p>
+            <h1>C# Enum 박싱 문제</h1>
+            <p>왜 Enum만 쓰면 GC가 터질까? - 숨겨진 성능 함정과 해결책</p>
             <div class="tags">
                 <span class="tag">Boxing</span>
                 <span class="tag">Enum</span>
@@ -260,55 +381,71 @@
             </div>
         </header>
 
+        <!-- 진행 표시기 -->
+        <div class="progress-indicator">
+            <div class="progress-dot active" data-part="박싱이란?"></div>
+            <div class="progress-dot" data-part="왜 발생?"></div>
+            <div class="progress-dot" data-part="박싱 지옥"></div>
+            <div class="progress-dot" data-part="정석 해법"></div>
+            <div class="progress-dot" data-part="진짜 해법"></div>
+            <div class="progress-dot" data-part="실전 코드"></div>
+            <div class="progress-dot" data-part="면접대비"></div>
+        </div>
+
         <!-- Part 1: 박싱이란? -->
-        <div class="conversation">
-            <h2>Part 1. 박싱(Boxing)이 뭐야?</h2>
+        <section class="part-section" id="part1">
+            <div class="part-header">
+                <div class="part-number">1</div>
+                <h2 class="part-title">박싱(Boxing)이 뭐야?</h2>
+            </div>
 
             <div class="chat">
                 <div class="q">int를 object에 넣으면 뭐가 달라지는 거야?</div>
                 <div class="a">
-                    <p><span class="highlight">값을 "박스"에 담는 거야.</span></p>
-                    <p>int는 스택에 살고, object는 힙에 사는데, 타입이 다르니까 변환이 필요해.</p>
-                </div>
-            </div>
-
-            <div class="code-block">
-void PrintValue(object obj) {
-    Debug.Log(obj);
-}
-
-int num = 42;
-PrintValue(num);  // 여기서 박싱 발생!
-                  // int(값 타입) -> object(참조 타입)</div>
-
-            <div class="chat">
-                <div class="q">박싱이 왜 문제야? 그냥 타입 변환 아냐?</div>
-                <div class="a">
-                    <p><span class="warning">힙에 메모리가 할당돼!</span></p>
-                    <p>힙 할당 = GC가 나중에 정리해야 함 = 게임 끊김의 원인!</p>
+                    <p><span class="highlight">값을 "박스"에 담는 거야!</span></p>
+                    <p>C#에서 int는 <strong>값 타입</strong>(스택에 저장), object는 <strong>참조 타입</strong>(힙에 저장)이거든.</p>
+                    <p>이 둘을 연결하려면 변환이 필요해. 그게 바로 <strong>박싱</strong>!</p>
                 </div>
             </div>
 
             <div class="analogy-box">
-                <strong>택배 비유</strong><br><br>
-                int = 내 손에 들고 있는 물건 (스택)<br>
-                object = 택배 박스에 담아서 창고에 보관 (힙)<br><br>
-                물건을 박스에 넣고 창고에 보내려면 <strong>박스 비용 + 배송 비용</strong>이 들지?<br>
-                박싱도 마찬가지야. <strong>힙 할당 비용 + 나중에 GC 비용</strong>!
+                <strong>📦 택배 비유</strong>
+                <p><strong>int</strong> = 내 손에 들고 있는 물건 (스택 - 빠르게 접근 가능)</p>
+                <p><strong>object</strong> = 택배 박스에 담아서 창고에 보관 (힙 - 찾으러 가야 함)</p>
+                <p style="margin-top: 16px;">물건을 박스에 넣고 창고에 보내려면 <strong>박스 비용 + 배송 비용</strong>이 들지?<br>
+                박싱도 마찬가지야. <strong>힙 할당 비용 + 나중에 GC 정리 비용!</strong></p>
+            </div>
+
+            <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                      박싱 발생 과정                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   스택 (Stack)              힙 (Heap)                            │
+│   ┌─────────┐               ┌────────────────────┐              │
+│   │ int: 42 │ ──박싱──────→ │ Object Header      │              │
+│   └─────────┘               │ Type Info Pointer  │              │
+│                             │ ──────────────────  │              │
+│   (4 바이트)                │ 값: 42             │              │
+│                             └────────────────────┘              │
+│                             (64-bit: 24 바이트!)                 │
+│                                                                  │
+│   ※ 힙 할당 = GC 대상 = 게임 끊김의 원인!                        │
+└─────────────────────────────────────────────────────────────────┘
             </div>
 
             <div class="chat">
-                <div class="q">박싱된 객체는 얼마나 커?</div>
+                <div class="q">박싱된 객체는 얼마나 커져?</div>
                 <div class="a">
-                    <p>원래 값 + <span class="highlight">헤더 오버헤드</span>가 붙어.</p>
+                    <p>원래 값 + <span class="warning">헤더 오버헤드</span>가 붙어서 6배까지 커질 수 있어!</p>
                 </div>
             </div>
 
             <table class="compare-table">
                 <tr>
                     <th>타입</th>
-                    <th>32-bit</th>
-                    <th>64-bit</th>
+                    <th>32-bit 환경</th>
+                    <th>64-bit 환경</th>
                 </tr>
                 <tr>
                     <td>int (값 타입)</td>
@@ -317,106 +454,219 @@ PrintValue(num);  // 여기서 박싱 발생!
                 </tr>
                 <tr>
                     <td>박싱된 int</td>
-                    <td class="bad">12 바이트</td>
-                    <td class="bad">24 바이트</td>
+                    <td class="bad">12 바이트 (3배)</td>
+                    <td class="bad">24 바이트 (6배)</td>
                 </tr>
             </table>
 
             <div class="warning-box">
-                <strong>계산 예시</strong><br><br>
-                한 프레임에 Equals 비교 125회 발생<br>
-                -> 비교당 박싱 2회 x 24바이트 = 48바이트<br>
-                -> 125 x 48 = <strong>6KB/프레임</strong><br>
-                -> 60fps면 <strong>360KB/초</strong> 쓰레기 발생!
+                <strong>⚠️ 실제 게임에서의 충격</strong>
+                <p>한 프레임에 Equals 비교 125회 발생한다면:</p>
+                <p>• 비교당 박싱 2회 × 24바이트 = 48바이트</p>
+                <p>• 125 × 48 = <strong>6KB/프레임</strong></p>
+                <p>• 60fps면 <strong>360KB/초</strong> 쓰레기 발생!</p>
             </div>
-        </div>
+        </section>
 
-        <!-- Part 2: Enum + Generic = 박싱 지옥 -->
-        <div class="conversation">
-            <h2>Part 2. Enum + Generic = 박싱 지옥</h2>
+        <!-- Part 2: 왜 박싱이 발생하는가? -->
+        <section class="part-section" id="part2">
+            <div class="part-header">
+                <div class="part-number">2</div>
+                <h2 class="part-title">값 타입 vs 참조 타입 - 왜 이런 구조일까?</h2>
+            </div>
 
             <div class="chat">
-                <div class="q">Enum이랑 Generic이 만나면 왜 박싱이 발생해?</div>
+                <div class="q">C#은 왜 값 타입과 참조 타입을 구분해?</div>
                 <div class="a">
-                    <p><span class="highlight">Equals() 메서드 때문이야.</span></p>
+                    <p><span class="highlight">성능과 편의성의 트레이드오프야!</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>특성</th>
+                    <th>값 타입 (Value Type)</th>
+                    <th>참조 타입 (Reference Type)</th>
+                </tr>
+                <tr>
+                    <td>저장 위치</td>
+                    <td class="good">스택 (빠름)</td>
+                    <td>힙 (상대적 느림)</td>
+                </tr>
+                <tr>
+                    <td>예시</td>
+                    <td>int, float, struct, Enum</td>
+                    <td>class, object, string</td>
+                </tr>
+                <tr>
+                    <td>복사 시</td>
+                    <td>값 전체 복사</td>
+                    <td>참조(주소)만 복사</td>
+                </tr>
+                <tr>
+                    <td>GC 대상</td>
+                    <td class="good">아니오</td>
+                    <td class="bad">예</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">근데 왜 object에 int를 넣을 수 있어?</div>
+                <div class="a">
+                    <p>C#의 모든 타입은 <span class="key-point">object를 상속</span>해. 심지어 int도!</p>
+                    <p>다형성(Polymorphism)을 위해 모든 걸 object로 다룰 수 있게 한 거지.</p>
+                </div>
+            </div>
+
+            <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                   C# 타입 계층 구조                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│                        ┌──────────┐                             │
+│                        │  Object  │  ← 모든 타입의 최상위        │
+│                        └────┬─────┘                             │
+│                 ┌───────────┼───────────┐                       │
+│                 │           │           │                       │
+│           ┌─────┴─────┐ ┌───┴───┐ ┌─────┴─────┐                │
+│           │ ValueType │ │ Array │ │  String   │                 │
+│           └─────┬─────┘ └───────┘ └───────────┘                 │
+│         ┌───────┼───────┐                                       │
+│         │       │       │                                       │
+│     ┌───┴──┐ ┌──┴──┐ ┌──┴──┐                                   │
+│     │ Int32│ │Enum │ │struct│                                   │
+│     └──────┘ └─────┘ └──────┘                                   │
+│                                                                  │
+│   ※ Enum은 ValueType 상속 → 값 타입!                            │
+│   ※ 하지만 object 변수에 담으려면 → 박싱 필요!                   │
+└─────────────────────────────────────────────────────────────────┘
+            </div>
+
+            <div class="chat">
+                <div class="q">박싱이 자동으로 일어나는 거야?</div>
+                <div class="a">
+                    <p><span class="warning">응, 그게 문제야!</span> 명시적으로 안 해도 컴파일러가 알아서 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+<span class="comment">// 박싱이 숨어있는 코드들</span>
+
+<span class="keyword">int</span> num = <span class="number">42</span>;
+
+<span class="comment">// Case 1: object 변수에 대입</span>
+<span class="keyword">object</span> obj = num;  <span class="comment">// 박싱!</span>
+
+<span class="comment">// Case 2: object 파라미터를 받는 함수</span>
+Console.WriteLine(num);  <span class="comment">// 박싱! (내부적으로 object로 받음)</span>
+
+<span class="comment">// Case 3: 문자열 결합</span>
+<span class="keyword">string</span> str = <span class="string">"값은 "</span> + num;  <span class="comment">// 박싱!</span>
+
+<span class="comment">// Case 4: 인터페이스 변수에 대입</span>
+IComparable comp = num;  <span class="comment">// 박싱!</span>
+            </div>
+        </section>
+
+        <!-- Part 3: Enum + Generic = 박싱 지옥 -->
+        <section class="part-section" id="part3">
+            <div class="part-header">
+                <div class="part-number">3</div>
+                <h2 class="part-title">Enum + Generic = 박싱 지옥</h2>
+            </div>
+
+            <div class="chat">
+                <div class="q">Enum이랑 Generic이 만나면 왜 특히 문제야?</div>
+                <div class="a">
+                    <p><span class="highlight">Equals() 메서드 시그니처 때문이야!</span></p>
                     <p>제네릭에서 Equals를 호출하면 <code>object.Equals(object)</code>가 불려.</p>
                 </div>
             </div>
 
-            <div class="code-block">
-void Compare<T>(T a, T b) {
-    if (a.Equals(b)) {  // 여기서 박싱!
-        // ...
-    }
-}
-
-enum CardRank { Ace, King, Queen }
-Compare(CardRank.Ace, CardRank.King);  // 박싱 2회 발생!</div>
-
-            <div class="chat">
-                <div class="q">왜 박싱이 2회나 발생해?</div>
-                <div class="a">
-                    <p>Equals 메서드 시그니처를 봐봐.</p>
-                </div>
+            <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                 제네릭 Equals 호출 시 박싱                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   코드:  Compare(CardRank.Ace, CardRank.King)                   │
+│                                                                  │
+│   void Compare&lt;T&gt;(T a, T b) where T : Enum                       │
+│   {                                                              │
+│       if (a.Equals(b)) { ... }                                  │
+│   }                                                              │
+│                                                                  │
+│   ────────────────────────────────────────────────────          │
+│                                                                  │
+│   [컴파일러가 보는 것]                                           │
+│                                                                  │
+│   public virtual bool Equals(object obj)  ← 시그니처            │
+│                              ^^^^^^                              │
+│                              object!                             │
+│                                                                  │
+│   a.Equals(b) 호출 시:                                          │
+│   1. b가 object로 변환 ─────────────→ 박싱 1회 (인자)           │
+│   2. a에서 virtual Equals 호출 ─────→ 박싱 1회 (수신자)         │
+│                                                                  │
+│   = 비교 1회에 박싱 2회!                                        │
+└─────────────────────────────────────────────────────────────────┘
             </div>
-
-            <div class="code-block">
-public virtual bool Equals(object obj)
-                           ^^^^^^
-                           object 타입!
-
-a.Equals(b) 호출 시:
-1. b가 object로 변환 -> 박싱 1회 (인자)
-2. a도 virtual Equals 호출하려면 -> 박싱 1회 (수신자)
-
-= 비교 1회에 박싱 2회!</div>
 
             <div class="chat">
                 <div class="q">Dictionary에서 Enum을 키로 쓰면?</div>
                 <div class="a">
-                    <p><span class="warning">검색할 때마다 박싱!</span></p>
+                    <p><span class="warning">검색할 때마다 박싱!</span> Dictionary는 내부에서 Equals, GetHashCode를 호출해.</p>
                 </div>
             </div>
 
             <div class="code-block">
-Dictionary<CardRank, int> cardValues = new();
+<span class="type">Dictionary</span>&lt;<span class="type">CardRank</span>, <span class="keyword">int</span>&gt; cardValues = <span class="keyword">new</span>();
 
-cardValues[CardRank.Ace] = 1;   // 박싱 발생!
-var value = cardValues[CardRank.Ace];  // 또 박싱!</div>
+cardValues[<span class="type">CardRank</span>.Ace] = <span class="number">1</span>;    <span class="comment">// 박싱 발생!</span>
+<span class="keyword">var</span> value = cardValues[<span class="type">CardRank</span>.Ace];  <span class="comment">// 또 박싱!</span>
+
+<span class="comment">// Dictionary 내부에서 일어나는 일:</span>
+<span class="comment">// - key.GetHashCode() 호출 → 박싱</span>
+<span class="comment">// - key.Equals(otherKey) 호출 → 박싱 2회</span>
+            </div>
 
             <div class="chat">
-                <div class="q">HasFlag()도 마찬가지야?</div>
+                <div class="q">HasFlag()는 어때?</div>
                 <div class="a">
-                    <p><span class="warning">응, 더 황당해.</span></p>
-                    <p>성능을 위해 비트 마스킹을 쓴 건데, 실제로는 박싱으로 더 느려!</p>
+                    <p><span class="warning">더 황당해!</span> 성능을 위해 비트 연산 쓴 건데, 오히려 박싱으로 더 느려!</p>
                 </div>
             </div>
 
             <div class="code-block">
-[Flags]
-enum Permissions { Read = 1, Write = 2, Execute = 4 }
+[<span class="type">Flags</span>]
+<span class="keyword">enum</span> <span class="type">Permissions</span> { Read = <span class="number">1</span>, Write = <span class="number">2</span>, Execute = <span class="number">4</span> }
 
-Permissions perm = Permissions.Read | Permissions.Write;
-bool canWrite = perm.HasFlag(Permissions.Write);  // 박싱!
+<span class="type">Permissions</span> perm = <span class="type">Permissions</span>.Read | <span class="type">Permissions</span>.Write;
 
-// HasFlag 내부:
-public bool HasFlag(Enum flag)  // Enum = 참조 타입!
+<span class="comment">// 편해 보이지만...</span>
+<span class="keyword">bool</span> canWrite = perm.HasFlag(<span class="type">Permissions</span>.Write);  <span class="comment">// 박싱!</span>
+
+<span class="comment">// HasFlag 시그니처를 보면:</span>
+<span class="keyword">public</span> <span class="keyword">bool</span> HasFlag(<span class="type">Enum</span> flag)  <span class="comment">// Enum = 참조 타입!</span>
 {
-    // 내부에서 object로 다루므로 박싱 발생
-}</div>
+    <span class="comment">// 내부에서 object로 다루므로 박싱 발생</span>
+}
+            </div>
 
             <div class="analogy-box">
-                <strong>역설적 상황</strong><br><br>
-                "비트 연산으로 성능 최적화하자!" -> HasFlag 사용<br>
-                -> 내부에서 박싱 발생<br>
-                -> <strong>오히려 더 느려짐!</strong><br><br>
-                좋은 의도가 나쁜 결과를 낳는 케이스.
+                <strong>🎭 역설적 상황</strong>
+                <p>"비트 연산으로 성능 최적화하자!" → HasFlag 사용</p>
+                <p>→ 내부에서 박싱 발생</p>
+                <p>→ <strong>오히려 더 느려짐!</strong></p>
+                <p style="margin-top: 12px; color: #666;">좋은 의도가 나쁜 결과를 낳는 대표적인 케이스.</p>
             </div>
-        </div>
+        </section>
 
-        <!-- Part 3: 정석적 해법의 한계 -->
-        <div class="conversation">
-            <h2>Part 3. 정석적 해법? "이게 해법이라고?"</h2>
+        <!-- Part 4: 정석적 해법의 한계 -->
+        <section class="part-section" id="part4">
+            <div class="part-header">
+                <div class="part-number">4</div>
+                <h2 class="part-title">정석적 해법? "이게 해법이라고?"</h2>
+            </div>
 
             <div class="chat">
                 <div class="q">C#에서 공식으로 제공하는 해결책은 뭐야?</div>
@@ -427,36 +677,52 @@ public bool HasFlag(Enum flag)  // Enum = 참조 타입!
             </div>
 
             <div class="code-block">
-public class CardRankComparer : IEqualityComparer<CardRank>
+<span class="keyword">public</span> <span class="keyword">class</span> <span class="type">CardRankComparer</span> : <span class="type">IEqualityComparer</span>&lt;<span class="type">CardRank</span>&gt;
 {
-    public bool Equals(CardRank x, CardRank y)
+    <span class="keyword">public</span> <span class="keyword">bool</span> Equals(<span class="type">CardRank</span> x, <span class="type">CardRank</span> y)
     {
-        return x == y;  // 구체 타입이라 박싱 없음!
+        <span class="keyword">return</span> x == y;  <span class="comment">// 구체 타입이라 박싱 없음!</span>
     }
 
-    public int GetHashCode(CardRank obj)
+    <span class="keyword">public</span> <span class="keyword">int</span> GetHashCode(<span class="type">CardRank</span> obj)
     {
-        return (int)obj;  // int로 캐스팅, 박싱 없음
+        <span class="keyword">return</span> (<span class="keyword">int</span>)obj;  <span class="comment">// int로 캐스팅, 박싱 없음</span>
     }
 }
 
-// 사용
-var dict = new Dictionary<CardRank, int>(new CardRankComparer());</div>
+<span class="comment">// 사용</span>
+<span class="keyword">var</span> dict = <span class="keyword">new</span> <span class="type">Dictionary</span>&lt;<span class="type">CardRank</span>, <span class="keyword">int</span>&gt;(<span class="keyword">new</span> <span class="type">CardRankComparer</span>());
+            </div>
 
             <div class="chat">
                 <div class="q">이게 왜 문제야?</div>
                 <div class="a">
-                    <p><span class="warning">프로그래머한테 일을 시키는 거지!</span></p>
+                    <p><span class="warning">프로그래머한테 일을 떠넘기는 거지!</span></p>
                 </div>
             </div>
 
-            <div class="code-block">
-영화 <극한직업> 대사가 떠오름:
-"이게 해법이라고 내놓는 거지?"
-
-Enum 10개 만들면 -> Comparer 10개 작성
-Dictionary 100개 만들면 -> 생성자 100개 수정
-까먹으면? -> 다시 박싱 발생!</div>
+            <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                  정석 해법의 현실적 문제                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   영화 &lt;극한직업&gt; 대사가 떠오름:                                  │
+│   "이게 해법이라고 내놓는 거지?"                                 │
+│                                                                  │
+│   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━                      │
+│                                                                  │
+│   [작업량 폭발]                                                  │
+│                                                                  │
+│   Enum 10개 만들면 → Comparer 10개 작성                         │
+│   Dictionary 100개 만들면 → 생성자 100개 수정                   │
+│                                                                  │
+│   [실수 가능성]                                                  │
+│                                                                  │
+│   까먹으면? → 다시 박싱 발생!                                    │
+│   신규 개발자가 모르면? → 박싱 발생!                             │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+            </div>
 
             <div class="chat">
                 <div class="q">C# 7.3에서 where T : Enum 제약이 생겼다던데?</div>
@@ -466,26 +732,30 @@ Dictionary 100개 만들면 -> 생성자 100개 수정
             </div>
 
             <div class="code-block">
-void Process<T>(T value) where T : Enum
+<span class="keyword">void</span> Process&lt;T&gt;(T value) <span class="keyword">where</span> T : <span class="type">Enum</span>
 {
-    // T가 Enum임을 컴파일러가 알게 됨
-    // 하지만...
+    <span class="comment">// T가 Enum임을 컴파일러가 알게 됨</span>
+    <span class="comment">// 하지만...</span>
 }
 
-// IL 코드를 보면...
-box !!T          // 여전히 박싱!
-callvirt Equals</div>
+<span class="comment">// IL 코드를 보면...</span>
+box !!T          <span class="comment">// 여전히 박싱!</span>
+callvirt Equals
+            </div>
 
             <div class="warning-box">
-                <strong>결론</strong><br><br>
-                C# 7.3의 Enum 제약은 타입 안전성만 제공.<br>
-                <strong>박싱 문제는 여전히 존재한다!</strong>
+                <strong>⚠️ 결론</strong>
+                <p>C# 7.3의 Enum 제약은 타입 안전성만 제공.</p>
+                <p><strong>박싱 문제는 여전히 존재한다!</strong></p>
             </div>
-        </div>
+        </section>
 
-        <!-- Part 4: 실용적 해결책 -->
-        <div class="conversation">
-            <h2>Part 4. 진짜 해결책: Enum -> int 변환</h2>
+        <!-- Part 5: 진짜 해결책 -->
+        <section class="part-section" id="part5">
+            <div class="part-header">
+                <div class="part-number">5</div>
+                <h2 class="part-title">진짜 해결책: Enum → int 변환</h2>
+            </div>
 
             <div class="chat">
                 <div class="q">핵심 아이디어가 뭐야?</div>
@@ -495,12 +765,26 @@ callvirt Equals</div>
                 </div>
             </div>
 
-            <div class="code-block">
-CardRank.Ace = 0 (내부적으로 int 0)
-CardRank.King = 1 (내부적으로 int 1)
-
-int끼리 비교 -> 박싱 없음!
-int를 Dictionary 키로 -> 박싱 없음!</div>
+            <div class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                    핵심 인사이트                                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   CardRank.Ace  = 0 (내부적으로 int 0)                          │
+│   CardRank.King = 1 (내부적으로 int 1)                          │
+│   CardRank.Queen = 2 (내부적으로 int 2)                         │
+│                                                                  │
+│   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━                      │
+│                                                                  │
+│   Enum 비교                int 비교                              │
+│   ┌────────────────┐      ┌────────────────┐                    │
+│   │ Ace.Equals(King)│      │   0 == 1       │                    │
+│   │    ↓            │      │    ↓           │                    │
+│   │ 박싱 2회 발생! │  VS  │ 박싱 없음!    │                    │
+│   └────────────────┘      └────────────────┘                    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+            </div>
 
             <div class="chat">
                 <div class="q">근데 제네릭 T는 캐스팅이 안 되잖아?</div>
@@ -510,16 +794,17 @@ int를 Dictionary 키로 -> 박싱 없음!</div>
             </div>
 
             <div class="code-block">
-void Process<T>(T value) where T : Enum
+<span class="keyword">void</span> Process&lt;T&gt;(T value) <span class="keyword">where</span> T : <span class="type">Enum</span>
 {
-    int num = (int)value;  // 컴파일 에러!
-                          // T가 뭔지 모르니까 캐스팅 불가
-}</div>
+    <span class="keyword">int</span> num = (<span class="keyword">int</span>)value;  <span class="comment">// 컴파일 에러!</span>
+                          <span class="comment">// T가 뭔지 모르니까 캐스팅 불가</span>
+}
+            </div>
 
             <div class="chat">
                 <div class="q">그럼 어떻게 해?</div>
                 <div class="a">
-                    <p>방법이 3가지 있어. 하나씩 보자.</p>
+                    <p>방법이 3가지 있어. 플랫폼 호환성을 고려해야 해.</p>
                 </div>
             </div>
 
@@ -527,7 +812,7 @@ void Process<T>(T value) where T : Enum
                 <tr>
                     <th>방법</th>
                     <th>원리</th>
-                    <th>한계</th>
+                    <th>플랫폼 지원</th>
                 </tr>
                 <tr>
                     <td>Expression (동적 생성)</td>
@@ -537,7 +822,7 @@ void Process<T>(T value) where T : Enum
                 <tr>
                     <td>FieldOffset (Union)</td>
                     <td>메모리 공유</td>
-                    <td class="bad">최신 Unity 호환성</td>
+                    <td class="bad">최신 Unity 호환성 문제</td>
                 </tr>
                 <tr>
                     <td>Unsafe 포인터</td>
@@ -545,149 +830,140 @@ void Process<T>(T value) where T : Enum
                     <td class="good">모든 플랫폼 OK!</td>
                 </tr>
             </table>
-        </div>
+        </section>
 
-        <!-- Part 5: Unsafe 포인터 해법 -->
-        <div class="conversation">
-            <h2>Part 5. 최종 해법: Unsafe 포인터</h2>
+        <!-- Part 6: 실전 코드 -->
+        <section class="part-section" id="part6">
+            <div class="part-header">
+                <div class="part-number">6</div>
+                <h2 class="part-title">실전 코드: Unsafe 포인터 해법</h2>
+            </div>
 
             <div class="chat">
                 <div class="q">Unsafe 포인터가 뭐야?</div>
                 <div class="a">
                     <p>C#에서 C++ 스타일로 <span class="highlight">메모리를 직접 조작</span>하는 거야.</p>
+                    <p>변환 비용 없이 메모리를 그대로 읽어!</p>
                 </div>
             </div>
 
+            <div class="step-box">
+                <span class="step-num">핵심 코드</span>
+                <div class="step-title">Enum ↔ int 변환 유틸리티</div>
+            </div>
+
             <div class="code-block">
-public static class EnumToInt<TEnum> where TEnum : struct
+<span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">class</span> <span class="type">EnumToInt</span>&lt;TEnum&gt; <span class="keyword">where</span> TEnum : <span class="keyword">struct</span>
 {
-    public static unsafe int Convert(TEnum value)
+    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">unsafe</span> <span class="keyword">int</span> Convert(TEnum value)
     {
-        int* ptr = (int*)&value;
-        return *ptr;
+        <span class="keyword">int</span>* ptr = (<span class="keyword">int</span>*)&amp;value;
+        <span class="keyword">return</span> *ptr;
     }
 }
 
-public static class IntToEnum<TEnum> where TEnum : struct
+<span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">class</span> <span class="type">IntToEnum</span>&lt;TEnum&gt; <span class="keyword">where</span> TEnum : <span class="keyword">struct</span>
 {
-    public static unsafe TEnum Convert(int value)
+    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">unsafe</span> TEnum Convert(<span class="keyword">int</span> value)
     {
-        TEnum* ptr = (TEnum*)&value;
-        return *ptr;
+        TEnum* ptr = (TEnum*)&amp;value;
+        <span class="keyword">return</span> *ptr;
     }
 }
 
-// 사용
-int num = EnumToInt<CardRank>.Convert(CardRank.Ace);
-CardRank rank = IntToEnum<CardRank>.Convert(0);</div>
+<span class="comment">// 사용</span>
+<span class="keyword">int</span> num = <span class="type">EnumToInt</span>&lt;<span class="type">CardRank</span>&gt;.Convert(<span class="type">CardRank</span>.Ace);  <span class="comment">// 박싱 없음!</span>
+<span class="type">CardRank</span> rank = <span class="type">IntToEnum</span>&lt;<span class="type">CardRank</span>&gt;.Convert(<span class="number">0</span>);        <span class="comment">// 박싱 없음!</span>
+            </div>
 
             <div class="result-box">
-                <strong>이게 최종 해법!</strong><br><br>
-                - 모든 플랫폼에서 동작 (iOS 포함)<br>
-                - 최고 성능 (포인터 직접 접근)<br>
-                - 박싱 완전 제거
+                <strong>✅ 이게 최종 해법!</strong>
+                <p>• 모든 플랫폼에서 동작 (iOS 포함)</p>
+                <p>• 최고 성능 (포인터 직접 접근)</p>
+                <p>• 박싱 완전 제거</p>
             </div>
 
-            <div class="chat">
-                <div class="q">Unity에서 unsafe 어떻게 활성화해?</div>
-                <div class="a">
-                    <p>Player Settings > Other Settings > <span class="key-point">Allow 'unsafe' Code</span> 체크!</p>
-                </div>
-            </div>
-
-            <div class="chat">
-                <div class="q">이걸 이용해서 EnumDictionary도 만들 수 있어?</div>
-                <div class="a">
-                    <p><span class="key-point">당연하지!</span> Enum을 키로 받되, 내부에선 int로 저장해.</p>
-                </div>
+            <div class="step-box">
+                <span class="step-num">응용</span>
+                <div class="step-title">박싱 없는 EnumDictionary</div>
             </div>
 
             <div class="code-block">
-public class EnumDictionary<TKey, TValue>
-    where TKey : struct  // Enum 제약
+<span class="keyword">public</span> <span class="keyword">class</span> <span class="type">EnumDictionary</span>&lt;TKey, TValue&gt;
+    <span class="keyword">where</span> TKey : <span class="keyword">struct</span>  <span class="comment">// Enum 제약</span>
 {
-    private Dictionary<int, TValue> _inner = new();
+    <span class="keyword">private</span> <span class="type">Dictionary</span>&lt;<span class="keyword">int</span>, TValue&gt; _inner = <span class="keyword">new</span>();
 
-    public TValue this[TKey key]
+    <span class="keyword">public</span> TValue <span class="keyword">this</span>[TKey key]
     {
-        get => _inner[EnumToInt<TKey>.Convert(key)];
-        set => _inner[EnumToInt<TKey>.Convert(key)] = value;
+        <span class="keyword">get</span> =&gt; _inner[<span class="type">EnumToInt</span>&lt;TKey&gt;.Convert(key)];
+        <span class="keyword">set</span> =&gt; _inner[<span class="type">EnumToInt</span>&lt;TKey&gt;.Convert(key)] = value;
     }
 
-    public bool ContainsKey(TKey key)
+    <span class="keyword">public</span> <span class="keyword">bool</span> ContainsKey(TKey key)
     {
-        return _inner.ContainsKey(EnumToInt<TKey>.Convert(key));
+        <span class="keyword">return</span> _inner.ContainsKey(<span class="type">EnumToInt</span>&lt;TKey&gt;.Convert(key));
     }
-    // ... 나머지 구현
 }
 
-// 사용
-var values = new EnumDictionary<CardRank, int>();
-values[CardRank.Ace] = 1;     // 박싱 없음!
-var v = values[CardRank.Ace];  // 박싱 없음!</div>
-
-            <div class="guide-box">
-                <strong>GitHub: libgni/EnumExtension</strong>
-                <ul>
-                    <li><strong>BitConverter</strong> - Enum <-> int 변환</li>
-                    <li><strong>EnumDictionary</strong> - 박싱 없는 Dictionary</li>
-                    <li><strong>EnumHashSet</strong> - 박싱 없는 HashSet</li>
-                </ul>
+<span class="comment">// 사용</span>
+<span class="keyword">var</span> values = <span class="keyword">new</span> <span class="type">EnumDictionary</span>&lt;<span class="type">CardRank</span>, <span class="keyword">int</span>&gt;();
+values[<span class="type">CardRank</span>.Ace] = <span class="number">1</span>;     <span class="comment">// 박싱 없음!</span>
+<span class="keyword">var</span> v = values[<span class="type">CardRank</span>.Ace];  <span class="comment">// 박싱 없음!</span>
             </div>
-        </div>
 
-        <!-- Part 6: HasFlag 대안 -->
-        <div class="conversation">
-            <h2>Part 6. HasFlag 대안</h2>
-
-            <div class="chat">
-                <div class="q">HasFlag 대신 뭘 써야 해?</div>
-                <div class="a">
-                    <p><span class="key-point">비트 연산자를 직접 써!</span></p>
-                </div>
+            <div class="step-box">
+                <span class="step-num">대안</span>
+                <div class="step-title">HasFlag 대신 비트 연산 직접 사용</div>
             </div>
 
             <div class="code-block">
-// 나쁜 예: HasFlag 사용 (박싱 발생!)
-bool canWrite = perm.HasFlag(Permissions.Write);
+<span class="comment">// 나쁜 예: HasFlag 사용 (박싱 발생!)</span>
+<span class="keyword">bool</span> canWrite = perm.HasFlag(<span class="type">Permissions</span>.Write);
 
-// 좋은 예: 비트 연산 직접 사용 (박싱 없음!)
-bool canWrite = (perm & Permissions.Write) == Permissions.Write;
+<span class="comment">// 좋은 예: 비트 연산 직접 사용 (박싱 없음!)</span>
+<span class="keyword">bool</span> canWrite = (perm &amp; <span class="type">Permissions</span>.Write) == <span class="type">Permissions</span>.Write;
 
-// 또는 0이 아닌지 확인
-bool canWrite = (perm & Permissions.Write) != 0;</div>
+<span class="comment">// 또는 0이 아닌지 확인</span>
+<span class="keyword">bool</span> canWrite = (perm &amp; <span class="type">Permissions</span>.Write) != <span class="number">0</span>;
+            </div>
 
-            <table class="compare-table">
-                <tr>
-                    <th>방식</th>
-                    <th>코드</th>
-                    <th>박싱</th>
-                </tr>
-                <tr>
-                    <td>HasFlag</td>
-                    <td><code>perm.HasFlag(Permission.Write)</code></td>
-                    <td class="bad">발생!</td>
-                </tr>
-                <tr>
-                    <td>비트 연산</td>
-                    <td><code>(perm & Permission.Write) != 0</code></td>
-                    <td class="good">없음!</td>
-                </tr>
-            </table>
-        </div>
+            <div class="warning-box">
+                <strong>⚠️ Unity에서 unsafe 활성화</strong>
+                <p>Player Settings → Other Settings → <strong>Allow 'unsafe' Code</strong> 체크!</p>
+            </div>
+        </section>
 
-        <!-- Part 7: 정리 -->
-        <div class="conversation">
-            <h2>Part 7. 실무 가이드라인</h2>
+        <!-- Part 7: 면접 대비 -->
+        <section class="part-section" id="part7">
+            <div class="part-header">
+                <div class="part-number">7</div>
+                <h2 class="part-title">면접 대비 & 실무 가이드라인</h2>
+            </div>
 
-            <div class="guide-box">
-                <strong>Enum 박싱 예방 수칙</strong>
-                <ul>
-                    <li><strong>Dictionary, List에 Enum 키 사용 시</strong> - EnumDictionary 또는 커스텀 Comparer 사용</li>
-                    <li><strong>제네릭에서 Enum 비교 시</strong> - int로 변환 후 비교</li>
-                    <li><strong>HasFlag 사용 금지</strong> - 비트 연산자 직접 사용</li>
-                    <li><strong>핫 패스(자주 호출되는 코드)</strong> - 프로파일러로 박싱 체크</li>
-                </ul>
+            <div class="chat">
+                <div class="q">기술 면접: "C#에서 박싱이 뭐고, 왜 피해야 해요?"</div>
+                <div class="a">
+                    <p>"박싱은 <strong>값 타입을 참조 타입(object)으로 변환</strong>하는 것입니다.</p>
+                    <p>힙에 메모리가 할당되고 GC 대상이 되어, 게임처럼 실시간 성능이 중요한 환경에서는 <strong>프레임 드랍</strong>을 유발합니다."</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">"Enum + Dictionary 조합에서 박싱이 왜 발생해요?"</div>
+                <div class="a">
+                    <p>"Dictionary 내부에서 키 비교 시 <strong>Equals()와 GetHashCode()</strong>를 호출하는데,</p>
+                    <p>이들의 시그니처가 object 기반이라 Enum이 박싱됩니다.</p>
+                    <p>해결책은 <strong>IEqualityComparer 구현</strong>이나 <strong>unsafe 포인터로 int 변환</strong>입니다."</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">"HasFlag() 왜 안 쓰는 게 좋아요?"</div>
+                <div class="a">
+                    <p>"HasFlag 메서드가 Enum 타입을 파라미터로 받는데, 내부에서 object로 다뤄져 박싱이 발생합니다.</p>
+                    <p><strong>비트 연산자(&amp;)를 직접 사용</strong>하면 박싱 없이 같은 결과를 얻을 수 있습니다."</p>
+                </div>
             </div>
 
             <table class="compare-table">
@@ -702,7 +978,7 @@ bool canWrite = (perm & Permissions.Write) != 0;</div>
                     <td class="good">int로 변환 후 비교</td>
                 </tr>
                 <tr>
-                    <td>Dictionary<Enum, T> 박싱</td>
+                    <td>Dictionary&lt;Enum, T&gt; 박싱</td>
                     <td>GetHashCode, Equals 호출</td>
                     <td class="good">EnumDictionary 사용</td>
                 </tr>
@@ -719,42 +995,67 @@ bool canWrite = (perm & Permissions.Write) != 0;</div>
             </table>
 
             <div class="result-box">
-                <strong>한 줄 요약</strong><br><br>
-                <span style="font-size: 1.2rem; font-weight: bold;">"Enum + Generic = 박싱을 의심하라"</span>
+                <strong>🎯 한 줄 요약</strong>
+                <p style="font-size: 1.2rem; font-weight: bold; margin-top: 12px;">"Enum + Generic = 박싱을 의심하라"</p>
             </div>
 
             <div class="warning-box">
-                <strong>한계</strong><br><br>
-                이 기법은 <strong>32비트 Enum(기본 int)</strong>만 지원.<br>
-                byte, short, long 기반 Enum은 별도 처리 필요.<br>
-                (실무에서 대부분 기본 int를 사용하므로 큰 문제는 아님)
+                <strong>⚠️ 한계</strong>
+                <p>이 기법은 <strong>32비트 Enum(기본 int)</strong>만 지원합니다.</p>
+                <p>byte, short, long 기반 Enum은 별도 처리 필요.</p>
+                <p>(실무에서 대부분 기본 int를 사용하므로 큰 문제는 아님)</p>
             </div>
-        </div>
+        </section>
 
         <!-- 핵심 정리 -->
         <div class="summary-box">
-            <h3>핵심 정리: C# Enum 박싱 문제</h3>
+            <h3>📋 핵심 정리: C# Enum 박싱 문제</h3>
             <ul>
-                <li><strong>박싱</strong> - 값 타입 -> 참조 타입 변환, 힙 할당 + GC 대상</li>
-                <li><strong>Enum + Generic</strong> - Equals 호출 시 박싱 2회 발생</li>
-                <li><strong>HasFlag</strong> - 편의 함수지만 박싱 발생, 비트 연산으로 대체</li>
-                <li><strong>공식 해법</strong> - IEqualityComparer, 하지만 번거로움</li>
-                <li><strong>실용적 해법</strong> - Enum -> int 변환 (unsafe 포인터)</li>
-                <li><strong>게임에서 GC = 프레임 드랍</strong> - 박싱 최대한 피하라</li>
+                <li><strong>박싱</strong> - 값 타입 → 참조 타입 변환, 힙 할당 + GC 대상이 됨</li>
+                <li><strong>Enum + Generic</strong> - Equals 호출 시 박싱 2회 발생 (비교 1회당)</li>
+                <li><strong>HasFlag</strong> - 편의 함수지만 박싱 발생, 비트 연산(&amp;)으로 대체</li>
+                <li><strong>공식 해법</strong> - IEqualityComparer 커스텀 구현 (번거로움)</li>
+                <li><strong>실용적 해법</strong> - unsafe 포인터로 Enum → int 직접 변환</li>
+                <li><strong>게임에서 GC = 프레임 드랍</strong> - 박싱을 최대한 피하라!</li>
             </ul>
         </div>
 
-        <div class="conversation">
-            <h2>출처</h2>
+        <section class="part-section">
+            <h2 style="color: #2E7D32; margin-bottom: 16px;">출처</h2>
             <a href="https://www.youtube.com/watch?v=H6Jz-pdQu3A" class="source-link" target="_blank">
-                NDC 2019 - 이놈의 박싱은 어찌 피하리오 (YouTube)
+                📺 NDC 2019 - 이놈의 박싱은 어찌 피하리오 (YouTube)
             </a>
-        </div>
+        </section>
 
         <div class="nav-links">
-            <a href="../cpp-modern/">< 언어 카테고리</a>
-            <a href="../../">홈으로 ></a>
+            <a href="../cpp-modern/">← 언어 카테고리</a>
+            <a href="../../">홈으로 →</a>
         </div>
     </div>
+
+    <script>
+        // 진행 표시기 인터랙션
+        document.querySelectorAll('.progress-dot').forEach((dot, index) => {
+            dot.addEventListener('click', () => {
+                document.querySelectorAll('.progress-dot').forEach(d => d.classList.remove('active'));
+                dot.classList.add('active');
+                document.getElementById('part' + (index + 1))?.scrollIntoView({ behavior: 'smooth' });
+            });
+        });
+
+        // 스크롤 시 진행 표시기 업데이트
+        window.addEventListener('scroll', () => {
+            const sections = document.querySelectorAll('.part-section');
+            const dots = document.querySelectorAll('.progress-dot');
+
+            sections.forEach((section, index) => {
+                const rect = section.getBoundingClientRect();
+                if (rect.top <= 200 && rect.bottom >= 200) {
+                    dots.forEach(d => d.classList.remove('active'));
+                    if (dots[index]) dots[index].classList.add('active');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
