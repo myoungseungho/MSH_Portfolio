@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>링킹 단계 - .obj를 .exe로 조립하기 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #e65100; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #fff3e0; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .diagram-box { background: #263238; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre; color: #eceff1; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; }
+        .code-block .error { color: #ff8a80; }
+
+        .option-box { background: #e3f2fd; border-radius: 12px; padding: 24px; margin: 16px 0; border-left: 4px solid #1565c0; }
+        .option-box h4 { color: #1565c0; margin-bottom: 12px; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .summary-box { background: linear-gradient(135deg, #e65100 0%, #ff6b35 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #ffcc80; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #e65100; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-build/" class="back-link">← 컴파일 / 빌드</a>
+
+        <header class="header">
+            <h1>링킹 단계 - .obj를 .exe로 조립하기</h1>
+            <p>심볼 해결, 재배치, 그리고 링크 최적화 옵션들</p>
+        </header>
+
+        <!-- Part 1: 링킹이란 -->
+        <div class="conversation">
+            <h2>Part 1. 링커가 하는 일</h2>
+
+            <div class="chat">
+                <div class="q">컴파일 끝나면 바로 실행 가능한 거 아니야?</div>
+                <div class="a">
+                    <p>아니! .obj 파일은 아직 <span class="warning">부품</span>이야.</p>
+                    <p>링커가 이 부품들을 조립해서 완성품(.exe)을 만들어.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🔗 링커의 4단계 작업
+
+┌─────────────────────────────────────────────────────────┐
+│ 1️⃣ 심볼 수집                                            │
+│    각 .obj에서 정의된 함수/변수 목록 추출               │
+│                                                         │
+│ 2️⃣ 심볼 해결 (Symbol Resolution)                       │
+│    "이 함수 호출하는데, 정의는 어디?"를 연결            │
+│                                                         │
+│ 3️⃣ 재배치 (Relocation)                                 │
+│    모든 코드를 하나로 합치고 최종 주소 배정             │
+│                                                         │
+│ 4️⃣ 실행 파일 출력                                      │
+│    .exe 또는 .dll 생성                                  │
+└─────────────────────────────────────────────────────────┘</div>
+        </div>
+
+        <!-- Part 2: 심볼 해결 -->
+        <div class="conversation">
+            <h2>Part 2. 심볼 해결이란?</h2>
+
+            <div class="chat">
+                <div class="q">심볼이 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">함수 이름, 변수 이름</span> 같은 거야!</p>
+                    <p>코드에서 쓰는 모든 이름이 심볼이야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">📦 player.obj의 심볼 테이블
+
+┌─────────────────────────────────────────┐
+│ 정의된 심볼 (이 파일에 구현 있음):       │
+│   ✅ Player::Attack                     │
+│   ✅ Player::Move                       │
+│   ✅ Player::Die                        │
+│                                         │
+│ 참조하는 심볼 (다른 곳에 있음):          │
+│   ❓ Monster::TakeDamage                │
+│   ❓ EffectManager::PlayEffect          │
+│   ❓ SoundManager::PlaySound            │
+└─────────────────────────────────────────┘</div>
+
+            <div class="chat">
+                <div class="q">❓ 표시된 건 어떻게 찾아?</div>
+                <div class="a">
+                    <p>링커가 <span class="key-point">다른 모든 .obj를 뒤져서</span> 찾아!</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🔍 심볼 해결 과정
+
+player.obj: "Monster::TakeDamage 어딨어?"
+     ↓ 검색
+monster.obj: "Monster::TakeDamage 여기 있어! 주소: 0x1234"
+     ↓ 연결
+player.obj의 호출 코드 → 0x1234 주소로 점프하도록 수정</div>
+        </div>
+
+        <!-- Part 3: unresolved external symbol -->
+        <div class="conversation">
+            <h2>Part 3. 유명한 에러 - unresolved external symbol</h2>
+
+            <div class="chat">
+                <div class="q">이 에러 자주 보는데 뭐야?</div>
+                <div class="a">
+                    <p>링커가 <span class="warning">"이 심볼 정의를 못 찾겠어!"</span>라고 하는 거야.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="error">error LNK2019: unresolved external symbol
+"public: void __cdecl Player::Attack(void)"
+referenced in function "main"</span></div>
+
+            <div class="chat">
+                <div class="q">왜 이런 에러가 나?</div>
+                <div class="a">
+                    <p>주로 세 가지 원인이야:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>원인</th>
+                    <th>상황</th>
+                    <th>해결책</th>
+                </tr>
+                <tr>
+                    <td class="bad">1. 정의 누락</td>
+                    <td>헤더에 선언만 하고 cpp에 구현 안 함</td>
+                    <td>cpp 파일에 구현 추가</td>
+                </tr>
+                <tr>
+                    <td class="bad">2. 파일 누락</td>
+                    <td>cpp 파일을 프로젝트에 안 넣음</td>
+                    <td>프로젝트에 파일 추가</td>
+                </tr>
+                <tr>
+                    <td class="bad">3. 라이브러리 누락</td>
+                    <td>필요한 .lib를 링크 안 함</td>
+                    <td>Additional Dependencies에 추가</td>
+                </tr>
+            </table>
+
+            <div class="diagram-box">💡 디버깅 팁
+
+에러 메시지 해석:
+"Player::Attack ... referenced in main"
+        ↑                    ↑
+   못 찾는 함수          호출하는 곳
+
+→ Player::Attack의 정의가 어디 있는지 확인!
+→ player.cpp가 프로젝트에 있는지 확인!
+→ 혹시 다른 라이브러리에 있는 건 아닌지?</div>
+        </div>
+
+        <!-- Part 4: 링크 최적화 -->
+        <div class="conversation">
+            <h2>Part 4. 링크 최적화 옵션들</h2>
+
+            <div class="chat">
+                <div class="q">링킹도 최적화할 수 있어?</div>
+                <div class="a">
+                    <p>당연하지! 특히 <span class="highlight">안 쓰는 코드 제거</span>가 핵심이야.</p>
+                </div>
+            </div>
+
+            <div class="option-box">
+                <h4>🔧 /Gy - Function-Level Linking</h4>
+                <p>각 함수를 별도 섹션에 배치</p>
+                <p>→ 링커가 안 쓰는 함수만 제거 가능!</p>
+            </div>
+
+            <div class="diagram-box">📦 /Gy의 효과
+
+❌ /Gy 없음:
+┌─────────────────────────────────────┐
+│ [FuncA][FuncB][FuncC]               │ ← 하나의 섹션
+└─────────────────────────────────────┘
+FuncB 안 써도 제거 불가 (뭉쳐있어서)
+
+✅ /Gy 적용:
+┌──────────┐ ┌──────────┐ ┌──────────┐
+│ [FuncA]  │ │ [FuncB]  │ │ [FuncC]  │ ← 각각 별도 섹션
+└──────────┘ └──────────┘ └──────────┘
+FuncB 안 쓰면 해당 섹션만 제거! ✂️</div>
+
+            <div class="option-box">
+                <h4>🔧 /Gw - Optimize Global Data</h4>
+                <p>전역 변수/상수도 별도 섹션에 배치</p>
+                <p>→ 안 쓰는 전역 데이터 제거!</p>
+            </div>
+
+            <div class="diagram-box">📦 /Gw의 효과
+
+전역변수들:
+const char* UNUSED_STRING = "never used";
+const int UNUSED_VALUE = 12345;
+int usedCounter = 0;
+
+/Gw 적용 후:
+→ UNUSED_STRING, UNUSED_VALUE는 제거됨!
+→ usedCounter만 최종 exe에 포함</div>
+
+            <div class="option-box">
+                <h4>🔧 /Zc:inline - Remove Unreferenced COMDAT</h4>
+                <p>참조되지 않은 인라인 함수 제거</p>
+                <p>→ .obj 파일 크기 감소 → 링킹 속도 향상</p>
+            </div>
+        </div>
+
+        <!-- Part 5: Debug Fast Link -->
+        <div class="conversation">
+            <h2>Part 5. Debug 빌드 빠르게 - /DEBUG:FASTLINK</h2>
+
+            <div class="chat">
+                <div class="q">디버그 빌드 링킹이 느린데, 빠르게 할 수 있어?</div>
+                <div class="a">
+                    <p><span class="highlight">/DEBUG:FASTLINK</span> 옵션을 써봐!</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">⚡ /DEBUG:FASTLINK
+
+일반 디버그 링킹:
+모든 .obj의 디버그 정보 → PDB 파일 하나로 복사
+시간: 30초
+
+FASTLINK:
+디버그 정보는 .obj에 그대로 두고, PDB는 참조만
+시간: 5초!
+
+단점:
+- .obj 파일 지우면 디버깅 안 됨
+- 배포용으로 부적합 (개발 중에만 사용)</div>
+
+            <div class="chat">
+                <div class="q">개발 중에만 쓰라는 거지?</div>
+                <div class="a">
+                    <p>맞아! Release 빌드에서는 일반 /DEBUG 써야 해.</p>
+                    <p>Debug 빌드 반복할 때 <span class="key-point">엄청 빨라져</span>!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 실제 적용 -->
+        <div class="conversation">
+            <h2>Part 6. 실제 프로젝트에 적용</h2>
+
+            <div class="chat">
+                <div class="q">조선협객전에는 어떻게 적용했어?</div>
+                <div class="a">
+                    <p>Debug와 Release 각각 다르게 설정했어!</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>옵션</th>
+                    <th>Debug|x64</th>
+                    <th>Release|x64</th>
+                </tr>
+                <tr>
+                    <td>/Gy</td>
+                    <td class="good">Yes</td>
+                    <td class="good">Yes</td>
+                </tr>
+                <tr>
+                    <td>/Gw</td>
+                    <td class="good">Yes</td>
+                    <td class="good">Yes</td>
+                </tr>
+                <tr>
+                    <td>/Zc:inline</td>
+                    <td class="good">Yes</td>
+                    <td class="good">Yes</td>
+                </tr>
+                <tr>
+                    <td>/DEBUG:FASTLINK</td>
+                    <td class="good">Yes (개발용)</td>
+                    <td>No (배포용)</td>
+                </tr>
+                <tr>
+                    <td>/CGTHREADS:8</td>
+                    <td class="good">Yes</td>
+                    <td class="good">Yes</td>
+                </tr>
+            </table>
+
+            <div class="diagram-box">📊 링킹 시간 변화
+
+Debug 빌드:
+├── 적용 전: 40초
+├── /Gy, /Gw, /Zc:inline: 35초 (5초 단축)
+├── /DEBUG:FASTLINK: 20초 (15초 단축)
+└── /CGTHREADS:8: 15초 (5초 단축)
+총: 40초 → 15초 (62% 감소)
+
+Release 빌드:
+├── 적용 전: 60초
+├── /Gy, /Gw, /Zc:inline: 50초 (10초 단축)
+└── /CGTHREADS:8: 40초 (10초 단축)
+총: 60초 → 40초 (33% 감소)</div>
+        </div>
+
+        <!-- Part 7: 에러 해결 팁 -->
+        <div class="conversation">
+            <h2>Part 7. 링크 에러 해결 치트시트</h2>
+
+            <div class="chat">
+                <div class="q">링크 에러 종류별로 해결법 정리해줘!</div>
+                <div class="a">
+                    <p>자주 나오는 에러들과 해결책:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>에러</th>
+                    <th>의미</th>
+                    <th>해결</th>
+                </tr>
+                <tr>
+                    <td>LNK2019</td>
+                    <td>외부 심볼 못 찾음</td>
+                    <td>.cpp 추가 / .lib 링크</td>
+                </tr>
+                <tr>
+                    <td>LNK2001</td>
+                    <td>심볼 정의 없음</td>
+                    <td>가상 함수 구현 확인</td>
+                </tr>
+                <tr>
+                    <td>LNK1120</td>
+                    <td>N개 외부 참조 못 찾음</td>
+                    <td>위 에러들 N개 해결</td>
+                </tr>
+                <tr>
+                    <td>LNK2005</td>
+                    <td>심볼 중복 정의</td>
+                    <td>헤더에 inline / static</td>
+                </tr>
+                <tr>
+                    <td>LNK1104</td>
+                    <td>파일 열 수 없음</td>
+                    <td>.lib 경로 확인</td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <h4>⚠️ LNK2005 중복 정의 해결</h4>
+                <p>헤더에 함수 정의가 있으면 여러 .obj에 포함됨!</p>
+                <p>해결: <strong>inline</strong> 키워드 추가 또는 .cpp로 옮기기</p>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>📝 핵심 정리</h3>
+            <ul>
+                <li><strong>링커</strong> = .obj들을 모아 .exe로 조립</li>
+                <li><strong>심볼 해결</strong> = 함수 호출과 정의 연결</li>
+                <li><strong>LNK2019</strong> = 가장 흔한 에러, 정의/파일/lib 확인</li>
+                <li><strong>/Gy, /Gw</strong> = 안 쓰는 함수/데이터 제거</li>
+                <li><strong>/DEBUG:FASTLINK</strong> = Debug 링킹 획기적 단축</li>
+                <li><strong>/CGTHREADS</strong> = 링킹 병렬화</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../parallel-build/">← 병렬 빌드</a>
+            <a href="../debug-vs-release/">Debug vs Release →</a>
+        </div>
+    </div>
+</body>
+</html>

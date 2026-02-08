@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug vs Release - 왜 속도가 다른가 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #e65100; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #fff3e0; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .diagram-box { background: #263238; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre; color: #eceff1; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .comment { color: #78909c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .neutral { background: #fff3e0; }
+
+        .result-box { background: #e8f5e9; border-radius: 16px; padding: 28px; margin: 24px 0; border: 2px solid #4caf50; }
+        .result-box h3 { color: #2e7d32; margin-bottom: 16px; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .summary-box { background: linear-gradient(135deg, #e65100 0%, #ff6b35 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #ffcc80; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #e65100; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-build/" class="back-link">← 컴파일 / 빌드</a>
+
+        <header class="header">
+            <h1>Debug vs Release - 왜 속도가 다른가</h1>
+            <p>최적화 옵션의 차이와 그 영향 이해하기</p>
+        </header>
+
+        <!-- Part 1: 기본 차이 -->
+        <div class="conversation">
+            <h2>Part 1. Debug와 Release의 목적</h2>
+
+            <div class="chat">
+                <div class="q">Debug랑 Release가 뭐가 달라?</div>
+                <div class="a">
+                    <p><span class="highlight">Debug</span> = 개발자가 버그 찾기 쉽게</p>
+                    <p><span class="highlight">Release</span> = 사용자에게 최고 성능으로</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🎯 목적의 차이
+
+Debug 빌드:
+┌─────────────────────────────────────┐
+│ 목표: 디버깅 편의                    │
+│ • 변수 값 쉽게 확인                  │
+│ • 한 줄씩 실행 가능                  │
+│ • 콜스택 정확히 표시                 │
+│ • 실행 속도? 느려도 OK               │
+└─────────────────────────────────────┘
+
+Release 빌드:
+┌─────────────────────────────────────┐
+│ 목표: 최대 성능                      │
+│ • 최고 속도로 실행                   │
+│ • 파일 크기 최소화                   │
+│ • 메모리 효율 최적화                 │
+│ • 디버깅? 어려워도 OK                │
+└─────────────────────────────────────┘</div>
+        </div>
+
+        <!-- Part 2: 핵심 옵션 -->
+        <div class="conversation">
+            <h2>Part 2. 핵심 컴파일러 옵션</h2>
+
+            <div class="chat">
+                <div class="q">구체적으로 어떤 옵션이 다른데?</div>
+                <div class="a">
+                    <p>가장 큰 차이는 <span class="highlight">최적화 수준</span>이야!</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>옵션</th>
+                    <th>Debug</th>
+                    <th>Release</th>
+                    <th>의미</th>
+                </tr>
+                <tr>
+                    <td>최적화</td>
+                    <td class="bad">/Od (없음)</td>
+                    <td class="good">/O2 (최대)</td>
+                    <td>코드 변환 수준</td>
+                </tr>
+                <tr>
+                    <td>런타임 체크</td>
+                    <td class="neutral">/RTC1 (켜짐)</td>
+                    <td class="good">없음</td>
+                    <td>배열 범위, 스택 검사</td>
+                </tr>
+                <tr>
+                    <td>디버그 정보</td>
+                    <td class="neutral">/Zi (전체)</td>
+                    <td class="neutral">/Zi 또는 없음</td>
+                    <td>PDB 파일 생성</td>
+                </tr>
+                <tr>
+                    <td>런타임 라이브러리</td>
+                    <td class="bad">/MDd (Debug)</td>
+                    <td class="good">/MD (Release)</td>
+                    <td>CRT 버전</td>
+                </tr>
+                <tr>
+                    <td>인라인 확장</td>
+                    <td class="bad">제한적</td>
+                    <td class="good">적극적</td>
+                    <td>함수 호출 최적화</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3: 최적화가 하는 일 -->
+        <div class="conversation">
+            <h2>Part 3. /O2가 뭘 하길래?</h2>
+
+            <div class="chat">
+                <div class="q">최적화가 정확히 뭘 해?</div>
+                <div class="a">
+                    <p>컴파일러가 <span class="key-point">똑같은 결과를 더 빠르게</span> 실행되도록</p>
+                    <p>코드를 변환해!</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">// 원본 코드</span>
+<span class="keyword">int</span> sum = <span class="number">0</span>;
+<span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i < <span class="number">100</span>; i++) {
+    sum += i;
+}
+<span class="keyword">return</span> sum;</div>
+
+            <div class="diagram-box">🔄 최적화 변환 예시
+
+/Od (Debug) - 코드 그대로:
+    mov eax, 0          ; sum = 0
+    mov ecx, 0          ; i = 0
+loop:
+    add eax, ecx        ; sum += i
+    inc ecx             ; i++
+    cmp ecx, 100        ; i < 100?
+    jl loop             ; 반복
+    ret                 ; return sum
+
+    → 100번 반복 실행
+
+/O2 (Release) - 최적화 후:
+    mov eax, 4950       ; 컴파일 시점에 계산 완료!
+    ret
+
+    → 0번 반복, 바로 결과!</div>
+
+            <div class="chat">
+                <div class="q">와, 루프가 아예 없어졌네!</div>
+                <div class="a">
+                    <p>이게 <span class="highlight">상수 폴딩(Constant Folding)</span>이야.</p>
+                    <p>컴파일 시점에 계산 가능하면 미리 계산해버려.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 주요 최적화 기법 -->
+        <div class="conversation">
+            <h2>Part 4. Release에서 적용되는 최적화들</h2>
+
+            <div class="chat">
+                <div class="q">다른 최적화도 있어?</div>
+                <div class="a">
+                    <p>엄청 많아! 대표적인 것들:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🚀 주요 최적화 기법
+
+1️⃣ 인라인 확장 (Inline Expansion)
+   함수 호출 → 함수 내용 복사
+   호출 오버헤드 제거
+
+2️⃣ 루프 언롤링 (Loop Unrolling)
+   for (i=0; i<4; i++) body;
+   → body; body; body; body;
+   분기 오버헤드 제거
+
+3️⃣ 죽은 코드 제거 (Dead Code Elimination)
+   if (false) { ... }  → 삭제!
+   사용 안 하는 변수 → 삭제!
+
+4️⃣ 레지스터 할당 최적화
+   자주 쓰는 변수 → CPU 레지스터에
+   메모리 접근 최소화
+
+5️⃣ 명령어 스케줄링
+   CPU 파이프라인 효율 극대화</div>
+
+            <div class="chat">
+                <div class="q">그래서 Release가 얼마나 빨라?</div>
+                <div class="a">
+                    <p>코드에 따라 다르지만, 보통 <span class="key-point">2~10배</span> 빨라!</p>
+                    <p>게임 같은 성능 중요한 곳에서는 필수야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 빌드 시간 차이 -->
+        <div class="conversation">
+            <h2>Part 5. 왜 Release 빌드가 더 오래 걸려?</h2>
+
+            <div class="chat">
+                <div class="q">Debug는 1분인데 Release는 2분 걸리던데?</div>
+                <div class="a">
+                    <p><span class="warning">최적화하는 데 시간이 들어</span>!</p>
+                    <p>코드 분석하고, 변환하고, 더 나은 방법 찾고...</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">⏱️ 빌드 시간 분포 비교
+
+Debug 빌드 (1분):
+├── 전처리     : 15초
+├── 파싱       : 20초
+├── 코드 생성  : 20초 (최적화 없음, 빠름)
+└── 링킹       : 5초
+                ─────
+                60초
+
+Release 빌드 (2분):
+├── 전처리     : 15초
+├── 파싱       : 20초
+├── 코드 생성  : 70초 ⚠️ (최적화 분석 + 변환)
+└── 링킹       : 15초 ⚠️ (더 많은 최적화)
+                ─────
+                120초</div>
+
+            <div class="chat">
+                <div class="q">코드 생성이 3배나 오래 걸리네!</div>
+                <div class="a">
+                    <p>맞아. 최적화 수준이 높을수록 분석할 게 많아.</p>
+                    <p>그래도 <span class="key-point">실행 속도가 중요</span>하니까 감수해야지!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: 우리 프로젝트 -->
+        <div class="conversation">
+            <h2>Part 6. 실제 프로젝트 비교</h2>
+
+            <div class="chat">
+                <div class="q">조선협객전 서버는 어땠어?</div>
+                <div class="a">
+                    <p>최적화 적용 후 Debug와 Release 모두 빨라졌어!</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>Debug|x64</th>
+                    <th>Release|x64</th>
+                </tr>
+                <tr>
+                    <td>빌드 시간 (최적화 전)</td>
+                    <td class="bad">3분 30초</td>
+                    <td class="bad">4분 27초</td>
+                </tr>
+                <tr>
+                    <td>빌드 시간 (최적화 후)</td>
+                    <td class="good">58초</td>
+                    <td class="good">1분 53초</td>
+                </tr>
+                <tr>
+                    <td>exe 크기</td>
+                    <td>15MB</td>
+                    <td class="good">8MB (작음)</td>
+                </tr>
+                <tr>
+                    <td>실행 속도</td>
+                    <td class="bad">느림</td>
+                    <td class="good">빠름</td>
+                </tr>
+                <tr>
+                    <td>디버깅</td>
+                    <td class="good">쉬움</td>
+                    <td class="bad">어려움</td>
+                </tr>
+            </table>
+
+            <div class="result-box">
+                <h3>💡 Release가 더 오래 걸리는 이유</h3>
+                <p>1. /O2 최적화 분석 시간</p>
+                <p>2. 인라인 확장으로 코드량 임시 증가</p>
+                <p>3. 링킹 시 COMDAT 폴딩 등 추가 최적화</p>
+                <p>→ 빌드는 느리지만, <strong>실행은 훨씬 빠름!</strong></p>
+            </div>
+        </div>
+
+        <!-- Part 7: Debug Only 버그 -->
+        <div class="conversation">
+            <h2>Part 7. Debug에서만 되고 Release에서 안 된다?</h2>
+
+            <div class="chat">
+                <div class="q">Debug에선 잘 되는데 Release에서 크래시 나!</div>
+                <div class="a">
+                    <p>흔한 현상이야! <span class="warning">최적화가 버그를 드러내는</span> 거야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🐛 Debug Only 버그의 원인들
+
+1️⃣ 초기화 안 된 변수
+   Debug: 0으로 초기화됨 (운 좋게 동작)
+   Release: 쓰레기 값 그대로 (크래시!)
+
+2️⃣ 타이밍 이슈
+   Debug: 느려서 race condition 안 생김
+   Release: 빨라서 동시 접근 충돌
+
+3️⃣ 최적화로 인한 순서 변경
+   Debug: 코드 순서대로 실행
+   Release: 최적화로 순서 바뀜
+
+4️⃣ 사용 안 하는 변수 제거
+   Debug: 변수 유지
+   Release: 안 쓰는 변수 삭제 → 사이드이펙트 사라짐</div>
+
+            <div class="warning-box">
+                <h4>⚠️ 해결책</h4>
+                <p>1. 변수는 항상 초기화!</p>
+                <p>2. Release 빌드도 정기적으로 테스트</p>
+                <p>3. 정적 분석 도구 사용 (Warning 레벨 높이기)</p>
+            </div>
+        </div>
+
+        <!-- Part 8: 권장 설정 -->
+        <div class="conversation">
+            <h2>Part 8. 권장 설정 정리</h2>
+
+            <div class="chat">
+                <div class="q">결국 어떻게 설정해야 해?</div>
+                <div class="a">
+                    <p>용도에 맞게 설정하면 돼!</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>권장 빌드</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>코드 작성 중</td>
+                    <td class="good">Debug</td>
+                    <td>빠른 빌드, 쉬운 디버깅</td>
+                </tr>
+                <tr>
+                    <td>버그 수정</td>
+                    <td class="good">Debug</td>
+                    <td>브레이크포인트, 변수 확인</td>
+                </tr>
+                <tr>
+                    <td>성능 테스트</td>
+                    <td class="good">Release</td>
+                    <td>실제 성능 측정</td>
+                </tr>
+                <tr>
+                    <td>QA 테스트</td>
+                    <td class="good">Release</td>
+                    <td>실제 배포 환경과 동일</td>
+                </tr>
+                <tr>
+                    <td>라이브 배포</td>
+                    <td class="good">Release</td>
+                    <td>최적 성능</td>
+                </tr>
+            </table>
+
+            <div class="diagram-box">📋 빌드 최적화 최종 체크리스트
+
+Debug|x64:
+☑️ PCH 사용 (StdAfx.h)
+☑️ /MP (병렬 컴파일)
+☑️ /Gy, /Gw (함수/데이터 분리)
+☑️ /DEBUG:FASTLINK (빠른 링킹)
+☑️ /CGTHREADS:8 (병렬 링킹)
+
+Release|x64:
+☑️ PCH 사용 (Debug와 동일 설정)
+☑️ /MP (병렬 컴파일)
+☑️ /O2 (최대 최적화)
+☑️ /Gy, /Gw (함수/데이터 분리)
+☑️ /CGTHREADS:8 (병렬 링킹)</div>
+        </div>
+
+        <div class="summary-box">
+            <h3>📝 핵심 정리</h3>
+            <ul>
+                <li><strong>Debug</strong> = 디버깅 편의, 느린 실행, 빠른 빌드</li>
+                <li><strong>Release</strong> = 최대 성능, 느린 빌드, 작은 파일</li>
+                <li><strong>/Od vs /O2</strong> = 최적화 수준 (실행 속도 2~10배 차이)</li>
+                <li>Release 빌드가 느린 이유 = 최적화 분석 시간</li>
+                <li>Debug Only 버그 주의 = 초기화, 타이밍, 순서</li>
+                <li>둘 다 PCH + /MP 적용하면 빌드 시간 단축!</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../linking-stages/">← 링킹 단계</a>
+            <a href="../category-build/">목록으로 →</a>
+        </div>
+    </div>
+</body>
+</html>

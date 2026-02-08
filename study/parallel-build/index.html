@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>병렬 빌드 - CPU 코어 전부 활용하기 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #e65100; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #fff3e0; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .diagram-box { background: #263238; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre; color: #eceff1; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .option-box { background: #e3f2fd; border-radius: 12px; padding: 24px; margin: 16px 0; border-left: 4px solid #1565c0; }
+        .option-box h4 { color: #1565c0; margin-bottom: 12px; }
+
+        .result-box { background: #e8f5e9; border-radius: 16px; padding: 28px; margin: 24px 0; border: 2px solid #4caf50; }
+        .result-box h3 { color: #2e7d32; margin-bottom: 16px; }
+
+        .summary-box { background: linear-gradient(135deg, #e65100 0%, #ff6b35 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #ffcc80; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #e65100; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-build/" class="back-link">← 컴파일 / 빌드</a>
+
+        <header class="header">
+            <h1>병렬 빌드 - CPU 코어 전부 활용하기</h1>
+            <p>/MP로 컴파일을, /CGTHREADS로 링킹을 병렬화</p>
+        </header>
+
+        <!-- Part 1: 문제 인식 -->
+        <div class="conversation">
+            <h2>Part 1. 8코어인데 1코어만 쓴다고?</h2>
+
+            <div class="chat">
+                <div class="q">빌드할 때 CPU 사용량 보니까 12%밖에 안 쓰던데?</div>
+                <div class="a">
+                    <p>8코어 CPU인데 <span class="warning">1코어만 쓰고 있다</span>는 거야!</p>
+                    <p>기본 설정은 순차 컴파일이거든.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">❌ 기본 설정 (순차 컴파일)
+
+시간 ─────────────────────────────────────→
+Core 1: [main.cpp]─[game.cpp]─[player.cpp]─[monster.cpp]─...
+Core 2: 💤 (놀고 있음)
+Core 3: 💤 (놀고 있음)
+Core 4: 💤 (놀고 있음)
+Core 5: 💤 (놀고 있음)
+Core 6: 💤 (놀고 있음)
+Core 7: 💤 (놀고 있음)
+Core 8: 💤 (놀고 있음)
+
+CPU 사용률: 12.5% (1/8)
+빌드 시간: 2분</div>
+
+            <div class="chat">
+                <div class="q">왜 기본이 순차야? 병렬이 당연히 빠를 텐데.</div>
+                <div class="a">
+                    <p>역사적인 이유야. 옛날에는 싱글코어가 대부분이었거든.</p>
+                    <p>그리고 병렬화하면 <span class="highlight">메모리 사용량이 늘어나는</span> 부작용도 있어.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: /MP 옵션 -->
+        <div class="conversation">
+            <h2>Part 2. /MP - 병렬 컴파일</h2>
+
+            <div class="chat">
+                <div class="q">어떻게 병렬로 바꿔?</div>
+                <div class="a">
+                    <p><span class="highlight">/MP</span> 옵션을 켜면 돼!</p>
+                    <p>Multi-Processor Compilation의 약자야.</p>
+                </div>
+            </div>
+
+            <div class="option-box">
+                <h4>🔧 /MP 설정 방법</h4>
+                <p>프로젝트 속성 → C/C++ → General</p>
+                <p><strong>Multi-processor Compilation: Yes (/MP)</strong></p>
+            </div>
+
+            <div class="diagram-box">✅ /MP 적용 후 (병렬 컴파일)
+
+시간 ──────────────────→
+Core 1: [main.cpp  ]─[skill.cpp ]
+Core 2: [game.cpp  ]─[quest.cpp ]
+Core 3: [player.cpp]─[npc.cpp   ]
+Core 4: [monster.cpp]─[item.cpp ]
+Core 5: [map.cpp   ]─[shop.cpp  ]
+Core 6: [party.cpp ]─[chat.cpp  ]
+Core 7: [guild.cpp ]─[mail.cpp  ]
+Core 8: [event.cpp ]─[log.cpp   ]
+
+CPU 사용률: 100%!
+빌드 시간: 15초! (2분 → 15초)</div>
+
+            <div class="chat">
+                <div class="q">와 8배 빨라진 거야?</div>
+                <div class="a">
+                    <p>이론적으로는 그래! 실제로는 <span class="key-point">4~6배</span> 정도.</p>
+                    <p>파일 크기가 다르고, 디스크 I/O 병목도 있거든.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: /MP 숫자 -->
+        <div class="conversation">
+            <h2>Part 3. /MP 숫자의 의미</h2>
+
+            <div class="chat">
+                <div class="q">/MP8 이런 식으로 숫자를 붙이던데?</div>
+                <div class="a">
+                    <p>동시에 컴파일할 <span class="highlight">최대 프로세스 수</span>야!</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>옵션</th>
+                    <th>의미</th>
+                    <th>권장 상황</th>
+                </tr>
+                <tr>
+                    <td>/MP</td>
+                    <td class="good">자동 (CPU 코어 수만큼)</td>
+                    <td>대부분의 경우</td>
+                </tr>
+                <tr>
+                    <td>/MP4</td>
+                    <td>최대 4개 동시</td>
+                    <td>메모리가 부족할 때</td>
+                </tr>
+                <tr>
+                    <td>/MP16</td>
+                    <td>최대 16개 동시</td>
+                    <td>고성능 서버</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">그냥 /MP 쓰면 알아서 해주는구나!</div>
+                <div class="a">
+                    <p>맞아! CPU 코어 수에 맞춰서 자동 결정해.</p>
+                    <p>8코어면 8개, 16코어면 16개 동시 컴파일.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 링킹도 병렬화 -->
+        <div class="conversation">
+            <h2>Part 4. 링킹도 병렬화할 수 있어?</h2>
+
+            <div class="chat">
+                <div class="q">컴파일은 빨라졌는데, 링킹도 1코어만 쓰는 것 같아.</div>
+                <div class="a">
+                    <p>맞아! 링킹은 기본적으로 <span class="warning">순차 처리</span>야.</p>
+                    <p>근데 <span class="highlight">/CGTHREADS</span> 옵션으로 병렬화 가능!</p>
+                </div>
+            </div>
+
+            <div class="option-box">
+                <h4>🔧 /CGTHREADS 설정 방법</h4>
+                <p>프로젝트 속성 → Linker → Command Line</p>
+                <p>Additional Options: <strong>/CGTHREADS:8</strong></p>
+            </div>
+
+            <div class="diagram-box">📊 /CGTHREADS의 역할
+
+링킹 과정 중 "코드 생성(Code Generation)" 단계를 병렬화!
+
+❌ 기본:
+[심볼 해결]─[코드생성 ████████████████████]─[출력]
+                    ↑ 여기가 오래 걸림 (1코어)
+
+✅ /CGTHREADS:8:
+[심볼 해결]─[코드생성 ████]─[출력]
+            [코드생성 ████]
+            [코드생성 ████]
+            [코드생성 ████] ← 8코어 동시!</div>
+
+            <div class="chat">
+                <div class="q">링킹 시간도 줄어드는구나!</div>
+                <div class="a">
+                    <p>큰 프로젝트에서 효과가 커. 특히 <span class="key-point">Release 빌드</span>!</p>
+                    <p>최적화 코드 생성에 시간이 많이 들거든.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 주의사항 -->
+        <div class="conversation">
+            <h2>Part 5. 병렬 빌드 주의사항</h2>
+
+            <div class="chat">
+                <div class="q">무조건 병렬화하면 좋은 거 아냐?</div>
+                <div class="a">
+                    <p>대부분 좋지만, <span class="warning">몇 가지 주의점</span>이 있어!</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>주의사항</th>
+                    <th>설명</th>
+                    <th>해결책</th>
+                </tr>
+                <tr>
+                    <td>메모리 사용량 증가</td>
+                    <td>코어당 컴파일러 인스턴스</td>
+                    <td>/MP4로 제한</td>
+                </tr>
+                <tr>
+                    <td>PCH와 함께 사용 시</td>
+                    <td>.pch 파일 동시 접근 이슈</td>
+                    <td>VS 2019+ 자동 해결</td>
+                </tr>
+                <tr>
+                    <td>빌드 출력 뒤섞임</td>
+                    <td>여러 파일 로그가 섞임</td>
+                    <td>정상 동작, 무시해도 됨</td>
+                </tr>
+            </table>
+
+            <div class="diagram-box">💾 메모리 사용량 비교
+
+/MP 없음:      컴파일러 1개 × 500MB = 500MB
+/MP (8코어):   컴파일러 8개 × 500MB = 4GB!
+
+메모리 8GB 미만이면 /MP4 정도로 제한 권장</div>
+        </div>
+
+        <!-- Part 6: 실제 결과 -->
+        <div class="conversation">
+            <h2>Part 6. 실제 적용 결과</h2>
+
+            <div class="chat">
+                <div class="q">실제로 얼마나 빨라졌어?</div>
+                <div class="a">
+                    <p>조선협객전 서버 프로젝트 결과:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>단계</th>
+                    <th>적용 전</th>
+                    <th>적용 후</th>
+                    <th>단축</th>
+                </tr>
+                <tr>
+                    <td>컴파일 (PCH 적용 상태)</td>
+                    <td class="bad">1분 40초</td>
+                    <td class="good">50초</td>
+                    <td>50초 (50%)</td>
+                </tr>
+                <tr>
+                    <td>링킹</td>
+                    <td class="bad">30초</td>
+                    <td class="good">20초</td>
+                    <td>10초 (33%)</td>
+                </tr>
+                <tr>
+                    <td><strong>전체</strong></td>
+                    <td class="bad"><strong>2분 10초</strong></td>
+                    <td class="good"><strong>1분 10초</strong></td>
+                    <td><strong>1분 (46%)</strong></td>
+                </tr>
+            </table>
+
+            <div class="result-box">
+                <h3>📊 누적 최적화 효과</h3>
+                <p><strong>원본:</strong> 3분 30초</p>
+                <p><strong>+ PCH:</strong> 2분 10초 (1분 20초 단축)</p>
+                <p><strong>+ /MP:</strong> 1분 20초 (50초 단축)</p>
+                <p><strong>+ /CGTHREADS:</strong> 1분 10초 (10초 단축)</p>
+                <p>→ <strong>총 2분 20초 단축 (67%)</strong></p>
+            </div>
+        </div>
+
+        <!-- Part 7: MSBuild 병렬 -->
+        <div class="conversation">
+            <h2>Part 7. 프로젝트 단위 병렬 빌드</h2>
+
+            <div class="chat">
+                <div class="q">솔루션에 프로젝트가 여러 개면?</div>
+                <div class="a">
+                    <p>MSBuild의 <span class="highlight">/m</span> 옵션으로 프로젝트도 병렬 빌드!</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">📦 솔루션 수준 병렬화
+
+chosun_server.sln
+├── server_Game        ─┐
+├── server_Login       ─┼─→ 의존성 없으면 동시 빌드!
+├── server_Gate        ─┘
+├── server_GameDB      ─┐
+├── server_AccountDB   ─┼─→ 이것들도 동시에!
+└── server_CashDB      ─┘
+
+MSBuild 명령:
+msbuild chosun_server.sln /m /p:Configuration=Debug
+
+/m = 최대 병렬 (코어 수만큼)
+/m:4 = 최대 4개 프로젝트 동시</div>
+
+            <div class="chat">
+                <div class="q">그럼 /MP랑 /m을 같이 쓰면?</div>
+                <div class="a">
+                    <p><span class="key-point">이중 병렬화!</span></p>
+                    <p>프로젝트도 동시에, 각 프로젝트 안에서도 파일 동시 컴파일!</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>📝 핵심 정리</h3>
+            <ul>
+                <li><strong>/MP</strong>: 파일 단위 병렬 컴파일 (CPU 100% 활용)</li>
+                <li><strong>/CGTHREADS:N</strong>: 링킹 중 코드 생성 병렬화</li>
+                <li><strong>/m</strong>: 솔루션 내 프로젝트 병렬 빌드</li>
+                <li>세 가지 조합하면 <strong>빌드 시간 50%+ 단축</strong></li>
+                <li>메모리 부족하면 /MP4 등으로 제한</li>
+                <li>VS 2019 이상에서 PCH와 잘 호환</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../pch/">← PCH</a>
+            <a href="../linking-stages/">링킹 단계 →</a>
+        </div>
+    </div>
+</body>
+</html>
