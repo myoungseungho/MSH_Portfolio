@@ -565,7 +565,7 @@
                 <button class="search-clear" id="searchClear" onclick="clearSearch()">&times;</button>
                 <div class="search-results" id="searchResults"></div>
             </div>
-            <p class="search-hint">약 110개 문서에서 검색</p>
+            <p class="search-hint">374개 문서 전체 본문 검색</p>
         </header>
 
         <section class="section">
@@ -956,6 +956,21 @@
             return text.replace(regex, '<mark>$1</mark>');
         }
 
+        // 본문에서 검색어 주변 컨텍스트 추출
+        function extractContext(content, query, maxLen = 80) {
+            if (!content) return '';
+            const lower = content.toLowerCase();
+            const idx = lower.indexOf(query.toLowerCase());
+            if (idx === -1) return content.slice(0, maxLen) + '...';
+
+            const start = Math.max(0, idx - 30);
+            const end = Math.min(content.length, idx + query.length + 50);
+            let snippet = content.slice(start, end);
+            if (start > 0) snippet = '...' + snippet;
+            if (end < content.length) snippet = snippet + '...';
+            return snippet;
+        }
+
         // 검색 실행
         function doSearch(query) {
             if (!query || query.length < 1) {
@@ -969,19 +984,25 @@
 
             const results = searchIndex.filter(item => {
                 return item.title.toLowerCase().includes(q) ||
-                       item.desc.toLowerCase().includes(q);
+                       (item.content && item.content.toLowerCase().includes(q));
             }).slice(0, 10); // 최대 10개 결과
 
             if (results.length === 0) {
                 searchResults.innerHTML = '<div class="search-no-result">검색 결과가 없습니다</div>';
             } else {
-                searchResults.innerHTML = results.map(item => `
+                searchResults.innerHTML = results.map(item => {
+                    // 제목 매칭이면 제목 하이라이트, 아니면 본문 컨텍스트 표시
+                    const titleMatch = item.title.toLowerCase().includes(q);
+                    const desc = titleMatch
+                        ? (item.content ? item.content.slice(0, 80) + '...' : '')
+                        : extractContext(item.content, query);
+                    return `
                     <a href="${item.url}" class="search-result-item">
                         <div class="search-result-title">${highlight(item.title, query)}</div>
-                        <div class="search-result-desc">${highlight(item.desc, query)}</div>
+                        <div class="search-result-desc">${highlight(desc, query)}</div>
                         <span class="search-result-category">${item.category}</span>
                     </a>
-                `).join('');
+                `}).join('');
             }
 
             searchResults.classList.add('show');
