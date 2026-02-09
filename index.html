@@ -248,6 +248,137 @@
             text-decoration: underline;
         }
 
+        /* 검색 기능 */
+        .search-container {
+            max-width: 600px;
+            margin: 0 auto 40px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 16px 20px 16px 48px;
+            font-size: 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            background: white;
+            transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.15);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.2rem;
+            color: #999;
+        }
+
+        .search-clear {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: #999;
+            cursor: pointer;
+            display: none;
+        }
+
+        .search-clear:hover {
+            color: #666;
+        }
+
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            margin-top: 8px;
+        }
+
+        .search-results.show {
+            display: block;
+        }
+
+        .search-result-item {
+            display: block;
+            padding: 16px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            text-decoration: none;
+            color: inherit;
+            transition: background 0.15s;
+        }
+
+        .search-result-item:hover {
+            background: #f8f9fa;
+        }
+
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .search-result-title {
+            font-weight: 600;
+            color: #111;
+            margin-bottom: 4px;
+        }
+
+        .search-result-title mark {
+            background: #fff3cd;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+
+        .search-result-desc {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .search-result-desc mark {
+            background: #fff3cd;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+
+        .search-result-category {
+            font-size: 0.75rem;
+            color: #999;
+            background: #f0f0f0;
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .search-no-result {
+            padding: 24px;
+            text-align: center;
+            color: #999;
+        }
+
+        .search-hint {
+            text-align: center;
+            font-size: 0.85rem;
+            color: #999;
+            margin-top: 8px;
+        }
+
         /* 비밀 입구 */
         .secret-trigger {
             display: inline-block;
@@ -424,6 +555,17 @@
             <div style="margin-top: 16px;">
                 <img src="https://visitor-badge.laobi.icu/badge?page_id=myoungseungho.MSH_Portfolio" alt="visitors" />
             </div>
+
+            <!-- 검색 기능 -->
+            <div class="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="search-input" id="searchInput"
+                       placeholder="제목 또는 내용으로 검색..."
+                       autocomplete="off">
+                <button class="search-clear" id="searchClear" onclick="clearSearch()">&times;</button>
+                <div class="search-results" id="searchResults"></div>
+            </div>
+            <p class="search-hint">약 110개 문서에서 검색</p>
         </header>
 
         <section class="section">
@@ -790,6 +932,98 @@
         // ESC로 닫기
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeSecret();
+        });
+
+        // 검색 기능
+        let searchIndex = [];
+
+        // 검색 인덱스 로드
+        fetch('./search-index.json')
+            .then(res => res.json())
+            .then(data => {
+                searchIndex = data;
+            })
+            .catch(err => console.log('검색 인덱스 로드 실패:', err));
+
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+        const searchClear = document.getElementById('searchClear');
+
+        // 검색어 하이라이팅
+        function highlight(text, query) {
+            if (!query) return text;
+            const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return text.replace(regex, '<mark>$1</mark>');
+        }
+
+        // 검색 실행
+        function doSearch(query) {
+            if (!query || query.length < 1) {
+                searchResults.classList.remove('show');
+                searchClear.style.display = 'none';
+                return;
+            }
+
+            searchClear.style.display = 'block';
+            const q = query.toLowerCase();
+
+            const results = searchIndex.filter(item => {
+                return item.title.toLowerCase().includes(q) ||
+                       item.desc.toLowerCase().includes(q);
+            }).slice(0, 10); // 최대 10개 결과
+
+            if (results.length === 0) {
+                searchResults.innerHTML = '<div class="search-no-result">검색 결과가 없습니다</div>';
+            } else {
+                searchResults.innerHTML = results.map(item => `
+                    <a href="${item.url}" class="search-result-item">
+                        <div class="search-result-title">${highlight(item.title, query)}</div>
+                        <div class="search-result-desc">${highlight(item.desc, query)}</div>
+                        <span class="search-result-category">${item.category}</span>
+                    </a>
+                `).join('');
+            }
+
+            searchResults.classList.add('show');
+        }
+
+        // 입력 이벤트
+        let debounceTimer;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                doSearch(e.target.value.trim());
+            }, 150);
+        });
+
+        // 검색창 포커스 시
+        searchInput.addEventListener('focus', () => {
+            if (searchInput.value.trim()) {
+                doSearch(searchInput.value.trim());
+            }
+        });
+
+        // 외부 클릭 시 결과 닫기
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-container')) {
+                searchResults.classList.remove('show');
+            }
+        });
+
+        // 검색어 지우기
+        function clearSearch() {
+            searchInput.value = '';
+            searchResults.classList.remove('show');
+            searchClear.style.display = 'none';
+            searchInput.focus();
+        }
+
+        // ESC로 검색 결과 닫기
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                searchResults.classList.remove('show');
+                searchInput.blur();
+            }
         });
     </script>
 </body>
