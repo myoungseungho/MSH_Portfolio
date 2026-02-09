@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프로시저 호출 1개가 왜 100ms나 걸려? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .step-box { background: white; border-radius: 12px; padding: 20px; margin: 12px 0; border-left: 4px solid #1a237e; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .step-box h4 { color: #1a237e; margin-bottom: 8px; }
+        .step-box .desc { color: #666; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">← DB / 캐시</a>
+
+        <header class="header">
+            <h1>프로시저 호출 1개가 왜 100ms나 걸려?</h1>
+            <p>SP 컴파일 오버헤드와 Plan Cache - 첫 호출이 느린 이유</p>
+        </header>
+
+        <!-- Part 1: 문제 상황 -->
+        <div class="conversation">
+            <h2>Part 1. 이상하다, 첫 번째 호출만 느려</h2>
+
+            <div class="chat">
+                <div class="q">프로시저 호출하는데 처음만 100ms, 두 번째부터는 5ms야. 왜 그래?</div>
+                <div class="a">
+                    <p>첫 호출 때 <span class="highlight">컴파일</span>이 일어났거든.</p>
+                    <p>SQL Server는 프로시저를 실행하기 전에 "실행 계획"을 만들어야 해.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">실행 계획? 그게 뭔데?</div>
+                <div class="a">
+                    <p>네비게이션 경로라고 생각하면 돼.</p>
+                    <p>"서울에서 부산 가기" → 어떤 길로 갈지 미리 계산하는 거야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[프로시저 첫 호출 - 컴파일 발생]
+
+EXEC gp_LoadCharacter @CharNo = 12345
+    │
+    ├─ 1단계: 구문 분석 (Parsing) ─────────── 5ms
+    │     "문법 맞아? 테이블 있어?"
+    │
+    ├─ 2단계: 최적화 (Optimization) ──────── 50ms ← 여기가 비싸!
+    │     "인덱스 쓸까? 풀스캔 할까? JOIN 순서는?"
+    │
+    ├─ 3단계: 실행 계획 캐싱 ─────────────── 5ms
+    │     Plan Cache에 저장
+    │
+    └─ 4단계: 실제 실행 ──────────────────── 5ms
+          데이터 가져오기
+
+총합: 65ms (컴파일 55ms + 실행 5ms)</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">최적화 단계</span>가 가장 비싸.</p>
+                    <p>테이블 통계 확인, 인덱스 비교, 여러 경로 시뮬레이션...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: Plan Cache -->
+        <div class="conversation">
+            <h2>Part 2. Plan Cache - 한 번 만든 계획은 재사용</h2>
+
+            <div class="chat">
+                <div class="q">두 번째 호출은 왜 빠른 거야?</div>
+                <div class="a">
+                    <p><span class="highlight">Plan Cache</span>에 저장된 걸 재사용하니까.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[프로시저 두 번째 호출 - 캐시 히트]
+
+EXEC gp_LoadCharacter @CharNo = 67890
+    │
+    ├─ Plan Cache 확인 ──────────────────── 0.1ms
+    │     "gp_LoadCharacter 계획 있네!"
+    │
+    └─ 바로 실행 ────────────────────────── 5ms
+          캐시된 계획 사용
+
+총합: 5.1ms (컴파일 0ms!)</div>
+
+            <div class="chat">
+                <div class="q">그럼 Plan Cache는 영원히 유지돼?</div>
+                <div class="a">
+                    <p>아니. 여러 이유로 사라질 수 있어:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>캐시가 사라지는 경우</th>
+                    <th>왜?</th>
+                </tr>
+                <tr>
+                    <td>서버 재시작</td>
+                    <td>메모리 초기화</td>
+                </tr>
+                <tr>
+                    <td>메모리 부족</td>
+                    <td>오래된 계획부터 제거</td>
+                </tr>
+                <tr>
+                    <td>프로시저 수정</td>
+                    <td>ALTER PROCEDURE 실행</td>
+                </tr>
+                <tr>
+                    <td>통계 업데이트</td>
+                    <td>테이블 데이터 변경 많을 때</td>
+                </tr>
+                <tr>
+                    <td>스키마 변경</td>
+                    <td>인덱스 추가/삭제</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="warning">서버 재시작 직후</span>에 첫 접속자들이 느린 건 이 때문이야.</p>
+                    <p>모든 프로시저가 다시 컴파일되니까.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 컴파일이 반복되는 경우 -->
+        <div class="conversation">
+            <h2>Part 3. 컴파일이 매번 일어나는 최악의 케이스</h2>
+
+            <div class="chat">
+                <div class="q">캐시 안 되고 매번 컴파일되는 경우도 있어?</div>
+                <div class="a">
+                    <p>있어. <span class="warning">가장 흔한 실수</span>가 Dynamic SQL이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- ❌ 나쁜 예: 동적 SQL (매번 컴파일)</span>
+<span class="keyword">CREATE PROCEDURE</span> gp_SearchItem
+    @ItemName NVARCHAR(50)
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="keyword">DECLARE</span> @sql NVARCHAR(MAX)
+    <span class="keyword">SET</span> @sql = <span class="string">'SELECT * FROM TItem WHERE ItemName = '''</span> + @ItemName + <span class="string">''''</span>
+    <span class="keyword">EXEC</span>(@sql)  <span class="comment">-- 매번 새 SQL = 매번 컴파일!</span>
+<span class="keyword">END</span></div>
+
+            <div class="diagram-box">
+호출 1: EXEC gp_SearchItem '장검'
+  → SQL: "SELECT * FROM TItem WHERE ItemName = '장검'"
+  → 컴파일 (새 SQL이니까)
+
+호출 2: EXEC gp_SearchItem '단검'
+  → SQL: "SELECT * FROM TItem WHERE ItemName = '단검'"
+  → 컴파일 (또 새 SQL이니까!)
+
+문자열이 다르면 = 다른 SQL = 매번 컴파일</div>
+
+            <div class="code-block"><span class="comment">-- ✅ 좋은 예: 파라미터화 (캐시 재사용)</span>
+<span class="keyword">CREATE PROCEDURE</span> gp_SearchItem
+    @ItemName NVARCHAR(50)
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="keyword">SELECT</span> * <span class="keyword">FROM</span> TItem <span class="keyword">WHERE</span> ItemName = @ItemName
+    <span class="comment">-- 파라미터만 바뀌므로 같은 계획 재사용</span>
+<span class="keyword">END</span></div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">파라미터화</span>하면 SQL 구조가 같으니까 캐시 재사용 가능!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: WITH RECOMPILE -->
+        <div class="conversation">
+            <h2>Part 4. 일부러 재컴파일하는 경우</h2>
+
+            <div class="chat">
+                <div class="q">근데 가끔은 새로 컴파일하는 게 나을 때도 있지 않아?</div>
+                <div class="a">
+                    <p>맞아. 데이터 분포가 극단적으로 다를 때.</p>
+                    <p>이걸 <span class="highlight">Parameter Sniffing 문제</span>라고 해.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[극단적 데이터 분포 예시]
+
+테이블: TPlayer (100만 명)
+├── ServerID = 1: 50만 명 (50%)
+└── ServerID = 99: 10명 (0.001%)
+
+첫 호출: @ServerID = 1 (50만 명)
+  → 최적화: "풀스캔이 낫겠다"
+  → 이 계획이 캐시됨
+
+두번째: @ServerID = 99 (10명)
+  → 캐시된 계획 사용 (풀스캔)
+  → 10명 찾는데 50만 건 스캔?! 비효율!</div>
+
+            <div class="chat">
+                <div class="q">그럼 어떻게 해?</div>
+                <div class="a">
+                    <p>세 가지 방법이 있어:</p>
+                </div>
+            </div>
+
+            <div class="step-box">
+                <h4>1. WITH RECOMPILE - 매번 재컴파일</h4>
+                <div class="desc">
+                    <code>EXEC gp_FindPlayer @ServerID = 99 WITH RECOMPILE</code><br>
+                    항상 최적의 계획. 대신 컴파일 비용 발생.
+                </div>
+            </div>
+
+            <div class="step-box">
+                <h4>2. OPTION(RECOMPILE) - 특정 쿼리만</h4>
+                <div class="desc">
+                    프로시저 내 특정 쿼리에만 적용.<br>
+                    <code>SELECT * FROM TPlayer WHERE ServerID = @ServerID OPTION(RECOMPILE)</code>
+                </div>
+            </div>
+
+            <div class="step-box">
+                <h4>3. OPTIMIZE FOR - 특정 값 기준</h4>
+                <div class="desc">
+                    <code>OPTION(OPTIMIZE FOR (@ServerID = 50))</code><br>
+                    중간값 기준으로 계획 생성.
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">대부분의 경우</span> 캐시 재사용이 이득이야.</p>
+                    <p>RECOMPILE은 정말 필요할 때만!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 서버 시작 시 워밍업 -->
+        <div class="conversation">
+            <h2>Part 5. 서버 시작 직후가 느린 이유</h2>
+
+            <div class="chat">
+                <div class="q">게임 서버 재시작하면 처음 몇 분 동안 느려. 왜 그래?</div>
+                <div class="a">
+                    <p><span class="warning">Plan Cache가 비어있거든.</span></p>
+                    <p>첫 접속자들이 모든 프로시저를 컴파일시키는 거야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[서버 시작 직후 상황]
+
+09:00 서버 재시작
+  └── Plan Cache: 비어있음
+
+09:01 첫 번째 유저 로그인
+  ├── gp_LoadAccount → 컴파일 (50ms)
+  ├── gp_LoadCharacter → 컴파일 (100ms)
+  ├── gp_LoadInventory → 컴파일 (80ms)
+  └── 총 로그인 시간: 500ms+ (느림!)
+
+09:02 두 번째 유저 로그인
+  ├── gp_LoadAccount → 캐시 히트 (5ms)
+  ├── gp_LoadCharacter → 캐시 히트 (5ms)
+  └── 총 로그인 시간: 50ms (빠름!)</div>
+
+            <div class="chat">
+                <div class="q">미리 워밍업 할 수 있어?</div>
+                <div class="a">
+                    <p><span class="key-point">할 수 있어!</span> 더미 호출로 캐시를 채우는 거야.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 서버 시작 시 워밍업 스크립트</span>
+<span class="comment">-- 자주 쓰는 프로시저들을 미리 한 번씩 호출</span>
+
+<span class="keyword">EXEC</span> gp_LoadAccount @AccountNo = 1
+<span class="keyword">EXEC</span> gp_LoadCharacter @CharNo = 1
+<span class="keyword">EXEC</span> gp_LoadInventory @CharNo = 1
+<span class="keyword">EXEC</span> gp_LoadQuest @CharNo = 1
+<span class="keyword">EXEC</span> gp_LoadSkill @CharNo = 1
+<span class="comment">-- ... 모든 주요 프로시저</span></div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>실제 유저가 들어오기 전에 <span class="highlight">Plan Cache를 미리 채워두면</span></p>
+                    <p>첫 유저도 빠르게 로그인할 수 있어.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 6: Plan Cache 확인 -->
+        <div class="conversation">
+            <h2>Part 6. Plan Cache 상태 확인하기</h2>
+
+            <div class="chat">
+                <div class="q">현재 캐시된 계획들을 볼 수 있어?</div>
+                <div class="a">
+                    <p>DMV로 확인 가능해.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- 캐시된 프로시저와 사용 횟수</span>
+<span class="keyword">SELECT TOP</span> 20
+    OBJECT_NAME(object_id) <span class="keyword">AS</span> proc_name,
+    execution_count,
+    total_elapsed_time / 1000 <span class="keyword">AS</span> total_ms,
+    total_elapsed_time / execution_count / 1000 <span class="keyword">AS</span> avg_ms,
+    cached_time
+<span class="keyword">FROM</span> sys.dm_exec_procedure_stats
+<span class="keyword">ORDER BY</span> execution_count <span class="keyword">DESC</span></div>
+
+            <div class="code-block"><span class="comment">-- Plan Cache 메모리 사용량</span>
+<span class="keyword">SELECT</span>
+    type <span class="keyword">AS</span> cache_type,
+    entries_count,
+    single_pages_kb + multi_pages_kb <span class="keyword">AS</span> total_kb
+<span class="keyword">FROM</span> sys.dm_os_memory_cache_counters
+<span class="keyword">WHERE</span> type = <span class="string">'CACHESTORE_SQLCP'</span>  <span class="comment">-- SQL 계획 캐시</span></div>
+
+            <div class="chat">
+                <div class="q">캐시를 강제로 비울 수도 있어?</div>
+                <div class="a">
+                    <p>가능하지만, <span class="warning">운영 중엔 절대 하지 마</span>.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- ⚠️ Plan Cache 전체 비우기 (테스트 환경에서만!)</span>
+<span class="keyword">DBCC FREEPROCCACHE</span>
+
+<span class="comment">-- 특정 프로시저만 비우기</span>
+<span class="keyword">DECLARE</span> @plan_handle VARBINARY(64)
+<span class="keyword">SELECT</span> @plan_handle = plan_handle
+<span class="keyword">FROM</span> sys.dm_exec_procedure_stats
+<span class="keyword">WHERE</span> OBJECT_NAME(object_id) = <span class="string">'gp_LoadCharacter'</span>
+<span class="keyword">DBCC FREEPROCCACHE</span>(@plan_handle)</div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>첫 호출이 느린 이유</strong> = 실행 계획 컴파일 (최적화 비용)</li>
+                <li><strong>Plan Cache</strong> = 컴파일된 계획 저장소 → 재사용으로 빨라짐</li>
+                <li><strong>동적 SQL</strong> = 문자열이 다르면 매번 컴파일 (피할 것)</li>
+                <li><strong>WITH RECOMPILE</strong> = 극단적 데이터 분포일 때만 사용</li>
+                <li><strong>서버 시작 워밍업</strong> = 더미 호출로 캐시 미리 채우기</li>
+                <li><strong>dm_exec_procedure_stats</strong> = 캐시 상태 모니터링</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../parameter-sniffing/">← 이전: Parameter Sniffing</a>
+            <a href="../index-selectivity/">다음: 인덱스 선택도 →</a>
+        </div>
+    </div>
+</body>
+</html>

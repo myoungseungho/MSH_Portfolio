@@ -306,6 +306,104 @@ DB 대기 1초 = 서버 멈춤 1초</div>
     <span class="keyword">ON</span> blocked.blocking_session_id = blocking.session_id</div>
         </div>
 
+        <!-- Part 6: 실전 진단 체크리스트 -->
+        <div class="conversation">
+            <h2>Part 6. DB가 갑자기 느려지면? 5분 진단 체크리스트</h2>
+
+            <div class="chat">
+                <div class="q">갑자기 DB가 느려졌어! 뭐부터 봐야 해?</div>
+                <div class="a">
+                    <p>이 순서대로 확인해:</p>
+                </div>
+            </div>
+
+            <div class="wait-card">
+                <h4>Step 1. 현재 대기 상태 확인 (10초)</h4>
+                <div class="cause">지금 이 순간 뭘 기다리고 있나?</div>
+                <div class="solution">
+                    <code>SELECT wait_type, wait_time, session_id FROM sys.dm_exec_requests WHERE wait_type IS NOT NULL</code>
+                </div>
+            </div>
+
+            <div class="wait-card">
+                <h4>Step 2. 블로킹 체인 확인 (20초)</h4>
+                <div class="cause">누가 누굴 막고 있나?</div>
+                <div class="solution">
+                    <code>SELECT blocking_session_id, session_id, wait_type FROM sys.dm_exec_requests WHERE blocking_session_id > 0</code><br>
+                    → blocking_session_id가 범인!
+                </div>
+            </div>
+
+            <div class="wait-card">
+                <h4>Step 3. 범인 쿼리 확인 (30초)</h4>
+                <div class="cause">블로킹 세션이 뭘 하고 있나?</div>
+                <div class="solution">
+                    <code>SELECT text FROM sys.dm_exec_sql_text((SELECT sql_handle FROM sys.dm_exec_requests WHERE session_id = [범인ID]))</code>
+                </div>
+            </div>
+
+            <div class="wait-card">
+                <h4>Step 4. 누적 통계 확인 (1분)</h4>
+                <div class="cause">최근 며칠간 어떤 대기가 많았나?</div>
+                <div class="solution">
+                    <code>SELECT TOP 5 wait_type, wait_time_ms/1000 FROM sys.dm_os_wait_stats ORDER BY wait_time_ms DESC</code>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">주요 증상별로 정리해줘.</div>
+                <div class="a">
+                    <p>증상 → 원인 → 해결책:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>증상</th>
+                    <th>Wait Type</th>
+                    <th>원인</th>
+                    <th>해결</th>
+                </tr>
+                <tr class="io">
+                    <td>모든 쿼리가 느림</td>
+                    <td>PAGEIOLATCH_*</td>
+                    <td>디스크 느림/메모리 부족</td>
+                    <td>SSD, 메모리 증설</td>
+                </tr>
+                <tr class="lock">
+                    <td>특정 테이블만 느림</td>
+                    <td>LCK_M_*</td>
+                    <td>잠금 경합</td>
+                    <td>트랜잭션 짧게, 인덱스</td>
+                </tr>
+                <tr class="io">
+                    <td>INSERT/UPDATE 느림</td>
+                    <td>WRITELOG</td>
+                    <td>로그 디스크 느림</td>
+                    <td>로그파일 SSD</td>
+                </tr>
+                <tr class="cpu">
+                    <td>복잡한 쿼리만 느림</td>
+                    <td>CXPACKET</td>
+                    <td>병렬처리 불균형</td>
+                    <td>MAXDOP 조정</td>
+                </tr>
+                <tr class="memory">
+                    <td>큰 쿼리만 느림</td>
+                    <td>RESOURCE_SEMAPHORE</td>
+                    <td>쿼리 메모리 부족</td>
+                    <td>메모리 증설, 쿼리 분할</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">90%는 이 5가지 중 하나</span>야.</p>
+                    <p>Wait Type만 알면 원인의 방향이 보여.</p>
+                </div>
+            </div>
+        </div>
+
         <!-- 핵심 정리 -->
         <div class="summary-box">
             <h3>핵심 정리</h3>
@@ -315,6 +413,7 @@ DB 대기 1초 = 서버 멈춤 1초</div>
                 <li><strong>PAGEIOLATCH</strong>: 디스크 I/O → 메모리/인덱스 개선</li>
                 <li><strong>LCK_M_*</strong>: 잠금 대기 → 트랜잭션 최소화</li>
                 <li><strong>게임 서버</strong>: 동기 호출이라 대기 = 서버 멈춤</li>
+                <li><strong>5분 진단</strong>: 대기상태 → 블로킹 → 범인쿼리 → 누적통계</li>
                 <li><strong>모니터링</strong>: sys.dm_os_wait_stats, dm_exec_requests</li>
             </ul>
         </div>
