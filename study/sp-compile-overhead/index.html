@@ -187,28 +187,96 @@ EXEC gp_LoadCharacter @CharNo = 67890
                 </div>
             </div>
 
-            <div class="code-block"><span class="comment">-- ❌ 나쁜 예: 동적 SQL (매번 컴파일)</span>
+            <div class="chat">
+                <div class="q">Dynamic SQL이 뭔데?</div>
+                <div class="a">
+                    <p><span class="highlight">문자열로 SQL을 조립</span>해서 실행하는 거야.</p>
+                    <p>마치 레고 블록처럼 SQL 문장을 이어붙이는 방식이지.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[Static SQL vs Dynamic SQL]
+
+Static SQL (정적 SQL):
+  코드에 SQL이 그대로 적혀있음
+  → SELECT * FROM TItem WHERE ItemName = @Name
+  → 컴파일 시점에 구조가 확정됨
+
+Dynamic SQL (동적 SQL):
+  문자열을 조합해서 SQL을 만듦
+  → @sql = 'SELECT * FROM TItem WHERE ItemName = ' + @Name
+  → 실행할 때마다 문자열이 달라질 수 있음</div>
+
+            <div class="chat">
+                <div class="q">왜 그런 걸 써? 그냥 정적으로 쓰면 되잖아.</div>
+                <div class="a">
+                    <p>가끔 <span class="key-point">진짜 필요한 경우</span>가 있어:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">
+[Dynamic SQL이 필요한 경우]
+
+1. 테이블명이 바뀌어야 할 때
+   → SELECT * FROM Log_202401  (월별 테이블)
+   → SELECT * FROM Log_202402
+
+2. 컬럼 목록이 동적일 때
+   → SELECT Col1, Col2 FROM ...  (사용자가 선택)
+   → SELECT Col1, Col3, Col5 FROM ...
+
+3. 조건 개수가 가변적일 때
+   → WHERE Level > 50
+   → WHERE Level > 50 AND Class = '전사' AND ServerID = 1
+
+이런 경우엔 어쩔 수 없이 Dynamic SQL을 써야 해.</div>
+
+            <div class="chat">
+                <div class="q">그럼 뭐가 문제야?</div>
+                <div class="a">
+                    <p>문제는 <span class="warning">값을 직접 문자열에 끼워넣을 때</span> 생겨.</p>
+                    <p>값이 바뀌면 SQL 전체가 "다른 쿼리"가 되거든.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- ❌ 나쁜 예: 값을 문자열에 직접 연결 (매번 컴파일)</span>
 <span class="keyword">CREATE PROCEDURE</span> gp_SearchItem
     @ItemName NVARCHAR(50)
 <span class="keyword">AS</span>
 <span class="keyword">BEGIN</span>
     <span class="keyword">DECLARE</span> @sql NVARCHAR(MAX)
     <span class="keyword">SET</span> @sql = <span class="string">'SELECT * FROM TItem WHERE ItemName = '''</span> + @ItemName + <span class="string">''''</span>
-    <span class="keyword">EXEC</span>(@sql)  <span class="comment">-- 매번 새 SQL = 매번 컴파일!</span>
+    <span class="comment">-- '장검'이 들어가면: "... WHERE ItemName = '장검'"</span>
+    <span class="comment">-- '단검'이 들어가면: "... WHERE ItemName = '단검'"</span>
+    <span class="keyword">EXEC</span>(@sql)  <span class="comment">-- 문자열이 다르면 = 다른 SQL = 매번 컴파일!</span>
 <span class="keyword">END</span></div>
 
             <div class="diagram-box">
-호출 1: EXEC gp_SearchItem '장검'
-  → SQL: "SELECT * FROM TItem WHERE ItemName = '장검'"
-  → 컴파일 (새 SQL이니까)
+[왜 매번 컴파일될까?]
 
-호출 2: EXEC gp_SearchItem '단검'
-  → SQL: "SELECT * FROM TItem WHERE ItemName = '단검'"
-  → 컴파일 (또 새 SQL이니까!)
+SQL Server 입장에서 보면:
 
-문자열이 다르면 = 다른 SQL = 매번 컴파일</div>
+호출 1: "SELECT * FROM TItem WHERE ItemName = '장검'"
+  → 이 SQL 본 적 없네? → 컴파일해서 캐시
 
-            <div class="code-block"><span class="comment">-- ✅ 좋은 예: 파라미터화 (캐시 재사용)</span>
+호출 2: "SELECT * FROM TItem WHERE ItemName = '단검'"
+  → 이것도 본 적 없네? → 또 컴파일해서 캐시
+
+호출 3: "SELECT * FROM TItem WHERE ItemName = '활'"
+  → 이것도 처음이네? → 또 컴파일...
+
+100가지 아이템 검색 = 100번 컴파일 = Plan Cache 100개 차지!</div>
+
+            <div class="chat">
+                <div class="q">어떻게 해결해?</div>
+                <div class="a">
+                    <p><span class="key-point">sp_executesql</span>로 파라미터화하면 돼.</p>
+                    <p>SQL 구조는 같고, 값만 파라미터로 전달하는 거야.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">-- ✅ 좋은 예 1: 아예 Dynamic SQL 안 쓰기</span>
 <span class="keyword">CREATE PROCEDURE</span> gp_SearchItem
     @ItemName NVARCHAR(50)
 <span class="keyword">AS</span>
@@ -216,6 +284,33 @@ EXEC gp_LoadCharacter @CharNo = 67890
     <span class="keyword">SELECT</span> * <span class="keyword">FROM</span> TItem <span class="keyword">WHERE</span> ItemName = @ItemName
     <span class="comment">-- 파라미터만 바뀌므로 같은 계획 재사용</span>
 <span class="keyword">END</span></div>
+
+            <div class="code-block"><span class="comment">-- ✅ 좋은 예 2: Dynamic SQL이 필요하면 sp_executesql 사용</span>
+<span class="keyword">CREATE PROCEDURE</span> gp_SearchItem
+    @ItemName NVARCHAR(50)
+<span class="keyword">AS</span>
+<span class="keyword">BEGIN</span>
+    <span class="keyword">DECLARE</span> @sql NVARCHAR(MAX)
+    <span class="keyword">SET</span> @sql = <span class="string">'SELECT * FROM TItem WHERE ItemName = @Name'</span>
+    <span class="comment">-- 값 대신 @Name 파라미터를 넣음</span>
+
+    <span class="keyword">EXEC</span> sp_executesql @sql,
+         N<span class="string">'@Name NVARCHAR(50)'</span>,  <span class="comment">-- 파라미터 정의</span>
+         @Name = @ItemName           <span class="comment">-- 값 전달</span>
+    <span class="comment">-- SQL 구조가 항상 같음 → 캐시 재사용!</span>
+<span class="keyword">END</span></div>
+
+            <div class="diagram-box">
+[sp_executesql의 마법]
+
+모든 호출이 같은 SQL로 인식됨:
+  "SELECT * FROM TItem WHERE ItemName = @Name"
+
+호출 1: @Name = '장검' → 캐시된 계획 사용
+호출 2: @Name = '단검' → 캐시된 계획 사용
+호출 3: @Name = '활'   → 캐시된 계획 사용
+
+100가지 아이템 검색 = 1번만 컴파일!</div>
 
             <div class="chat">
                 <div class="a">
