@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이벤트가 2번 와도 1번만 처리하는 법 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../async-systems/" class="back-link">← 메시지 큐 / 비동기</a>
+
+        <header class="header">
+            <h1>이벤트가 2번 와도 1번만 처리하는 법</h1>
+            <p>멱등성(Idempotency)으로 중복 처리 방지하기</p>
+        </header>
+
+        <!-- Part 1: 왜 2번 오는가 -->
+        <div class="conversation">
+            <h2>Part 1. 왜 같은 요청이 2번 와?</h2>
+
+            <div class="chat">
+                <div class="q">요청은 1번 보냈는데 왜 2번 처리돼?</div>
+                <div class="a">
+                    <p>분산 시스템에서 <span class="warning">중복은 피할 수 없어</span>.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[중복 발생 시나리오]
+
+1️⃣ 네트워크 재시도
+   클라이언트 → 서버 (요청 전달됨)
+   서버 → 클라이언트 (응답 유실!)
+   클라이언트: "응답 없네? 다시 보내자"
+   → 서버는 같은 요청 2번 받음
+
+2️⃣ 메시지 큐 재전송
+   Producer → Queue → Consumer (처리 완료)
+   Consumer: Ack 보내기 전에 죽음
+   Queue: "Ack 없네? 다시 보내자"
+   → 새 Consumer가 같은 메시지 또 받음
+
+3️⃣ 유저 더블클릭
+   "구매" 버튼 연타
+   → 결제 요청 여러 번</div>
+
+            <div class="chat">
+                <div class="q">그러면 돈이 2번 빠져나가는 거야?</div>
+                <div class="a">
+                    <p>멱등성 없으면 <span class="warning">진짜 2번 빠져나가!</span></p>
+                    <p>이게 바로 멱등성이 필요한 이유야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 멱등성이 뭔데 -->
+        <div class="conversation">
+            <h2>Part 2. 멱등성이 뭐야?</h2>
+
+            <div class="chat">
+                <div class="q">멱등성(Idempotency)이 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">"같은 연산을 여러 번 해도 결과가 같다"</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[멱등 vs 비멱등]
+
+✅ 멱등한 연산:
+   x = 5;           // 100번 해도 x는 5
+   DELETE user_123  // 이미 삭제됐으면 그냥 OK
+   SET gold = 1000  // 100번 해도 골드는 1000
+
+❌ 비멱등한 연산:
+   x += 1;          // 할 때마다 x 증가
+   gold += 100;     // 할 때마다 골드 증가
+   INSERT log(...)  // 할 때마다 로그 추가</div>
+
+            <div class="chat">
+                <div class="q">아, "설정"은 멱등하고 "증가"는 비멱등하구나</div>
+                <div class="a">
+                    <p><span class="key-point">정확해!</span> 비멱등한 연산을 멱등하게 만드는 게 핵심이야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 구현 방법 1 - Idempotency Key -->
+        <div class="conversation">
+            <h2>Part 3. 방법 1: Idempotency Key</h2>
+
+            <div class="chat">
+                <div class="q">비멱등 연산을 어떻게 멱등하게 만들어?</div>
+                <div class="a">
+                    <p><span class="highlight">요청마다 고유 ID를 붙여</span>서 "이미 처리했는지" 체크해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Idempotency Key 방식]
+
+클라이언트 요청:
+{
+  "idempotency_key": "uuid-abc-123",  // 고유 ID
+  "action": "buy_item",
+  "item_id": 999,
+  "price": 100
+}
+
+서버 처리:
+1. Redis 조회: "uuid-abc-123" 처리됐나?
+
+   if (redis.exists("idem:uuid-abc-123")) {
+       return redis.get("idem:uuid-abc-123");  // 이전 결과 반환
+   }
+
+2. 처리 안 됐으면 실행
+   result = processPayment();
+
+3. 결과 저장 (TTL: 24시간)
+   redis.setex("idem:uuid-abc-123", 86400, result);
+
+4. 결과 반환</div>
+
+            <div class="chat">
+                <div class="q">같은 key로 또 요청 오면?</div>
+                <div class="a">
+                    <p>Redis에 이미 있으니까 <span class="key-point">실행 안 하고 이전 결과만 반환</span>!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: 구현 방법 2 - 상태 체크 -->
+        <div class="conversation">
+            <h2>Part 4. 방법 2: 상태 체크</h2>
+
+            <div class="code-block">[상태 기반 멱등성]
+
+예시: 퀘스트 완료 보상 수령
+
+요청: "퀘스트 123 보상 받기"
+
+처리:
+1. DB 조회: 퀘스트 상태?
+   SELECT reward_claimed FROM quests
+   WHERE user_id = ? AND quest_id = 123
+
+2. 이미 받았으면?
+   if (reward_claimed == true) {
+       return "이미 보상을 받았습니다";
+   }
+
+3. 아직이면 지급 + 상태 변경
+   BEGIN TRANSACTION;
+     INSERT INTO inventory...;
+     UPDATE quests SET reward_claimed = true WHERE...;
+   COMMIT;
+
+→ 같은 요청 10번 와도 보상은 1번만!</div>
+
+            <div class="chat">
+                <div class="q">이게 더 간단해 보이는데?</div>
+                <div class="a">
+                    <p>상태가 있는 작업은 이게 좋아.</p>
+                    <p>상태 없는 작업(API 호출 등)은 Idempotency Key가 낫고.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 구현 방법 3 - 버전/시퀀스 -->
+        <div class="conversation">
+            <h2>Part 5. 방법 3: 버전 체크</h2>
+
+            <div class="code-block">[버전 기반 멱등성 - Optimistic Lock]
+
+예시: 골드 증가
+
+요청:
+{
+  "user_id": 123,
+  "add_gold": 100,
+  "expected_version": 5  // 현재 버전이 5라고 알고 있음
+}
+
+처리:
+UPDATE users
+SET gold = gold + 100, version = version + 1
+WHERE user_id = 123 AND version = 5;  // 버전 일치할 때만!
+
+if (rows_affected == 0) {
+    // 버전 불일치 = 누가 이미 수정함
+    return "다시 시도해주세요";
+}
+
+→ 같은 요청 2번 와도, 첫 번째만 성공, 두 번째는 버전 불일치!</div>
+        </div>
+
+        <!-- Part 6: 게임 서버 적용 -->
+        <div class="conversation">
+            <h2>Part 6. 게임 서버 멱등성 사례</h2>
+
+            <div class="code-block">[게임 서버 멱등성 적용]
+
+1️⃣ 결제 처리
+   - 결제 요청에 transaction_id 필수
+   - 같은 transaction_id 재요청 → 기존 결과 반환
+   - "결제 2번" 방지
+
+2️⃣ 아이템 지급
+   - 보상 코드 사용: code_used 플래그 체크
+   - 이미 사용한 코드 → "이미 사용됨" 반환
+   - "보상 중복" 방지
+
+3️⃣ 메일 수령
+   - 메일 상태: UNREAD → READ → CLAIMED
+   - CLAIMED 상태에서 수령 요청 → 무시
+   - "첨부 아이템 2번 받기" 방지
+
+4️⃣ 거래소 구매
+   - 매물 상태: SELLING → SOLD
+   - 이미 SOLD인 매물 구매 요청 → "이미 판매됨"
+   - "동시 구매" 충돌 방지
+
+5️⃣ 이벤트 참여
+   - 참여 기록 테이블: (user_id, event_id) UNIQUE
+   - 중복 INSERT → 실패 (이미 참여함)
+   - "보상 중복 수령" 방지</div>
+        </div>
+
+        <!-- Part 7: 메시지 큐와 멱등성 -->
+        <div class="conversation">
+            <h2>Part 7. 메시지 큐에서 멱등성</h2>
+
+            <div class="chat">
+                <div class="q">Kafka 같은 큐에서도 중복 메시지 오잖아?</div>
+                <div class="a">
+                    <p>맞아. Consumer 쪽에서 멱등성 보장해야 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[메시지 큐 멱등성 처리]
+
+메시지 구조:
+{
+  "message_id": "msg-uuid-456",  // 메시지 고유 ID
+  "event_type": "item_drop",
+  "user_id": 123,
+  "item_id": 999
+}
+
+Consumer 처리:
+1. 처리 완료 테이블 조회
+   SELECT 1 FROM processed_messages
+   WHERE message_id = 'msg-uuid-456';
+
+2. 이미 처리됐으면 스킵
+   if (exists) {
+       ack();  // 메시지 처리 완료 신호
+       return;
+   }
+
+3. 실제 처리 + 기록 (트랜잭션)
+   BEGIN;
+     INSERT INTO inventory...;
+     INSERT INTO processed_messages(message_id) VALUES(...);
+   COMMIT;
+
+4. Ack 전송</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>핵심: <span class="key-point">"처리 로직"과 "처리 기록"을 같은 트랜잭션에</span></p>
+                    <p>이래야 "처리는 됐는데 기록 안 됨" 문제 방지!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>멱등성</strong> = 여러 번 해도 결과가 같음</li>
+                <li><strong>중복 발생 원인</strong> = 네트워크 재시도, 큐 재전송, 더블클릭</li>
+                <li><strong>Idempotency Key</strong> = 요청마다 고유 ID, Redis에 결과 캐시</li>
+                <li><strong>상태 체크</strong> = 이미 처리됐는지 DB 상태로 확인</li>
+                <li><strong>버전 체크</strong> = 낙관적 락으로 동시 수정 방지</li>
+                <li><strong>메시지 큐</strong> = 처리 + 기록을 같은 트랜잭션에</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../back-pressure/">← Back Pressure</a>
+            <a href="../async-architecture/">비동기 아키텍처 →</a>
+        </div>
+    </div>
+</body>
+</html>

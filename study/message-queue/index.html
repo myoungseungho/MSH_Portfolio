@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>서버끼리 편지 보내듯 통신한다고? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../async-systems/" class="back-link">← 메시지 큐 / 비동기</a>
+
+        <header class="header">
+            <h1>서버끼리 편지 보내듯 통신한다고?</h1>
+            <p>Message Queue로 서버 간 느슨한 결합 만들기</p>
+        </header>
+
+        <!-- Part 1: 직접 호출의 문제 -->
+        <div class="conversation">
+            <h2>Part 1. 직접 호출하면 뭐가 문제야?</h2>
+
+            <div class="chat">
+                <div class="q">게임 서버에서 결제 서버 호출하면 바로 응답 받으면 되는 거 아냐?</div>
+                <div class="a">
+                    <p>간단한 경우엔 그래도 돼. 근데 문제가 생겨.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[직접 호출 - 동기 방식]
+
+게임 서버 ──요청──▶ 결제 서버
+    │                  │
+    │◀──────응답───────┘
+    │
+    ▼ (응답 올 때까지 대기)
+
+문제 1: 결제 서버 죽으면? → 게임 서버도 에러
+문제 2: 결제 서버 느리면? → 게임 서버도 멈춤
+문제 3: 동시에 1만 명 결제? → 결제 서버 터짐</div>
+
+            <div class="chat">
+                <div class="q">서버끼리 너무 딱 붙어있으면 하나 문제생기면 다 죽는구나</div>
+                <div class="a">
+                    <p>맞아. 이걸 <span class="warning">"강한 결합(Tight Coupling)"</span>이라고 해.</p>
+                    <p>큰 시스템일수록 이게 치명적이야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 메시지 큐 개념 -->
+        <div class="conversation">
+            <h2>Part 2. 메시지 큐가 뭔데?</h2>
+
+            <div class="chat">
+                <div class="q">그럼 어떻게 해?</div>
+                <div class="a">
+                    <p>중간에 <span class="highlight">"우체통"</span>을 하나 두는 거야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[메시지 큐 - 비동기 방식]
+
+게임 서버 ──메시지──▶ [ 📫 큐 ] ──메시지──▶ 결제 서버
+    │                     │
+    ▼ (바로 다음 작업)     │ (메시지 보관)
+                          │
+                          ▼ (결제 서버가 여유 있을 때 가져감)
+
+장점 1: 결제 서버 죽어도? → 큐에 쌓여있음, 살아나면 처리
+장점 2: 결제 서버 느려도? → 게임 서버는 안 기다림
+장점 3: 동시에 1만 명? → 큐에서 천천히 처리</div>
+
+            <div class="chat">
+                <div class="q">아, 편지 보내는 거랑 비슷하네. 상대방이 없어도 우체통에 넣으면 되니까</div>
+                <div class="a">
+                    <p><span class="key-point">정확해!</span> 그래서 "느슨한 결합(Loose Coupling)"이라고 해.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 게임 서버 예시 -->
+        <div class="conversation">
+            <h2>Part 3. 게임 서버에서 언제 써?</h2>
+
+            <div class="chat">
+                <div class="q">게임에서 메시지 큐 쓰는 상황이 뭐가 있어?</div>
+                <div class="a">
+                    <p>실시간 응답이 <strong>필수가 아닌</strong> 작업들:</p>
+                </div>
+            </div>
+
+            <div class="code-block">[메시지 큐 적합한 작업]
+
+✅ 로그 저장 - 유저가 뭘 했는지 기록
+   게임 서버 → [로그 큐] → 로그 서버 → DB
+
+✅ 메일 발송 - 보상, 공지 메일
+   운영 툴 → [메일 큐] → 게임 서버들
+
+✅ 랭킹 집계 - 매 분마다 계산
+   게임 서버들 → [점수 큐] → 랭킹 서버
+
+✅ 결제 처리 - 약간 늦어도 괜찮음
+   게임 서버 → [결제 큐] → 결제 서버
+
+✅ 푸시 알림 - 친구 접속, 길드 공지
+   게임 서버 → [푸시 큐] → 푸시 서버</div>
+
+            <div class="chat">
+                <div class="q">전투나 스킬은 안 되겠네?</div>
+                <div class="a">
+                    <p>맞아. <span class="warning">실시간 응답이 필요한 건 직접 호출</span>이 맞아.</p>
+                    <p>0.1초 늦으면 "렉"이라고 느끼는 건 큐로 안 돼.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 4: Producer / Consumer -->
+        <div class="conversation">
+            <h2>Part 4. Producer와 Consumer</h2>
+
+            <div class="chat">
+                <div class="q">메시지 큐 용어가 좀 나오던데?</div>
+                <div class="a">
+                    <p>핵심 용어 3개만 알면 돼:</p>
+                </div>
+            </div>
+
+            <div class="code-block">[핵심 용어]
+
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│  Producer   │───▶│    Queue    │───▶│  Consumer   │
+│  (생산자)   │    │    (큐)     │    │  (소비자)   │
+└─────────────┘    └─────────────┘    └─────────────┘
+   메시지를           메시지를           메시지를
+   보내는 쪽          보관하는 곳        받아 처리하는 쪽
+
+예시:
+- Producer: 게임 서버 (로그 생성)
+- Queue: RabbitMQ, Redis Pub/Sub
+- Consumer: 로그 서버 (로그 저장)</div>
+
+            <div class="chat">
+                <div class="q">Consumer가 여러 개면?</div>
+                <div class="a">
+                    <p><span class="key-point">처리량이 늘어나!</span> 큐 하나에 Consumer 10개 붙이면 10배 빠르게 처리.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[Consumer 확장]
+
+                   ┌─▶ Consumer 1 (처리)
+                   │
+Queue ────────────┼─▶ Consumer 2 (처리)
+(메시지 1000개)    │
+                   └─▶ Consumer 3 (처리)
+
+→ 메시지를 나눠 가져가서 병렬 처리
+→ 처리량 부족하면 Consumer만 추가하면 됨!</div>
+        </div>
+
+        <!-- Part 5: Pub/Sub 패턴 -->
+        <div class="conversation">
+            <h2>Part 5. Pub/Sub 패턴</h2>
+
+            <div class="chat">
+                <div class="q">메시지를 여러 곳에 동시에 보내고 싶으면?</div>
+                <div class="a">
+                    <p><span class="highlight">Pub/Sub (Publish/Subscribe)</span> 패턴을 써.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[일반 큐 vs Pub/Sub]
+
+[일반 큐] - 1:1 또는 1:N 분배
+메시지 → 큐 → Consumer 1개가 가져감
+              (다른 Consumer는 못 받음)
+
+[Pub/Sub] - 1:N 브로드캐스트
+메시지 → Topic → 구독자 A (복사본 받음)
+              → 구독자 B (복사본 받음)
+              → 구독자 C (복사본 받음)
+
+모든 구독자가 같은 메시지를 받음!</div>
+
+            <div class="chat">
+                <div class="q">게임에서 언제 써?</div>
+            </div>
+
+            <div class="code-block">[Pub/Sub 사용 예시]
+
+📢 "유저 레벨업" 이벤트 발생!
+
+게임 서버 ──publish──▶ [레벨업 Topic]
+                          │
+                ┌─────────┼─────────┐
+                ▼         ▼         ▼
+           업적 서버   랭킹 서버   푸시 서버
+           (업적 체크)  (점수 갱신)  (축하 알림)
+
+→ 게임 서버는 "레벨업했다"만 알림
+→ 누가 듣든 말든 신경 안 씀
+→ 새 서비스 추가? 그냥 구독만 하면 끝!</div>
+        </div>
+
+        <!-- Part 6: 대표 기술들 -->
+        <div class="conversation">
+            <h2>Part 6. 어떤 기술 쓰면 돼?</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>기술</th>
+                    <th>특징</th>
+                    <th>게임 서버 용도</th>
+                </tr>
+                <tr>
+                    <td><strong>RabbitMQ</strong></td>
+                    <td>범용, 다양한 패턴</td>
+                    <td>결제, 메일, 알림</td>
+                </tr>
+                <tr>
+                    <td><strong>Redis Pub/Sub</strong></td>
+                    <td>초간단, 메모리 기반</td>
+                    <td>실시간 알림, 채팅</td>
+                </tr>
+                <tr>
+                    <td><strong>Kafka</strong></td>
+                    <td>대용량, 로그 저장</td>
+                    <td>로그 수집, 분석</td>
+                </tr>
+                <tr>
+                    <td><strong>AWS SQS</strong></td>
+                    <td>관리형, 무제한 확장</td>
+                    <td>모바일 게임</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">뭘 쓰는 게 좋아?</div>
+                <div class="a">
+                    <p>• 간단하게 시작: <span class="key-point">Redis Pub/Sub</span> (이미 Redis 쓰고 있으면)</p>
+                    <p>• 안정성 중요: <strong>RabbitMQ</strong></p>
+                    <p>• 대용량 로그: <strong>Kafka</strong></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 7: 주의할 점 -->
+        <div class="warning-box">
+            <h4>⚠️ 메시지 큐 도입 시 주의</h4>
+            <p>• <strong>메시지 유실</strong> - 큐가 죽으면? 디스크에 저장하는 옵션 켜기</p>
+            <p>• <strong>순서 보장</strong> - Consumer가 여러 개면 순서 꼬일 수 있음</p>
+            <p>• <strong>중복 처리</strong> - 같은 메시지 2번 받을 수 있음 → 멱등성 필요</p>
+            <p>• <strong>모니터링</strong> - 큐에 메시지 쌓이는지 항상 체크</p>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>메시지 큐</strong> = 서버 사이의 우체통. 비동기로 메시지 전달</li>
+                <li><strong>느슨한 결합</strong> = 상대방 죽어도 내가 안 죽음</li>
+                <li><strong>Producer → Queue → Consumer</strong> 기본 구조</li>
+                <li><strong>Pub/Sub</strong> = 여러 구독자에게 동시에 브로드캐스트</li>
+                <li><strong>실시간 응답 필요한 건 X</strong> - 전투, 스킬은 직접 호출</li>
+                <li><strong>로그, 메일, 결제, 알림</strong> 같은 건 큐로 분리</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../async-systems/">← 메시지 큐 / 비동기</a>
+            <a href="../kafka/">Kafka →</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>"나중에 처리해줘"가 되는 구조 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../async-systems/" class="back-link">← 메시지 큐 / 비동기</a>
+
+        <header class="header">
+            <h1>"나중에 처리해줘"가 되는 구조</h1>
+            <p>비동기 아키텍처로 응답 시간과 처리량 분리하기</p>
+        </header>
+
+        <!-- Part 1: 동기 vs 비동기 -->
+        <div class="conversation">
+            <h2>Part 1. 동기 vs 비동기</h2>
+
+            <div class="chat">
+                <div class="q">동기랑 비동기가 뭐가 달라?</div>
+                <div class="a">
+                    <p><span class="highlight">동기</span> = 결과 올 때까지 기다림</p>
+                    <p><span class="highlight">비동기</span> = 요청만 하고 다른 일 함</p>
+                </div>
+            </div>
+
+            <div class="code-block">[동기 vs 비동기 비유]
+
+🍔 햄버거 주문
+
+[동기 방식] - 카운터 앞에서 대기
+  나: "햄버거 주세요"
+  직원: (만드는 중...)
+  나: (계속 서서 기다림... 3분...)
+  직원: "여기요"
+  → 내 시간 3분 소모
+
+[비동기 방식] - 진동벨
+  나: "햄버거 주세요" → 진동벨 받음
+  나: (자리에서 유튜브 봄)
+  벨: 부르릉!
+  나: (햄버거 받으러 감)
+  → 내 시간 0분 소모 (다른 일 함)</div>
+
+            <div class="chat">
+                <div class="q">서버에서도 똑같아?</div>
+                <div class="a">
+                    <p>응. 동기로 DB 호출하면 <span class="warning">응답 올 때까지 스레드가 멈춤</span>.</p>
+                    <p>비동기면 요청만 던지고 다른 요청 처리 가능.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 2: 왜 비동기 아키텍처? -->
+        <div class="conversation">
+            <h2>Part 2. 왜 비동기로 해야 해?</h2>
+
+            <div class="code-block">[동기 방식의 문제]
+
+게임 서버 (스레드 100개)
+
+유저 1 → 스레드 1 → DB 호출 (100ms 대기) → 응답
+유저 2 → 스레드 2 → DB 호출 (100ms 대기) → 응답
+...
+유저 100 → 스레드 100 → DB 호출 (100ms 대기) → 응답
+
+유저 101번 들어오면?
+→ 스레드 없음! 대기열...
+
+[계산]
+스레드 100개 × DB 대기 100ms = 초당 1,000명 한계
+
+────────────────────────────────────────────────────
+
+[비동기 방식]
+
+유저 1 → 스레드 1 → DB 요청 (안 기다림) → 다음 유저 처리
+유저 2 → 스레드 1 → DB 요청 (안 기다림) → 다음 유저 처리
+...
+DB 응답 오면 → 콜백으로 처리
+
+[계산]
+스레드 100개가 대기 없이 계속 처리 = 초당 10,000명+</div>
+
+            <div class="chat">
+                <div class="q">그러니까 "기다리는 시간"을 없애는 거구나</div>
+                <div class="a">
+                    <p><span class="key-point">정확해!</span> I/O 대기 시간이 병목이면 비동기가 답이야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 비동기 아키텍처 패턴 -->
+        <div class="conversation">
+            <h2>Part 3. 비동기 아키텍처 패턴</h2>
+
+            <div class="chat">
+                <div class="q">비동기로 짜는 방법이 뭐가 있어?</div>
+            </div>
+
+            <div class="code-block">[패턴 1: 콜백 (Callback)]
+
+// 요청 보내고 콜백 등록
+db.query("SELECT * FROM users", (result) => {
+    // 결과 오면 이 함수가 호출됨
+    sendResponse(result);
+});
+// 여기서 기다리지 않고 바로 다음 줄로
+
+장점: 간단
+단점: 콜백 지옥 (중첩되면 복잡)
+
+────────────────────────────────────────────────────
+
+[패턴 2: Promise / Future]
+
+// 요청 보내고 Promise 받음
+let promise = db.query("SELECT * FROM users");
+
+// 나중에 결과 처리
+promise.then((result) => {
+    sendResponse(result);
+});
+
+장점: 체이닝 가능, 에러 처리 깔끔
+단점: 여전히 콜백 느낌
+
+────────────────────────────────────────────────────
+
+[패턴 3: async/await]
+
+async function handleRequest() {
+    let result = await db.query("SELECT * FROM users");
+    // await 동안 다른 요청 처리 가능
+    sendResponse(result);
+}
+
+장점: 동기 코드처럼 읽힘
+단점: 언어 지원 필요</div>
+        </div>
+
+        <!-- Part 4: 작업 큐 패턴 -->
+        <div class="conversation">
+            <h2>Part 4. 작업 큐 (Job Queue)</h2>
+
+            <div class="chat">
+                <div class="q">코드 레벨 말고, 서버 구조 레벨에서 비동기는?</div>
+                <div class="a">
+                    <p><span class="highlight">작업 큐</span>를 쓰면 돼.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[작업 큐 아키텍처]
+
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  API 서버   │────▶│  작업 큐    │────▶│  Worker     │
+│ (요청 접수) │     │ (Redis 등)  │     │ (실제 처리) │
+└─────────────┘     └─────────────┘     └─────────────┘
+      │                                        │
+      ▼                                        ▼
+   즉시 응답:                              백그라운드에서
+   "요청 접수됨"                           시간 걸리는 작업
+
+예시 흐름:
+1. 유저: "동영상 인코딩해줘"
+2. API 서버: 큐에 작업 등록 → 즉시 "요청 접수됨" 응답
+3. Worker: 큐에서 작업 꺼내서 인코딩 (10분 걸림)
+4. 완료되면 유저에게 푸시 알림</div>
+
+            <div class="chat">
+                <div class="q">게임 서버에서 언제 써?</div>
+            </div>
+
+            <div class="code-block">[게임 서버 작업 큐 사례]
+
+1️⃣ 로그 저장
+   게임 로직 스레드: 로그 큐에 push만 → 바로 다음 처리
+   로그 Worker: 큐에서 모아서 DB에 bulk insert
+
+2️⃣ 매칭 시스템
+   유저: 매칭 신청 → "매칭 중" 응답
+   매칭 Worker: 조건 맞는 유저 매칭 → 완료되면 알림
+
+3️⃣ 랭킹 집계
+   게임 서버: 점수 변동 → 점수 큐에 push
+   랭킹 Worker: 매 분마다 점수 집계 → 랭킹 갱신
+
+4️⃣ 메일 발송
+   운영 툴: 10만 유저에게 메일 → 큐에 10만 개 작업
+   메일 Worker: 천천히 처리 (서버 부하 없이)
+
+5️⃣ 결제 완료 처리
+   결제 콜백: 결제 완료 → 큐에 push
+   결제 Worker: 아이템 지급, 로그 기록</div>
+        </div>
+
+        <!-- Part 5: 이벤트 기반 아키텍처 -->
+        <div class="conversation">
+            <h2>Part 5. 이벤트 기반 아키텍처</h2>
+
+            <div class="chat">
+                <div class="q">더 큰 규모에서는?</div>
+                <div class="a">
+                    <p><span class="highlight">이벤트 기반 아키텍처 (EDA)</span>를 써.</p>
+                    <p>모든 변화를 "이벤트"로 발행하고, 관심 있는 서비스가 구독.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[이벤트 기반 아키텍처]
+
+"유저 레벨업" 이벤트 발생
+
+게임 서버 ──publish──▶ Event Bus (Kafka 등)
+                          │
+         ┌────────────────┼────────────────┐
+         ▼                ▼                ▼
+    업적 서버         랭킹 서버        알림 서버
+   (구독: 레벨업)    (구독: 레벨업)   (구독: 레벨업)
+         │                │                │
+         ▼                ▼                ▼
+   업적 체크         랭킹 갱신        푸시 알림
+
+장점:
+✅ 게임 서버는 "레벨업했다"만 알림 (다른 서버 몰라도 됨)
+✅ 새 서비스 추가? 구독만 하면 끝
+✅ 서버 간 결합도 ↓, 확장성 ↑</div>
+        </div>
+
+        <!-- Part 6: 응답이 필요할 때 -->
+        <div class="conversation">
+            <h2>Part 6. 비동기인데 응답이 필요하면?</h2>
+
+            <div class="chat">
+                <div class="q">"나중에 처리"면 결과를 어떻게 알려줘?</div>
+            </div>
+
+            <div class="code-block">[비동기 결과 전달 방법]
+
+1️⃣ 폴링 (Polling)
+   클라이언트: 1초마다 "완료됐어?" 물어봄
+   서버: "아직..." → "아직..." → "완료!"
+
+   단점: 불필요한 요청 많음
+
+2️⃣ 웹훅 (Webhook)
+   서버: 완료되면 클라이언트가 등록한 URL로 POST
+
+   결제 완료 → POST https://game.com/payment-callback
+
+   단점: 클라이언트가 서버여야 함
+
+3️⃣ 푸시 알림
+   서버: 완료되면 Firebase/APNs로 푸시
+
+   "인코딩 완료! 확인하러 가기"
+
+   모바일 게임에서 많이 씀
+
+4️⃣ WebSocket
+   서버 ↔ 클라이언트 연결 유지
+   서버: 완료되면 즉시 클라이언트에 메시지
+
+   게임에서 가장 많이 씀 (이미 연결되어 있으니)</div>
+        </div>
+
+        <!-- Part 7: 언제 동기, 언제 비동기 -->
+        <div class="conversation">
+            <h2>Part 7. 언제 동기, 언제 비동기?</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>방식</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>로그인, 인증</td>
+                    <td>동기</td>
+                    <td>결과 없이 진행 불가</td>
+                </tr>
+                <tr>
+                    <td>전투, 스킬</td>
+                    <td>동기</td>
+                    <td>즉각적 피드백 필수</td>
+                </tr>
+                <tr>
+                    <td>아이템 구매</td>
+                    <td>동기</td>
+                    <td>결과 확인 후 다음 액션</td>
+                </tr>
+                <tr>
+                    <td class="good">로그 저장</td>
+                    <td class="good">비동기</td>
+                    <td>유저 응답과 무관</td>
+                </tr>
+                <tr>
+                    <td class="good">메일 발송</td>
+                    <td class="good">비동기</td>
+                    <td>나중에 확인하면 됨</td>
+                </tr>
+                <tr>
+                    <td class="good">랭킹 집계</td>
+                    <td class="good">비동기</td>
+                    <td>실시간 아니어도 됨</td>
+                </tr>
+                <tr>
+                    <td class="good">결제 처리</td>
+                    <td class="good">비동기</td>
+                    <td>외부 시스템 느림</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p>핵심: <span class="key-point">"유저가 결과를 당장 봐야 하나?"</span></p>
+                    <p>Yes → 동기, No → 비동기</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>비동기</strong> = 요청하고 기다리지 않음. 결과는 나중에</li>
+                <li><strong>동기의 문제</strong> = I/O 대기 중 스레드 낭비</li>
+                <li><strong>작업 큐</strong> = API는 접수만, Worker가 백그라운드 처리</li>
+                <li><strong>이벤트 기반</strong> = 이벤트 발행, 관심 있는 서비스가 구독</li>
+                <li><strong>결과 전달</strong> = 폴링, 웹훅, 푸시, WebSocket</li>
+                <li><strong>판단 기준</strong> = "유저가 당장 결과를 봐야 하나?"</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../idempotency/">← Idempotency</a>
+            <a href="../async-systems/">메시지 큐 / 비동기 →</a>
+        </div>
+    </div>
+</body>
+</html>
