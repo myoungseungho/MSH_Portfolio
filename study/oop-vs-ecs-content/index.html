@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OOP vs ECS, 어차피 둘 다 복잡한데 뭐가 다른 건데? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .neutral { background: #fff9c4; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "\2192"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .insight-box { background: linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .insight-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .insight-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../ai/" class="back-link">&larr; AI 활용</a>
+
+        <header class="header">
+            <h1>OOP vs ECS, 어차피 둘 다 복잡한데 뭐가 다른 건데?</h1>
+            <p>게임 컨텐츠 레이어의 복잡함은 피할 수 없다. 그럼 어떤 복잡함을 선택할 것인가?</p>
+        </header>
+
+        <!-- Part 1: 솔직한 고백 -->
+        <div class="conversation">
+            <h2>Part 1. 솔직한 고백 &mdash; 둘 다 복잡하다</h2>
+
+            <div class="chat">
+                <div class="q">ECS가 AI한테 좋다면서, 왜 컨텐츠에서는 복잡하다고 해?</div>
+                <div class="a">
+                    <p>이전 문서에서 ECS의 장점을 잔뜩 얘기했는데, 솔직하게 말해야 할 게 있어.</p>
+                    <p><span class="warning">게임 컨텐츠는 어떤 패턴을 쓰든 복잡해.</span> 이건 OOP도, ECS도 마찬가지야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[왜 게임 컨텐츠는 원래 복잡한가]
+
+게임 컨텐츠의 본질:
+  플레이어가 몬스터를 때린다 (간단해 보이지?)
+
+실제로 일어나는 일:
+  1. 공격 판정 (명중률, 회피율)
+  2. 데미지 계산 (공격력, 방어력, 속성 상성)
+  3. 버프/디버프 적용 (공격력 +30%, 방어력 -10%)
+  4. 크리티컬 판정 (크리티컬 확률, 크리티컬 배율)
+  5. 스킬 효과 (관통, 흡혈, 범위 공격)
+  6. 몬스터 HP 감소
+  7. 몬스터 사망 판정
+  8. 경험치 지급
+  9. 퀘스트 진행 체크 ("몬스터 10마리 처치" 달성?)
+  10. 아이템 드롭 (확률 계산, 인벤토리 여유 확인)
+  11. 파티원 경험치 분배
+  12. PK 판정 (악인 포인트, 성향 시스템)
+  13. 전투 로그 기록
+  14. 업적/칭호 체크
+  15. 이벤트 체크 (이벤트 기간 중 추가 보상?)
+
+"때린다" 하나에 15개 시스템이 엮여있음.
+이건 OOP든 ECS든 피할 수 없는 게임의 본질.</div>
+
+            <div class="chat">
+                <div class="q">그럼 OOP도 ECS도 다를 거 없는 거 아니야?</div>
+                <div class="a">
+                    <p>아니, <span class="highlight">복잡한 건 똑같은데, "복잡함의 모양"이 달라.</span></p>
+                    <p>비유를 하나 들어볼게.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[비유: 같은 미로, 다른 조명]
+
+OOP의 복잡함 = 어두운 미로
+  → 벽이 어디 있는지 안 보여
+  → 손으로 더듬으면서 가야 함
+  → 막다른 길인지 알려면 끝까지 가봐야 함
+  → 경험 많은 사람은 "감"으로 길을 앎
+
+ECS의 복잡함 = 조명이 켜진 미로
+  → 벽이 다 보여. 미로 자체는 똑같이 복잡해
+  → 근데 어디가 막혀있는지 눈에 보임
+  → 경험 없어도 "보이니까" 판단할 수 있음
+
+둘 다 미로를 풀어야 하는 건 같아.
+차이는 "보이느냐, 안 보이느냐".</div>
+        </div>
+
+        <!-- Part 2: 구체적 예시 -->
+        <div class="conversation">
+            <h2>Part 2. 구체적 예시 &mdash; "플레이어가 몬스터를 때렸다"</h2>
+
+            <div class="chat">
+                <div class="q">말로만 하지 말고, 실제 코드로 보여줘. OOP에서 이 흐름이 어떻게 생겼어?</div>
+            </div>
+
+            <div class="code-block">[OOP: 플레이어가 몬스터를 공격했을 때]
+
+// 1단계: 메시지 수신 (GameMsg.cpp:1247)
+void OnRecv_CM_ATTACK(CGamePC* pPC, MSG_ATTACK* pMsg)
+{
+    CGameNPC* pTarget = FindNPC(pMsg->targetId);
+
+    // 2단계: 공격 판정 (CGamePC::Attack 안에서)
+    pPC->Attack(pTarget);
+}
+
+// CGamePC.cpp의 Attack() 함수 — 여기서부터 여러 곳으로 퍼진다
+void CGamePC::Attack(CGameNPC* pTarget)
+{
+    // 3단계: 데미지 계산 — 다른 클래스 호출
+    int damage = CalcDamage(this, pTarget);         // DamageCalc.cpp
+    damage = ApplyBuffs(this, damage);              // BuffManager.cpp
+    damage = ApplyCritical(this, damage);           // CriticalCalc.cpp
+    damage = ApplySkillEffect(m_curSkill, damage);  // SkillManager.cpp
+
+    // 4단계: 데미지 적용 — 타겟 객체 안으로 들어감
+    pTarget->TakeDamage(damage);
+
+    // 5단계: 퀘스트 체크 — 또 다른 매니저
+    g_QuestManager.OnMonsterKill(this, pTarget);    // QuestManager.cpp
+
+    // 6단계: 이벤트 체크 — 또 다른 매니저
+    g_EventManager.OnMonsterKill(this, pTarget);    // EventManager.cpp
+}
+
+// CGameNPC.cpp의 TakeDamage() — 여기서도 분기가 일어남
+void CGameNPC::TakeDamage(int damage)
+{
+    m_hp -= damage;
+
+    if (m_hp <= 0) {
+        Die();  // ← 여기서 또 10가지가 일어남
+    }
+}
+
+// CGameNPC.cpp의 Die() — 사망 시 연쇄 호출
+void CGameNPC::Die()
+{
+    DropItem();                      // ItemManager.cpp
+    GiveExp(m_pKiller);             // ExpManager.cpp
+    g_AchievementMgr.Check(...);    // AchievementManager.cpp
+    g_PKManager.OnKill(...);        // PKManager.cpp
+    LogCombat(...);                  // LogManager.cpp
+}</div>
+
+            <div class="chat">
+                <div class="q">이거 진짜 보기 힘든데... 전체 흐름을 파악하려면?</div>
+                <div class="a">
+                    <p><span class="warning">최소 8개 파일을 열어서 함수 체인을 따라가야 해.</span></p>
+                </div>
+            </div>
+
+            <div class="diagram-box">[OOP: 코드를 따라가는 경로 — "함수 안에서 다른 함수로"]
+
+GameMsg.cpp (메시지 수신)
+    └→ CGamePC.cpp::Attack()
+        ├→ DamageCalc.cpp::CalcDamage()
+        ├→ BuffManager.cpp::ApplyBuffs()
+        ├→ CriticalCalc.cpp::ApplyCritical()
+        ├→ SkillManager.cpp::ApplySkillEffect()
+        ├→ CGameNPC.cpp::TakeDamage()
+        │   └→ CGameNPC.cpp::Die()
+        │       ├→ ItemManager.cpp::DropItem()
+        │       ├→ ExpManager.cpp::GiveExp()
+        │       ├→ AchievementManager.cpp::Check()
+        │       ├→ PKManager.cpp::OnKill()
+        │       └→ LogManager.cpp::LogCombat()
+        ├→ QuestManager.cpp::OnMonsterKill()
+        └→ EventManager.cpp::OnMonsterKill()
+
+파일 수: 11개
+함수 호출 깊이: 3~4단계
+핵심 문제: Attack() 안에 들어가봐야 뭘 하는지 알 수 있음</div>
+
+            <div class="chat">
+                <div class="q">그럼 ECS에서 같은 기능이 어떻게 생겨?</div>
+            </div>
+
+            <div class="code-block">[ECS: 플레이어가 몬스터를 공격했을 때]
+
+// 공격 이벤트 발생 시, "CombatEvent" 컴포넌트를 생성
+// → 각 System이 자기 관심사만 처리
+
+// [CombatSystem.cpp] — 데미지 계산만 담당
+void CombatSystem::Process(World& world)
+{
+    for (auto [entity, event, combat] :
+         world.view&lt;CombatEvent, CombatComponent&gt;())
+    {
+        auto& targetHp = world.get&lt;HealthComponent&gt;(event.target);
+        int damage = combat.attack - world.get&lt;CombatComponent&gt;(event.target).defense;
+        targetHp.hp -= max(1, damage);
+    }
+}
+
+// [BuffSystem.cpp] — 버프 적용만 담당
+void BuffSystem::Process(World& world)
+{
+    for (auto [entity, event, buffs] :
+         world.view&lt;CombatEvent, BuffComponent&gt;())
+    {
+        // 버프에 의한 데미지 보정
+        ApplyBuffModifiers(entity, event);
+    }
+}
+
+// [DeathSystem.cpp] — 사망 판정만 담당
+void DeathSystem::Process(World& world)
+{
+    for (auto [entity, hp] : world.view&lt;HealthComponent&gt;())
+    {
+        if (hp.hp &lt;= 0 && !world.has&lt;DeadTag&gt;(entity)) {
+            world.add&lt;DeadTag&gt;(entity);
+            world.add&lt;DeathEvent&gt;(entity);
+        }
+    }
+}
+
+// [LootSystem.cpp] — 아이템 드롭만 담당
+void LootSystem::Process(World& world)
+{
+    for (auto [entity, death, loot] :
+         world.view&lt;DeathEvent, LootTableComponent&gt;())
+    {
+        DropItems(entity, loot);
+    }
+}
+
+// [QuestSystem.cpp] — 퀘스트 체크만 담당
+void QuestSystem::Process(World& world)
+{
+    for (auto [entity, death] : world.view&lt;DeathEvent&gt;())
+    {
+        CheckKillQuests(entity);
+    }
+}
+
+// ... ExpSystem, AchievementSystem, PKSystem 등도 각각 독립 파일</div>
+
+            <div class="chat">
+                <div class="q">이것도 파일 많은 건 똑같잖아?</div>
+                <div class="a">
+                    <p>맞아. <span class="highlight">파일 수는 비슷해.</span> 근데 구조가 완전히 달라.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">[ECS: 코드를 따라가는 경로 — "이벤트가 흐른다"]
+
+CombatEvent 발생!
+    ↓ (각 System이 독립적으로 반응)
+    ├─ CombatSystem.cpp     → 데미지 계산
+    ├─ BuffSystem.cpp        → 버프 보정
+    ├─ CriticalSystem.cpp    → 크리티컬 판정
+    └─ SkillEffectSystem.cpp → 스킬 효과
+
+DeathEvent 발생! (HP &lt;= 0이면)
+    ↓ (각 System이 독립적으로 반응)
+    ├─ LootSystem.cpp        → 아이템 드롭
+    ├─ ExpSystem.cpp          → 경험치 분배
+    ├─ QuestSystem.cpp        → 퀘스트 체크
+    ├─ AchievementSystem.cpp  → 업적 체크
+    ├─ PKSystem.cpp           → PK 판정
+    └─ LogSystem.cpp          → 로그 기록
+
+파일 수: 11개 (비슷함)
+함수 호출 깊이: 1단계 (각 System이 독립)
+핵심 차이: System 이름만 보면 뭘 하는지 알 수 있음</div>
+        </div>
+
+        <!-- Part 3: 핵심 차이 -->
+        <div class="conversation">
+            <h2>Part 3. 핵심 차이 &mdash; 복잡함이 숨는 위치</h2>
+
+            <div class="chat">
+                <div class="q">둘 다 11개 파일인데, 왜 ECS가 낫다는 거야?</div>
+                <div class="a">
+                    <p>파일 수가 아니라, <span class="highlight">"복잡함이 어디에 숨어있느냐"</span>가 핵심이야.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>기준</th>
+                    <th>OOP</th>
+                    <th>ECS</th>
+                </tr>
+                <tr>
+                    <td><strong>복잡함 위치</strong></td>
+                    <td class="bad">함수 <strong>안</strong>에 숨어있음<br>Attack() 안에 뭐가 있는지 열어봐야 앎</td>
+                    <td class="good">시스템 <strong>사이</strong>에 드러남<br>System 목록만 보면 무슨 일이 일어나는지 앎</td>
+                </tr>
+                <tr>
+                    <td><strong>흐름 파악</strong></td>
+                    <td class="bad">함수 → 함수 → 함수 체인 따라가기<br>3~4단계 깊이</td>
+                    <td class="good">이벤트 → 반응하는 System 목록 보기<br>1단계 깊이</td>
+                </tr>
+                <tr>
+                    <td><strong>"이 코드 뭐 하는 거야?"</strong></td>
+                    <td class="bad">Attack() 전체 (200줄)를 읽어야 앎</td>
+                    <td class="good">CombatSystem (50줄) 하나만 읽으면 됨</td>
+                </tr>
+                <tr>
+                    <td><strong>"이거 고치면 다른 데 영향?"</strong></td>
+                    <td class="bad">Attack() 안에서 호출하는 모든 함수 확인<br>+ 그 함수들이 호출하는 함수도 확인</td>
+                    <td class="good">이 System이 쓰는 Component 확인<br>같은 Component 쓰는 다른 System 확인</td>
+                </tr>
+                <tr>
+                    <td><strong>비유</strong></td>
+                    <td class="neutral">러시아 인형 (마트료시카)<br>열면 안에 또 있고, 또 있고...</td>
+                    <td class="neutral">레고 블록<br>블록마다 따로 보이고, 조립도가 있음</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">좀 더 쉽게 설명해봐. 실제로 버그 찾을 때 차이가 뭐야?</div>
+            </div>
+
+            <div class="code-block">[실제 상황: "크리티컬 데미지가 2배가 아니라 3배로 들어가요"]
+
+OOP에서 버그 찾기:
+  1. Attack() 열기 (200줄) → 크리티컬 관련 부분 찾기
+  2. ApplyCritical() 따라가기 → CriticalCalc.cpp 열기
+  3. 여기서 계산하네... 근데 값이 맞는데?
+  4. 다시 Attack()으로 → ApplySkillEffect() 따라가기
+  5. SkillManager.cpp에서 크리티컬 배율을 또 적용하고 있었음!
+  6. → 두 곳에서 중복 적용되는 걸 발견하기까지 30분
+
+ECS에서 버그 찾기:
+  1. "크리티컬"이니까 CriticalSystem.cpp 열기 (50줄)
+  2. 여기는 정상이네
+  3. CombatComponent를 수정하는 System이 또 있나? → grep
+  4. SkillEffectSystem.cpp에서 크리티컬 배율을 또 적용!
+  5. → 5분만에 발견
+
+차이: OOP는 "함수 안"을 파고 들어가야 하고
+      ECS는 "Component 이름"으로 검색하면 됨</div>
+
+            <div class="insight-box">
+                <h4>핵심 차이 한 줄 요약</h4>
+                <p><strong>OOP:</strong> 복잡함이 함수 안에 숨어있다 &rarr; "열어봐야 안다"</p>
+                <p><strong>ECS:</strong> 복잡함이 시스템 사이에 드러난다 &rarr; "검색하면 안다"</p>
+            </div>
+        </div>
+
+        <!-- Part 4: 창발적 복잡성의 수준 -->
+        <div class="conversation">
+            <h2>Part 4. 창발적 복잡성 &mdash; "못 만든다" 수준이야?</h2>
+
+            <div class="chat">
+                <div class="q">전에 ECS의 "창발적 복잡성"이 리스크라고 했잖아. 이게 진짜 치명적이야? 게임을 못 만드는 수준이야?</div>
+                <div class="a">
+                    <p><span class="key-point">아니. "못 만든다" 수준이 아니야.</span></p>
+                    <p>솔직하게 말하면, <span class="highlight">OOP에도 똑같은 문제가 있어.</span> 이름만 다를 뿐.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[OOP의 "창발적 복잡성" — 이름만 다를 뿐 같은 문제]
+
+OOP에서 일어나는 똑같은 현상:
+
+Attack() 안에서 ApplyBuffs()를 호출하고
+ApplyBuffs() 안에서 스킬 효과를 다시 트리거하고
+그 스킬 효과가 또 다른 버프를 발동하고
+그 버프가 패시브 스킬을 활성화하고...
+
+→ "콜 체인 폭발"이라고 부름
+→ 이것도 "개별 함수는 단순한데, 조합하면 예측 어려움"
+→ 이것도 창발적 복잡성이야. 다만 OOP에서는
+   "스파게티 코드"라고 불렀을 뿐.
+
+결론:
+  OOP에서: 함수가 함수를 호출 → 체인 폭발 → "스파게티"
+  ECS에서: System이 이벤트에 반응 → 연쇄 반응 → "창발적 복잡성"
+
+이름만 다르지, 본질은 같은 문제.</div>
+
+            <div class="chat">
+                <div class="q">그러면 ECS만의 추가적인 문제는 없어?</div>
+                <div class="a">
+                    <p>있긴 해. 딱 하나 차이가 있어:</p>
+                </div>
+            </div>
+
+            <div class="code-block">[ECS만의 차이점: 실행 순서가 "코드에 안 보인다"]
+
+OOP에서의 실행 순서:
+  void Attack() {
+      CalcDamage();       // 1번째
+      ApplyBuffs();       // 2번째  ← 코드 순서 = 실행 순서
+      ApplyCritical();    // 3번째
+  }
+  → 코드를 위에서 아래로 읽으면 순서가 보임
+
+ECS에서의 실행 순서:
+  CombatSystem::Process()     // 언제 실행되지?
+  BuffSystem::Process()        // 이게 먼저? 저게 먼저?
+  CriticalSystem::Process()    // 순서가 어디에 적혀있지?
+
+  → System 파일 안에는 순서 정보가 없음
+  → 별도의 "실행 순서 설정"을 봐야 함
+
+이게 ECS의 진짜 약점:
+  코드만 봐서는 "어떤 System이 먼저 돌아가는지" 모름</div>
+
+            <div class="chat">
+                <div class="q">그럼 이걸 정리하면, OOP vs ECS 복잡성의 레벨이 어때?</div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>복잡성 종류</th>
+                    <th>OOP</th>
+                    <th>ECS</th>
+                    <th>심각도</th>
+                </tr>
+                <tr>
+                    <td><strong>시스템 조합 폭발</strong></td>
+                    <td class="bad">있음 (스파게티)</td>
+                    <td class="bad">있음 (창발적)</td>
+                    <td class="neutral">둘 다 동일</td>
+                </tr>
+                <tr>
+                    <td><strong>숨겨진 부작용</strong></td>
+                    <td class="bad">함수 안에 숨어있음</td>
+                    <td class="good">Component 변경으로 추적 가능</td>
+                    <td class="good">ECS가 나음</td>
+                </tr>
+                <tr>
+                    <td><strong>실행 순서 파악</strong></td>
+                    <td class="good">코드 순서 = 실행 순서</td>
+                    <td class="bad">별도 설정 필요</td>
+                    <td class="bad">OOP가 나음</td>
+                </tr>
+                <tr>
+                    <td><strong>영향 범위 파악</strong></td>
+                    <td class="bad">전역 상태 추적 필요</td>
+                    <td class="good">Component grep으로 가능</td>
+                    <td class="good">ECS가 나음</td>
+                </tr>
+                <tr>
+                    <td><strong>종합</strong></td>
+                    <td class="neutral" colspan="3" style="text-align: center; font-weight: 600;">둘 다 복잡하다. "못 만든다" 수준은 아니다. 복잡함의 모양이 다를 뿐.</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">그러면 결론은, "못 만든다"가 아니라 "OOP랑 난이도는 비슷한데 형태가 다르다"?</div>
+                <div class="a">
+                    <p><span class="key-point">정확해.</span></p>
+                    <p>OOP 게임 서버는 20년 넘게 잘 만들어왔어. 스파게티 코드에도 불구하고.</p>
+                    <p>ECS도 마찬가지야. 창발적 복잡성이 있지만, 그건 OOP의 스파게티와 <strong>같은 레벨의 문제</strong>야.</p>
+                    <p>"ECS라서 못 만든다"가 아니라 "게임 컨텐츠라서 복잡하다"가 맞는 표현이야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: AI에게 유리한 복잡함 -->
+        <div class="conversation">
+            <h2>Part 5. 그럼 AI한테는 어떤 복잡함이 유리해?</h2>
+
+            <div class="chat">
+                <div class="q">둘 다 복잡하면, AI 에이전트 입장에서 어떤 복잡함이 다루기 쉬워?</div>
+                <div class="a">
+                    <p><span class="highlight">검색 가능한 복잡함</span>이 AI에게 압도적으로 유리해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[AI 에이전트가 "크리티컬 버그"를 찾는 과정]
+
+OOP에서 AI가 하는 일:
+  1. "크리티컬" 키워드로 grep → 50개 결과
+  2. 그 중 관련 있는 걸 찾으려면 → 각 파일 열어서 문맥 파악
+  3. Attack() 열기 → ApplyCritical() 따라가기 → CriticalCalc.cpp
+  4. 여기는 정상... 다시 Attack()으로...
+  5. ApplySkillEffect() 따라가기 → SkillManager.cpp
+  6. 여기서 크리티컬 배율을 또 적용하는 걸 발견!
+  7. → 토큰 소모: ~50,000 (파일 6개 읽기 + 분석)
+
+ECS에서 AI가 하는 일:
+  1. "CombatComponent"를 수정하는 System 찾기 → grep 한 번
+  2. 결과: CombatSystem.cpp, CriticalSystem.cpp, SkillEffectSystem.cpp
+  3. 3개 파일만 열면 끝 (각각 50~100줄)
+  4. → 토큰 소모: ~5,000 (파일 3개 읽기)
+
+차이: 10배</div>
+
+            <div class="chat">
+                <div class="q">왜 이런 차이가 나는 거야?</div>
+            </div>
+
+            <div class="code-block">[AI의 검색 방식과 패턴의 궁합]
+
+AI가 잘하는 것:
+  ✅ 텍스트 검색 (grep, 파일명 매칭)
+  ✅ 패턴 인식 (같은 구조 반복이면 빠르게 파악)
+  ✅ 작은 파일 전체 읽기 (500줄 이하)
+
+AI가 못하는 것:
+  ❌ "감"으로 찾기 (경험 기반 직감)
+  ❌ 거대 파일에서 관련 부분 골라읽기 (3000줄 중 어디?)
+  ❌ 함수 호출 체인을 머릿속으로 추적하기
+
+OOP의 복잡함은 AI가 "못하는 것"을 요구:
+  → 함수 안으로 들어가서, 또 함수 안으로 들어가서...
+  → 3000줄 파일에서 관련 부분만 찾아내기
+  → "이 전역 변수를 누가 바꾸는지" 전체 프로젝트 추적
+
+ECS의 복잡함은 AI가 "잘하는 것"으로 해결 가능:
+  → Component 이름으로 grep → 관련 System 전부 찾기
+  → 각 System 50~100줄 → 전체 읽기 가능
+  → 같은 구조 반복 → 패턴 인식으로 빠르게 파악</div>
+
+            <div class="insight-box">
+                <h4>핵심 통찰</h4>
+                <p>사람한테는 둘 다 어렵다. 복잡한 게임 컨텐츠는 어떤 패턴을 써도 어렵다.</p>
+                <p>하지만 <strong>AI한테는 ECS가 압도적으로 유리하다.</strong></p>
+                <p>이유: OOP의 복잡함은 "감"으로 풀어야 하고, ECS의 복잡함은 "검색"으로 풀 수 있으니까.</p>
+                <p>"어차피 복잡한 거, <strong>누구한테 유리한 복잡함</strong>을 선택할 거냐?"</p>
+            </div>
+        </div>
+
+        <!-- Part 6: 실행 순서 문제 해결 -->
+        <div class="conversation">
+            <h2>Part 6. ECS의 약점 &mdash; 실행 순서 문제 해결법</h2>
+
+            <div class="chat">
+                <div class="q">아까 ECS의 약점이 "실행 순서가 코드에 안 보인다"였잖아. 이건 어떻게 해결해?</div>
+                <div class="a">
+                    <p>프레임워크 레벨에서 해결할 수 있어. 이게 바로 <span class="highlight">"프레임워크가 컨텐츠의 면역 체계"</span>가 되는 부분이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[방법 1: 실행 순서 선언 파일]
+
+// execution-order.yaml — 프레임워크가 이 파일을 읽고 순서대로 실행
+combat_pipeline:
+  description: "전투 처리 파이프라인"
+  order:
+    1. BuffSystem          # 먼저 버프 보정
+    2. CombatSystem        # 데미지 계산
+    3. CriticalSystem      # 크리티컬 판정
+    4. SkillEffectSystem   # 스킬 효과
+    5. DeathSystem         # 사망 판정
+    6. LootSystem          # 아이템 드롭
+    7. ExpSystem           # 경험치 분배
+    8. QuestSystem         # 퀘스트 체크
+    9. LogSystem           # 로그 기록
+
+→ 이 파일 하나만 열면 전체 흐름이 보임
+→ OOP의 "코드 순서 = 실행 순서" 장점을 되찾음
+→ 근데 OOP보다 나음: 한 파일에 전체 파이프라인이 정리돼 있으니까</div>
+
+            <div class="code-block">[방법 2: 상호작용 선언 — System이 뭘 읽고 뭘 쓰는지]
+
+// combat_system.manifest.yaml
+name: CombatSystem
+description: "기본 데미지 계산"
+
+reads:                           # 이 System이 읽는 데이터
+  - CombatComponent              # 공격력, 방어력
+  - CombatEvent                  # 공격 이벤트
+
+writes:                          # 이 System이 바꾸는 데이터
+  - HealthComponent              # HP 감소
+
+triggers:                        # 이 System이 발생시키는 이벤트
+  - DamageEvent                  # 데미지 적용 이벤트
+
+depends_on:                      # 이 System보다 먼저 실행돼야 하는 것
+  - BuffSystem                   # 버프가 먼저 적용돼야 하니까
+
+→ AI가 이 파일만 읽으면:
+  "CombatSystem은 CombatComponent를 읽고, HealthComponent를 바꾸고,
+   BuffSystem 다음에 실행돼야 한다"
+  를 한눈에 파악</div>
+
+            <div class="chat">
+                <div class="q">이러면 ECS의 약점이 사라지는 거야?</div>
+                <div class="a">
+                    <p><span class="key-point">약점이 사라지는 게 아니라, 프레임워크가 약점을 보완해주는 거야.</span></p>
+                    <p>이게 바로 "프레임워크 = 컨텐츠의 면역 체계" 개념이야:</p>
+                </div>
+            </div>
+
+            <div class="code-block">[프레임워크의 진짜 역할]
+
+일반적인 프레임워크:
+  네트워크 처리 ✅
+  DB 연결 ✅
+  스케줄러 ✅
+  (여기서 끝. 컨텐츠는 알아서 짜세요)
+
+에이전트 퍼스트 프레임워크:
+  네트워크 처리 ✅
+  DB 연결 ✅
+  스케줄러 ✅
+  실행 순서 관리 ✅        ← 컨텐츠 보호
+  상호작용 검증 ✅         ← 컨텐츠 보호
+  의도 기록 강제 ✅        ← 컨텐츠 보호
+  자동 충돌 감지 ✅        ← 컨텐츠 보호
+
+→ 프레임워크가 "AI가 컨텐츠를 안전하게 만들 수 있는 가드레일"을 제공
+→ 건물의 골조(프레임워크)가 튼튼해야,
+   인테리어(컨텐츠)를 누가 하든 건물이 안 무너짐</div>
+        </div>
+
+        <!-- Part 7: 현실적 판단 -->
+        <div class="conversation">
+            <h2>Part 7. 현실적 판단 &mdash; 그래서 어떤 걸 선택해야 해?</h2>
+
+            <div class="chat">
+                <div class="q">정리해줘. 게임 서버를 만든다고 했을 때, OOP vs ECS 어떤 상황에서 뭘 써야 해?</div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>추천</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td><strong>혼자 만드는 소규모 게임</strong></td>
+                    <td class="neutral">OOP</td>
+                    <td>머릿속에 전체가 들어감. 직관적.</td>
+                </tr>
+                <tr>
+                    <td><strong>팀이 만드는 중규모 게임</strong></td>
+                    <td class="neutral">OOP (익숙하면)</td>
+                    <td>팀원 전원이 OOP 경험자면 굳이 바꿀 필요 없음</td>
+                </tr>
+                <tr>
+                    <td><strong>AI + 인간이 함께 만드는 게임</strong></td>
+                    <td class="good">ECS</td>
+                    <td>AI가 코드 분석/생성에서 10배 효율</td>
+                </tr>
+                <tr>
+                    <td><strong>AI가 주도하고 인간이 감독</strong></td>
+                    <td class="good">ECS + 에이전트 퍼스트 프레임워크</td>
+                    <td>AI에게 최적화된 구조 + 프레임워크 가드레일</td>
+                </tr>
+                <tr>
+                    <td><strong>기존 OOP 프로젝트 유지보수</strong></td>
+                    <td class="neutral">OOP 유지 + AI 보조 레이어</td>
+                    <td>다 갈아엎는 건 비현실적. 보조 레이어로 개선</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">결국 핵심이 뭐야? 한 줄로</div>
+                <div class="a">
+                    <p><span class="key-point">"어차피 복잡한 거, AI가 다룰 수 있는 형태의 복잡함을 선택하라."</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 주의 박스 -->
+        <div class="warning-box">
+            <h4>OOP가 나쁜 게 아니다</h4>
+            <p>OOP는 20년 넘게 게임 서버를 잘 만들어온 검증된 패턴이다.</p>
+            <p>현재 운영 중인 서버를 ECS로 갈아엎는 건 <strong>말이 안 된다.</strong></p>
+            <p>이 문서의 요점은 "새로 만든다면, AI 시대에는 어떤 선택이 유리한가?"이다.</p>
+            <p><strong>패턴이 나쁜 게 아니라, 시대가 바뀌고 있는 것이다.</strong></p>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>게임 컨텐츠는 원래 복잡하다</strong> &mdash; "때린다" 하나에 15개 시스템이 엮임. OOP든 ECS든 피할 수 없음</li>
+                <li><strong>복잡함의 위치가 다르다</strong> &mdash; OOP는 함수 "안"에 숨고, ECS는 시스템 "사이"에 드러남</li>
+                <li><strong>OOP = 어두운 미로</strong> &mdash; 벽이 안 보여서 손으로 더듬어야 함 (경험 = 감)</li>
+                <li><strong>ECS = 조명 켜진 미로</strong> &mdash; 벽이 보여서 판단할 수 있음 (검색 = 눈)</li>
+                <li><strong>창발적 복잡성은 "못 만든다"가 아니다</strong> &mdash; OOP의 "스파게티"와 같은 레벨의 문제</li>
+                <li><strong>ECS만의 약점</strong> &mdash; 실행 순서가 코드에 안 보임. 프레임워크로 해결 가능</li>
+                <li><strong>AI한테 ECS가 압도적으로 유리</strong> &mdash; "검색 가능한 복잡함"이기 때문</li>
+                <li><strong>프레임워크 = 컨텐츠의 면역 체계</strong> &mdash; 실행 순서 관리, 상호작용 검증, 의도 기록 강제</li>
+                <li><strong>핵심 질문</strong> &mdash; "어차피 복잡한 거, 누구한테 유리한 복잡함을 선택할 거냐?"</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../ecs-agent-architecture/">&larr; AI가 100% 짠 서버</a>
+            <a href="../ai-asset/">AI 스킬의 90%가 0원이 된 이유 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>
