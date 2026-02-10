@@ -563,12 +563,145 @@ ECS의 복잡함은 AI가 "잘하는 것"으로 해결 가능:
             </div>
         </div>
 
-        <!-- Part 6: 실행 순서 문제 해결 -->
+        <!-- Part 6: 실행 순서의 진짜 의미 -->
         <div class="conversation">
-            <h2>Part 6. ECS의 약점 &mdash; 실행 순서 문제 해결법</h2>
+            <h2>Part 6. 잠깐 &mdash; "실행 순서"가 수천 개 필요한 거 아니야?</h2>
 
             <div class="chat">
-                <div class="q">아까 ECS의 약점이 "실행 순서가 코드에 안 보인다"였잖아. 이건 어떻게 해결해?</div>
+                <div class="q">실행 순서를 따로 관리해야 한다면서? 그러면 "몬스터가 길 가다가 플레이어 발견하면 공격" 이런 상황마다 실행 순서가 다른 거 아니야? 그러면 실행 순서 파일이 수천 개가 되는 거 아닌가?</div>
+                <div class="a">
+                    <p><span class="warning">아니. 이건 핵심적인 오해야.</span></p>
+                    <p>실행 순서는 <span class="highlight">"System의 순서"</span>이지, <span class="highlight">"개별 상황의 순서"</span>가 아니야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[흔한 오해 vs 실제]
+
+❌ 잘못된 이해:
+  몬스터가 걸어가다 플레이어 발견 → 실행순서 A
+  몬스터가 걸어가다 아이템 발견   → 실행순서 B
+  몬스터가 전투 중 도망           → 실행순서 C
+  몬스터가 죽으면서 아이템 드롭   → 실행순서 D
+  ... 상황마다 다른 순서? → 수천 개?
+
+✅ 실제:
+  매 프레임마다 항상 같은 순서로 System이 돈다:
+    1. AISystem           (모든 몬스터의 AI 판단)
+    2. MovementSystem      (모든 엔티티의 이동)
+    3. DetectionSystem     (모든 몬스터의 감지)
+    4. CombatSystem        (모든 전투 처리)
+    5. DeathSystem         (모든 사망 판정)
+    6. LootSystem          (모든 아이템 드롭)
+    ...
+
+  이 순서는 항상 고정. 전체 20~50개.
+  실행 순서 파일 = 딱 하나, 20~50줄.</div>
+
+            <div class="chat">
+                <div class="q">잠깐. 그러면 상황에 따라 다른 동작은 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="key-point">System 순서는 고정이야. 달라지는 건 "데이터(Component)"야.</span></p>
+                    <p>비유를 들어볼게:</p>
+                </div>
+            </div>
+
+            <div class="code-block">[비유: 공장 컨베이어 벨트]
+
+ECS = 공장의 컨베이어 벨트
+
+[스테이션1: AI판단] → [스테이션2: 이동] → [스테이션3: 감지] → [스테이션4: 전투]
+       ↑                    ↑                   ↑                   ↑
+    모든 몬스터가         모든 엔티티가       모든 몬스터가       전투 중인
+    여기서 판단          여기서 이동         여기서 감지        엔티티만 처리
+
+컨베이어 벨트 = System 실행 순서 → 항상 고정
+벨트 위의 제품 = Entity (몬스터, 플레이어) → 매번 다름
+
+자동차 공장에서:
+  도색 스테이션은 항상 조립 다음에 온다 (순서 고정)
+  빨간 차가 오면 빨간 페인트, 파란 차가 오면 파란 페인트 (데이터가 다름)
+  스테이션 순서를 차 색깔마다 바꾸지 않음!</div>
+
+            <div class="chat">
+                <div class="q">구체적으로 보여줘. 몬스터가 걷다가 플레이어를 발견해서 공격하는 상황이, 매 프레임에서 어떻게 돌아가?</div>
+            </div>
+
+            <div class="code-block">[몬스터가 순찰 → 플레이어 발견 → 공격하는 과정]
+
+System 실행 순서 (항상 고정):
+  1. AISystem → 2. MovementSystem → 3. DetectionSystem → 4. CombatSystem
+
+──── 프레임 1: 몬스터가 순찰 중 ────
+  AISystem        → 몬스터: 상태="순찰" → 이동 방향 결정
+  MovementSystem  → 몬스터: 순찰 경로대로 이동
+  DetectionSystem → 몬스터: 감지 범위에 아무도 없음 → 아무 일 없음
+  CombatSystem    → 몬스터: 전투 상태 아님 → 스킵
+
+──── 프레임 2: 아직 순찰 중 ────
+  AISystem        → 몬스터: 상태="순찰" (변화 없음)
+  MovementSystem  → 몬스터: 계속 이동
+  DetectionSystem → 몬스터: 플레이어 발견! → "DetectedTag" 붙임
+  CombatSystem    → 몬스터: 전투 상태 아님 → 스킵
+
+──── 프레임 3: 추적 시작 ────
+  AISystem        → 몬스터: DetectedTag 있네? → 상태="추적"으로 변경
+  MovementSystem  → 몬스터: 플레이어 방향으로 이동
+  DetectionSystem → 몬스터: 플레이어가 공격 범위 안! → "AttackReadyTag" 붙임
+  CombatSystem    → 몬스터: 전투 상태 아님 → 스킵
+
+──── 프레임 4: 공격! ────
+  AISystem        → 몬스터: AttackReadyTag 있네? → 상태="공격"
+  MovementSystem  → 몬스터: 공격 중이라 이동 안 함
+  DetectionSystem → 몬스터: 이미 전투 중 → 스킵
+  CombatSystem    → 몬스터: 상태="공격"이네! → 데미지 계산, HP 감소
+
+핵심:
+  → 4개 프레임 동안 System 실행 순서는 완전히 동일
+  → 달라진 건 몬스터에 붙은 Tag/Component (데이터)
+  → 실행 순서를 상황마다 바꾼 게 아님!</div>
+
+            <div class="chat">
+                <div class="q">아... 그러니까 System은 "항상 돌되, 해당 없으면 스킵한다"는 거야?</div>
+                <div class="a">
+                    <p><span class="key-point">정확해!</span> 그게 OOP랑 근본적으로 다른 사고방식이야:</p>
+                </div>
+            </div>
+
+            <div class="code-block">[OOP 사고방식 vs ECS 사고방식]
+
+OOP: "이 상황에서는 이 함수를 호출한다"
+  if (몬스터가 플레이어 발견) {
+      몬스터->StartChase(플레이어);   ← 특정 상황에서 특정 함수 호출
+  }
+  → 흐름이 조건에 따라 분기함
+  → 어떤 함수가 호출될지는 런타임에 결정
+
+ECS: "모든 System이 항상 돈다. 해당 없으면 스킵한다"
+  DetectionSystem: 매 프레임 모든 몬스터 체크
+    → 감지 범위 안에 플레이어 있으면? Tag 붙임
+    → 없으면? 아무것도 안 함 (스킵)
+
+  AISystem: 매 프레임 모든 몬스터 체크
+    → DetectedTag 있으면? 추적 상태로 변경
+    → 없으면? 현재 상태 유지 (스킵)
+
+  → 흐름은 항상 고정. 데이터(Tag/Component)가 분기함
+  → 어떤 System이 실행될지는 항상 같음 (전부 실행)</div>
+
+            <div class="insight-box">
+                <h4>핵심 한 줄</h4>
+                <p><strong>OOP:</strong> "흐름"이 분기한다 (어떤 함수를 호출할지 달라짐)</p>
+                <p><strong>ECS:</strong> "데이터"가 분기한다 (System은 항상 같은 순서로 돌고, Component가 달라짐)</p>
+                <p>그래서 실행 순서 파일은 수천 개가 아니라 <strong>딱 하나, 20~50줄</strong>이다.</p>
+            </div>
+        </div>
+
+        <!-- Part 7: 실행 순서 해결법 -->
+        <div class="conversation">
+            <h2>Part 7. 실행 순서를 관리하는 구체적 방법</h2>
+
+            <div class="chat">
+                <div class="q">그래, 실행 순서가 20~50개라는 건 알겠어. 그러면 이걸 어떻게 관리해?</div>
                 <div class="a">
                     <p>프레임워크 레벨에서 해결할 수 있어. 이게 바로 <span class="highlight">"프레임워크가 컨텐츠의 면역 체계"</span>가 되는 부분이야.</p>
                 </div>
@@ -648,9 +781,9 @@ depends_on:                      # 이 System보다 먼저 실행돼야 하는 �
    인테리어(컨텐츠)를 누가 하든 건물이 안 무너짐</div>
         </div>
 
-        <!-- Part 7: 현실적 판단 -->
+        <!-- Part 8: 현실적 판단 -->
         <div class="conversation">
-            <h2>Part 7. 현실적 판단 &mdash; 그래서 어떤 걸 선택해야 해?</h2>
+            <h2>Part 8. 현실적 판단 &mdash; 그래서 어떤 걸 선택해야 해?</h2>
 
             <div class="chat">
                 <div class="q">정리해줘. 게임 서버를 만든다고 했을 때, OOP vs ECS 어떤 상황에서 뭘 써야 해?</div>
@@ -715,7 +848,9 @@ depends_on:                      # 이 System보다 먼저 실행돼야 하는 �
                 <li><strong>OOP = 어두운 미로</strong> &mdash; 벽이 안 보여서 손으로 더듬어야 함 (경험 = 감)</li>
                 <li><strong>ECS = 조명 켜진 미로</strong> &mdash; 벽이 보여서 판단할 수 있음 (검색 = 눈)</li>
                 <li><strong>창발적 복잡성은 "못 만든다"가 아니다</strong> &mdash; OOP의 "스파게티"와 같은 레벨의 문제</li>
-                <li><strong>ECS만의 약점</strong> &mdash; 실행 순서가 코드에 안 보임. 프레임워크로 해결 가능</li>
+                <li><strong>ECS만의 약점</strong> &mdash; 실행 순서가 코드에 안 보임. 하지만 순서는 20~50개뿐</li>
+                <li><strong>실행 순서 ≠ 상황별 순서</strong> &mdash; System 순서는 고정, 달라지는 건 데이터(Component)</li>
+                <li><strong>OOP는 흐름이 분기, ECS는 데이터가 분기</strong> &mdash; System은 항상 돌고, 해당 없으면 스킵</li>
                 <li><strong>AI한테 ECS가 압도적으로 유리</strong> &mdash; "검색 가능한 복잡함"이기 때문</li>
                 <li><strong>프레임워크 = 컨텐츠의 면역 체계</strong> &mdash; 실행 순서 관리, 상호작용 검증, 의도 기록 강제</li>
                 <li><strong>핵심 질문</strong> &mdash; "어차피 복잡한 거, 누구한테 유리한 복잡함을 선택할 거냐?"</li>
