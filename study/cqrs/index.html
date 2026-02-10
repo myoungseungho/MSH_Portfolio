@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>읽기용 DB, 쓰기용 DB를 왜 나눠? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../distributed-systems/" class="back-link">← 분산 시스템</a>
+
+        <header class="header">
+            <h1>읽기용 DB, 쓰기용 DB를 왜 나눠?</h1>
+            <p>CQRS(Command Query Responsibility Segregation) - 읽기와 쓰기를 분리하는 패턴</p>
+        </header>
+
+        <!-- Part 1: 기존 방식의 문제 -->
+        <div class="conversation">
+            <h2>Part 1. 하나의 DB로 뭐가 문제야?</h2>
+
+            <div class="chat">
+                <div class="q">DB 하나로 읽고 쓰면 안 돼?</div>
+                <div class="a">
+                    <p>작은 규모에선 괜찮아.</p>
+                    <p>근데 <span class="warning">읽기와 쓰기 패턴이 완전 달라</span>.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">📊 게임에서 읽기 vs 쓰기 비율:
+
+[랭킹 시스템]
+├─ 쓰기: 점수 갱신 (분당 100건)
+└─ 읽기: 랭킹 조회 (분당 10,000건)
+   → 읽기가 100배 많음!
+
+[인벤토리]
+├─ 쓰기: 아이템 획득/사용 (분당 1,000건)
+└─ 읽기: 인벤토리 열기 (분당 5,000건)
+   → 읽기가 5배 많음
+
+[거래소]
+├─ 쓰기: 등록/구매 (분당 500건)
+└─ 읽기: 검색/조회 (분당 50,000건)
+   → 읽기가 100배 많음!</div>
+
+            <div class="chat">
+                <div class="q">읽기가 많으면 뭐가 문제야?</div>
+                <div class="a">
+                    <p>같은 DB에서 <span class="highlight">쓰기가 읽기를 방해</span>해.</p>
+                    <p>INSERT/UPDATE 하는 동안 SELECT가 느려져.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🚧 하나의 DB에서 충돌:
+
+[랭킹 DB]
+├─ 쓰기: "점수 UPDATE 중..." 🔒 락 걸림
+└─ 읽기: "랭킹 조회하려는데... 기다려야 함" ⏳
+
+1만 명이 랭킹 보려고 하는데
+10명이 점수 갱신하느라 락 걸림
+
+→ 대기열 발생
+→ 랭킹 조회 느려짐
+→ 유저: "왜 랭킹이 안 떠요?!"</div>
+        </div>
+
+        <!-- Part 2: CQRS 개념 -->
+        <div class="conversation">
+            <h2>Part 2. CQRS가 뭔데?</h2>
+
+            <div class="chat">
+                <div class="q">CQRS가 뭐야?</div>
+                <div class="a">
+                    <p><span class="key-point">Command = 쓰기, Query = 읽기</span></p>
+                    <p>둘을 완전히 분리하는 거야.</p>
+                    <p>쓰기용 모델과 읽기용 모델을 따로 만들어.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🔀 CQRS 기본 구조:
+
+[기존: 하나로 통합]
+┌─────────────────────────────────┐
+│           랭킹 DB               │
+│  ┌─────────────────────────┐   │
+│  │ 읽기 + 쓰기 모두 여기서 │   │
+│  └─────────────────────────┘   │
+└─────────────────────────────────┘
+
+[CQRS: 분리]
+┌──────────────┐     ┌──────────────┐
+│   쓰기 모델   │     │   읽기 모델   │
+│   (Command)  │ ──▶ │   (Query)    │
+│              │동기화│              │
+│ - 점수 갱신  │     │ - 랭킹 조회  │
+│ - 정규화     │     │ - 비정규화   │
+│ - 트랜잭션   │     │ - 캐시 최적화│
+└──────────────┘     └──────────────┘</div>
+
+            <div class="chat">
+                <div class="q">왜 분리하면 좋아?</div>
+                <div class="a">
+                    <p><span class="highlight">각자 목적에 맞게 최적화</span>할 수 있어.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>쓰기 모델</th>
+                    <th>읽기 모델</th>
+                </tr>
+                <tr>
+                    <td>목적</td>
+                    <td>데이터 정합성</td>
+                    <td>빠른 조회</td>
+                </tr>
+                <tr>
+                    <td>구조</td>
+                    <td>정규화</td>
+                    <td class="good">비정규화 (JOIN 없이)</td>
+                </tr>
+                <tr>
+                    <td>인덱스</td>
+                    <td>최소한</td>
+                    <td class="good">조회 패턴별 최적화</td>
+                </tr>
+                <tr>
+                    <td>스케일링</td>
+                    <td>단일 마스터</td>
+                    <td class="good">복제본 여러 대</td>
+                </tr>
+                <tr>
+                    <td>일관성</td>
+                    <td class="good">강한 일관성</td>
+                    <td>최종 일관성</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3: 실제 예시 -->
+        <div class="conversation">
+            <h2>Part 3. 랭킹 시스템으로 이해하기</h2>
+
+            <div class="chat">
+                <div class="q">랭킹에 CQRS 적용하면 어떻게 돼?</div>
+                <div class="a">
+                    <p>쓰기와 읽기를 완전히 분리해보자:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🏆 랭킹 CQRS 예시:
+
+[쓰기 모델 - Write DB]
+┌─────────────────────────────────┐
+│ 테이블: PlayerScore             │
+│ - player_id (PK)               │
+│ - score                        │
+│ - updated_at                   │
+│                                 │
+│ 역할: 점수 갱신만 담당          │
+│ 특징: 정규화, 트랜잭션 보장     │
+└─────────────────────────────────┘
+         │
+         │ 점수 변경 시 이벤트 발행
+         ▼
+[읽기 모델 - Read DB / Redis]
+┌─────────────────────────────────┐
+│ 구조: Redis Sorted Set          │
+│ Key: "ranking:weekly"           │
+│ - player_id → score (정렬됨)   │
+│                                 │
+│ 역할: 랭킹 조회만 담당          │
+│ 특징: 이미 정렬됨, O(log N)     │
+└─────────────────────────────────┘</div>
+
+            <div class="chat">
+                <div class="q">점수 바뀌면 어떻게 동기화해?</div>
+                <div class="a">
+                    <p><span class="highlight">이벤트로 전파</span>해.</p>
+                    <p>쓰기 DB에서 점수 바뀌면 → 이벤트 발행 → 읽기 모델 갱신</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🔄 동기화 흐름:
+
+1️⃣ 유저가 점수 갱신
+   [Game Server] ──▶ [Write DB] UPDATE score=1000
+
+2️⃣ 이벤트 발행
+   [Write DB] ──▶ [Message Queue] "ScoreUpdated: player=123, score=1000"
+
+3️⃣ 읽기 모델 갱신
+   [Message Queue] ──▶ [Read Model Updater]
+   [Updater] ──▶ [Redis] ZADD ranking:weekly 1000 "player:123"
+
+4️⃣ 조회는 읽기 모델에서
+   [유저] ──랭킹 조회──▶ [Redis] ZREVRANGE ranking:weekly 0 99
+   → 1ms 만에 응답!</div>
+
+            <div class="chat">
+                <div class="q">실시간으로 동기화되는 거야?</div>
+                <div class="a">
+                    <p><span class="warning">약간의 지연</span>이 있어.</p>
+                    <p>점수 갱신 → 읽기 모델 반영까지 몇 ms ~ 몇 초.</p>
+                    <p>이걸 <span class="highlight">최종 일관성(Eventual Consistency)</span>이라고 해.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">⏱️ 최종 일관성:
+
+[강한 일관성] - 기존 방식
+쓰기 완료 = 즉시 읽기 반영
+→ 락 필요, 느림
+
+[최종 일관성] - CQRS
+쓰기 완료 → (약간 지연) → 읽기 반영
+→ 락 불필요, 빠름
+
+랭킹의 경우:
+"내 점수 1000점으로 갱신했는데 랭킹에 999점으로 보여요"
+→ 1초 후 새로고침하면 1000점으로 보임
+→ 대부분의 경우 문제 없음</div>
+        </div>
+
+        <!-- Part 4: 언제 써야 할까 -->
+        <div class="conversation">
+            <h2>Part 4. 언제 CQRS를 써야 해?</h2>
+
+            <div class="chat">
+                <div class="q">모든 곳에 CQRS 적용해야 해?</div>
+                <div class="a">
+                    <p><span class="warning">아니, 복잡성이 증가</span>해.</p>
+                    <p>읽기/쓰기 비율이 극단적으로 다를 때만 써.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>CQRS</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>랭킹 시스템</td>
+                    <td class="good">✅ 적합</td>
+                    <td>읽기 100배 많음</td>
+                </tr>
+                <tr>
+                    <td>거래소</td>
+                    <td class="good">✅ 적합</td>
+                    <td>검색 조회 폭발</td>
+                </tr>
+                <tr>
+                    <td>대시보드/통계</td>
+                    <td class="good">✅ 적합</td>
+                    <td>복잡한 집계 쿼리</td>
+                </tr>
+                <tr>
+                    <td>인벤토리</td>
+                    <td class="bad">△ 상황에 따라</td>
+                    <td>읽기/쓰기 비슷</td>
+                </tr>
+                <tr>
+                    <td>채팅</td>
+                    <td class="bad">❌ 과함</td>
+                    <td>단순 CRUD로 충분</td>
+                </tr>
+                <tr>
+                    <td>설정 저장</td>
+                    <td class="bad">❌ 과함</td>
+                    <td>트래픽 자체가 적음</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">CQRS의 단점은?</div>
+                <div class="a">
+                    <p>복잡성이 크게 증가해:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">⚠️ CQRS의 비용:
+
+1️⃣ 코드 복잡성
+   - 쓰기 로직 따로, 읽기 로직 따로
+   - 동기화 로직 추가
+   - 디버깅 어려움 증가
+
+2️⃣ 인프라 복잡성
+   - DB가 2개 이상
+   - Message Queue 필요
+   - 동기화 Worker 필요
+
+3️⃣ 일관성 처리
+   - 지연 발생 처리
+   - 에러 시 재시도 로직
+   - 순서 보장 필요할 수도</div>
+        </div>
+
+        <!-- Part 5: 이벤트 소싱과 조합 -->
+        <div class="conversation">
+            <h2>Part 5. 이벤트 소싱과 같이 쓰면?</h2>
+
+            <div class="chat">
+                <div class="q">CQRS랑 이벤트 소싱이랑 같이 쓴다며?</div>
+                <div class="a">
+                    <p>완벽한 조합이야!</p>
+                    <p><span class="highlight">이벤트 소싱 = 쓰기</span>, <span class="highlight">프로젝션 = 읽기</span></p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🔗 이벤트 소싱 + CQRS:
+
+[Command 처리]
+유저: "1000점 획득"
+    │
+    ▼
+[Event Store] ← 쓰기 모델
+├─ Event #1: ScoreEarned(+1000)
+├─ Event #2: ScoreEarned(+500)
+└─ Event #3: ScoreSpent(-200)
+    │
+    │ 이벤트 발행
+    ▼
+[Projection] → 읽기 모델
+├─ 랭킹용: Redis Sorted Set
+├─ 통계용: 일별 집계 테이블
+└─ 리포트용: 월간 요약 테이블
+
+→ 하나의 이벤트로 여러 읽기 모델 생성!</div>
+
+            <div class="chat">
+                <div class="q">여러 읽기 모델을 만들 수 있어?</div>
+                <div class="a">
+                    <p>그게 핵심 장점이야!</p>
+                    <p>같은 데이터를 <span class="key-point">용도별로 다르게</span> 저장할 수 있어.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">📊 하나의 이벤트 → 여러 읽기 모델:
+
+[점수 이벤트]
+ScoreEarned(player=123, score=1000, source="boss_kill")
+    │
+    ├──▶ [랭킹 모델]
+    │    Redis: ZADD ranking 1000 player:123
+    │    → "랭킹 몇 위인가요?" 조회용
+    │
+    ├──▶ [통계 모델]
+    │    DB: INSERT INTO daily_stats (date, total_score, ...)
+    │    → "오늘 총 획득 점수" 조회용
+    │
+    └──▶ [알림 모델]
+         서버: "보스 처치 업적 달성!"
+         → 실시간 알림용</div>
+        </div>
+
+        <!-- Part 6: 구현 포인트 -->
+        <div class="conversation">
+            <h2>Part 6. 직접 구현할 때 핵심</h2>
+
+            <div class="chat">
+                <div class="q">간단하게 구현하려면?</div>
+                <div class="a">
+                    <p>가장 기본적인 구조:</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span style="color:#78909c">// Command (쓰기)</span>
+<span style="color:#82b1ff">class</span> UpdateScoreCommand
+{
+    <span style="color:#82b1ff">void</span> Execute(<span style="color:#82b1ff">int</span> playerId, <span style="color:#82b1ff">int</span> newScore)
+    {
+        <span style="color:#78909c">// 1. 쓰기 DB에 저장</span>
+        m_writeDb.Update(playerId, newScore);
+
+        <span style="color:#78909c">// 2. 이벤트 발행 (읽기 모델 갱신용)</span>
+        m_eventBus.Publish(<span style="color:#c3e88d">"ScoreUpdated"</span>, playerId, newScore);
+    }
+};
+
+<span style="color:#78909c">// Query (읽기)</span>
+<span style="color:#82b1ff">class</span> GetRankingQuery
+{
+    vector&lt;RankEntry&gt; Execute(<span style="color:#82b1ff">int</span> topN)
+    {
+        <span style="color:#78909c">// 읽기 전용 모델에서 조회 (Redis)</span>
+        <span style="color:#82b1ff">return</span> m_redis.GetTopRanking(topN);
+    }
+};
+
+<span style="color:#78909c">// 이벤트 핸들러 (동기화)</span>
+<span style="color:#82b1ff">class</span> RankingProjection
+{
+    <span style="color:#82b1ff">void</span> OnScoreUpdated(<span style="color:#82b1ff">int</span> playerId, <span style="color:#82b1ff">int</span> newScore)
+    {
+        <span style="color:#78909c">// 읽기 모델 갱신</span>
+        m_redis.UpdateRanking(playerId, newScore);
+    }
+};</div>
+        </div>
+
+        <div class="warning-box">
+            <h4>⚠️ CQRS 적용 시 주의사항</h4>
+            <p>1. <strong>최종 일관성 고려</strong> - 읽기 모델이 최신이 아닐 수 있음을 UI에서 처리</p>
+            <p>2. <strong>멱등성 보장</strong> - 같은 이벤트 두 번 처리해도 결과 동일해야 함</p>
+            <p>3. <strong>순서 보장</strong> - 이벤트 순서가 중요하면 파티셔닝 고려</p>
+            <p>4. <strong>재빌드 전략</strong> - 읽기 모델 꼬이면 이벤트부터 다시 빌드 가능해야 함</p>
+        </div>
+
+        <div class="summary-box">
+            <h3>📝 핵심 정리</h3>
+            <ul>
+                <li>CQRS = Command(쓰기)와 Query(읽기) 완전 분리</li>
+                <li>각각 최적화 가능: 쓰기는 정규화, 읽기는 비정규화</li>
+                <li>읽기 100배 많은 시스템에 효과적 (랭킹, 거래소)</li>
+                <li>이벤트로 동기화, 약간의 지연 발생 (최종 일관성)</li>
+                <li>복잡성 증가 → 정말 필요할 때만 적용</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../event-sourcing/">← "지금 상태"를 저장 안 하고 "변경 기록"만 저장한다고?</a>
+            <a href="../saga-pattern/">분산 트랜잭션이 2PC 없이 되는 이유 →</a>
+        </div>
+    </div>
+</body>
+</html>

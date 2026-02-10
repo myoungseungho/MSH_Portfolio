@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>분산 트랜잭션이 2PC 없이 되는 이유 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../distributed-systems/" class="back-link">← 분산 시스템</a>
+
+        <header class="header">
+            <h1>분산 트랜잭션이 2PC 없이 되는 이유</h1>
+            <p>Saga 패턴 - 보상 트랜잭션으로 분산 환경에서 일관성 유지하기</p>
+        </header>
+
+        <!-- Part 1: 문제 상황 -->
+        <div class="conversation">
+            <h2>Part 1. 분산 환경에서 트랜잭션이 왜 어려워?</h2>
+
+            <div class="chat">
+                <div class="q">DB 하나면 트랜잭션 쉬운데, 뭐가 문제야?</div>
+                <div class="a">
+                    <p>게임에서 <span class="highlight">서버 간 아이템 거래</span>를 생각해봐.</p>
+                    <p>A서버 유저가 B서버 유저에게 아이템 판매.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">💱 크로스서버 거래 시나리오:
+
+[A서버]                    [B서버]
+유저 A ──아이템 판매──▶ 유저 B
+   │                        │
+   ▼                        ▼
+A의 DB                   B의 DB
+├─ 아이템 제거           ├─ 골드 차감
+└─ 골드 추가             └─ 아이템 추가
+
+❓ 만약 A의 DB는 성공, B의 DB는 실패하면?
+   → A는 아이템 잃고 골드도 못 받음
+   → B는 골드도 안 빠지고 아이템도 없음
+   → 둘 다 손해/이득 불공정!</div>
+
+            <div class="chat">
+                <div class="q">그냥 BEGIN TRANSACTION으로 묶으면 안 돼?</div>
+                <div class="a">
+                    <p><span class="warning">DB가 다르면 안 돼</span>.</p>
+                    <p>트랜잭션은 같은 DB 안에서만 동작해.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">❌ 일반 트랜잭션의 한계:
+
+BEGIN TRANSACTION
+    UPDATE A_DB.Inventory ...  ← A서버 DB
+    UPDATE B_DB.Inventory ...  ← B서버 DB (다른 DB!)
+COMMIT
+
+→ 에러! 다른 DB에는 트랜잭션이 안 걸림
+→ A_DB만 롤백되거나, 아예 안 됨</div>
+        </div>
+
+        <!-- Part 2: 2PC의 한계 -->
+        <div class="conversation">
+            <h2>Part 2. 2PC(Two-Phase Commit)는 왜 안 써?</h2>
+
+            <div class="chat">
+                <div class="q">분산 트랜잭션 하려면 2PC 쓰라던데?</div>
+                <div class="a">
+                    <p>2PC = <span class="highlight">2단계 커밋</span>이야.</p>
+                    <p>모든 참여자에게 "커밋해도 돼?" 물어보고, 다 OK하면 커밋.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🔐 2PC (Two-Phase Commit) 동작:
+
+[1단계: Prepare]
+Coordinator: "커밋 준비됐어?"
+    ├──▶ A서버 DB: "OK 준비됨" ✓
+    └──▶ B서버 DB: "OK 준비됨" ✓
+
+[2단계: Commit]
+Coordinator: "다들 OK했으니 커밋해!"
+    ├──▶ A서버 DB: COMMIT ✓
+    └──▶ B서버 DB: COMMIT ✓
+
+완료!</div>
+
+            <div class="chat">
+                <div class="q">잘 되는 것 같은데 뭐가 문제야?</div>
+                <div class="a">
+                    <p><span class="warning">Coordinator가 죽으면?</span></p>
+                    <p>모든 참여자가 영원히 대기해야 해.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">💀 2PC의 치명적 약점:
+
+[1단계: Prepare]
+Coordinator: "커밋 준비됐어?"
+    ├──▶ A서버 DB: "OK 준비됨" 🔒 락 걸고 대기
+    └──▶ B서버 DB: "OK 준비됨" 🔒 락 걸고 대기
+
+[Coordinator 사망!] 💥
+
+A서버 DB: "Coordinator 응답 없음... 계속 대기..." 🔒
+B서버 DB: "Coordinator 응답 없음... 계속 대기..." 🔒
+
+→ 락이 안 풀림!
+→ 다른 트랜잭션도 전부 대기
+→ 서비스 전체 마비 위험!</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>2PC 문제점</th>
+                    <th>영향</th>
+                </tr>
+                <tr>
+                    <td>Coordinator SPOF</td>
+                    <td class="bad">죽으면 전체 마비</td>
+                </tr>
+                <tr>
+                    <td>동기 방식</td>
+                    <td class="bad">모두 응답까지 대기 (느림)</td>
+                </tr>
+                <tr>
+                    <td>락 유지 시간</td>
+                    <td class="bad">긴 락 = 병목</td>
+                </tr>
+                <tr>
+                    <td>확장성</td>
+                    <td class="bad">참여자 많을수록 느려짐</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 3: Saga 패턴 -->
+        <div class="conversation">
+            <h2>Part 3. Saga 패턴이 뭔데?</h2>
+
+            <div class="chat">
+                <div class="q">그래서 대안이 뭐야?</div>
+                <div class="a">
+                    <p><span class="key-point">Saga = 작은 트랜잭션들의 연속</span></p>
+                    <p>실패하면 <span class="highlight">보상 트랜잭션</span>으로 되돌려.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🎭 Saga 패턴 핵심 개념:
+
+[일반 트랜잭션]
+BEGIN ──▶ 작업1 ──▶ 작업2 ──▶ 작업3 ──▶ COMMIT
+          실패하면 전체 ROLLBACK
+
+[Saga]
+작업1 ──▶ 작업2 ──▶ 작업3
+  │         │         │
+  ▼         ▼         ▼
+보상1     보상2     보상3
+
+실패하면? 이미 완료된 작업들을 "보상"으로 되돌림!
+
+예: 작업3 실패 시
+    작업1 ✓ ──▶ 작업2 ✓ ──▶ 작업3 ✗
+                  │           │
+                  ▼           ▼
+               보상2 실행   (실패했으니 보상 불필요)
+    ▼
+  보상1 실행
+
+결과: 원래 상태로 복구!</div>
+
+            <div class="chat">
+                <div class="q">보상 트랜잭션이 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">이미 한 일을 취소하는 작업</span>이야.</p>
+                    <p>ROLLBACK이 아니라, 반대 작업을 실행하는 거야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🔄 보상 트랜잭션 예시:
+
+[크로스서버 아이템 거래]
+
+정방향 작업:
+T1: A서버 - 아이템 제거
+T2: A서버 - 골드 추가
+T3: B서버 - 골드 차감
+T4: B서버 - 아이템 추가
+
+보상 작업 (역방향):
+C1: A서버 - 아이템 복구 (T1의 보상)
+C2: A서버 - 골드 제거 (T2의 보상)
+C3: B서버 - 골드 환불 (T3의 보상)
+C4: B서버 - 아이템 제거 (T4의 보상)
+
+T3 실패 시:
+T1 ✓ → T2 ✓ → T3 ✗
+            ↓
+         C2 실행 (골드 제거)
+            ↓
+         C1 실행 (아이템 복구)
+
+→ A유저는 원래대로 아이템 보유!</div>
+        </div>
+
+        <!-- Part 4: Choreography vs Orchestration -->
+        <div class="conversation">
+            <h2>Part 4. 누가 Saga를 관리해?</h2>
+
+            <div class="chat">
+                <div class="q">각 서비스가 알아서 해? 아니면 중앙에서 관리해?</div>
+                <div class="a">
+                    <p>두 가지 방식이 있어:</p>
+                    <p><span class="highlight">Choreography</span> = 각자 알아서</p>
+                    <p><span class="highlight">Orchestration</span> = 중앙에서 지휘</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">💃 Choreography (분산형):
+
+각 서비스가 이벤트로 소통, 중앙 관리자 없음
+
+[A서버] ──이벤트: 아이템 제거됨──▶ [Message Queue]
+                                        │
+                                        ▼
+[B서버] ◀──이벤트 수신, 골드 차감 시도
+    │
+    └──성공/실패 이벤트 발행──▶ [Message Queue]
+                                        │
+                                        ▼
+[A서버] ◀──결과 수신, 필요시 보상 실행
+
+장점: 중앙 장애점 없음, 느슨한 결합
+단점: 흐름 파악 어려움, 디버깅 힘듦</div>
+
+            <div class="diagram-box">🎼 Orchestration (중앙형):
+
+Saga Orchestrator가 전체 흐름 관리
+
+[Saga Orchestrator]
+    │
+    ├──1. A서버에 요청: "아이템 제거해"
+    │   ◀── A서버: "OK 완료"
+    │
+    ├──2. A서버에 요청: "골드 추가해"
+    │   ◀── A서버: "OK 완료"
+    │
+    ├──3. B서버에 요청: "골드 차감해"
+    │   ◀── B서버: "실패!" ✗
+    │
+    └──4. 보상 실행
+        ├── A서버에 요청: "골드 제거해" (C2)
+        └── A서버에 요청: "아이템 복구해" (C1)
+
+장점: 흐름 명확, 디버깅 쉬움
+단점: Orchestrator가 SPOF 될 수 있음</div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>비교</th>
+                    <th>Choreography</th>
+                    <th>Orchestration</th>
+                </tr>
+                <tr>
+                    <td>결합도</td>
+                    <td class="good">느슨함</td>
+                    <td class="bad">강함</td>
+                </tr>
+                <tr>
+                    <td>흐름 파악</td>
+                    <td class="bad">어려움</td>
+                    <td class="good">명확함</td>
+                </tr>
+                <tr>
+                    <td>디버깅</td>
+                    <td class="bad">이벤트 추적 필요</td>
+                    <td class="good">중앙에서 확인</td>
+                </tr>
+                <tr>
+                    <td>SPOF</td>
+                    <td class="good">없음</td>
+                    <td class="bad">Orchestrator</td>
+                </tr>
+                <tr>
+                    <td>복잡한 흐름</td>
+                    <td class="bad">관리 어려움</td>
+                    <td class="good">관리 쉬움</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">게임에서는 뭘 써?</div>
+                <div class="a">
+                    <p>대부분 <span class="key-point">Orchestration</span>을 써.</p>
+                    <p>거래 실패 시 "왜 실패했는지" 추적이 중요하거든.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 5: 게임 적용 사례 -->
+        <div class="conversation">
+            <h2>Part 5. 게임에서 Saga 적용 예시</h2>
+
+            <div class="chat">
+                <div class="q">실제 게임에서 어디에 쓰여?</div>
+                <div class="a">
+                    <p>여러 서버/서비스에 걸친 작업에:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🎮 게임에서 Saga 활용:
+
+1️⃣ 크로스서버 거래소
+   ├─ T1: 판매자 서버 - 아이템 에스크로
+   ├─ T2: 거래소 서버 - 매물 등록
+   ├─ T3: 구매자 서버 - 골드 차감
+   ├─ T4: 구매자 서버 - 아이템 지급
+   └─ T5: 판매자 서버 - 골드 지급
+
+   T3 실패 시 → C2(매물 취소) → C1(아이템 반환)
+
+2️⃣ 서버 이전 (캐릭터 이동)
+   ├─ T1: 원본 서버 - 캐릭터 잠금
+   ├─ T2: 대상 서버 - 캐릭터 생성
+   ├─ T3: 원본 서버 - 캐릭터 삭제
+
+   T2 실패 시 → C1(잠금 해제)
+
+3️⃣ 결제 처리
+   ├─ T1: 결제 서버 - 결제 승인
+   ├─ T2: 게임 서버 - 캐시 지급
+   ├─ T3: 로그 서버 - 결제 기록
+
+   T2 실패 시 → C1(결제 취소/환불)</div>
+
+            <div class="chat">
+                <div class="q">구체적인 코드로 보여줘</div>
+                <div class="a">
+                    <p>Orchestrator 기반 Saga 예시:</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span style="color:#78909c">// Saga 정의</span>
+<span style="color:#82b1ff">class</span> CrossServerTradeSaga
+{
+    <span style="color:#78909c">// 정방향 스텝들</span>
+    vector&lt;SagaStep&gt; m_steps = {
+        { <span style="color:#c3e88d">"아이템 에스크로"</span>, EscrowItem, RestoreItem },
+        { <span style="color:#c3e88d">"골드 차감"</span>, DeductGold, RefundGold },
+        { <span style="color:#c3e88d">"아이템 지급"</span>, GiveItem, RemoveItem },
+        { <span style="color:#c3e88d">"골드 지급"</span>, GiveGold, DeductGold },
+    };
+
+    <span style="color:#82b1ff">void</span> Execute()
+    {
+        <span style="color:#82b1ff">for</span> (<span style="color:#82b1ff">int</span> i = <span style="color:#f78c6c">0</span>; i < m_steps.size(); i++)
+        {
+            <span style="color:#82b1ff">if</span> (!m_steps[i].action())  <span style="color:#78909c">// 실행 실패</span>
+            {
+                <span style="color:#78909c">// 보상 실행 (역순)</span>
+                Compensate(i - <span style="color:#f78c6c">1</span>);
+                <span style="color:#82b1ff">return</span>;
+            }
+        }
+    }
+
+    <span style="color:#82b1ff">void</span> Compensate(<span style="color:#82b1ff">int</span> fromStep)
+    {
+        <span style="color:#78909c">// 역순으로 보상 실행</span>
+        <span style="color:#82b1ff">for</span> (<span style="color:#82b1ff">int</span> i = fromStep; i >= <span style="color:#f78c6c">0</span>; i--)
+        {
+            m_steps[i].compensate();
+        }
+    }
+};</div>
+        </div>
+
+        <!-- Part 6: 주의사항 -->
+        <div class="conversation">
+            <h2>Part 6. Saga 구현 시 주의할 점</h2>
+
+            <div class="chat">
+                <div class="q">Saga 쓸 때 조심할 게 있어?</div>
+                <div class="a">
+                    <p>몇 가지 중요한 포인트가 있어:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">⚠️ Saga 구현 핵심 주의사항:
+
+1️⃣ 멱등성 (Idempotency)
+   같은 작업 2번 해도 결과가 같아야 함
+
+   ❌ 잘못된 예:
+   GiveGold() { player.gold += 1000; }
+   → 2번 호출하면 2000 증가!
+
+   ✅ 올바른 예:
+   GiveGold(txId) {
+       if (alreadyProcessed(txId)) return;
+       player.gold += 1000;
+       markProcessed(txId);
+   }
+
+2️⃣ 보상도 실패할 수 있음
+   보상 작업도 실패하면?
+   → 재시도 큐에 넣고 계속 시도
+   → 또는 수동 개입 알림
+
+3️⃣ 타임아웃 처리
+   너무 오래 걸리면?
+   → 타임아웃 후 보상 실행
+   → 상태: "처리 중" → "타임아웃" → "보상 완료"</div>
+
+            <div class="chat">
+                <div class="q">보상 중에 서버가 죽으면?</div>
+                <div class="a">
+                    <p><span class="highlight">Saga 상태를 저장</span>해둬야 해.</p>
+                    <p>어디까지 했는지 기록해서 재시작 후 이어서 보상.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">💾 Saga 상태 저장:
+
+[Saga 상태 테이블]
+┌─────────┬──────────────┬─────────┐
+│ SagaID  │ CurrentStep  │ Status  │
+├─────────┼──────────────┼─────────┤
+│ 12345   │ 3            │ RUNNING │
+│ 12346   │ 2            │ COMPENSATING │
+│ 12347   │ 4            │ COMPLETED │
+└─────────┴──────────────┴─────────┘
+
+서버 재시작 시:
+1. Status=RUNNING인 Saga 조회
+2. CurrentStep부터 이어서 실행
+3. Status=COMPENSATING인 Saga 조회
+4. 남은 보상 작업 이어서 실행</div>
+        </div>
+
+        <div class="warning-box">
+            <h4>⚠️ Saga 패턴 주의사항</h4>
+            <p>1. <strong>멱등성 필수</strong> - 재시도해도 결과가 같아야 함</p>
+            <p>2. <strong>보상은 "의미적 롤백"</strong> - DB ROLLBACK이 아니라 반대 작업 실행</p>
+            <p>3. <strong>상태 저장</strong> - 중간에 죽어도 복구할 수 있게</p>
+            <p>4. <strong>격리성 없음</strong> - 중간 상태가 다른 트랜잭션에 보일 수 있음</p>
+        </div>
+
+        <div class="info-box">
+            <h4>💡 Saga vs 2PC 선택 기준</h4>
+            <p>• <strong>2PC</strong>: 강한 일관성 필수, 짧은 트랜잭션, 참여자 적음</p>
+            <p>• <strong>Saga</strong>: 최종 일관성 OK, 긴 트랜잭션, 마이크로서비스</p>
+            <p>• <strong>게임에서는</strong>: 대부분 Saga가 적합 (서버 간 독립성 중요)</p>
+        </div>
+
+        <div class="summary-box">
+            <h3>📝 핵심 정리</h3>
+            <ul>
+                <li>2PC = 모두 준비 → 모두 커밋, 하지만 블로킹 문제</li>
+                <li>Saga = 작은 트랜잭션 연속 + 실패 시 보상 트랜잭션</li>
+                <li>보상 = ROLLBACK이 아니라 "반대 작업" 실행</li>
+                <li>Choreography = 이벤트 기반, Orchestration = 중앙 관리</li>
+                <li>멱등성 + 상태 저장 = Saga 구현의 핵심</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../cqrs/">← 읽기용 DB, 쓰기용 DB를 왜 나눠?</a>
+            <a href="../distributed-systems/">분산 시스템 목록으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
