@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>게임 안에서 강화학습을 쓰면, 뭐가 달라지는 건데? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .neutral { background: #fff9c4; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "\2192"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .insight-box { background: linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .insight-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .insight-box p { opacity: 0.95; margin-bottom: 8px; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../ai/" class="back-link">&larr; AI 활용</a>
+
+        <header class="header">
+            <h1>게임 안에서 강화학습을 쓰면, 뭐가 달라지는 건데?</h1>
+            <p>확률 상태머신으로 충분한 것, 강화학습이 필요한 것, 그리고 실제로 어떻게 만드는지</p>
+        </header>
+
+        <!-- Part 1: 솔직한 출발점 -->
+        <div class="conversation">
+            <h2>Part 1. 솔직한 출발점 &mdash; 게임 AI의 99%는 "가짜"다</h2>
+
+            <div class="chat">
+                <div class="q">게임 AI라고 하면 뭔가 대단한 거 아니야? 알파고 같은?</div>
+                <div class="a">
+                    <p><span class="warning">게임에서 "AI"라고 부르는 것의 99%는 if-else + 랜덤이야.</span></p>
+                    <p>그리고 이게 나쁜 게 아니야. 오히려 대부분의 상황에서는 이게 최선이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[현실: 게임 AI의 정체]
+
+몬스터 AI:
+  if (플레이어가 10m 안에 있으면) {
+      공격();
+  } else if (HP가 30% 이하면) {
+      도망();
+  } else {
+      랜덤으로 돌아다님();
+  }
+
+NPC 상인:
+  if (플레이어가 말 걸면) {
+      대사 출력("무엇을 도와드릴까요?");
+  }
+
+이것도 "AI"라고 부른다.
+왜? 플레이어 입장에서 "살아있는 것처럼" 보이니까.</div>
+
+            <div class="chat">
+                <div class="q">그러면 진짜 AI는 뭐야?</div>
+                <div class="a">
+                    <p>비유를 하나 들어볼게.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[비유: 연기 vs 진짜 감정]
+
+확률 상태머신 = 대본 연기
+  → 시나리오 작가가 "이 상황에서는 이렇게 해라" 써놓음
+  → 배우는 대본대로 연기함
+  → 관객이 보기에 감정이 있는 것처럼 보임
+  → 하지만 배우는 진짜 슬픈 게 아님
+
+강화학습 = 즉흥극
+  → 대본이 없음
+  → 배우가 상황을 보고 직접 판단
+  → "이러면 관객이 웃겠지?" → 시도 → 반응 보고 학습
+  → 수백 번 무대에 서면서 진짜 감이 생김
+
+둘 다 관객은 즐겁다.
+차이는 "대본에 없는 상황"이 왔을 때.</div>
+
+            <div class="insight-box">
+                <h4>핵심 구분</h4>
+                <p><strong>대본 연기 (확률 상태머신):</strong> 작성자가 상상한 상황만 처리 가능</p>
+                <p><strong>즉흥극 (강화학습):</strong> 한 번도 안 해본 상황에도 판단 가능</p>
+                <p>문제는 &mdash; 즉흥극은 연습(학습)에 수백 번의 무대가 필요하다.</p>
+            </div>
+        </div>
+
+        <!-- Part 2: 확률 상태머신 -->
+        <div class="conversation">
+            <h2>Part 2. 확률 상태머신 &mdash; "이것만으로 충분한 범위"</h2>
+
+            <div class="chat">
+                <div class="q">확률 상태머신이 정확히 뭐야? 코드로 보여줘.</div>
+            </div>
+
+            <div class="code-block">[확률 상태머신 = FSM + 주사위]
+
+상태(State)와 전이(Transition)를 정의하고,
+전이 확률을 주사위로 결정하는 것.
+
+[대기] ──30%──→ [순찰]
+  │               │
+  │   20%        ├── 적 발견? ──→ [추적] ──→ [공격]
+  │               │                           │
+  │               │                     HP 낮으면?
+  │               │                           ↓
+  │               └── 5분 경과? ──→ [귀환]  [도망]
+  │
+  ├──15%──→ [주변 탐색]
+  └──5%───→ [제자리 멈춤]
+
+각 상태에서 "다음에 뭘 할지"를 확률로 정한다.
+이게 전부다. 머신러닝 없다.</div>
+
+            <div class="chat">
+                <div class="q">이걸로 뭘 할 수 있어?</div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>활용</th>
+                    <th>설명</th>
+                    <th>왜 이걸로 충분해?</th>
+                </tr>
+                <tr>
+                    <td><strong>부하 테스트</strong></td>
+                    <td>200명 봇이 서버에 접속해서 행동</td>
+                    <td class="good">행동의 "질"은 상관없음. 양만 중요</td>
+                </tr>
+                <tr>
+                    <td><strong>살아있는 월드</strong></td>
+                    <td>NPC 유저들이 돌아다니고, 싸우고, 거래</td>
+                    <td class="good">200명이 제각각 다른 타이밍이면 충분히 자연스러움</td>
+                </tr>
+                <tr>
+                    <td><strong>QA 자동화</strong></td>
+                    <td>봇이 모든 기능을 반복 테스트</td>
+                    <td class="good">정해진 시나리오 반복이니까</td>
+                </tr>
+                <tr>
+                    <td><strong>튜토리얼 NPC</strong></td>
+                    <td>초보 안내, 길찾기 도움</td>
+                    <td class="good">정해진 대사와 행동이면 됨</td>
+                </tr>
+                <tr>
+                    <td><strong>몬스터 일반 AI</strong></td>
+                    <td>순찰, 감지, 추적, 공격, 도망</td>
+                    <td class="good">패턴이 고정이라 대본으로 충분</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">핵심이 뭐야? 한 줄로</div>
+                <div class="a">
+                    <p><span class="key-point">"무엇을 하느냐"만 중요하고, "얼마나 잘 하느냐"는 상관없는 경우</span> &mdash; 확률 상태머신으로 충분하다.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Part 3: 경계선 -->
+        <div class="conversation">
+            <h2>Part 3. 경계선 &mdash; "여기서부터 강화학습이 필요하다"</h2>
+
+            <div class="chat">
+                <div class="q">그러면 강화학습이 진짜 필요한 건 언제야?</div>
+                <div class="a">
+                    <p>딱 하나만 물어보면 돼:</p>
+                    <p><span class="highlight">"이 AI가 잘 해야 하나?"</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[판단 기준: 딱 하나의 질문]
+
+"이 AI가 잘 해야 하나?"
+
+  YES → 강화학습 (RL)
+  NO  → 확률 상태머신 (FSM)
+
+구체적으로:
+
+  "봇이 서버에 부하를 줘야 한다"
+  → 아무거나 하면 됨 → FSM
+
+  "봇이 레이드 기믹을 클리어해야 한다"
+  → 잘 해야 함 → RL
+
+  "NPC가 동료로서 전투를 도와야 한다"
+  → 잘 해야 함 → RL
+
+  "NPC가 마을에서 돌아다니면 된다"
+  → 아무거나 하면 됨 → FSM</div>
+
+            <div class="chat">
+                <div class="q">"잘 해야 한다"를 좀 더 구체적으로 설명해줘</div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>시나리오</th>
+                    <th>왜 FSM으로 안 되나?</th>
+                    <th>RL이 해결하는 것</th>
+                </tr>
+                <tr>
+                    <td><strong>상대를 이겨야 할 때</strong><br>보스 AI, PvP 봇, 레이드 동료</td>
+                    <td class="bad">FSM은 패턴이 고정이라<br>상대가 패턴을 읽으면 끝</td>
+                    <td class="good">상대 행동에 맞춰<br>실시간으로 전략을 바꿈</td>
+                </tr>
+                <tr>
+                    <td><strong>난이도를 맞춰야 할 때</strong><br>적응형 난이도 (Adaptive Difficulty)</td>
+                    <td class="bad">FSM은 "적당히 지는" 게 불가능<br>이기거나 지거나 밖에 못 함</td>
+                    <td class="good">"유저 실력에 맞춰<br>딱 적당한 수준"으로 플레이</td>
+                </tr>
+                <tr>
+                    <td><strong>버그/익스플로잇 찾아야 할 때</strong><br>밸런스 테스트, OP 조합 발견</td>
+                    <td class="bad">FSM은 랜덤이라<br>"최적 조합"을 절대 발견 못 함</td>
+                    <td class="good">수만 번 시도하면서<br>스스로 OP 전략을 발견</td>
+                </tr>
+                <tr>
+                    <td><strong>핵/치트 감지</strong><br>비정상 행동 패턴 탐지</td>
+                    <td class="bad">정상 패턴을 수동으로<br>다 정의하는 건 불가능</td>
+                    <td class="good">정상 행동을 학습해서<br>"이건 비정상"을 자동 감지</td>
+                </tr>
+            </table>
+
+            <div class="insight-box">
+                <h4>경계선 한 줄</h4>
+                <p><strong>대본에 쓸 수 있으면</strong> &rarr; 확률 상태머신</p>
+                <p><strong>대본에 쓸 수 없으면</strong> (상대가 매번 다르게 행동, 최적해를 찾아야 함) &rarr; 강화학습</p>
+            </div>
+        </div>
+
+        <!-- Part 4: 강화학습의 원리 -->
+        <div class="conversation">
+            <h2>Part 4. 강화학습의 원리 &mdash; 5분 만에 이해하기</h2>
+
+            <div class="chat">
+                <div class="q">강화학습이 대체 뭔데? 어려운 거 아니야?</div>
+                <div class="a">
+                    <p>개념은 놀라울 정도로 단순해. <span class="highlight">아기가 걷기를 배우는 것과 완전히 같아.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[비유: 아기가 걷기 배우는 과정]
+
+시도 1: 일어서다 → 넘어짐 → 아야 (벌점 -1)
+시도 2: 일어서다 → 한 발 → 넘어짐 → 아야 (벌점 -1)
+시도 3: 일어서다 → 두 발 → 엄마한테 감! → 안아줌 (보상 +10)
+
+아기가 학습한 것:
+  "일어서서 → 한 발씩 → 엄마 방향 = 좋은 결과"
+
+아무도 "왼발 먼저, 무릎 각도 15도, 중심 이동은..." 하고 가르치지 않았다.
+시도 → 결과 → 기억 → 더 나은 시도
+
+이게 강화학습의 전부.</div>
+
+            <div class="chat">
+                <div class="q">이걸 게임에 대입하면?</div>
+            </div>
+
+            <div class="diagram-box">[강화학습의 3요소 — 게임 버전]
+
+                    ┌─────────────────┐
+                    │    게임 세계     │
+                    │  (Environment)   │
+                    └──┬──────────┬───┘
+            관찰(State) │          │ 보상(Reward)
+                       ↓          ↑
+                    ┌──────────────┐
+                    │   AI 에이전트  │
+                    │   (Agent)     │
+                    └──────┬───────┘
+                           │
+                      행동(Action)
+                           ↓
+                    ┌─────────────────┐
+                    │    게임 세계     │
+                    │  (다음 상태)     │
+                    └─────────────────┘
+
+1. State (관찰): AI가 "보는 것"
+   → 내 HP, 주변 적, 거리, 지형...
+
+2. Action (행동): AI가 "하는 것"
+   → 공격, 이동, 도망, 스킬 사용...
+
+3. Reward (보상): "잘했는지 못했는지"
+   → 몬스터 처치 +1, 레벨업 +5, 사망 -2
+
+이 루프를 수만 번 반복하면,
+AI가 "어떤 상황에서 뭘 해야 보상이 높은지" 스스로 학습한다.</div>
+
+            <div class="chat">
+                <div class="q">이걸 실제로 어떻게 구현해?</div>
+            </div>
+
+            <div class="code-block">[게임 AI에서의 State / Action / Reward 매핑]
+
+State (AI가 보는 숫자들):
+  [내 HP 비율]       = 0.0 ~ 1.0  (0.7이면 HP 70%)
+  [내 MP 비율]       = 0.0 ~ 1.0
+  [가장 가까운 적 거리] = 0.0 ~ 1.0  (0.0이면 바로 앞)
+  [가장 가까운 적 HP]  = 0.0 ~ 1.0
+  [주변 적 수]        = 0 ~ 10 (정규화)
+  [내 레벨]           = 0.0 ~ 1.0
+
+  → 이걸 하나의 숫자 배열로 만듦: [0.7, 0.5, 0.3, 0.8, 0.2, 0.1]
+
+Action (AI가 고를 수 있는 선택지):
+  0: 가만히 있기
+  1: 적에게 이동
+  2: 기본 공격
+  3: 스킬 사용
+  4: 도망 (반대 방향)
+  5: 포션 사용
+
+  → AI는 매 순간 0~5 중 하나를 선택
+
+Reward (결과에 따른 점수):
+  몬스터 처치   → +1.0
+  레벨업       → +5.0
+  사망         → -2.0
+  데미지 받음  → -0.1
+  아무것도 안 함 → -0.01 (가만히 있으면 미세 감점)</div>
+
+            <div class="insight-box">
+                <h4>핵심 원리 한 줄</h4>
+                <p><strong>세상을 숫자로 바꾸고</strong> (State)</p>
+                <p><strong>선택지 중에 하나를 고르고</strong> (Action)</p>
+                <p><strong>결과에 점수를 매긴다</strong> (Reward)</p>
+                <p>이걸 수만 번 반복하면 AI가 <strong>스스로 최적 전략을 발견</strong>한다.</p>
+            </div>
+        </div>
+
+        <!-- Part 5: 보상 설계 -->
+        <div class="conversation">
+            <h2>Part 5. 보상 설계 &mdash; "이게 90%다"</h2>
+
+            <div class="chat">
+                <div class="q">코드는 간단해 보이는데, 어려운 게 뭐야?</div>
+                <div class="a">
+                    <p><span class="warning">보상 설계. 이게 강화학습의 90%야.</span></p>
+                    <p>코드 자체는 라이브러리가 다 해준다. 보상을 잘못 설계하면 AI가 의도하지 않은 행동을 학습해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[보상이 봇의 "성격"을 결정한다]
+
+같은 게임, 같은 코드, 보상만 다르게 줬을 때:
+
+사냥꾼 보상:
+  몬스터 처치 = +2.0 (높음)
+  유저 처치   = +0.0 (무관심)
+  사망        = -1.0
+  → 결과: 몬스터만 골라서 사냥하는 AI
+
+PK 보상:
+  유저 처치   = +3.0 (매우 높음)
+  사망        = -0.5 (낮음)
+  → 결과: 유저만 찾아다니며 PK하는 AI
+
+겁쟁이 보상:
+  사망        = -10.0 (매우 높은 벌점)
+  생존 1초    = +0.01
+  → 결과: 절대 싸우지 않고 도망만 다니는 AI
+
+탱커 보상:
+  데미지 받음 = -0.01 (거의 벌점 없음)
+  아군 생존   = +1.0
+  → 결과: 앞에 서서 맞아주는 AI</div>
+
+            <div class="chat">
+                <div class="q">보상을 잘못 주면 어떻게 돼?</div>
+                <div class="a">
+                    <p><span class="warning">AI가 개발자가 전혀 의도하지 않은 "꼼수"를 학습해.</span></p>
+                    <p>이게 강화학습의 가장 재밌으면서도 무서운 부분이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[실제 사례: 보상 설계 실패]
+
+사례 1: "벽만 보는 봇"
+  보상: 사망 = -10.0, 다른 건 없음
+  AI의 발견: "안 싸우면 안 죽는다!"
+  결과: 구석에서 벽만 보고 서 있음
+  원인: "살아남기"만 보상하고, "뭔가 하기"를 보상 안 함
+
+사례 2: "자살 봇"
+  보상: 전투 시작 = +1.0
+  AI의 발견: "죽으면 리스폰 → 또 전투 시작 가능 → 보상!"
+  결과: 일부러 죽어서 빠르게 리스폰 → 전투 시작 보상 반복 수집
+  원인: "전투 시작"만 보상하고, "전투 결과"를 보상 안 함
+
+사례 3: "뱅뱅 도는 봇"
+  보상: 이동 거리 = +0.01 (가만히 있지 말라고)
+  AI의 발견: "제자리에서 빙글빙글 돌면 이동 거리가 무한!"
+  결과: 한 지점에서 회전만 함
+  원인: "이동 거리"를 보상했지만, "목적 있는 이동"을 보상 안 함</div>
+
+            <div class="chat">
+                <div class="q">이걸 어떻게 고쳐?</div>
+                <div class="a">
+                    <p><span class="key-point">보상을 "하나의 목표"가 아니라, "좋은 행동의 조합"으로 설계해야 해.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">[좋은 보상 설계의 원칙]
+
+나쁜 설계:
+  "몬스터를 많이 죽여라" → 이것만 줌
+  → AI: 가장 약한 몬스터만 학살 (효율 최적화)
+
+좋은 설계 (균형 잡힌 보상):
+  몬스터 처치     = +1.0        ← 주 목표
+  레벨업          = +5.0        ← 성장 보상
+  레벨 차이 보너스 = +0.5 * 차이  ← 적정 난이도 유도
+  HP 낮은데 도망   = +0.3       ← 생존 전략 유도
+  사망            = -2.0        ← 무모한 행동 억제
+  아무것도 안 함   = -0.01      ← 무행동 억제
+
+핵심: "원하는 행동에 당근, 원하지 않는 행동에 채찍"
+      하지만 당근과 채찍의 비율이 핵심이다.</div>
+
+            <div class="insight-box">
+                <h4>보상 설계의 진짜 어려움</h4>
+                <p>코드는 라이브러리가 해결한다. 알고리즘도 논문이 해결한다.</p>
+                <p>하지만 <strong>"이 게임에서 뭘 보상하고 뭘 벌할지"</strong>는 게임을 이해하는 사람만 할 수 있다.</p>
+                <p>그래서 강화학습의 90%는 코딩이 아니라 <strong>게임 디자인</strong>이다.</p>
+            </div>
+        </div>
+
+        <!-- Part 6: 게임 컨텐츠 활용 -->
+        <div class="conversation">
+            <h2>Part 6. 게임 컨텐츠로서의 강화학습 &mdash; 실제 활용 사례</h2>
+
+            <div class="chat">
+                <div class="q">실제로 게임에서 강화학습을 컨텐츠에 쓰는 사례가 있어?</div>
+                <div class="a">
+                    <p>있어. 그리고 점점 늘고 있어. 대표적인 4가지를 보여줄게.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[활용 1: 적응형 난이도 (Adaptive Difficulty)]
+
+문제:
+  고수 → "너무 쉬워. 재미없어."
+  초보 → "너무 어려워. 그만둘래."
+
+FSM으로 해결하려면:
+  if (유저 레벨 > 50) { 몬스터_강화(); }
+  → 레벨이 같아도 실력이 다름. 해결 안 됨.
+
+RL로 해결:
+  State: 유저의 최근 10전 승률, 평균 클리어 시간, 회피율
+  Action: 몬스터 AI 공격 빈도 조절 (0.5x ~ 2.0x)
+  Reward: 유저가 "간신히 이겼을 때" +1.0
+          유저가 "압도적으로 이겼을 때" -0.5
+          유저가 "졌을 때" -0.5
+
+  → AI가 학습하는 것:
+    "이 유저한테는 70% 강도로 때리면 가장 재밌어한다"
+    "이 유저한테는 30%로 약하게 해야 간신히 이긴다"
+
+  → 유저마다 다른 난이도를 자동으로 제공</div>
+
+            <div class="code-block">[활용 2: NPC 동료 AI — "진짜 파티원처럼"]
+
+문제:
+  솔로 유저에게 NPC 동료를 줘야 하는데,
+  FSM 동료는 바보 같음 (벽에 부딪히고, 적당한 타이밍에 힐 안 함)
+
+RL로 해결:
+  State: 파티원 전체 HP, 적 수, 적 공격 패턴, 내 스킬 쿨타임
+  Action: 공격, 힐, 버프, 위치 이동, 도발
+  Reward:
+    파티 전멸       = -10.0
+    보스 클리어     = +5.0
+    파티원 HP 유지  = +0.1 (매초)
+    적절한 타이밍 힐 = +1.0
+
+  → AI가 학습하는 것:
+    "탱커 HP가 40% 아래로 내려가기 전에 힐을 시작해야 한다"
+    "보스가 범위 공격 쓸 때 뒤로 빠져야 한다"
+    "디버프 걸린 파티원한테 해제 스킬을 우선 써야 한다"
+
+  → FSM으로는 이 모든 상황을 대본에 쓸 수 없음
+  → RL은 수천 번 실패하면서 스스로 학습</div>
+
+            <div class="code-block">[활용 3: 밸런스 자동 테스트 — "OP 조합 발견기"]
+
+문제:
+  신규 직업/스킬 추가 시 "이 조합이 사기인지" 테스트하려면
+  QA 팀이 수백 시간 플레이해야 함
+
+RL로 해결:
+  RL 봇에게 "가능한 모든 스킬 조합을 시도하고, 승률을 최대화하라" 지시
+  → 1000시간 치 플레이를 하루 만에 시뮬레이션
+  → "이 스킬 3개 조합으로 승률 95%" 발견
+  → 출시 전에 밸런스 패치
+
+실제 사례:
+  EA Sports — FIFA의 전술 밸런스 테스트
+  Riot Games — LoL 챔피언 밸런스 시뮬레이션</div>
+
+            <div class="code-block">[활용 4: 비정상 행동 탐지 — "핵 유저 잡기"]
+
+문제:
+  에임핵, 스피드핵, 매크로를 규칙으로 잡으려면
+  규칙을 매번 업데이트해야 함 (치터가 규칙을 우회)
+
+RL/ML로 해결:
+  "정상 유저 10만 명의 행동 패턴" 학습
+  → "이 유저의 행동은 정상 패턴과 97% 다름"
+  → 자동 플래그
+
+  정상: 에임 정확도 30~60%, 반응 시간 0.2~0.5초
+  비정상: 에임 정확도 99%, 반응 시간 0.02초
+  → "이건 사람이 아니다"</div>
+
+            <div class="chat">
+                <div class="q">이거 정리해주면?</div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>활용</th>
+                    <th>핵심 가치</th>
+                    <th>FSM으로 가능?</th>
+                </tr>
+                <tr>
+                    <td><strong>적응형 난이도</strong></td>
+                    <td>유저마다 맞춤 난이도 → 이탈 방지</td>
+                    <td class="bad">불가능 (실력 측정 불가)</td>
+                </tr>
+                <tr>
+                    <td><strong>NPC 동료</strong></td>
+                    <td>진짜 파티원처럼 상황 판단</td>
+                    <td class="bad">대본 한계 (상황 조합 폭발)</td>
+                </tr>
+                <tr>
+                    <td><strong>밸런스 테스트</strong></td>
+                    <td>QA 수백 시간 → 하루로 단축</td>
+                    <td class="bad">랜덤으로는 최적 조합 못 찾음</td>
+                </tr>
+                <tr>
+                    <td><strong>핵 탐지</strong></td>
+                    <td>규칙 업데이트 없이 자동 감지</td>
+                    <td class="bad">치터가 규칙 우회</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Part 7: 현실적 판단 -->
+        <div class="conversation">
+            <h2>Part 7. 현실적 판단 &mdash; "지금 당장 뭘 해야 해?"</h2>
+
+            <div class="chat">
+                <div class="q">재밌긴 한데, 현실적으로 어떻게 접근해야 해?</div>
+                <div class="a">
+                    <p><span class="key-point">확률 상태머신으로 시작하고, 필요할 때 RL로 업그레이드하라.</span></p>
+                    <p>처음부터 RL을 쓰면 오버엔지니어링이야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">[단계별 접근법]
+
+Level 0: 하드코딩
+  if (적 가까우면) 공격();
+  → 개발 시간: 1시간
+  → 결과: 바보같지만 동작은 함
+
+Level 1: 확률 상태머신 (FSM)
+  상태 + 전이 확률 + 타이머
+  → 개발 시간: 하루
+  → 결과: "살아있는 것처럼" 보임
+
+Level 2: 행동 트리 (Behavior Tree)
+  FSM의 진화형. 조건/액션을 트리로 구성
+  → 개발 시간: 2~3일
+  → 결과: 복잡한 행동 패턴 가능
+
+Level 3: 강화학습 (RL)
+  State/Action/Reward 설계 + 학습 환경 구축
+  → 개발 시간: 1~2주 (보상 튜닝이 대부분)
+  → 결과: "진짜 판단하는" AI
+
+대부분의 게임은 Level 1~2에서 끝난다.
+Level 3이 필요한 건 Part 3에서 말한 경우뿐이다.</div>
+
+            <div class="chat">
+                <div class="q">강화학습을 하려면 뭘 공부해야 해?</div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>단계</th>
+                    <th>내용</th>
+                    <th>난이도</th>
+                </tr>
+                <tr>
+                    <td><strong>1. 개념 이해</strong></td>
+                    <td>State / Action / Reward 사이클<br>이 문서를 읽었으면 이미 완료</td>
+                    <td class="good">쉬움</td>
+                </tr>
+                <tr>
+                    <td><strong>2. 환경 만들기</strong></td>
+                    <td>게임 서버를 OpenAI Gym 형태로 래핑<br>reset() → step(action) → (state, reward, done)</td>
+                    <td class="neutral">중간</td>
+                </tr>
+                <tr>
+                    <td><strong>3. 보상 설계</strong></td>
+                    <td>"뭘 보상하고 뭘 벌할지" 결정<br>게임 디자인 능력이 핵심</td>
+                    <td class="bad">어려움 (이게 90%)</td>
+                </tr>
+                <tr>
+                    <td><strong>4. 학습 실행</strong></td>
+                    <td>PPO, DQN 같은 알고리즘 실행<br>stable-baselines3 같은 라이브러리 사용</td>
+                    <td class="good">쉬움 (라이브러리가 해줌)</td>
+                </tr>
+                <tr>
+                    <td><strong>5. 튜닝</strong></td>
+                    <td>보상 조정 → 재학습 → 행동 관찰 → 반복<br>"왜 벽만 보고 있지?" → 보상 수정</td>
+                    <td class="bad">어려움 (삽질)</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">결국 핵심이 뭐야? 한 줄로</div>
+                <div class="a">
+                    <p><span class="key-point">"코드는 라이브러리가 해결한다. 어려운 건 '이 게임에서 뭘 보상할지' 결정하는 것이다."</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 주의 박스 -->
+        <div class="warning-box">
+            <h4>강화학습이 만능은 아니다</h4>
+            <p>학습에 시간이 오래 걸린다 (수만~수십만 에피소드).</p>
+            <p>보상을 잘못 설계하면 <strong>의도하지 않은 행동</strong>을 학습한다.</p>
+            <p>학습된 모델이 "왜 이렇게 행동하는지" 설명하기 어렵다 (블랙박스).</p>
+            <p><strong>대부분의 게임 AI는 확률 상태머신으로 충분하다.</strong> RL은 "정말 필요할 때"만 쓰는 도구다.</p>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>게임 AI의 99%는 if-else + 랜덤이다</strong> &mdash; 그리고 대부분 그걸로 충분하다</li>
+                <li><strong>확률 상태머신 = 대본 연기</strong> &mdash; 작성자가 상상한 상황만 처리 가능. 하지만 빠르고 안정적</li>
+                <li><strong>강화학습 = 즉흥극</strong> &mdash; 대본에 없는 상황도 판단 가능. 하지만 연습(학습)이 오래 걸림</li>
+                <li><strong>판단 기준은 하나</strong> &mdash; "이 AI가 잘 해야 하나?" YES면 RL, NO면 FSM</li>
+                <li><strong>RL의 3요소</strong> &mdash; State(관찰), Action(행동), Reward(보상). 세상을 숫자로 바꾸고, 결과에 점수를 매기는 것</li>
+                <li><strong>보상 설계가 90%</strong> &mdash; 코드는 라이브러리가 해결. "뭘 보상할지"가 게임 디자인</li>
+                <li><strong>보상을 잘못 주면</strong> &mdash; 벽만 보는 봇, 자살 반복 봇, 빙글빙글 도는 봇이 탄생</li>
+                <li><strong>실제 활용</strong> &mdash; 적응형 난이도, NPC 동료, 밸런스 테스트, 핵 탐지</li>
+                <li><strong>현실적 접근</strong> &mdash; FSM으로 시작 → 한계가 보이면 RL로 업그레이드</li>
+                <li><strong>핵심 질문</strong> &mdash; "대본에 쓸 수 있으면 FSM, 쓸 수 없으면 RL"</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../oop-vs-ecs-content/">&larr; OOP vs ECS 컨텐츠 복잡성</a>
+            <a href="../ai/">AI 활용 목록 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>
