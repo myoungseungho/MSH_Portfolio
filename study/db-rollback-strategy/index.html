@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DB 롤백 전략 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        /* 코드 블록 */
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* 비교 테이블 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            line-height: 1.8;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "\2192";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .divider {
+            height: 1px;
+            background: #e0e0e0;
+            margin: 32px 0;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">&larr; DB / 캐시</a>
+
+        <header class="header">
+            <h1>DB를 되돌려야 하는데, 정상 유저 데이터는?</h1>
+            <p>DB 롤백 전략 - 시간을 되돌리면 무고한 유저의 시간도 되돌려진다</p>
+        </header>
+
+        <!-- Section 1: 왜 이 문제가 어려운가 -->
+        <div class="conversation">
+            <h2>왜 이 문제가 어려운가</h2>
+
+            <div class="chat">
+                <div class="q">버그 때문에 DB를 어제로 되돌려야 해. 근데 어제부터 지금까지 정상적으로 플레이한 유저들은?</div>
+                <div class="a">
+                    <p>바로 그게 문제야.</p>
+                    <p>시간을 되돌리면 <span class="key-point">버그 피해자는 복구되지만</span>, <span class="warning">정상 유저의 진행도가 통째로 날아감.</span></p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>비유: 교실 시험</strong><br><br>
+                시험지에 오류가 있어서 전체 시험을 무효로 했어. 근데 오류 문제는 3번 하나뿐이고, 나머지 49문제는 멀쩡했어.<br>
+                정상적으로 49문제 다 푼 학생들 입장에서는? <strong>"왜 내 답안지까지 버려?"</strong><br><br>
+                DB 롤백이 정확히 이 상황이야.
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 어떻게 해야 해?</div>
+                <div class="a">
+                    <p>선택지가 크게 3가지 있어. 각각 장단점이 완전히 달라.</p>
+                    <p><span class="warning">복구하려다 더 큰 피해를 만들 수 있다.</span> 그래서 신중하게 골라야 해.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 2: 선택지 A - 전체 롤백 -->
+        <div class="conversation">
+            <h2>선택지 A - 전체 롤백 + 보상 (가장 단순하지만 가장 무식)</h2>
+
+            <div class="chat">
+                <div class="q">제일 간단한 방법은 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">전체 DB를 사고 이전 시점으로 복원</span>하는 거야.</p>
+                    <p>모든 데이터를 "어제 오후 3시" 상태로 되돌리는 거지.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">PITR이 뭐야?</div>
+                <div class="a">
+                    <p><strong>정의:</strong> <span class="highlight">PITR (Point-in-Time Recovery)</span> = 특정 시점 복구. DB를 원하는 과거 시점으로 되돌리는 기능.</p>
+                    <p><strong>왜 필요:</strong> "어제 오후 3시 상태로 돌려줘"처럼 정확한 시점을 지정해서 복원할 수 있어. 백업 파일 + 트랜잭션 로그를 조합해서 원하는 시점을 재현하는 원리야.</p>
+                    <p><strong>안 쓰면:</strong> 마지막 전체 백업 시점으로만 돌아갈 수 있음. 백업이 새벽 3시에 찍혔다면? 오후 3시에 사고 났어도 새벽 3시로 돌아가야 해. 12시간치 데이터가 추가로 날아감.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">전체 롤백의 장점과 단점은?</div>
+                <div class="a">
+                    <p><span class="key-point">강점: 확실하게 문제 해결. 구현이 단순.</span> PITR로 시점 지정하고 복원하면 끝이야.</p>
+                    <p><span class="warning">약점: 정상 유저 전원이 피해를 봄.</span></p>
+                    <p>"2시간 열심히 플레이했는데 보상이 포션 10개?" 이런 불만이 폭발해. 유저 신뢰가 무너지는 거야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 전체 롤백 흐름 (MSSQL 기준)
+
+1. 서비스 긴급 점검 진입
+2. PITR로 사고 직전 시점 복원
+   RESTORE DATABASE GameDB
+   FROM DISK = 'D:\Backup\GameDB_Full.bak'
+   WITH NORECOVERY;
+   RESTORE LOG GameDB
+   FROM DISK = 'D:\Backup\GameDB_Log.trn'
+   WITH STOPAT = '2026-02-17 15:00:00', RECOVERY;
+3. 전체 유저에게 보상 지급
+4. 서비스 재개</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>적합한 상황:</strong> 경제 붕괴급 버그에서만. 예를 들어 복제 버그로 골드가 무한 생성됐다면, 부분 복구로는 해결이 안 돼. <span class="warning">최후의 수단.</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 3: 선택지 B - 선택적 롤백 -->
+        <div class="conversation">
+            <h2>선택지 B - 선택적 롤백 (Selective/Surgical Rollback)</h2>
+
+            <div class="chat">
+                <div class="q">전체를 되돌리지 않고, 영향받은 유저만 골라서 되돌릴 수는 없어?</div>
+                <div class="a">
+                    <p><span class="key-point">있어. 그게 선택적 롤백이야.</span></p>
+                    <p><span class="highlight">Selective Rollback (선택적 롤백)</span> = 영향받은 유저의 데이터만 과거 시점으로 교체하고, 나머지는 그대로 두는 방법.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">구체적으로 어떻게 해?</div>
+                <div class="a">
+                    <p>순서가 있어:</p>
+                    <p><strong>1단계:</strong> PITR로 사고 직전 시점의 복원본을 <strong>별도 서버</strong>에 올려. 운영 DB를 건드리는 게 아니야.</p>
+                    <p><strong>2단계:</strong> 복원본 DB와 운영 DB를 비교해서, 영향받은 유저를 추출해.</p>
+                    <p><strong>3단계:</strong> 해당 유저의 데이터만 복원본에서 가져와서 운영 DB에 덮어씀.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 1단계: 복원본 DB에서 영향받은 유저 추출
+SELECT user_id, item_data, gold
+FROM backup_db.dbo.UserInventory
+WHERE user_id IN (SELECT user_id FROM AffectedUsers)
+
+-- 2단계: 운영 DB에 선택적 적용
+UPDATE live_db.dbo.UserInventory
+SET item_data = backup.item_data, gold = backup.gold
+FROM backup_db.dbo.UserInventory backup
+WHERE live_db.user_id = backup.user_id
+AND live_db.user_id IN (SELECT user_id FROM AffectedUsers)</div>
+
+            <div class="chat">
+                <div class="q">장점과 단점은?</div>
+                <div class="a">
+                    <p><span class="key-point">강점: 정상 유저에게 피해가 없음.</span> 버그에 영향받은 유저만 정밀하게 복구할 수 있어.</p>
+                    <p><span class="warning">약점: "영향받은 유저" 목록을 정확히 추출해야 해.</span></p>
+                    <p>이 목록이 틀리면? 멀쩡한 유저 데이터를 과거로 되돌려버리는 <strong>2차 사고</strong>가 발생해. 추출 + 검증에 시간도 걸려.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>필요 조건:</strong> <span class="highlight">상세한 로그</span> + <span class="highlight">백업 체계</span>가 갖춰져 있어야 해.</p>
+                    <p>로그가 부실하면 "누가 영향받았는지" 자체를 알 수 없어. 그러면 이 방법을 쓸 수가 없어.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 4: 선택지 C - 보상 트랜잭션 -->
+        <div class="conversation">
+            <h2>선택지 C - 보상 트랜잭션 (Compensating Transaction)</h2>
+
+            <div class="chat">
+                <div class="q">DB 자체를 과거로 안 돌리고 해결할 수는 없어?</div>
+                <div class="a">
+                    <p><span class="key-point">있어. 롤백 대신 "역연산"을 적용하는 거야.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Compensating Transaction이 뭐야?</div>
+                <div class="a">
+                    <p><strong>정의:</strong> <span class="highlight">Compensating Transaction (보상 트랜잭션)</span> = 잘못된 작업의 효과를 상쇄하는 "반대 작업"을 실행하는 것. DB를 과거로 되돌리지 않고, 현재 상태에서 수정 패치를 적용하는 방식.</p>
+                    <p><strong>왜 필요:</strong> DB 전체를 건드리지 않으니 서비스를 중단할 필요가 없어. 정상 유저 데이터는 아예 손대지 않아.</p>
+                    <p><strong>안 쓰면:</strong> 아무리 작은 버그라도 매번 DB 복원 + 서비스 점검이 필요해짐. 유저 이탈과 매출 손실이 커져.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>비유: 은행 송금 실수</strong><br><br>
+                A에게 100만원을 잘못 보냈어. 은행이 어떻게 해?<br>
+                "시간을 되돌려서 송금을 취소"하는 게 아니야. <strong>A한테서 100만원을 다시 빼서 돌려주는 거야.</strong><br><br>
+                DB도 마찬가지. 되돌리는 게 아니라, 반대 작업을 실행해.
+            </div>
+
+            <div class="chat">
+                <div class="q">예를 들면?</div>
+                <div class="a">
+                    <p>버그로 아이템 2개가 추가 지급됐다면:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 버그로 인한 잘못된 지급 내역 확인
+SELECT user_id, item_id, quantity
+FROM BugAffectedLog
+WHERE bug_id = 'BUG-2026-0217'
+
+-- 역연산: 잘못 지급된 아이템 삭제
+DELETE FROM UserInventory
+WHERE (user_id, item_id) IN (
+    SELECT user_id, item_id FROM BugAffectedLog
+    WHERE bug_id = 'BUG-2026-0217'
+)
+
+-- 잘못 추가된 골드 차감
+UPDATE UserAccount
+SET gold = gold - (
+    SELECT wrongly_added_gold FROM BugAffectedLog
+    WHERE BugAffectedLog.user_id = UserAccount.user_id
+    AND bug_id = 'BUG-2026-0217'
+)
+WHERE user_id IN (
+    SELECT user_id FROM BugAffectedLog
+    WHERE bug_id = 'BUG-2026-0217'
+)</div>
+
+            <div class="chat">
+                <div class="q">이거 제일 좋아 보이는데, 단점은 없어?</div>
+                <div class="a">
+                    <p><span class="key-point">강점: 서비스 중단 없음. 정상 유저 영향 없음. 가장 정밀한 방법.</span></p>
+                    <p><span class="warning">약점: 영향 체인이 길면 극도로 복잡해짐.</span></p>
+                    <p>예를 들어 이런 상황을 생각해봐:</p>
+                    <p>버그로 아이템 복제 &rarr; 그 아이템을 거래소에 판매 &rarr; 골드 획득 &rarr; 골드로 강화 &rarr; 강화한 장비를 다른 유저에게 거래</p>
+                    <p>이 체인을 전부 역추적해서 하나하나 되돌려야 해. <span class="warning">체인이 5단계만 넘어도 현실적으로 불가능에 가까워.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>적합한 상황:</strong> 영향 범위가 명확하고, 체인이 짧을 때. "아이템 N개가 잘못 지급됐고, 아직 거래 안 됐음" 같은 경우가 딱이야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 5: 비교 테이블 -->
+        <div class="conversation">
+            <h2>3가지 전략 비교</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>전체 롤백</th>
+                    <th>선택적 롤백</th>
+                    <th>보상 트랜잭션</th>
+                </tr>
+                <tr>
+                    <td><strong>정상 유저 피해</strong></td>
+                    <td><span class="warning">전원 피해</span></td>
+                    <td><span class="key-point">피해 없음</span></td>
+                    <td><span class="key-point">피해 없음</span></td>
+                </tr>
+                <tr>
+                    <td><strong>서비스 중단</strong></td>
+                    <td>필수 (전체 점검)</td>
+                    <td>부분 점검 가능</td>
+                    <td><span class="key-point">불필요</span></td>
+                </tr>
+                <tr>
+                    <td><strong>필요 조건</strong></td>
+                    <td>PITR 백업</td>
+                    <td>상세 로그 + 백업</td>
+                    <td>상세 로그 + 영향 분석</td>
+                </tr>
+                <tr>
+                    <td><strong>소요 시간</strong></td>
+                    <td>빠름 (수십 분)</td>
+                    <td>보통 (수 시간)</td>
+                    <td>가변적 (체인 길이에 따라)</td>
+                </tr>
+                <tr>
+                    <td><strong>적합 상황</strong></td>
+                    <td>경제 붕괴급 대형 사고</td>
+                    <td>영향 유저 특정 가능할 때</td>
+                    <td>영향 범위 명확 + 체인 짧을 때</td>
+                </tr>
+                <tr>
+                    <td><strong>정밀도</strong></td>
+                    <td>낮음 (전부 되돌림)</td>
+                    <td>중간 (유저 단위)</td>
+                    <td>높음 (작업 단위)</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Section 6: 실무 판단 기준 -->
+        <div class="conversation">
+            <h2>실무 판단 기준 - 뭘 써야 하나</h2>
+
+            <div class="chat">
+                <div class="q">사고가 터졌어. 뭘 써야 할지 어떻게 판단해?</div>
+                <div class="a">
+                    <p>핵심 질문은 딱 하나야:</p>
+                    <p><span class="highlight">"로그로 영향 범위를 특정할 수 있느냐?"</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+판단 플로우:
+
+1. 로그로 영향받은 유저/데이터를 특정할 수 있는가?
+   │
+   ├── YES: 영향 체인이 짧은가? (거래/강화 등 2차 파급 없음)
+   │    │
+   │    ├── YES  --> 보상 트랜잭션 (가장 정밀, 서비스 유지)
+   │    │
+   │    └── NO   --> 선택적 롤백 (유저 단위로 복원)
+   │
+   └── NO: 영향 범위를 알 수 없다
+        │
+        └── 전체 롤백 (최후의 수단)</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>특정 가능 + 체인 짧음</strong> &rarr; <span class="key-point">보상 트랜잭션.</span> 서비스 중단 없이 정밀 복구.</p>
+                    <p><strong>특정 가능 + 체인 길음</strong> &rarr; <span class="highlight">선택적 롤백.</span> 해당 유저 데이터를 통째로 과거 시점으로 교체.</p>
+                    <p><strong>특정 불가능</strong> &rarr; <span class="warning">전체 롤백.</span> 최후의 수단. 보상 정책 필수.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">바로 실행하면 되는 거야?</div>
+                <div class="a">
+                    <p><span class="warning">절대 안 돼. 어떤 방법이든 스테이징 환경에서 먼저 검증해야 해.</span></p>
+                    <p>운영 DB에 직접 복구 스크립트를 돌렸다가, 스크립트 자체에 버그가 있으면?</p>
+                    <p><strong>"복구 스크립트가 더 큰 문제를 일으킨 사례"</strong>는 업계에서 생각보다 많아. 복구한다고 급하게 돌린 쿼리가 WHERE 조건 빠져서 전체 유저 데이터를 밀어버린 실제 사례도 있어.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+복구 실행 전 체크리스트:
+
+1. 스테이징 환경에 운영 DB 사본을 올린다
+2. 복구 스크립트를 스테이징에서 먼저 실행한다
+3. 결과를 검증한다 (영향받은 유저 수, 변경된 행 수 등)
+4. 검증 통과 후에만 운영 DB에 적용한다
+5. 적용 후에도 모니터링 (예상치 못한 사이드이펙트 감지)</div>
+        </div>
+
+        <!-- Section 7: MSSQL 실무 팁 -->
+        <div class="conversation">
+            <h2>MSSQL 실무 팁</h2>
+
+            <div class="chat">
+                <div class="q">MSSQL 환경에서 실제로 어떻게 써?</div>
+                <div class="a">
+                    <p>가장 실용적인 패턴을 알려줄게.</p>
+                    <p><strong>핵심은 "비교용 복원본"을 만드는 거야.</strong></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>1단계: PITR로 사고 1분 전 시점의 복원본을 별도 서버에 올리기</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 별도 서버(또는 별도 이름)로 사고 1분 전 시점 복원
+RESTORE DATABASE GameDB_Snapshot
+FROM DISK = 'D:\Backup\GameDB_Full.bak'
+WITH NORECOVERY,
+     MOVE 'GameDB_Data' TO 'D:\Restore\GameDB_Snapshot.mdf',
+     MOVE 'GameDB_Log' TO 'D:\Restore\GameDB_Snapshot.ldf';
+
+RESTORE LOG GameDB_Snapshot
+FROM DISK = 'D:\Backup\GameDB_Log.trn'
+WITH STOPAT = '2026-02-17 14:59:00', RECOVERY;</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>2단계: diff 쿼리로 영향 범위 파악</strong></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+-- 운영 DB vs 복원본 비교: 골드 차이가 비정상인 유저 추출
+SELECT
+    live.user_id,
+    live.gold AS current_gold,
+    snap.gold AS before_gold,
+    live.gold - snap.gold AS diff
+FROM GameDB.dbo.UserAccount live
+JOIN GameDB_Snapshot.dbo.UserAccount snap
+    ON live.user_id = snap.user_id
+WHERE ABS(live.gold - snap.gold) > 1000000  -- 비정상 차이 기준
+ORDER BY diff DESC</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">"비교용 복원본"이 있으면 판단이 훨씬 빨라짐.</span></p>
+                    <p>사고가 터지면 일단 복원본부터 올려놓고, 운영 DB와 비교하면서 영향 범위를 파악해. 이게 선택적 롤백이든 보상 트랜잭션이든 <strong>모든 전략의 출발점</strong>이야.</p>
+                    <p>복원본 없이 감으로 "이 유저가 영향받았을 거야"라고 판단하면? <span class="warning">높은 확률로 2차 사고가 난다.</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리: DB 롤백 전략</h3>
+            <ul>
+                <li><strong>전체 롤백</strong> - 최후의 수단. 확실하지만 정상 유저 전원이 피해를 봄</li>
+                <li><strong>선택적 롤백</strong> - 영향받은 유저만 복원. 정밀하지만 로그 품질에 의존</li>
+                <li><strong>보상 트랜잭션</strong> - 역연산 적용. 가장 정밀하고 서비스 중단 없음. 체인 짧을 때 적합</li>
+                <li><strong>판단 기준</strong> - "로그로 영향 범위를 특정할 수 있는가?"가 핵심</li>
+                <li><strong>복구 전 검증</strong> - 어떤 전략이든 스테이징 환경에서 먼저 테스트 필수</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">&larr; DB / 캐시</a>
+            <a href="../../">메인으로 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

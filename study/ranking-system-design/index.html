@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>500만 명의 등수를 1초 안에 매기는 법 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        /* 코드 블록 */
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* 비교 테이블 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: #fff8e1;
+            border-left: 4px solid #ffc107;
+            border-radius: 0 12px 12px 0;
+            padding: 20px 24px;
+            margin: 16px 0;
+            line-height: 1.8;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "\2192";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .divider {
+            height: 1px;
+            background: #e0e0e0;
+            margin: 32px 0;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-db/" class="back-link">&larr; DB / 캐시</a>
+
+        <header class="header">
+            <h1>500만 명의 등수를 1초 안에 매기는 법</h1>
+            <p>실시간 랭킹 시스템 설계 - 성능이 아닌 구조의 문제</p>
+        </header>
+
+        <!-- Section 1: 요구사항 분해가 먼저다 -->
+        <div class="conversation">
+            <h2>요구사항 분해가 먼저다</h2>
+
+            <div class="chat">
+                <div class="q">500만 명 전체를 1초마다 정렬하라고? 진짜?</div>
+                <div class="a">
+                    <p><span class="warning">잠깐.</span> 요구사항을 곧이곧대로 받아들이면 안 돼.</p>
+                    <p>"500만 명 실시간 랭킹" 이라는 말을 듣고 바로 구현부터 생각하면? 그 순간 이미 틀린 거야.</p>
+                    <p><span class="key-point">설계의 시작은 "진짜로 뭘 원하는 건지" 분해하는 거야.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">"랭킹"이라고 하면 다 같은 거 아니야? 뭘 분해해?</div>
+                <div class="a">
+                    <p>유저가 실제로 요청하는 건 크게 <strong>세 가지</strong>야:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+1. "내 등수가 몇 등이야?"
+   -> 특정 유저 1명의 순위 조회
+   -> Redis 명령어: ZREVRANK key userId
+   -> 500만 명 중 "나"만 찾으면 됨
+
+2. "상위 100명 보여줘"
+   -> 리더보드 상위 N명 조회
+   -> Redis 명령어: ZREVRANGE key 0 99
+   -> 이미 정렬된 상태에서 앞에서 100개만 꺼내면 됨
+
+3. "내 주변 +-10명 보여줘"
+   -> 내 등수 기준 앞뒤 N명 조회
+   -> Redis 명령어: ZREVRANGE key (myRank-10) (myRank+10)
+   -> 내 위치를 먼저 찾고, 그 근처만 꺼내면 됨</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>보이지? 세 가지 다 <span class="highlight">"500만 명 전체를 정렬하라"가 아니야.</span></p>
+                    <p>이미 정렬되어 있는 자료구조에서 <strong>특정 위치를 찾거나</strong>, <strong>일부 범위를 꺼내는 것</strong>뿐이야.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">근데 "갱신 주기 1초"라는 건 뭔데? 진짜 1초마다 전부 다시 계산해?</div>
+                <div class="a">
+                    <p>여기서 <strong>해석의 차이</strong>가 설계를 완전히 바꿔.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>비유: 마라톤 중계</strong><br><br>
+                마라톤 중계를 한다고 생각해봐. "실시간 순위"라고 했을 때:<br><br>
+                <strong>해석 A:</strong> 1초마다 4만 명 전원의 GPS를 읽어서 전부 다시 줄 세우기 -- <span class="warning">미친 짓이야.</span><br><br>
+                <strong>해석 B:</strong> 누군가 체크포인트를 통과하면 그때 순위 갱신하고, TV 화면은 1초 딜레이 허용 -- <span class="key-point">이게 현실이야.</span>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>해석 A: 전원 1초 갱신</th>
+                    <th>해석 B: 변경 시 반영 + 조회 딜레이</th>
+                </tr>
+                <tr>
+                    <td><strong>의미</strong></td>
+                    <td>500만 명 점수를 1초마다 전부 재계산</td>
+                    <td>점수 변경 시 즉시 반영, 조회 시 최대 1초 지연</td>
+                </tr>
+                <tr>
+                    <td><strong>현실성</strong></td>
+                    <td><span class="warning">비현실적</span></td>
+                    <td><span class="key-point">이게 실제 서비스 방식</span></td>
+                </tr>
+                <tr>
+                    <td><strong>쓰기 빈도</strong></td>
+                    <td>초당 500만 건</td>
+                    <td>초당 수천~수만 건 (실제 점수 변경만)</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">요구사항을 어떻게 해석하느냐가 아키텍처를 결정해.</span></p>
+                    <p>"진짜로 500만 명이 매초 동시에 점수가 바뀌나요?" 라고 물어봐.</p>
+                    <p>대부분 대답은 "아니요, 게임 끝날 때만 바뀝니다" 야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 2: Redis Sorted Set -->
+        <div class="conversation">
+            <h2>선택지 A - Redis Sorted Set (대부분 이걸로 충분)</h2>
+
+            <div class="chat">
+                <div class="q">Sorted Set이 뭔데?</div>
+                <div class="a">
+                    <p><span class="highlight">Sorted Set</span> = "점수 기준으로 자동 정렬되는 자료구조".</p>
+                    <p><strong>정의:</strong> Redis가 제공하는 자료구조. 각 원소에 점수(score)를 붙이면 Redis가 내부적으로 항상 정렬 상태를 유지해.</p>
+                    <p><strong>왜 필요:</strong> 500만 건을 넣어도 "N등은 누구?" 를 O(log N)에 찾을 수 있으니까.</p>
+                    <p><strong>안 쓰면:</strong> DB에서 ORDER BY + OFFSET 쿼리를 날려야 하고, 500만 행이면 수 초~수십 초 걸려.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">어떻게 쓰는 건데?</div>
+                <div class="a">
+                    <p>명령어 3개만 알면 돼:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+# 1. 점수 등록/갱신
+ZADD ranking 2500 "user:1234"
+ZADD ranking 3100 "user:5678"
+ZADD ranking 1800 "user:9999"
+-> 넣는 순간 자동 정렬됨. 이미 있으면 점수만 갱신.
+
+# 2. 특정 유저 등수 조회 (높은 점수 = 1등)
+ZREVRANK ranking "user:5678"
+-> 결과: 0 (0-based, 즉 1등)
+
+# 3. 상위 N명 조회
+ZREVRANGE ranking 0 9 WITHSCORES
+-> 1등부터 10등까지 유저ID + 점수 반환</div>
+
+            <div class="chat">
+                <div class="q">500만 명이면 느리지 않아?</div>
+                <div class="a">
+                    <p><span class="key-point">전혀.</span> 이게 Sorted Set의 핵심이야.</p>
+                    <p>내부적으로 <span class="highlight">Skip List</span>라는 자료구조를 쓰는데, 모든 연산이 <strong>O(log N)</strong>이야.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">O(log N)이 뭔데? 체감이 안 돼.</div>
+                <div class="a">
+                    <p><span class="highlight">O(log N)</span> = "데이터가 두 배로 늘어도 연산 횟수는 1번만 더 늘어남".</p>
+                    <p>구체적으로:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+유저 수         | log2(N) | 의미
+----------------|---------|------------------
+1,000명         | ~10     | 10번 비교로 찾음
+100,000명       | ~17     | 17번 비교로 찾음
+5,000,000명     | ~23     | 23번 비교로 찾음
+50,000,000명    | ~26     | 26번 비교로 찾음
+
+-> 500만 명이든 5000만 명이든, 비교 횟수 차이는 고작 3번.</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>강점:</strong></p>
+                    <p>- 구현이 극도로 단순. Redis 명령어 3개면 끝.</p>
+                    <p>- 단일 Redis 인스턴스 하나로 500만 명 충분히 커버.</p>
+                    <p>- <span class="key-point">정확한 랭킹</span>. 근사치가 아니라 진짜 "몇 등"인지 나옴.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>약점:</strong></p>
+                    <p>- <span class="warning">쓰기가 초당 10만 건 이상이면 단일 Redis에 병목</span>이 생겨.</p>
+                    <p>- 예: 배틀로얄에서 500만 명이 동시에 킬/데스를 기록하면서 점수가 바뀌는 경우.</p>
+                    <p>- 하지만 대부분의 서비스에서 초당 쓰기는 수천~수만 건. 그러면 전혀 문제 없어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 언제 이걸 쓰면 돼?</div>
+                <div class="a">
+                    <p><span class="key-point">동시 점수 변경이 초당 수만 건 이하라면, 무조건 이걸로 시작해.</span></p>
+                    <p>다른 선택지를 먼저 고려하는 건 <span class="warning">과설계</span>야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 3: 티어드 랭킹 -->
+        <div class="conversation">
+            <h2>선택지 B - 티어드 랭킹 (구간별 차등 처리)</h2>
+
+            <div class="chat">
+                <div class="q">유저가 1000만 명이 넘으면 어떡해? Redis 하나로 버틸 수 있어?</div>
+                <div class="a">
+                    <p>버틸 수 있긴 한데, 진짜 질문은 그게 아니야.</p>
+                    <p><span class="key-point">"1000만 명 전부에게 정확한 등수를 보여줘야 해?"</span> 이걸 먼저 물어봐야 해.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그게 무슨 소리야? 랭킹이면 당연히 정확한 등수 아니야?</div>
+                <div class="a">
+                    <p>생각해봐. 네가 <strong>4,312,847등</strong>이래. 이 숫자가 의미 있어?</p>
+                    <p>"<strong>상위 43%</strong>" 라고 하면? 이쪽이 더 와닿지 않아?</p>
+                    <p>대부분의 유저는 정확한 등수보다 <span class="highlight">"나는 대략 어디쯤이야?"</span>를 알고 싶어해.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>비유: 수능 성적표</strong><br><br>
+                수능 1등~100등까지는 이름과 정확한 등수가 나와. 뉴스에도 나오지.<br><br>
+                하지만 30만 등은? 등수 대신 <strong>"백분위 72%"</strong>라고 알려줘.<br><br>
+                이게 바로 <strong>티어드 랭킹(Tiered Ranking)</strong>의 핵심이야. 상위권만 정확하게, 나머지는 대략적으로.
+            </div>
+
+            <div class="chat">
+                <div class="q">Tiered Ranking이 뭔데?</div>
+                <div class="a">
+                    <p><span class="highlight">Tiered Ranking (티어드 랭킹)</span> = "계층별로 다른 정밀도를 제공하는 랭킹 방식".</p>
+                    <p><strong>정의:</strong> 유저를 상위/중위/하위 구간으로 나눠서, 각 구간마다 다른 방식으로 순위를 계산하는 설계.</p>
+                    <p><strong>왜 필요:</strong> 1000만 명 전부를 실시간 정확 순위로 관리하면 자원 낭비가 심하니까.</p>
+                    <p><strong>안 쓰면:</strong> 상위 100명이나 하위 500만 명이나 같은 비용을 쓰게 돼. 관심도 없는 하위권에 자원을 쏟는 거야.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+Tier 1: 상위 1,000명
+  -> Redis Sorted Set (실시간, 정확한 등수)
+  -> 점수 변경 즉시 반영
+  -> "1등, 2등, 3등..."
+
+Tier 2: 1,001등 ~ 100,000등
+  -> Redis Sorted Set (5초 주기 배치 갱신)
+  -> 조금 느려도 됨 - 어차피 이 구간 유저는 1등 다툼 안 하니까
+  -> "현재 약 12,450등"
+
+Tier 3: 100,001등 이하
+  -> 근사치만 제공 (백분율)
+  -> 주기적 통계 계산 (1분 단위)
+  -> "상위 3%입니다"</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>강점:</strong></p>
+                    <p>- 대부분의 유저(Tier 3)가 가장 가벼운 처리를 받아서 <span class="key-point">부하가 극적으로 줄어</span>.</p>
+                    <p>- "312,847등"보다 "상위 5%"가 유저 입장에서 더 직관적이야.</p>
+                    <p>- Tier 1만 실시간으로 관리하면 되니까 Redis 부담도 적어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>약점:</strong></p>
+                    <p>- <span class="warning">정확한 등수를 모든 유저에게 제공할 수 없어.</span></p>
+                    <p>- "나 정확히 몇 등이야?" 라는 요구가 강한 서비스에는 안 맞아.</p>
+                    <p>- 티어 경계(1,000등 vs 1,001등) 처리 로직이 추가로 필요해.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">이건 언제 쓰면 돼?</div>
+                <div class="a">
+                    <p><span class="key-point">유저 1000만 명 이상이고, 전체 유저에게 정확한 순위를 줄 필요가 없을 때.</span></p>
+                    <p>모바일 게임 시즌 랭킹, 대규모 온라인 경쟁 등이 전형적인 사례야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 4: 버킷 기반 근사 랭킹 -->
+        <div class="conversation">
+            <h2>선택지 C - 버킷 기반 근사 랭킹 (수십억도 가능)</h2>
+
+            <div class="chat">
+                <div class="q">유저가 수십억이면? 글로벌 게임에서 전 세계 유저 랭킹을 매기고 싶어.</div>
+                <div class="a">
+                    <p>수십억 명을 Redis Sorted Set에 넣으면 메모리만 수백 GB야.</p>
+                    <p>여기서 발상을 완전히 바꿔야 해.</p>
+                    <p><span class="key-point">"모든 유저를 정렬하지 말고, 점수 구간별로 몇 명인지만 세자."</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Bucket 기반이 뭔데?</div>
+                <div class="a">
+                    <p><span class="highlight">Bucket 기반 근사 랭킹</span> = "점수 구간(버킷)별 유저 수를 카운팅해서 대략적 순위를 계산하는 방식".</p>
+                    <p><strong>정의:</strong> 점수 범위를 일정 구간으로 나누고, 각 구간에 유저가 몇 명인지만 저장해.</p>
+                    <p><strong>왜 필요:</strong> 개별 유저를 저장하지 않으니까 메모리가 극소량이고, 수십억 명도 처리 가능.</p>
+                    <p><strong>안 쓰면:</strong> 글로벌 규모에서 정확한 랭킹을 유지하려면 서버 팜이 필요해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+점수 구간 (버킷)      | 유저 수
+----------------------|--------
+0 ~ 999점            | 1,200,000명
+1000 ~ 1999점        | 3,400,000명
+2000 ~ 2999점        | 2,800,000명
+3000 ~ 3999점        | 1,500,000명
+4000 ~ 4999점        |   800,000명
+5000점 이상           |   300,000명</div>
+
+            <div class="chat">
+                <div class="q">이걸로 어떻게 내 등수를 알아?</div>
+                <div class="a">
+                    <p>예시: 내 점수가 2500이면?</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+내 점수: 2500
+내 버킷: 2000 ~ 2999
+
+나보다 위에 있는 유저 수:
+  3000~3999 구간: 1,500,000명
+  4000~4999 구간:   800,000명
+  5000+ 구간:       300,000명
+  합계:           2,600,000명
+
+내 구간(2000~2999) 안에서의 대략적 위치:
+  2500은 구간의 50% 지점
+  내 구간 인원: 2,800,000명
+  -> 약 1,400,000명이 나보다 위
+
+추정 등수: 2,600,000 + 1,400,000 = 약 4,000,000등
+-> "상위 40%입니다"</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>강점:</strong></p>
+                    <p>- <span class="key-point">메모리 극소량</span>. 버킷 수천 개면 충분. 유저가 100억이든 상관없어.</p>
+                    <p>- <span class="key-point">O(1) 연산</span>. 버킷 개수는 고정이니까 유저 수와 무관하게 일정 시간에 계산.</p>
+                    <p>- 글로벌 시즌 랭킹, 업적 시스템에 딱 맞아.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>약점:</strong></p>
+                    <p>- <span class="warning">근사치야.</span> "정확히 4,000,123등"이 아니라 "약 400만 등".</p>
+                    <p>- 같은 버킷 안에서 누가 위인지 알 수 없어.</p>
+                    <p>- 점수 분포가 한쪽에 극단적으로 몰리면 정확도가 떨어져.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">언제 쓰면 돼?</div>
+                <div class="a">
+                    <p><span class="key-point">글로벌 규모 / 시즌 랭킹처럼 유저 수가 어마어마하고, "대략 상위 몇 %"만 알면 되는 경우.</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 5: 비교 테이블 -->
+        <div class="conversation">
+            <h2>세 가지 선택지 비교</h2>
+
+            <div class="chat">
+                <div class="q">세 개가 헷갈려. 한눈에 비교해줘.</div>
+                <div class="a">
+                    <p>각 방식의 핵심 차이를 표로 정리했어:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>Redis Sorted Set</th>
+                    <th>Tiered Ranking</th>
+                    <th>Bucket</th>
+                </tr>
+                <tr>
+                    <td><strong>정확도</strong></td>
+                    <td><span class="key-point">정확한 등수</span></td>
+                    <td>상위권만 정확, 나머지 백분율</td>
+                    <td>전부 근사치</td>
+                </tr>
+                <tr>
+                    <td><strong>유저 규모</strong></td>
+                    <td>~1000만</td>
+                    <td>1000만+</td>
+                    <td>수십억도 가능</td>
+                </tr>
+                <tr>
+                    <td><strong>메모리</strong></td>
+                    <td>유저 수 비례 (수 GB)</td>
+                    <td>Tier 1/2만 유지 (수백 MB)</td>
+                    <td><span class="key-point">극소 (수 KB~MB)</span></td>
+                </tr>
+                <tr>
+                    <td><strong>조회 속도</strong></td>
+                    <td>O(log N)</td>
+                    <td>O(log N) ~ O(1)</td>
+                    <td><span class="key-point">O(1)</span></td>
+                </tr>
+                <tr>
+                    <td><strong>구현 난이도</strong></td>
+                    <td><span class="key-point">매우 쉬움</span></td>
+                    <td>중간 (티어 경계 로직)</td>
+                    <td>쉬움 (카운팅만)</td>
+                </tr>
+                <tr>
+                    <td><strong>대표 사례</strong></td>
+                    <td>게임 리더보드, 실시간 경쟁</td>
+                    <td>모바일 게임 시즌 랭킹</td>
+                    <td>글로벌 업적, 시즌 통계</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">판단 기준은 단 두 가지:</span></p>
+                    <p>1. 유저가 정확한 등수를 필요로 하는가?</p>
+                    <p>2. 동시 점수 변경이 초당 얼마나 발생하는가?</p>
+                    <p>이 두 질문에 답하면 선택지는 하나로 좁혀져.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 6: Redis가 죽으면? -->
+        <div class="conversation">
+            <h2>Redis가 죽으면?</h2>
+
+            <div class="chat">
+                <div class="q">Redis는 메모리 DB잖아. 서버가 죽으면 랭킹 데이터 다 날아가는 거 아니야?</div>
+                <div class="a">
+                    <p>좋은 질문이야. 먼저 고가용성(HA) 이야기부터 하자.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">HA가 뭔데?</div>
+                <div class="a">
+                    <p><span class="highlight">HA (High Availability, 고가용성)</span> = "시스템이 죽지 않고 계속 서비스하는 것".</p>
+                    <p><strong>정의:</strong> 서버 하나가 죽어도 다른 서버가 바로 대체해서 서비스가 안 끊기게 만드는 구조.</p>
+                    <p><strong>왜 필요:</strong> 서버는 언젠가 반드시 죽어. "안 죽게 하자"가 아니라 "죽어도 괜찮게 하자"가 핵심.</p>
+                    <p><strong>안 쓰면:</strong> Redis 하나 죽으면 랭킹 서비스 전체 장애.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+Redis Sentinel (센티넬):
+  -> Master 1대 + Replica 2대 구성
+  -> Master가 죽으면 Sentinel이 감지하고
+  -> Replica 중 하나를 자동으로 Master로 승격
+  -> 보통 10~30초 안에 복구
+
+Redis Cluster (클러스터):
+  -> 데이터를 여러 노드에 분산 저장
+  -> 한 노드가 죽어도 다른 노드가 커버
+  -> 대규모 서비스에서 사용</div>
+
+            <div class="chat">
+                <div class="q">그래도 완전히 다 날아가면 어떡해?</div>
+                <div class="a">
+                    <p>여기가 핵심이야. 랭킹 데이터의 성격을 생각해봐.</p>
+                    <p><span class="key-point">랭킹은 "재구축 가능한 데이터"야.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+원본 데이터 (DB):
+  users 테이블에 user_id, score가 저장되어 있음
+
+Redis가 죽었을 때 복구 절차:
+  1. DB에서 SELECT user_id, score FROM users
+  2. 결과를 순회하면서 ZADD ranking score user_id
+  3. 끝. 랭킹 재구축 완료.
+
+500만 건 기준: 보통 수십 초 ~ 수 분이면 복구.</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>포인트는 이거야:</p>
+                    <p>- 점수의 <strong>원본</strong>은 DB(MySQL, PostgreSQL 등)에 있어.</p>
+                    <p>- Redis의 Sorted Set은 <strong>DB 데이터를 빠르게 조회하기 위한 캐시</strong>야.</p>
+                    <p>- 캐시가 날아가면? 원본에서 다시 만들면 돼.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 처음부터 Redis Sentinel + Cluster + 백업까지 다 세팅해야 해?</div>
+                <div class="a">
+                    <p><span class="warning">아니. 과설계하지 마.</span></p>
+                    <p>처음부터 완벽한 HA를 구축하면:</p>
+                    <p>- 개발 시간 3배</p>
+                    <p>- 운영 복잡도 5배</p>
+                    <p>- 근데 유저가 10만 명이면? 그 시스템이 필요 없었어.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+단계별 접근:
+
+1단계 (유저 10만 이하):
+  Redis 1대 + DB 백업
+  -> 죽으면 DB에서 재구축 (몇 분 장애 허용)
+
+2단계 (유저 100만+):
+  Redis Sentinel (Master + Replica 2대)
+  -> 자동 failover, 30초 내 복구
+
+3단계 (유저 1000만+):
+  Redis Cluster
+  -> 분산 저장, 노드 장애 시 무중단</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">"지금 필요한 만큼만 구축하고, 유저가 늘면 그때 올려."</span></p>
+                    <p>처음부터 3단계를 만드는 건 아직 손님도 없는데 10층짜리 식당을 짓는 거야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리: 실시간 랭킹 시스템 설계</h3>
+            <ul>
+                <li><strong>요구사항 분해</strong> - "500만 정렬"이 아니라 "등수 조회, 상위 N명, 주변 N명"으로 쪼개는 것이 설계의 시작</li>
+                <li><strong>Redis Sorted Set</strong> - 대부분 이걸로 충분. O(log N)이라 500만도 23번 비교면 끝. 과설계 금지</li>
+                <li><strong>Tiered Ranking</strong> - 상위권만 정확, 나머지는 백분율. "312,847등"보다 "상위 5%"가 더 유의미</li>
+                <li><strong>Bucket</strong> - 점수 구간별 카운팅. 수십억도 O(1). 글로벌 시즌 랭킹에 적합</li>
+                <li><strong>장애 대응</strong> - 랭킹은 재구축 가능한 데이터. DB 원본이 있으니 Redis가 죽어도 복구 가능</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../category-db/">&larr; DB / 캐시</a>
+            <a href="../../">메인으로 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이 서버만 왜 느리지? 원인 추적 5단계 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        /* GIF 섹션 */
+        .visual-section {
+            background: #f5f5f5;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .visual-section h4 {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .step-gif {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        .gif-caption {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* 코드 블록 */
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* 비교 테이블 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            line-height: 1.8;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "\2192";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .divider {
+            height: 1px;
+            background: #e0e0e0;
+            margin: 32px 0;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+
+        /* 통계 바 */
+        .stat-bar-container {
+            margin: 12px 0;
+        }
+        .stat-bar-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }
+        .stat-bar {
+            height: 24px;
+            background: #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .stat-bar-fill {
+            height: 100%;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            padding-left: 10px;
+            font-size: 0.75rem;
+            color: white;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../debugging/" class="back-link">&larr; 디버깅</a>
+
+        <header class="header">
+            <h1>이 서버만 왜 느리지? 원인 추적 5단계</h1>
+            <p>라이브 서버 렉 진단 - 체계적 소거법으로 접근하기</p>
+        </header>
+
+        <!-- Section 1: 시니어는 감이 아니라 소거법으로 찾는다 -->
+        <div class="conversation">
+            <h2>시니어는 감이 아니라 소거법으로 찾는다</h2>
+
+            <div class="chat">
+                <div class="q">"7번 서버만 렉 걸린다"는 신고가 들어왔어. 뭐부터 봐야 해?</div>
+                <div class="a">
+                    <p>일단 <span class="warning">코드부터 뒤지면 안 돼.</span></p>
+                    <p>신입이 가장 많이 하는 실수가 바로 "코드에 문제 있겠지?" 하고 디버거부터 여는 거야.</p>
+                    <p>그런데 실제 라이브 서버 장애의 원인 분포를 보면:</p>
+                </div>
+            </div>
+
+            <div class="stat-bar-container">
+                <div class="stat-bar-label">
+                    <span><strong>게임 이벤트</strong> (보스, 공성전, 유저 몰림)</span>
+                    <span>80%</span>
+                </div>
+                <div class="stat-bar">
+                    <div class="stat-bar-fill" style="width: 80%; background: #4CAF50;">80%</div>
+                </div>
+            </div>
+
+            <div class="stat-bar-container">
+                <div class="stat-bar-label">
+                    <span><strong>특정 유저 비정상 행동</strong> (패킷 어뷰징, 봇)</span>
+                    <span>15%</span>
+                </div>
+                <div class="stat-bar">
+                    <div class="stat-bar-fill" style="width: 15%; background: #FF9800;">15%</div>
+                </div>
+            </div>
+
+            <div class="stat-bar-container">
+                <div class="stat-bar-label">
+                    <span><strong>진짜 서버 이슈</strong> (메모리 릭, 스레드 데드락)</span>
+                    <span>5%</span>
+                </div>
+                <div class="stat-bar">
+                    <div class="stat-bar-fill" style="width: 5%; background: #f44336;"></div>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">80%는 코드 문제가 아니라 게임 컨텍스트 문제야.</span></p>
+                    <p>기술 프로파일링 전에 <span class="highlight">"이 서버에서 지금 뭐가 벌어지고 있는지"</span>를 먼저 확인하는 게 시간을 아끼는 방법이야.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>비유: 병원 응급실</strong><br><br>
+                환자가 배가 아프다고 왔어. 바로 CT 찍어? 아니지.<br>
+                "뭐 드셨어요?", "언제부터 아팠어요?" 먼저 물어보잖아.<br><br>
+                서버도 같아. <strong>"이 서버에서 지금 무슨 일이 벌어지고 있어?"</strong>부터 물어봐야 해.
+            </div>
+        </div>
+
+        <!-- Section 2: Step 1 - 하드웨어 레벨 확인 -->
+        <div class="conversation">
+            <h2>Step 1. 하드웨어 레벨 확인 (30초)</h2>
+
+            <div class="chat">
+                <div class="q">그러면 제일 먼저 뭘 봐?</div>
+                <div class="a">
+                    <p>모니터링 대시보드를 켜.</p>
+                    <p><span class="highlight">Grafana</span> 같은 도구로 해당 서버와 정상 서버의 지표를 나란히 비교하는 거야. 30초면 돼.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Grafana (그라파나)가 뭔데?</div>
+                <div class="a">
+                    <p><strong>정의:</strong> 서버의 상태(CPU, 메모리, 네트워크 등)를 실시간 그래프로 보여주는 모니터링 도구.</p>
+                    <p><strong>왜 필요:</strong> 숫자만 나열하면 변화를 읽기 어렵지만, 그래프로 보면 "어느 시점에 튀었는지" 한눈에 보여.</p>
+                    <p><strong>안 쓰면:</strong> 서버에 직접 접속해서 명령어를 하나하나 쳐야 하고, 정상 서버와 비교하기도 힘들어.</p>
+                </div>
+            </div>
+
+            <p>확인할 4가지 지표와, 각각이 비정상일 때 의미하는 것:</p>
+
+            <table class="compare-table">
+                <tr>
+                    <th>지표</th>
+                    <th>비정상 기준</th>
+                    <th>의심 원인</th>
+                </tr>
+                <tr>
+                    <td><strong>CPU 사용률</strong></td>
+                    <td>100% 고정</td>
+                    <td>게임 로직 과부하 or 무한루프</td>
+                </tr>
+                <tr>
+                    <td><strong>메모리 사용률</strong></td>
+                    <td>90% 이상</td>
+                    <td>메모리 릭 or 스왑(Swap) 발생</td>
+                </tr>
+                <tr>
+                    <td><strong>디스크 I/O</strong></td>
+                    <td>평소 대비 급증</td>
+                    <td>로깅 과도 or 스왑 발생</td>
+                </tr>
+                <tr>
+                    <td><strong>네트워크 대역폭</strong></td>
+                    <td>포화 상태</td>
+                    <td>패킷 폭주 (유저 밀집 or 공격)</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">스왑(Swap)이 뭐야?</div>
+                <div class="a">
+                    <p><strong>정의:</strong> 메모리(RAM)가 부족할 때, 디스크를 임시 메모리처럼 쓰는 것.</p>
+                    <p><strong>왜 문제:</strong> 디스크는 RAM보다 수백~수천 배 느려. 스왑이 발생하면 서버가 극심하게 느려져.</p>
+                    <p><strong>안 막으면:</strong> 메모리 부족 → 스왑 → 디스크 I/O 폭증 → 서버 전체가 멈춤 수준으로 느려짐.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+[정상 서버 vs 7번 서버 비교]
+
+         정상 서버    7번 서버
+CPU:      35%    vs   98%   &larr; 여기!
+Memory:   62%    vs   64%
+Disk I/O: 12MB/s vs   15MB/s
+Network:  200Mbps vs  220Mbps
+
+&rarr; CPU만 비정상 &rarr; "게임 로직 or 무한루프" 쪽을 파면 됨
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">정상 서버와 비교하는 게 핵심이야.</span> 절대값만 보면 "원래 이 정도인가?" 판단이 안 돼. 옆에 놓고 비교해야 "어디가 튀었는지" 보여.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 3: Step 2 - 프로세스 레벨 -->
+        <div class="conversation">
+            <h2>Step 2. 프로세스 레벨 확인 (1분)</h2>
+
+            <div class="chat">
+                <div class="q">Step 1에서 CPU가 높다는 걸 알았어. 그다음은?</div>
+                <div class="a">
+                    <p><span class="highlight">스레드(Thread)</span>별 CPU 사용률을 봐야 해.</p>
+                    <p>서버는 보통 여러 스레드가 동시에 돌아가거든. 그 중 <strong>어떤 스레드가 CPU를 독점하고 있는지</strong> 알아야 원인을 좁힐 수 있어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">스레드(Thread)가 뭔데?</div>
+                <div class="a">
+                    <p><strong>정의:</strong> 하나의 프로그램 안에서 독립적으로 실행되는 작업 단위. 프로세스 안의 "일꾼"이라고 생각하면 돼.</p>
+                    <p><strong>왜 필요:</strong> 게임 서버는 "게임 로직 계산", "DB 쿼리", "네트워크 패킷 처리" 같은 여러 일을 동시에 해야 하니까 스레드를 나눠서 병렬로 처리해.</p>
+                    <p><strong>안 쓰면:</strong> 한 번에 한 가지 일만 가능. DB 쿼리 기다리는 동안 게임 로직도 멈추고, 패킷도 못 받아.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+[7번 서버 스레드별 CPU 사용률]
+
+Thread-Main (게임 로직):    92%  &larr; 범인!
+Thread-DB (쿼리 처리):       3%
+Thread-Network (패킷 I/O):   2%
+Thread-Timer (스케줄러):      1%
+
+&rarr; 게임 로직 스레드가 CPU를 독점
+&rarr; "게임 로직에서 뭔가 무거운 계산이 돌고 있다"
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>어떤 스레드가 범인인지에 따라 다음 행동이 달라져:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>범인 스레드</th>
+                    <th>의심 원인</th>
+                    <th>다음 행동</th>
+                </tr>
+                <tr>
+                    <td><strong>게임 로직</strong></td>
+                    <td>보스 레이드, 대규모 전투, 무한루프</td>
+                    <td>Step 3 (게임 컨텍스트 확인)</td>
+                </tr>
+                <tr>
+                    <td><strong>DB 쿼리</strong></td>
+                    <td>느린 쿼리, DB 서버 과부하</td>
+                    <td>DB 슬로우 쿼리 로그 확인</td>
+                </tr>
+                <tr>
+                    <td><strong>네트워크</strong></td>
+                    <td>패킷 폭주, 비정상 클라이언트</td>
+                    <td>패킷 로그 분석</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">대부분은 게임 로직 스레드가 범인이야.</span> 그러니까 다음 스텝인 "게임 컨텍스트 확인"으로 넘어가자.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 4: Step 3 - 게임 컨텍스트 확인 -->
+        <div class="conversation">
+            <h2>Step 3. 게임 컨텍스트 확인 (핵심!)</h2>
+
+            <div class="chat">
+                <div class="q">게임 로직이 무겁다는 건 알았어. 근데 "왜" 무거운지는 어떻게 알아?</div>
+                <div class="a">
+                    <p>여기서부터가 <span class="warning">게임 서버 프로그래머만의 영역</span>이야.</p>
+                    <p>일반 서버 개발자는 "CPU 높네 → 프로파일링하자"로 바로 가. 근데 게임 서버는 다르거든.</p>
+                    <p>게임 서버는 <strong>"서버에서 지금 어떤 게임 이벤트가 벌어지고 있는지"</strong>를 아는 것만으로도 원인을 80% 좁힐 수 있어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">구체적으로 뭘 확인해?</div>
+                <div class="a">
+                    <p>이 질문들을 순서대로 던져봐:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+[게임 컨텍스트 체크리스트]
+
+1. 해당 서버에서 특별한 게임 이벤트 진행 중인가?
+   - 보스 레이드?
+   - 공성전?
+   - 대규모 이벤트? (2배 경험치 등)
+
+2. 특정 맵에 유저가 몰려 있는가?
+   - 이벤트 NPC 앞에 500명?
+   - 신규 던전 오픈해서 입구에 밀집?
+
+3. 특정 유저가 비정상 행동을 하고 있는가?
+   - 초당 수백 개 패킷 보내는 봇?
+   - 해킹 툴로 비정상 좌표 이동?
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>예를 들어 이런 상황이야:</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>실제 사례: "7번 서버만 느려요"</strong><br><br>
+                확인해보니 7번 서버에서 <strong>월드 보스 레이드</strong>가 진행 중이었어.<br>
+                보스 주변에 300명이 밀집 → AOI 계산 폭증 → 틱 처리 시간 초과 → 렉<br><br>
+                코드 문제가 아니야. <strong>300명이 같은 곳에 모인 게 원인</strong>이야.<br>
+                해결: 보스 방 최대 인원 제한 or 보스 스킬 AOI 최적화.
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">"이 단계에서 80%는 원인이 드러난다."</span></p>
+                    <p>남은 20%만 기술적 프로파일링이 필요해. 그게 다음 스텝이야.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 5: Step 4 - 프로파일링 -->
+        <div class="conversation">
+            <h2>Step 4. 프로파일링 (원인 특정)</h2>
+
+            <div class="chat">
+                <div class="q">게임 컨텍스트에서도 원인이 안 보여. 이제 뭐 해?</div>
+                <div class="a">
+                    <p>이제 진짜 <strong>기술적 프로파일링</strong>을 해야 해.</p>
+                    <p>"코드의 어떤 함수가 CPU를 잡아먹고 있는지" 정확히 찾는 단계야.</p>
+                    <p>상황에 따라 3가지 방법 중 하나를 써:</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Flame Graph (플레임 그래프)가 뭐야?</div>
+                <div class="a">
+                    <p><strong>정의:</strong> 프로그램이 실행되는 동안 "어떤 함수가 얼마나 오래 실행됐는지"를 불꽃 모양 그래프로 보여주는 도구.</p>
+                    <p><strong>왜 필요:</strong> 코드가 수만 줄이면 "어디가 느린지" 감으로 못 찾아. Flame Graph는 가장 넓은 막대가 가장 오래 걸린 함수니까, <strong>눈으로 바로 병목을 찾을 수 있어.</strong></p>
+                    <p><strong>안 쓰면:</strong> "이 함수가 느린 것 같은데..." 하고 감으로 추측 → 삽질 → 시간 낭비.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+[Flame Graph 읽는 법]
+
+       &larr;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash; 넓을수록 오래 걸린 함수 &mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&rarr;
+
+|=================== UpdateWorld() ===================|
+|======= ProcessCombat() =======|  |== MoveNPC() ==|
+|== CalcDamage() ==| |= ApplyBuff() =|
+
+&rarr; UpdateWorld()가 가장 넓다 = 가장 오래 걸림
+&rarr; 그 안에서 ProcessCombat()이 절반 차지
+&rarr; CalcDamage()를 최적화하면 효과가 크겠다!
+            </div>
+
+            <p><strong>상황별 접근법:</strong></p>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>A) 프로파일러 연결 가능한 경우</strong></p>
+                    <p>서버에 프로파일러를 붙여서 <span class="highlight">Flame Graph</span>를 뽑아.</p>
+                    <p>가장 정확하지만, 프로파일러 자체가 서버에 부하를 줘서 <span class="warning">라이브 서버에는 부담이 클 수 있어.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>B) 프로파일러 연결 불가한 경우 (라이브 부담)</strong></p>
+                    <p>서버에 미리 심어둔 <span class="highlight">내장 성능 카운터</span>를 확인해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+[내장 성능 카운터 예시]
+
+틱(Tick)당 처리 시간:   정상 16ms / 현재 85ms  &larr; 5배 느림!
+DB 쿼리 응답 시간:      정상 2ms  / 현재 3ms   &larr; 정상
+패킷 처리량:           정상 5000/s / 현재 12000/s &larr; 2.4배!
+
+&rarr; 틱 처리 시간이 5배 느리고, 패킷도 2배 이상
+&rarr; "많은 유저의 패킷을 한 틱 안에 처리하느라 느려진 것"
+            </div>
+
+            <div class="chat">
+                <div class="q">틱(Tick)이 뭐야?</div>
+                <div class="a">
+                    <p><strong>정의:</strong> 서버가 게임 세계를 한 번 업데이트하는 주기. "서버의 심장 박동"이라고 생각하면 돼.</p>
+                    <p><strong>왜 필요:</strong> 서버는 "유저 입력 처리 → 게임 로직 계산 → 결과 전송"을 한 틱에 다 해야 해. 보통 초당 20~60틱 (50ms~16ms 간격).</p>
+                    <p><strong>안 지키면:</strong> 틱이 밀리면 유저들이 체감하는 렉이 생겨. 16ms 틱인데 85ms 걸리면, 유저 화면에서 캐릭터가 뚝뚝 끊기는 거야.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>C) 로그 분석</strong></p>
+                    <p>A, B 둘 다 안 되면 <strong>서버 로그</strong>를 뒤져.</p>
+                    <p>Warning/Error 로그를 시간순으로 보면서, <span class="key-point">정상 서버 로그와 패턴을 비교</span>해.</p>
+                    <p>"정상 서버에는 없는데 7번 서버에만 반복되는 Warning"이 있다면 그게 단서야.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>방법</th>
+                    <th>정밀도</th>
+                    <th>라이브 부담</th>
+                    <th>사전 준비</th>
+                </tr>
+                <tr>
+                    <td><strong>A) Flame Graph</strong></td>
+                    <td>매우 높음</td>
+                    <td>높음</td>
+                    <td>프로파일러 설치</td>
+                </tr>
+                <tr>
+                    <td><strong>B) 내장 카운터</strong></td>
+                    <td>중간</td>
+                    <td>거의 없음</td>
+                    <td>코드에 미리 심어야 함</td>
+                </tr>
+                <tr>
+                    <td><strong>C) 로그 분석</strong></td>
+                    <td>낮음</td>
+                    <td>없음</td>
+                    <td>로깅 체계 필요</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Section 6: Step 5 - 재현 & 확인 -->
+        <div class="conversation">
+            <h2>Step 5. 재현 & 확인</h2>
+
+            <div class="chat">
+                <div class="q">원인 후보를 찾았어. 이제 바로 고치면 되는 거 아니야?</div>
+                <div class="a">
+                    <p><span class="warning">"후보"를 찾은 거지, "확정"이 아니야.</span></p>
+                    <p>라이브 서버에 검증 안 된 수정을 바로 배포하면 더 큰 사고가 날 수 있어.</p>
+                    <p>반드시 <strong>재현 → 수정 → 검증</strong> 순서를 밟아야 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+[재현 & 확인 플로우]
+
+원인 후보 발견
+     |
+     v
+스테이징(테스트) 서버에서 동일 조건 재현 시도
+     |
+     +------ 재현 성공 ------+
+     |                       |
+     v                       v
+  원인 확정              수정 & 패치
+     |                       |
+     v                       v
+  수정 코드 작성      스테이징에서 검증
+     |                       |
+     v                       v
+  스테이징 검증        라이브 배포
+     |
+     +------ 재현 실패 ------+
+     |                       |
+     v                       v
+  해당 서버에            더 상세한 로그를
+  더 상세한 로그 ON      켜고 모니터링 지속
+            </div>
+
+            <div class="chat">
+                <div class="q">스테이징(Staging) 서버가 뭐야?</div>
+                <div class="a">
+                    <p><strong>정의:</strong> 라이브 서버와 동일한 환경이지만, 실제 유저가 접속하지 않는 테스트 전용 서버.</p>
+                    <p><strong>왜 필요:</strong> 라이브에서 직접 테스트하면 실제 유저에게 피해가 가잖아. 스테이징은 "안전한 실험실"이야.</p>
+                    <p><strong>안 쓰면:</strong> "이거 고치면 될 것 같은데?"로 라이브에 바로 배포 → 더 큰 장애 → 긴급 롤백 → 야근.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>재현이 안 되는 경우가 더 무서워.</strong></p>
+                    <p>"특정 시간대에만", "특정 유저 조합에서만" 발생하는 버그는 재현이 안 될 수 있어.</p>
+                    <p>이럴 때는 해당 서버에 <span class="highlight">더 상세한 로그 레벨</span>을 켜놓고, 다음 발생을 기다리면서 데이터를 모아야 해.</p>
+                    <p><span class="key-point">재현 불가 = 포기가 아니라, "더 많은 정보를 모으는 단계"로 전환하는 것.</span></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 7: 평상시에 해놔야 하는 것 -->
+        <div class="conversation">
+            <h2>평상시에 해놔야 하는 것</h2>
+
+            <div class="chat">
+                <div class="q">사고가 터지고 나서 모니터링을 붙이면 안 돼?</div>
+                <div class="a">
+                    <p><span class="warning">"사고 나서 모니터링 붙이면 이미 늦다."</span></p>
+                    <p>사고가 터지면 모두가 패닉 상태야. 그때 "어... 대시보드 어떻게 만들지?" 하면 골든 타임을 날려.</p>
+                    <p><strong>평상시에 이미 세팅해둬야</strong> 사고 때 30초 만에 원인을 좁힐 수 있어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">최소한 뭘 모니터링해야 해?</div>
+                <div class="a">
+                    <p>서버별로 최소 4가지 지표를 <strong>항상</strong> 대시보드에 띄워놔야 해:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>지표</th>
+                    <th>왜 봐야 하는지</th>
+                    <th>경보 기준 예시</th>
+                </tr>
+                <tr>
+                    <td><strong>서버 틱 소요 시간</strong></td>
+                    <td>렉의 직접적 지표. 이게 밀리면 유저가 렉을 느낌</td>
+                    <td>목표 틱(16ms)의 2배 = 32ms 초과 시 경보</td>
+                </tr>
+                <tr>
+                    <td><strong>동접 수</strong></td>
+                    <td>유저 밀집 감지. 특정 서버만 동접 급증하면 이벤트/몰림</td>
+                    <td>평균의 1.5배 초과 시 경보</td>
+                </tr>
+                <tr>
+                    <td><strong>DB 쿼리 평균 응답 시간</strong></td>
+                    <td>DB 병목 감지. 쿼리가 느려지면 전체 틱이 밀림</td>
+                    <td>10ms 초과 시 경보</td>
+                </tr>
+                <tr>
+                    <td><strong>패킷 처리량</strong></td>
+                    <td>비정상 트래픽 감지. 봇/어뷰징 시 급증</td>
+                    <td>평균의 2배 초과 시 경보</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p>전체 진단 플로우를 한 장으로 정리하면:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+[서버 렉 진단 5단계 플로우]
+
+"7번 서버 렉 신고!"
+        |
+        v
+Step 1. 하드웨어 지표 확인 (30초)
+        CPU / Memory / Disk / Network
+        정상 서버와 비교
+        |
+        v
+Step 2. 스레드별 CPU 확인 (1분)
+        어떤 스레드가 CPU 독점?
+        게임 로직? DB? 네트워크?
+        |
+        v
+Step 3. 게임 컨텍스트 확인 (핵심)
+        보스전? 공성전? 유저 몰림?
+        비정상 유저? 봇?
+        === 여기서 80% 원인 발견 ===
+        |
+        v (안 찾으면)
+Step 4. 프로파일링
+        A) Flame Graph (정밀, 부담 큼)
+        B) 내장 성능 카운터 (실용적)
+        C) 로그 분석 (최후 수단)
+        |
+        v
+Step 5. 재현 & 확인
+        스테이징 재현 &rarr; 수정 &rarr; 검증 &rarr; 배포
+        재현 불가 &rarr; 상세 로그 ON &rarr; 대기
+            </div>
+        </div>
+
+        <!-- 핵심 정리 -->
+        <div class="summary-box">
+            <h3>핵심 정리: 서버 렉 진단 5단계</h3>
+            <ul>
+                <li><strong>Step 1: 하드웨어 지표 (30초)</strong> - CPU/메모리/디스크/네트워크를 정상 서버와 비교</li>
+                <li><strong>Step 2: 스레드별 CPU (1분)</strong> - 어떤 스레드가 CPU를 독점하는지 확인</li>
+                <li><strong>Step 3: 게임 컨텍스트 (핵심)</strong> - 80%는 여기서 원인이 드러난다</li>
+                <li><strong>Step 4: 프로파일링</strong> - Flame Graph, 내장 카운터, 로그 분석 중 상황에 맞는 것</li>
+                <li><strong>Step 5: 재현 & 확인</strong> - 스테이징에서 재현 후 수정, 재현 불가 시 로그 강화</li>
+                <li><strong>평상시 모니터링</strong> - 틱 소요 시간, 동접, DB 응답, 패킷 처리량을 항상 감시</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../debugging/">&larr; 디버깅</a>
+            <a href="../../">메인으로 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>100만 동접 MMO, 서버를 어떻게 나눌까? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #fafafa;
+            color: #333;
+            line-height: 1.9;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #666;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        /* 대화 스타일 */
+        .conversation {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin: 32px 0;
+            border: 1px solid #e0e0e0;
+        }
+        .conversation h2 {
+            font-size: 1.3rem;
+            color: #1a237e;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e8eaf6;
+        }
+
+        .chat { margin-bottom: 20px; }
+        .q {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 12px 12px 0;
+            font-weight: 500;
+        }
+        .q::before {
+            content: "Q. ";
+            color: #e65100;
+            font-weight: 700;
+        }
+        .a {
+            padding: 8px 0 8px 20px;
+            border-left: 4px solid #e0e0e0;
+            margin: 12px 0;
+        }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .key-point {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #ffcdd2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #c62828;
+        }
+
+        /* GIF 섹션 */
+        .visual-section {
+            background: #f5f5f5;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .visual-section h4 {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .step-gif {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        .gif-caption {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* 코드 블록 */
+        .code-block {
+            background: #263238;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #eceff1;
+            overflow-x: auto;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* 비교 테이블 */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+        .compare-table th, .compare-table td {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            text-align: left;
+        }
+        .compare-table th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+
+        /* 비유 박스 */
+        .analogy-box {
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            line-height: 1.8;
+        }
+
+        /* 핵심 정리 박스 */
+        .summary-box {
+            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+            border-radius: 16px;
+            padding: 32px;
+            color: white;
+            margin: 32px 0;
+        }
+        .summary-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+        .summary-box ul {
+            list-style: none;
+        }
+        .summary-box li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+        }
+        .summary-box li::before {
+            content: "\2192";
+            position: absolute;
+            left: 0;
+            color: #90caf9;
+        }
+
+        .divider {
+            height: 1px;
+            background: #e0e0e0;
+            margin: 32px 0;
+        }
+
+        .nav-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 60px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .nav-links a {
+            color: #1a237e;
+            text-decoration: none;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../network/" class="back-link">&larr; 네트워크</a>
+
+        <header class="header">
+            <h1>100만 동접 MMO, 서버를 어떻게 나눌까?</h1>
+            <p>대규모 MMO 서버 아키텍처 설계의 핵심 판단들</p>
+        </header>
+
+        <!-- Section 1: 왜 서버 1대로 안 되는가 -->
+        <div class="conversation">
+            <h2>왜 서버 1대로 안 되는가</h2>
+
+            <div class="chat">
+                <div class="q">MMO에서 서버 1대로 100만 명을 못 받나?</div>
+                <div class="a">
+                    <p><span class="warning">절대 못 받아.</span> 서버 1대의 물리적 한계를 생각해 보자.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">물리적 한계가 뭔데?</div>
+                <div class="a">
+                    <p>서버가 게임을 돌리려면 크게 세 가지 자원이 필요해.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>1. CPU 틱 처리량</strong></p>
+                    <p><span class="highlight">틱(Tick)</span>이란 서버가 게임 세계를 한 번 업데이트하는 주기야.</p>
+                    <p><strong>정의:</strong> 서버가 "모든 유저의 입력을 받고 &rarr; 게임 로직 계산하고 &rarr; 결과를 보내는" 한 사이클.</p>
+                    <p><strong>왜 필요:</strong> 틱이 없으면 게임 세계가 멈춤. 보통 초당 20~60틱.</p>
+                    <p><strong>안 쓰면:</strong> 유저 행동이 반영 안 되고, 서버가 아무것도 처리 못 함.</p>
+                    <p>100만 명의 이동/전투/스킬을 한 틱 안에 계산? CPU 1개론 <span class="warning">물리적으로 불가능.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>2. 메모리</strong></p>
+                    <p>유저 1명당 서버에 저장해야 하는 데이터: 위치, HP, 인벤토리, 버프, 파티 정보...</p>
+                    <p>유저 1명 = 대략 10~50KB. 100만 명이면? <strong>10~50GB</strong> 순수 유저 데이터만.</p>
+                    <p>거기에 몬스터, NPC, 아이템, 맵 데이터까지? <span class="warning">RAM이 터짐.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>3. 네트워크 대역폭</strong></p>
+                    <p>유저 1명한테 초당 보내는 데이터 = 약 5~20KB.</p>
+                    <p>100만 명이면? 초당 <strong>5~20GB</strong>. NIC (Network Interface Card, 네트워크 카드) 1장으로는 <span class="warning">감당 불가.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+서버 1대의 현실적 한계:
+
+CPU:    1틱(50ms) 안에 처리 가능한 유저 = 수천 명
+메모리: 64~128GB RAM 기준 = 유저 수만~수십만 (데이터 복잡도에 따라)
+네트워크: 10Gbps NIC 1장 = 초당 ~1.25GB (유저 수만 명 수준)
+
+결론: Zone/Game 서버 1대당 동시접속 2,000~5,000명이 현실적 상한선</div>
+
+            <div class="analogy-box">
+                <strong>비유: 식당</strong><br><br>
+                서버 1대 = 요리사 1명인 식당.<br>
+                손님 10명? 괜찮아.<br>
+                손님 100명? 좀 밀려.<br>
+                손님 100만 명? 요리사를 수백 명 고용하고, 주방을 수백 개로 나눠야지.<br>
+                <strong>그게 바로 서버를 나누는 이유야.</strong>
+            </div>
+        </div>
+
+        <!-- Section 2: 공통 뼈대 -->
+        <div class="conversation">
+            <h2>공통 뼈대 - 모든 MMO가 갖는 레이어</h2>
+
+            <div class="chat">
+                <div class="q">서버를 나눈다는 건 알겠어. 그런데 어떤 구조로 나눠?</div>
+                <div class="a">
+                    <p>아키텍처(설계 방식)에 따라 세부 구현은 다르지만, <span class="key-point">거의 모든 MMO 서버는 같은 뼈대를 공유해.</span></p>
+                    <p>하나씩 뜯어보자.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Gateway 서버가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">Gateway (= Proxy) 서버</span></p>
+                    <p><strong>정의:</strong> 클라이언트가 가장 먼저 접속하는 서버. 연결을 관리하고, 패킷을 적절한 내부 서버로 전달(라우팅)해 줌.</p>
+                    <p><strong>왜 필요:</strong> 유저가 직접 Game 서버에 붙으면, Game 서버 IP가 노출되고, 서버 교체/확장이 불가능해짐.</p>
+                    <p><strong>안 쓰면:</strong> 서버 점검할 때 유저 전원 튕기고, DDoS 공격에 Game 서버가 직접 노출됨.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Stateless 서비스가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">Stateless (상태 비저장형) 서비스</span></p>
+                    <p><strong>정의:</strong> 서버가 이전 요청의 결과를 기억하지 않는 방식. 요청이 올 때마다 독립적으로 처리.</p>
+                    <p><strong>왜 필요:</strong> 상태를 안 가지니까 서버를 마음대로 늘리거나 줄일 수 있음 (수평 확장).</p>
+                    <p><strong>안 쓰면:</strong> 서버 1대가 죽으면 그 서버에 있던 유저 데이터가 날아감.</p>
+                    <p>Login, Lobby, Chat, Matchmaking 같은 건 전부 Stateless로 만들 수 있어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 World/Zone 서버는?</div>
+                <div class="a">
+                    <p><span class="highlight">World/Zone 서버 (= Game 서버)</span> - 게임 로직의 핵심.</p>
+                    <p><strong>정의:</strong> 유저의 이동, 전투, 스킬, 충돌 판정 등 실시간 게임 로직을 처리하는 서버.</p>
+                    <p><strong>왜 필요:</strong> 게임의 "세계"가 실제로 돌아가는 곳. 이게 없으면 게임이 안 됨.</p>
+                    <p><strong>안 쓰면:</strong> 게임 자체가 존재하지 않음.</p>
+                    <p>이건 <span class="warning">Stateful (상태 보존형)</span>이야. 유저의 현재 위치, HP, 전투 상태를 계속 들고 있어야 하니까.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">DB랑 Cache는?</div>
+                <div class="a">
+                    <p><span class="highlight">Cache (캐시)</span> = Redis 같은 인메모리 저장소. 자주 쓰는 데이터를 메모리에 올려두고 빠르게 읽음.</p>
+                    <p><span class="highlight">DB (Database, 데이터베이스)</span> = MSSQL, MySQL 같은 영구 저장소. 유저 계정, 인벤토리 등을 디스크에 저장.</p>
+                    <p>Cache는 빠르고(마이크로초), DB는 느리지만(밀리초) 안전해. <span class="key-point">둘 다 써야 해.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>마지막으로 <strong>모니터링 / Admin / 로그 수집</strong> 레이어도 있어.</p>
+                    <p>서버가 수백 대인데, 어디가 병목인지 어떻게 알아? 로그 수집하고 대시보드로 보는 거야.</p>
+                    <p>이건 게임 로직과 직접 관련은 없지만, <span class="warning">없으면 장애 발생 시 원인 파악이 불가능.</span></p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                        [클라이언트]
+                            |
+                    ┌───────┴───────┐
+                    |   Gateway /   |
+                    |   Proxy 서버   |     &larr; 연결 관리, 패킷 라우팅
+                    └───────┬───────┘
+                            |
+          ┌─────────────────┼─────────────────┐
+          |                 |                 |
+    ┌─────┴─────┐    ┌─────┴─────┐    ┌─────┴─────┐
+    |  Login /  |    | World /   |    |   Chat /  |
+    |  Lobby    |    | Zone 서버  |    |   Match   |    &larr; Stateless &amp; Stateful
+    | (Stateless)|    | (Stateful)|    | (Stateless)|
+    └───────────┘    └─────┬─────┘    └───────────┘
+                           |
+                    ┌──────┼──────┐
+                    |             |
+              ┌─────┴─────┐ ┌────┴────┐
+              |   Redis   | |  MSSQL  |
+              |  (Cache)  | |  (DB)   |        &larr; 캐시 + 영구 저장소
+              └───────────┘ └─────────┘
+
+    + 모니터링 / Admin / 로그 수집 (전체 서버를 감시)</div>
+        </div>
+
+        <!-- Section 3: 선택지 A - 채널 분산 -->
+        <div class="conversation">
+            <h2>선택지 A - 채널 분산 (가장 흔함)</h2>
+
+            <div class="chat">
+                <div class="q">뼈대는 알겠어. 그러면 Game 서버를 어떻게 나누느냐가 관건이잖아. 첫 번째 방법은?</div>
+                <div class="a">
+                    <p>가장 흔하고 검증된 방법: <span class="highlight">채널 분산</span>.</p>
+                    <p><strong>정의:</strong> 같은 맵(월드)을 여러 개로 복제해서, 각 복제본을 "채널"이라 부르고 별도 서버에서 돌리는 방식.</p>
+                    <p><strong>왜 필요:</strong> 서버 1대에 수천 명밖에 못 받으니까, 같은 맵을 여러 채널로 복사해서 유저를 분산.</p>
+                    <p><strong>안 쓰면:</strong> 서버 1대에 유저가 몰려서 틱이 느려지고, 게임이 렉 걸림.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+메이플스토리 헤네시스를 생각해 봐:
+
+[헤네시스 1채널] - 서버 A - 유저 3,000명
+[헤네시스 2채널] - 서버 B - 유저 3,000명
+[헤네시스 3채널] - 서버 C - 유저 3,000명
+...
+[헤네시스 334채널] - 서버 N - 유저 3,000명
+
+합계: 약 100만 명</div>
+
+            <div class="chat">
+                <div class="q">강점은?</div>
+                <div class="a">
+                    <p><span class="key-point">구현이 단순하고, 스케일링이 쉬움.</span></p>
+                    <p>유저가 늘어나면? 채널을 추가하면 됨. 서버 1대 더 붙이고 "4채널" 열면 끝.</p>
+                    <p>각 채널은 독립적이라 서로 영향도 없어.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">약점은?</div>
+                <div class="a">
+                    <p><span class="warning">친구가 다른 채널이면 같이 못 놀아.</span></p>
+                    <p>"나 1채널인데 너 3채널이야? 채널 옮겨와" - 이런 경험 해봤을 거야.</p>
+                    <p>그리고 "하나의 거대한 세계"라는 느낌이 약해. 채널마다 별개의 세계니까.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">이 방식 쓰는 게임이 뭐야?</div>
+                <div class="a">
+                    <p><strong>메이플스토리</strong>, <strong>던전앤파이터</strong>, <strong>로스트아크</strong> (마을 구간) 같은 채널 기반 게임.</p>
+                    <p>사실 대부분의 한국 MMO가 이 방식이야.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>100만 동접이면?</strong></p>
+                    <p>채널당 3,000명 x 334채널. <span class="key-point">가장 현실적인 접근.</span></p>
+                    <p>인프라 비용도 예측 가능하고, 장애 범위도 채널 단위로 격리돼.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 4: 선택지 B - Zone 분할 -->
+        <div class="conversation">
+            <h2>선택지 B - Zone 분할 (오픈월드)</h2>
+
+            <div class="chat">
+                <div class="q">채널 방식은 세계가 분리되잖아. "진짜 하나의 세계"를 만들고 싶으면?</div>
+                <div class="a">
+                    <p>그러면 <span class="highlight">Zone 분할</span> 방식을 써야 해.</p>
+                    <p><strong>정의:</strong> 하나의 월드를 지리적 영역(Zone)으로 잘라서, 각 Zone을 별도 서버가 담당하는 방식.</p>
+                    <p><strong>왜 필요:</strong> 오픈월드 게임은 "채널 바꾸기" 없이 걸어서 어디든 갈 수 있어야 하니까.</p>
+                    <p><strong>안 쓰면:</strong> 오픈월드 자체가 불가능. 서버 1대로 전체 월드를 돌릴 수 없으니까.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+WoW (월드 오브 워크래프트) 구조 예시:
+
+┌──────────────┬──────────────┐
+|              |              |
+|  엘윈 숲     |  서부 몰락지대  |
+|  (Zone 서버 A)|  (Zone 서버 B)|
+|              |              |
+├──────────────┼──────────────┤
+|              |              |
+|  저습지       |  불모의 땅    |
+|  (Zone 서버 C)|  (Zone 서버 D)|
+|              |              |
+└──────────────┴──────────────┘
+
+유저가 엘윈 숲에서 서부 몰락지대로 걸어가면
+&rarr; 서버 A에서 서버 B로 핸드오프(이전) 발생</div>
+
+            <div class="chat">
+                <div class="q">강점은?</div>
+                <div class="a">
+                    <p><span class="key-point">"진짜 하나의 세계"를 만들 수 있어.</span></p>
+                    <p>유저 입장에서 채널 같은 거 신경 안 써도 됨. 그냥 걸어가면 됨.</p>
+                    <p>월드가 살아있다는 몰입감이 훨씬 강해.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">약점은?</div>
+                <div class="a">
+                    <p><span class="warning">Zone 경계 처리가 지옥이야.</span></p>
+                    <p>유저가 Zone 경계 위에 서 있으면? 양쪽 서버 모두에 존재해야 해.</p>
+                    <p>Zone A에서 화살을 쏴서 Zone B에 있는 적을 맞추면? 두 서버 간 통신이 필요해.</p>
+                    <p>이 "경계 처리"가 구현 난이도의 대부분을 차지해.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>그리고 <span class="warning">인기 Zone에 핫스팟(병목)</span>이 생겨.</p>
+                    <p>수도 같은 인기 지역에 유저가 몰리면 그 Zone 서버만 터짐. 다른 Zone 서버는 한가한데.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">이 방식 쓰는 게임은?</div>
+                <div class="a">
+                    <p><strong>WoW (월드 오브 워크래프트)</strong>, <strong>리니지</strong>, <strong>EVE Online</strong>, <strong>뉴월드</strong> 같은 오픈월드 MMO.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>100만 동접이면?</strong></p>
+                    <p><span class="warning">Zone당 부하 불균형이 심각해.</span></p>
+                    <p>조용한 필드 Zone은 유저 50명, 수도 Zone은 유저 50,000명. 같은 스펙 서버에 넣으면? 수도 서버만 죽음.</p>
+                    <p>그래서 인기 Zone은 더 좋은 서버를 쓰거나, 내부적으로 채널을 섞기도 해.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 5: 선택지 C - Dynamic Spatial Partitioning -->
+        <div class="conversation">
+            <h2>선택지 C - Dynamic Spatial Partitioning (동적 공간 분할)</h2>
+
+            <div class="chat">
+                <div class="q">Zone 분할의 핫스팟 문제를 해결할 방법은 없어?</div>
+                <div class="a">
+                    <p>이론적으로 완벽한 해답이 있어. <span class="highlight">Dynamic Spatial Partitioning (동적 공간 분할)</span>.</p>
+                    <p><strong>정의:</strong> Zone의 크기와 경계를 고정하지 않고, 실시간 부하에 따라 자동으로 나누고 합치는 방식.</p>
+                    <p><strong>왜 필요:</strong> 고정 Zone은 유저가 몰리면 핫스팟이 생기니까, 부하에 따라 유동적으로 분할.</p>
+                    <p><strong>안 쓰면:</strong> 인기 Zone에 유저가 몰릴 때마다 수동으로 서버를 증설해야 함.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+평소: Zone이 크게 2개로 나뉨
+┌────────────────┬────────────────┐
+|    서버 A       |    서버 B       |
+|    (유저 2000)  |    (유저 2000)  |
+└────────────────┴────────────────┘
+
+이벤트 시작! 왼쪽에 유저 몰림:
+┌────────┬───────┬────────────────┐
+| 서버 A  | 서버 C |    서버 B       |
+| (2000)  | (3000) |    (1000)      |
+└────────┴───────┴────────────────┘
+&uarr; 부하가 높은 영역을 자동으로 쪼개서 서버 C가 떠맡음</div>
+
+            <div class="chat">
+                <div class="q">강점은?</div>
+                <div class="a">
+                    <p><span class="key-point">부하 분산이 가장 유연하고, 이론적으로 무한 스케일이 가능.</span></p>
+                    <p>유저가 어디에 몰리든, 시스템이 알아서 서버를 배분해.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">약점은?</div>
+                <div class="a">
+                    <p><span class="warning">구현 난이도가 극상이야.</span></p>
+                    <p>공간이 분할될 때, 그 안에 있는 유저(Entity)의 데이터를 새 서버로 옮겨야 해.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">Entity가 뭐야?</div>
+                <div class="a">
+                    <p><span class="highlight">Entity (엔티티)</span></p>
+                    <p><strong>정의:</strong> 게임 세계에 존재하는 모든 객체. 유저 캐릭터, 몬스터, NPC, 드롭 아이템 등.</p>
+                    <p><strong>왜 필요:</strong> 서버가 게임 세계를 관리하려면, 모든 것을 "Entity"라는 단위로 추적해야 해.</p>
+                    <p><strong>안 쓰면:</strong> "이 몬스터를 누가 관리하지?"가 불분명해져서 동기화 오류 발생.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>공간 분할이 일어나면 <span class="highlight">Authority (권한)</span> 이전이 필요해.</p>
+                    <p><strong>정의:</strong> 특정 Entity를 "누가 제어할 권한을 가지는가"를 정하는 것.</p>
+                    <p><strong>왜 필요:</strong> 두 서버가 동시에 같은 몬스터를 제어하면 충돌이 나니까, 반드시 1개 서버만 권한을 가져야 해.</p>
+                    <p><strong>안 쓰면:</strong> 몬스터 HP가 서버마다 달라지고, 유저에게 다른 결과가 보임.</p>
+                    <p>이 Authority 이전이 실시간으로 깔끔하게 되려면 엄청나게 정교한 설계가 필요해.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 실제로 쓰는 곳이 있어?</div>
+                <div class="a">
+                    <p>완전한 Dynamic Spatial Partitioning을 쓰는 상용 게임은 <span class="warning">거의 없어.</span></p>
+                    <p>현실에서는 A(채널) 또는 B(Zone)를 기반으로 깔아놓고, 특정 상황에서만 부분적으로 C를 도입해.</p>
+                    <p>예: 대규모 공성전 영역만 동적 분할, 나머지는 고정 Zone.</p>
+                    <p>SpatialOS 같은 미들웨어가 이걸 시도했지만, 아직 업계 표준은 아님.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 6: 비교 테이블 -->
+        <div class="conversation">
+            <h2>세 가지 방식 비교</h2>
+
+            <div class="chat">
+                <div class="q">세 가지 방식을 한눈에 비교하면?</div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th></th>
+                    <th>채널 분산</th>
+                    <th>Zone 분할</th>
+                    <th>Dynamic Spatial</th>
+                </tr>
+                <tr>
+                    <td><strong>원리</strong></td>
+                    <td>같은 맵을 복제</td>
+                    <td>월드를 지역별로 자름</td>
+                    <td>부하에 따라 자동 분할</td>
+                </tr>
+                <tr>
+                    <td><strong>구현 난이도</strong></td>
+                    <td>낮음</td>
+                    <td>중간 (경계 처리)</td>
+                    <td>극상</td>
+                </tr>
+                <tr>
+                    <td><strong>스케일링</strong></td>
+                    <td>채널 추가 (쉬움)</td>
+                    <td>Zone 서버 증설</td>
+                    <td>자동 (이론적 무한)</td>
+                </tr>
+                <tr>
+                    <td><strong>월드 느낌</strong></td>
+                    <td>분리된 세계</td>
+                    <td>하나의 세계</td>
+                    <td>하나의 세계</td>
+                </tr>
+                <tr>
+                    <td><strong>핫스팟 대응</strong></td>
+                    <td>채널 간 분산</td>
+                    <td>취약</td>
+                    <td>자동 대응</td>
+                </tr>
+                <tr>
+                    <td><strong>대표 게임</strong></td>
+                    <td>메이플, 던파</td>
+                    <td>WoW, 리니지</td>
+                    <td>부분 적용 (SpatialOS)</td>
+                </tr>
+                <tr>
+                    <td><strong>100만 동접</strong></td>
+                    <td>3,000명 x 334채널</td>
+                    <td>Zone별 불균형 심각</td>
+                    <td>이상적이나 현실 적용 어려움</td>
+                </tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">정답은 없어.</span> 게임 장르와 기획에 따라 최적의 조합이 달라.</p>
+                    <p>채널 기반이지만 일부 콘텐츠에 Zone을 섞는 경우도 많아. (예: 로스트아크는 마을은 채널, 레이드는 인스턴스)</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 7: 진짜 병목은 어디인가 -->
+        <div class="conversation">
+            <h2>진짜 병목은 어디인가</h2>
+
+            <div class="chat">
+                <div class="q">서버를 잘 나눴어. 채널이든 Zone이든. 그러면 100만 동접 해결된 거야?</div>
+                <div class="a">
+                    <p><span class="warning">아직 멀었어.</span></p>
+                    <p>100만 동접의 진짜 병목은 Game 서버 자체가 아니야.</p>
+                    <p><span class="key-point">진짜 병목은 DB 쓰기와 서버 간 통신이야.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">DB 쓰기가 왜 병목이야?</div>
+                <div class="a">
+                    <p>유저가 아이템을 줍거나, 퀘스트를 깨거나, 레벨업 할 때마다 DB에 기록해야 해.</p>
+                    <p>100만 명이 동시에 행동하면? 초당 수백만 건의 DB 쓰기 요청이 폭주.</p>
+                    <p>MSSQL/MySQL은 디스크 I/O 기반이라 <span class="warning">초당 수천~수만 건이 한계.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>해결책:</strong></p>
+                    <p>1. <span class="highlight">Write-Behind (지연 쓰기)</span>: 바로 DB에 안 쓰고, Redis에 먼저 쌓아두고 묶어서 한 번에 DB로 밀어넣기.</p>
+                    <p>2. DB 샤딩: 유저 ID 기준으로 여러 DB 서버에 분산.</p>
+                    <p>3. 중요하지 않은 데이터 (채팅 로그 등)는 NoSQL이나 로그 시스템으로 분리.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">서버 간 통신은?</div>
+                <div class="a">
+                    <p>Zone A에 있는 유저가 Zone B에 있는 유저에게 귓속말을 보내면?</p>
+                    <p>Zone A 서버 &rarr; Gateway &rarr; Zone B 서버. 서버 간 통신이 발생해.</p>
+                    <p>파티, 길드, 거래, 경매장 같은 <strong>크로스 서버 기능</strong>이 많아질수록 서버 간 통신량이 폭발해.</p>
+                    <p><span class="warning">서버 간 통신 지연(latency)이 유저 체감 렉에 직접 영향.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><strong>해결책:</strong></p>
+                    <p>1. 서버 간 통신에 <span class="highlight">Message Queue (메시지 큐)</span>를 사용. 비동기로 처리해서 부하 분산.</p>
+                    <p>2. 같은 데이터센터 안에 서버를 배치해서 물리적 거리를 최소화.</p>
+                    <p>3. 크로스 서버 기능을 전담하는 별도 서비스 (Chat 서버, Guild 서버 등)를 둠.</p>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="chat">
+                <div class="q">Gateway가 죽으면 어떻게 돼?</div>
+                <div class="a">
+                    <p>Gateway는 모든 유저의 연결이 지나가는 곳이야. 여기가 죽으면?</p>
+                    <p><span class="warning">해당 Gateway에 연결된 유저 전원이 튕김.</span></p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그러면 어떻게 해?</div>
+                <div class="a">
+                    <p><span class="key-point">Gateway 다중화가 필수야.</span></p>
+                    <p>Gateway를 여러 대 두고, 앞에 <span class="highlight">Load Balancer (로드 밸런서, 부하 분산기)</span>를 놓아서 유저를 분산.</p>
+                    <p>Gateway 1대가 죽어도 다른 Gateway가 이어받음.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">근데 Gateway가 죽으면 유저의 세션 정보도 날아가지 않아?</div>
+                <div class="a">
+                    <p>맞아. 그래서 <span class="highlight">Redis에 세션 정보를 저장</span>해 둬.</p>
+                    <p>유저가 다른 Gateway로 재접속하면, Redis에서 세션을 복원해서 이어서 플레이할 수 있게.</p>
+                    <p>이걸 <span class="key-point">Redis 세션 복원</span>이라고 해.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+Gateway 다중화 + Redis 세션 복원:
+
+[유저] &rarr; [Load Balancer]
+                 |
+        ┌────────┼────────┐
+        |        |        |
+   [GW #1]  [GW #2]  [GW #3]     &larr; Gateway 다중화
+        |        |        |
+        └────────┼────────┘
+                 |
+            [Redis]               &larr; 세션 정보 공유 저장소
+                 |
+        ┌────────┼────────┐
+   [Game #1] [Game #2] [Game #3]
+
+GW #2가 죽으면:
+1. 유저가 Load Balancer를 통해 GW #3에 재접속
+2. GW #3이 Redis에서 세션 정보 조회
+3. 유저는 끊긴 지점부터 이어서 플레이</div>
+        </div>
+
+        <!-- 용어 사전 -->
+        <div class="conversation">
+            <h2>용어 사전</h2>
+
+            <table class="compare-table">
+                <tr>
+                    <th>용어</th>
+                    <th>뜻</th>
+                </tr>
+                <tr>
+                    <td><strong>Tick (틱)</strong></td>
+                    <td>서버가 게임 세계를 한 번 업데이트하는 주기. 보통 초당 20~60회.</td>
+                </tr>
+                <tr>
+                    <td><strong>Gateway / Proxy</strong></td>
+                    <td>클라이언트가 가장 먼저 접속하는 서버. 연결 관리 + 패킷 라우팅.</td>
+                </tr>
+                <tr>
+                    <td><strong>Stateless (상태 비저장)</strong></td>
+                    <td>이전 요청을 기억하지 않는 서비스. 수평 확장이 쉬움.</td>
+                </tr>
+                <tr>
+                    <td><strong>Stateful (상태 보존)</strong></td>
+                    <td>유저의 현재 상태를 계속 기억하는 서비스. Game 서버가 대표적.</td>
+                </tr>
+                <tr>
+                    <td><strong>Entity (엔티티)</strong></td>
+                    <td>게임 세계의 모든 객체 (유저, 몬스터, NPC, 아이템 등).</td>
+                </tr>
+                <tr>
+                    <td><strong>Authority (권한)</strong></td>
+                    <td>특정 Entity를 제어할 수 있는 서버의 권한.</td>
+                </tr>
+                <tr>
+                    <td><strong>Hotspot (핫스팟)</strong></td>
+                    <td>유저가 특정 영역에 몰려서 서버 부하가 집중되는 현상.</td>
+                </tr>
+                <tr>
+                    <td><strong>Write-Behind (지연 쓰기)</strong></td>
+                    <td>DB에 바로 안 쓰고 캐시에 모아뒀다가 한 번에 쓰는 기법.</td>
+                </tr>
+                <tr>
+                    <td><strong>Load Balancer (로드 밸런서)</strong></td>
+                    <td>들어오는 요청을 여러 서버에 분산시키는 장치.</td>
+                </tr>
+                <tr>
+                    <td><strong>Message Queue (메시지 큐)</strong></td>
+                    <td>서버 간 비동기 통신을 위한 대기열. 보내는 쪽과 받는 쪽을 분리.</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- 핵심 정리 박스 -->
+        <div class="summary-box">
+            <h3>핵심 정리: 100만 동접 MMO 서버 아키텍처</h3>
+            <ul>
+                <li><strong>Gateway</strong> - 연결 관리 + 패킷 라우팅. 다중화 필수, Redis로 세션 복원.</li>
+                <li><strong>채널 분산</strong> - 같은 맵을 복제. 가장 현실적이고 스케일링이 쉬움.</li>
+                <li><strong>Zone 분할</strong> - 월드를 지역별로 나눔. 오픈월드 필수이지만 경계 처리가 핵심 난제.</li>
+                <li><strong>Dynamic Spatial</strong> - 부하에 따라 자동 분할. 이상적이지만 현실에서는 부분 적용.</li>
+                <li><strong>진짜 병목</strong> - Game 서버가 아니라 DB 쓰기 + 서버 간 통신. 여기를 해결해야 100만 동접이 가능.</li>
+            </ul>
+        </div>
+
+        <div class="nav-links">
+            <a href="../network/">&larr; 네트워크</a>
+            <a href="../../">메인으로 &rarr;</a>
+        </div>
+    </div>
+</body>
+</html>
