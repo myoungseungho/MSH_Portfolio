@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MMO 서버인데 싱글스레드라고? 멀티스레드 게임 루프의 4가지 패턴 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-thread/" class="back-link">← 멀티스레드</a>
+
+        <header class="header">
+            <h1>MMO 서버인데 싱글스레드라고? 멀티스레드 게임 루프의 4가지 패턴</h1>
+            <p>IOCP는 멀티인데 메시지 처리는 싱글 — 다른 MMO들은 어떻게 하고 있을까?</p>
+        </header>
+
+        <div class="conversation">
+            <h2>Part 1. 우리 서버는 왜 싱글스레드야?</h2>
+
+            <div class="chat">
+                <div class="q">IOCP 쓰면 멀티스레드 아니야?</div>
+                <div class="a">
+                    <p><span class="highlight">네트워크 I/O</span>만 멀티스레드야. 패킷을 받고 보내는 건 여러 워커 스레드가 처리하지만, 받은 메시지를 실제로 처리하는 건 <span class="highlight">메인 루프 하나</span>에서 순차적으로 해.</p>
+                    <p>비유하면 우체국이야. 배달부(IOCP 워커)는 여러 명이지만, 편지를 열어보고 답장 쓰는 사람(게임 로직)은 한 명이야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">📦 우리 서버 구조 (IOCP + 싱글스레드 로직)
+
+[클라이언트들] ──패킷──▶ [IOCP 워커 스레드 4개] ──큐──▶ [메인 루프 1개]
+                          (네트워크: 멀티)              (게임 로직: 싱글)
+
+메인 루프가 하는 일:
+  while(true) {
+    1. 큐에서 메시지 꺼내기
+    2. 메시지 처리 (공격, 이동, 아이템...)
+    3. DB 호출 (동기)
+    4. 결과 패킷 전송
+  }</div>
+
+
+            <div class="chat">
+                <div class="q">그게 왜 문제가 안 돼?</div>
+                <div class="a">
+                    <p>가장 큰 장점은 <span class="key-point">레이스 컨디션이 원천 차단</span>된다는 거야. 플레이어 A가 아이템을 옮기는 도중에 플레이어 B가 그 아이템을 주울 일이 없어. 한 번에 하나씩 순서대로 처리하니까.</p>
+                    <p>락(Lock)도 필요 없고, 데드락도 불가능하고, 디버깅도 쉬워. 20년 넘게 운영되는 게임 서버들이 대부분 이 방식인 이유가 있어.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 뭐가 문제야?</div>
+                <div class="a">
+                    <p>동접 1,000명까지는 괜찮아. 근데 동접 5,000명, 10,000명이 되면?</p>
+                    <p>메인 루프 한 바퀴 도는 데 걸리는 시간이 늘어나. 메시지가 <span class="warning">초당 50,000개</span> 쌓이면, 한 스레드로는 밀려. 처리 지연 → 유저 렉 → 이탈.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 멀티스레드 게임 로직이 어려운 이유</h2>
+
+            <div class="chat">
+                <div class="q">그냥 스레드 여러 개 돌리면 안 돼?</div>
+                <div class="a">
+                    <p>안 돼. 게임 서버의 근본 문제는 <span class="warning">상태 공유</span>야.</p>
+                    <p>플레이어 A가 몬스터를 공격하는 도중에, 스레드 2에서 플레이어 B도 같은 몬스터를 공격하면? 몬스터 HP가 동시에 바뀌면서 꼬여.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">💥 상태 공유 문제
+
+스레드 1: A가 몬스터 공격 → HP 읽기(100) → 30 빼기 → HP 쓰기(70)
+스레드 2: B가 몬스터 공격 → HP 읽기(100) → 50 빼기 → HP 쓰기(50)
+
+결과: HP = 50 (틀림! 정답은 20)
+원인: 두 스레드가 동시에 HP 100을 읽었기 때문</div>
+
+
+            <div class="chat">
+                <div class="q">락 걸면 되잖아?</div>
+                <div class="a">
+                    <p>맞아, 락으로 해결은 돼. 근데 게임은 "모든 게 연결"되어 있어.</p>
+                    <p>A가 B를 공격하면: 데미지 계산 → 버프 확인 → HP 감소 → 사망 판정 → 경험치 → 퀘스트 → 아이템 드롭 → 파티 분배.</p>
+                    <p>이 모든 데이터에 락을 걸면? <span class="warning">사실상 싱글스레드랑 같아져</span>. 락 기다리는 시간 때문에 오히려 더 느릴 수도 있어.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 방법이 없어?</div>
+                <div class="a">
+                    <p>있어. 핵심은 <span class="key-point">"공유 상태를 없애거나, 공유 범위를 줄이는 것"</span>이야.</p>
+                    <p>이걸 해결하는 패턴이 크게 4가지 있어. 다른 MMO들이 실제로 쓰고 있는 방법들이야.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 패턴 1 — 존(Zone) 기반 스레딩</h2>
+
+            <div class="chat">
+                <div class="q">존 기반이 뭐야?</div>
+                <div class="a">
+                    <p>월드를 구역(Zone)으로 쪼개서, 각 구역을 별도 스레드(또는 별도 프로세스)가 담당하는 거야.</p>
+                    <p><span class="highlight">WoW(월드 오브 워크래프트)</span>가 대표적이야. 각 대륙(Eastern Kingdoms, Kalimdor)이나 던전 인스턴스가 별도 스레드에서 돌아가.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🗺️ 존 기반 스레딩 (WoW 스타일)
+
+[월드 서버]
+  ├─ 스레드 1: 동부 왕국 ── 플레이어 3,000명
+  ├─ 스레드 2: 칼림도어 ── 플레이어 2,500명
+  ├─ 스레드 3: 아웃랜드 ── 플레이어 1,200명
+  ├─ 스레드 4~20: 던전 인스턴스들
+  └─ 메시지 큐: 존 간 통신 (귓말, 거래, 파티)
+
+핵심: 같은 존 안에서는 싱글스레드!
+       존이 다르면 서로 간섭 없음</div>
+
+
+            <div class="chat">
+                <div class="q">비유하면?</div>
+                <div class="a">
+                    <p>아파트 관리야. 101동, 102동, 103동 각각 관리인이 따로 있어. 자기 동 안에서는 혼자 다 처리하고(싱글스레드), 다른 동이랑 연락할 일 있으면 관리사무소(메시지 큐)를 통해.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">문제점은?</div>
+                <div class="a">
+                    <p>존 경계를 넘을 때가 문제야.</p>
+                    <p>플레이어가 존 A에서 존 B로 이동하면? 한 스레드에서 다른 스레드로 캐릭터 데이터를 이관해야 해. 이때 잠깐 끊기거나 로딩이 생겨.</p>
+                    <p>그리고 한 존에 사람이 몰리면 (공성전, 월드보스) 그 스레드만 병목이 돼. <span class="warning">"오그리마 렉"</span>이 이거야.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>존 기반 스레딩</th>
+                </tr>
+                <tr>
+                    <td>대표 게임</td>
+                    <td>WoW, EVE Online (솔라 시스템 단위)</td>
+                </tr>
+                <tr>
+                    <td>장점</td>
+                    <td>구현 간단, 존 내부는 싱글스레드의 안전성</td>
+                </tr>
+                <tr>
+                    <td>단점</td>
+                    <td>존 경계 이동 시 끊김, 인구 쏠림 시 병목</td>
+                </tr>
+                <tr>
+                    <td>적합한 게임</td>
+                    <td>존/채널 구분이 명확한 MMO</td>
+                </tr>
+            </table>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 패턴 2 — Actor 모델</h2>
+
+            <div class="chat">
+                <div class="q">Actor 모델은 뭐가 다른데?</div>
+                <div class="a">
+                    <p>존 기반이 "지역"으로 나누는 거라면, Actor 모델은 "객체"로 나누는 거야.</p>
+                    <p>각 엔티티(플레이어, 몬스터, NPC)가 자기만의 <span class="highlight">메일박스</span>를 갖고, 메시지를 받아서 순차 처리해. 공유 메모리가 아예 없어.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">📬 Actor 모델
+
+[Player A Actor]  ←── 메일박스: 공격 결과, 버프 적용, ...
+    └─ 자기 상태만 수정 (HP, MP, 인벤토리)
+
+[Monster X Actor] ←── 메일박스: 피격, AI 틱, ...
+    └─ 자기 상태만 수정 (HP, 위치, 타겟)
+
+A가 X를 공격하면?
+  1. A Actor → X Actor에게 메시지: "30 데미지"
+  2. X Actor가 자기 메일박스에서 꺼내서 처리
+  3. X Actor → A Actor에게 메시지: "경험치 100"
+
+핵심: 남의 상태를 직접 안 건드려. 메시지로만 소통.</div>
+
+
+            <div class="chat">
+                <div class="q">어디서 쓰여?</div>
+                <div class="a">
+                    <p>Erlang/OTP 기반 게임 서버들이 이 방식이야. <span class="highlight">Riot Games</span>가 LoL 채팅 서버에 Erlang을 썼고, 일부 인디 MMO들이 Elixir(Erlang VM)로 만들어.</p>
+                    <p>개념적으로는 우리 서버의 IOCP 메시지 큐도 비슷해 — 다만 우리는 큐가 하나고 처리자도 하나인 거지.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">문제점은?</div>
+                <div class="a">
+                    <p>범위 공격이 골치야. A가 주변 10명에게 광역기를 쓰면? 10개의 Actor에게 각각 메시지를 보내고, 각각의 응답을 기다려야 해.</p>
+                    <p>메시지 왕복이 많아지면 <span class="warning">지연(latency)이 쌓여</span>. 싱글스레드에서는 for문 한 번이면 끝날 걸, Actor 모델에서는 비동기 메시지 10번이 필요해.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>Actor 모델</th>
+                </tr>
+                <tr>
+                    <td>대표 사례</td>
+                    <td>Erlang/OTP, Akka(Java), Orleans(.NET)</td>
+                </tr>
+                <tr>
+                    <td>장점</td>
+                    <td>락 없음, 분산 확장 용이, 장애 격리</td>
+                </tr>
+                <tr>
+                    <td>단점</td>
+                    <td>광역 처리 시 메시지 폭발, 디버깅 어려움</td>
+                </tr>
+                <tr>
+                    <td>적합한 게임</td>
+                    <td>개체 간 상호작용이 적은 게임, 채팅/로비 서버</td>
+                </tr>
+            </table>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 패턴 3 — ECS 병렬 시스템</h2>
+
+            <div class="chat">
+                <div class="q">ECS가 멀티스레드랑 무슨 관련이야?</div>
+                <div class="a">
+                    <p>ECS(Entity Component System)에서는 로직이 System 단위로 분리돼 있어.</p>
+                    <p>핵심은: <span class="key-point">서로 다른 데이터를 읽는 System들은 동시에 돌릴 수 있다</span>는 거야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">⚡ ECS 병렬 시스템 (Overwatch 스타일)
+
+프레임 1개 처리:
+
+[병렬 가능] ─┬─ MovementSystem (Position, Velocity 읽기/쓰기)
+             ├─ AISystem (AIState, Target 읽기/쓰기)
+             └─ AnimationSystem (AnimState 읽기/쓰기)
+                  ↓ 전부 끝나면
+[순차 처리] ─── CombatSystem (HP, Damage 읽기/쓰기)
+                  ↓
+[병렬 가능] ─┬─ RenderSystem (Position, Mesh 읽기)
+             └─ UISystem (HP, Name 읽기)
+
+핵심: 같은 Component를 안 건드리는 System끼리는 동시 실행!</div>
+
+
+            <div class="chat">
+                <div class="q">Overwatch가 이거 쓴다고?</div>
+                <div class="a">
+                    <p>맞아. Blizzard의 Tim Ford가 GDC 2017에서 발표했어. <span class="highlight">Overwatch</span>는 ECS 아키텍처를 쓰고, System의 읽기/쓰기 대상이 명시적이라서 어떤 System이 병렬 가능한지 자동으로 판단할 수 있어.</p>
+                    <p>Unity의 DOTS(Data-Oriented Technology Stack)도 같은 원리야. Burst Compiler가 자동으로 병렬 가능한 Job을 찾아서 멀티스레드로 돌려.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">문제점은?</div>
+                <div class="a">
+                    <p>기존 코드를 ECS로 바꾸는 게 <span class="warning">대공사</span>야. OOP로 짠 코드를 ECS로 전환하려면 사실상 다시 짜는 거거든.</p>
+                    <p>그리고 전투처럼 여러 Component를 동시에 건드리는 System은 결국 순차 처리해야 해서, 병렬화 이득이 제한적일 수 있어.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>ECS 병렬 시스템</th>
+                </tr>
+                <tr>
+                    <td>대표 사례</td>
+                    <td>Overwatch, Unity DOTS, Unreal Mass</td>
+                </tr>
+                <tr>
+                    <td>장점</td>
+                    <td>자동 병렬화 가능, 캐시 친화적, 성능 극대화</td>
+                </tr>
+                <tr>
+                    <td>단점</td>
+                    <td>기존 OOP 전환 불가, 전투 로직 병렬화 한계</td>
+                </tr>
+                <tr>
+                    <td>적합한 게임</td>
+                    <td>신규 프로젝트, 대규모 시뮬레이션</td>
+                </tr>
+            </table>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 패턴 4 — 공간 분할 (Spatial Partitioning)</h2>
+
+            <div class="chat">
+                <div class="q">존 기반이랑 뭐가 달라?</div>
+                <div class="a">
+                    <p>존 기반은 고정된 구역이야. "이 대륙은 이 스레드". 경계가 바뀌지 않아.</p>
+                    <p>공간 분할은 <span class="highlight">동적</span>이야. 사람이 많은 곳은 잘게 쪼개고, 사람이 없는 곳은 합쳐. 경계가 실시간으로 움직여.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">🔲 동적 공간 분할 (SpatialOS 스타일)
+
+평소:
+┌──────────────────┐
+│   워커 1          │  ← 넓은 영역, 유저 적음
+│                    │
+└──────────────────┘
+
+공성전 시작:
+┌────┬────┬────┬────┐
+│ W1 │ W2 │ W3 │ W4 │  ← 같은 영역을 4개로 쪼갬
+│50명│50명│50명│50명│     워커(스레드) 4개가 분담
+└────┴────┴────┴────┘
+
+핵심: 부하에 따라 워커 수를 실시간 조절</div>
+
+
+            <div class="chat">
+                <div class="q">어디서 쓰여?</div>
+                <div class="a">
+                    <p><span class="highlight">SpatialOS</span>(Improbable)가 이 방식이야. 수백 명이 한 전장에 모여도 자동으로 워커를 늘려서 처리해.</p>
+                    <p>핵심 아이디어: 게임 월드를 하나의 분산 시스템으로 보고, 각 서버 워커가 월드의 일부를 담당하되, 경계가 유동적이야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">문제점은?</div>
+                <div class="a">
+                    <p>경계에 걸친 엔티티 처리가 악몽이야. 플레이어 A가 워커 1과 워커 2의 경계에 서 있으면, 어느 워커가 A를 담당하지?</p>
+                    <p><span class="warning">엔티티 마이그레이션</span>(워커 간 이동) 로직이 극도로 복잡해. SpatialOS가 이걸 플랫폼 레벨에서 해결해주는 거지만, 직접 구현하면 난이도가 매우 높아.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>공간 분할</th>
+                </tr>
+                <tr>
+                    <td>대표 사례</td>
+                    <td>SpatialOS(Improbable), 자체 구현 엔진</td>
+                </tr>
+                <tr>
+                    <td>장점</td>
+                    <td>동적 스케일링, 공성전 같은 밀집 상황 대응</td>
+                </tr>
+                <tr>
+                    <td>단점</td>
+                    <td>경계 처리 극도로 복잡, 인프라 비용 높음</td>
+                </tr>
+                <tr>
+                    <td>적합한 게임</td>
+                    <td>대규모 오픈월드 PvP, 메타버스</td>
+                </tr>
+            </table>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 4가지 패턴 비교 — 뭘 골라야 해?</h2>
+            <table class="compare-table">
+                <tr>
+                    <th>패턴</th>
+                    <th>분할 단위</th>
+                    <th>공유 상태</th>
+                    <th>구현 난이도</th>
+                    <th>확장성</th>
+                </tr>
+                <tr>
+                    <td>싱글스레드 (현재)</td>
+                    <td>없음</td>
+                    <td>전부 공유 (문제없음)</td>
+                    <td>쉬움</td>
+                    <td>1 코어 한계</td>
+                </tr>
+                <tr>
+                    <td>존 기반</td>
+                    <td>지역(Zone)</td>
+                    <td>존 내부만 공유</td>
+                    <td>보통</td>
+                    <td>존 수만큼</td>
+                </tr>
+                <tr>
+                    <td>Actor 모델</td>
+                    <td>객체(Entity)</td>
+                    <td>공유 없음</td>
+                    <td>보통~어려움</td>
+                    <td>높음</td>
+                </tr>
+                <tr>
+                    <td>ECS 병렬</td>
+                    <td>시스템(System)</td>
+                    <td>Component 단위</td>
+                    <td>어려움</td>
+                    <td>코어 수만큼</td>
+                </tr>
+                <tr>
+                    <td>공간 분할</td>
+                    <td>동적 영역</td>
+                    <td>경계 부분만 공유</td>
+                    <td>매우 어려움</td>
+                    <td>매우 높음</td>
+                </tr>
+            </table>
+
+
+            <div class="chat">
+                <div class="q">우리 같은 서버는 어떤 게 현실적이야?</div>
+                <div class="a">
+                    <p>20년 된 OOP 코드를 ECS나 Actor로 바꾸는 건 사실상 새로 짜는 거야. 현실적인 선택지는:</p>
+                    <p>1. <span class="key-point">존/채널 기반 스레딩</span> — 기존 코드 거의 안 건드리고, 채널별로 프로세스를 분리. 가장 현실적.</p>
+                    <p>2. 신규 프로젝트라면 — ECS + 병렬 시스템이 미래지향적.</p>
+                    <p>3. 핵심은 "어디서 상태를 나눌 것인가"야. 나누는 단위가 다를 뿐, 원리는 같아.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">결국 싱글스레드가 나쁜 건 아니야?</div>
+                <div class="a">
+                    <p>전혀 아니야. 동접 수천 명 수준이면 싱글스레드가 <span class="key-point">최선의 선택</span>이야. 복잡도가 낮고, 버그가 적고, 유지보수가 쉬워.</p>
+                    <p>멀티스레드는 "성능이 부족할 때" 어쩔 수 없이 선택하는 거지, 더 좋아서 쓰는 게 아니야. 복잡도는 반드시 비용이 되거든.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="warning-box">
+            <h4>실무에서 주의할 점</h4>
+            <p>멀티스레드 = 더 좋은 게 아니야. 싱글스레드로 충분하면 싱글이 최선이야.</p>
+            <p>기존 서버를 멀티스레드로 바꾸는 건 리팩토링이 아니라 재작성에 가까워.</p>
+            <p>"채널 분리"가 가장 적은 비용으로 가장 큰 효과를 내는 방법이야.</p>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리: MMO 멀티스레드 게임 루프</h3>
+            <ul>
+                <li>싱글스레드 로직의 핵심 장점 = 레이스 컨디션 원천 차단, 락 불필요</li>
+                <li>멀티스레드가 어려운 이유 = 게임 상태가 전부 연결되어 있어서 락 범위가 넓어짐</li>
+                <li>존 기반 (WoW) = 지역별로 스레드 분리, 가장 현실적</li>
+                <li>Actor 모델 (Erlang) = 객체별 메일박스, 공유 메모리 제거, 광역기 처리가 약점</li>
+                <li>ECS 병렬 (Overwatch) = System 단위 자동 병렬화, 신규 프로젝트에 적합</li>
+                <li>공간 분할 (SpatialOS) = 동적 영역 분할, 최강 확장성, 최고 난이도</li>
+                <li>현실적 선택: 싱글로 충분하면 싱글, 부족하면 존/채널 분리부터</li>
+            </ul>
+        </div>
+
+
+        <div class="nav-links">
+            <a href="../category-thread/">← 멀티스레드</a>
+            <a href="../actor-model/">Actor 모델 →</a>
+        </div>
+    </div>
+</body>
+</html>
