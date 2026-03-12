@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU 16코어 샀는데 왜 4코어만 쓰고 있어? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../devops/" class="back-link">← 데브옵스</a>
+
+        <header class="header">
+            <h1>CPU 16코어 샀는데 왜 4코어만 쓰고 있어?</h1>
+            <p>게임 서버 인프라 사이징 — CPU·메모리·네트워크 부하 분석과 클라우드 머신 최적 배치</p>
+        </header>
+
+        <div class="conversation">
+            <h2>Part 1. 서버 머신 스펙, 감으로 고르면 어떻게 돼?</h2>
+
+            <div class="chat">
+                <div class="q">서버 느리면 CPU 좋은 거 사면 되는 거 아냐?</div>
+                <div class="a">
+                    <p>많은 사람이 그렇게 생각해. 그리고 실제로 그렇게 해서 돈을 날려.</p>
+                    <p>실화를 하나 들려줄게.</p>
+                    <p><span class="warning">8코어 서버가 느려서 16코어로 업그레이드했어. 비용 2배. 근데 체감 성능 차이? 거의 없었어.</span></p>
+                    <p>왜냐면 그 서버는 <span class="highlight">스레드 7개</span>만 쓰고 있었거든. 8코어에서 이미 코어가 남아돌고 있었는데, 16코어로 바꿔봤자 놀고 있는 코어만 늘어난 거야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">서버 머신을 고를 때 봐야 하는 4가지 자원:
+
+┌─────────────────────────────────────────────┐
+│                  서버 머신                     │
+│                                               │
+│   🧠 CPU          💾 메모리                   │
+│   - 코어 수        - 동접 × 유저당 메모리       │
+│   - 클럭(GHz)     - 버퍼, 큐 크기              │
+│   - IPC(세대)     - DB 캐시                    │
+│                                               │
+│   🌐 네트워크      💿 디스크                    │
+│   - 대역폭(Mbps)   - 로그 쓰기 속도             │
+│   - 패킷 수(PPS)   - DB 저장 시 I/O            │
+│   - 레이턴시(ms)                                │
+└─────────────────────────────────────────────┘
+
+이 4개 중 어디가 병목인지 모르면
+→ 엉뚱한 곳에 돈을 쓰게 됨</div>
+
+
+            <div class="chat">
+                <div class="q">그럼 어떤 지식이 있어야 '이 서버엔 이 스펙이면 된다'고 말할 수 있어?</div>
+                <div class="a">
+                    <p>크게 3단계야:</p>
+                    <p><span class="highlight">1단계: 서버가 내부에서 뭘 하는지 안다</span></p>
+                    <p>→ 스레드 구조, 메인 루프, DB 호출 방식</p>
+                    <p><span class="highlight">2단계: 실제 부하를 측정할 수 있다</span></p>
+                    <p>→ CPU 사용률, 메모리 점유, 네트워크 트래픽</p>
+                    <p><span class="highlight">3단계: 측정값 → 머신 스펙으로 번역한다</span></p>
+                    <p>→ '이 부하엔 이 인스턴스 타입이면 충분하다'</p>
+                    <p>이 3단계를 순서대로 가보자.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. CPU — 코어 수 vs 클럭 속도, 뭐가 더 중요해?</h2>
+
+            <div class="chat">
+                <div class="q">CPU 살 때 코어 수랑 클럭 중에 뭘 먼저 봐?</div>
+                <div class="a">
+                    <p>서버 구조에 따라 다른데, 게임 서버는 대부분 <span class="highlight">클럭(단일 코어 성능)</span>이 더 중요해.</p>
+                    <p>이유: 게임 서버의 메인 루프는 보통 싱글스레드야. 전투 판정, 아이템 처리, 퀘스트 진행 — 이걸 전부 <span class="highlight">1개 스레드</span>가 순차적으로 처리해.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">게임 서버의 전형적인 스레드 구조:
+
+  네트워크 스레드 (IOCP)          메인 스레드
+  ┌──────────────────┐         ┌──────────────────┐
+  │ 소켓에서 패킷 수신  │         │ 큐에서 메시지 꺼냄  │
+  │ 복호화            │  ─큐─▶  │ 게임 로직 처리     │
+  │ 큐에 넣기         │         │ DB 호출 (동기)     │
+  │                  │         │ 결과 전송          │
+  └──────────────────┘         └──────────────────┘
+  ×4개 (대부분 대기 중)           ×1개 (항상 바쁨) ★
+
+★ = 이게 병목. 이 스레드의 속도 = 서버 성능</div>
+
+
+            <div class="chat">
+                <div class="q">그럼 예를 들어, 8코어 3.0GHz vs 4코어 4.5GHz면?</div>
+                <div class="a">
+                    <p>게임 서버라면 <span class="key-point">4코어 4.5GHz가 더 빠름</span>.</p>
+                    <p>메인 스레드는 1코어만 쓰니까:</p>
+                    <p>- 8코어 3.0GHz → 메인 스레드 속도: 3.0GHz</p>
+                    <p>- 4코어 4.5GHz → 메인 스레드 속도: 4.5GHz (50% 빠름)</p>
+                    <p>나머지 코어는? IOCP 스레드 4개 + OS + DB 프로세스 돌리면 끝이야. 8코어까지 필요 없어.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 코어 수가 중요한 경우는 없어?</div>
+                <div class="a">
+                    <p>있어. <span class="highlight">한 머신에 서버 프로세스를 여러 개 올릴 때</span>.</p>
+                    <p>게임 서버 1개가 7스레드만 쓰면:</p>
+                    <p>- 16코어 머신에 서버 2개 → 14스레드 (코어 여유 있음)</p>
+                    <p>- 16코어 머신에 서버 3개 → 21스레드 (좀 빡빡)</p>
+                    <p>이런 식으로 <span class="key-point">코어 수 = 같은 머신에 올릴 수 있는 프로세스 수</span>로 보는 게 맞아.</p>
+                    <p>또, 웹 서버나 DB 서버처럼 <span class="highlight">멀티스레드로 병렬 처리</span>하는 서버는 코어 수가 직접적인 성능 향상으로 이어져.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>서버 유형</th>
+                    <th>코어 수 중요?</th>
+                    <th>클럭 중요?</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>게임 서버 (싱글스레드 루프)</td>
+                    <td>△</td>
+                    <td>★★★</td>
+                    <td>메인 루프가 1코어만 씀</td>
+                </tr>
+                <tr>
+                    <td>웹 서버 (Nginx, Node.js)</td>
+                    <td>★★</td>
+                    <td>★★</td>
+                    <td>워커 프로세스 × 코어 수</td>
+                </tr>
+                <tr>
+                    <td>DB 서버 (MSSQL, MySQL)</td>
+                    <td>★★★</td>
+                    <td>★★</td>
+                    <td>쿼리 병렬 실행에 코어 사용</td>
+                </tr>
+                <tr>
+                    <td>빌드 서버 (CI/CD)</td>
+                    <td>★★★</td>
+                    <td>★</td>
+                    <td>병렬 컴파일에 코어 수 직결</td>
+                </tr>
+            </table>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. IOCP 스레드 — 왜 늘려도 빨라지지 않아?</h2>
+
+            <div class="chat">
+                <div class="q">IOCP가 뭔데?</div>
+                <div class="a">
+                    <p>Windows에서 제공하는 <span class="highlight">비동기 네트워크 I/O 처리 구조</span>야.</p>
+                    <p>우체국 비유가 딱이야:</p>
+                    <p>- <span class="highlight">우체부</span> = IOCP 워커 스레드 (우체통에서 편지 꺼내서 분류함에 넣는 역할)</p>
+                    <p>- <span class="highlight">사장님</span> = 메인 스레드 (분류함에서 편지 꺼내서 실제 업무 처리)</p>
+                    <p>- <span class="highlight">분류함</span> = ReadQueue (CriticalSection 잠금으로 보호)</p>
+                    <p>IOCP 스레드가 하는 일은 단순해: 소켓에서 데이터가 오면 꺼내서, 복호화하고, 큐에 넣기. 끝.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 IOCP 스레드를 4개에서 8개로 늘리면? 우체부가 늘었으니 빨라져야 하잖아.</div>
+                <div class="a">
+                    <p>직감적으로는 그렇지. 하지만 맞춰봐 — 우체부 4명이 하루에 편지를 100통 처리할 수 있는데, 실제로 하루에 들어오는 편지가 30통이면?</p>
+                    <p><span class="warning">우체부를 8명으로 늘려도 처리하는 편지는 30통 그대로야.</span></p>
+                    <p>IOCP 스레드의 실제 시간 사용을 보면:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">IOCP 스레드 1개의 시간 사용 (동접 1000명 기준):
+
+  ██░░░░░░░░░░░░░░░░░░  대기 (GetQueuedCompletionStatus)  90%
+  █░░░░░░░░░░░░░░░░░░░  실제 작업 (복호화 + InQueue)      10%
+
+스레드 4개의 총 처리 용량:  ████████████████████████████████  400%
+실제 들어오는 패킷량:       ████████░░░░░░░░░░░░░░░░░░░░░░   40%
+
+→ 4개로도 이미 남아도는 상태
+→ 8개로 늘리면? 95% 놀고 있는 스레드가 8개가 될 뿐</div>
+
+
+            <div class="chat">
+                <div class="q">근데 이론적으로, 코어가 충분하면 스레드 늘려도 해는 없는 거 아냐? 1스레드 = 1코어잖아.</div>
+                <div class="a">
+                    <p>맞아, 그 이론은 정확해.</p>
+                    <p><span class="key-point">16코어에서 11스레드(IOCP 8개 + 3개)면 컨텍스트 스위칭 없음.</span></p>
+                    <p>실제로 해가 되는 경우는:</p>
+                    <p>- 8코어에서 IOCP 8개(총 11스레드) → 11 > 8이라 <span class="warning">컨텍스트 스위칭 발생</span> → 메인 스레드가 밀림</p>
+                    <p>- 16코어에서 IOCP 8개(총 11스레드) → 11 < 16이라 컨텍스트 스위칭 없음 → 해는 없음</p>
+                    <p>하지만 <span class="highlight">해가 없는 것 ≠ 이득이 있는 것</span>. 놀고 있는 스레드를 더 만드는 거라 성능 향상은 0이야.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>상황</th>
+                    <th>IOCP 4개</th>
+                    <th>IOCP 8개</th>
+                    <th>판정</th>
+                </tr>
+                <tr>
+                    <td>8코어 머신</td>
+                    <td>7스레드 < 8코어 ✓</td>
+                    <td>11스레드 > 8코어 ✗</td>
+                    <td>느려짐 (컨텍스트 스위칭)</td>
+                </tr>
+                <tr>
+                    <td>16코어 머신</td>
+                    <td>7스레드 < 16코어 ✓</td>
+                    <td>11스레드 < 16코어 ✓</td>
+                    <td>동일 (이득 없음)</td>
+                </tr>
+                <tr>
+                    <td>패킷 폭주 시</td>
+                    <td>처리 용량 넉넉</td>
+                    <td>처리 용량 더 넉넉</td>
+                    <td>극단 상황에서만 의미</td>
+                </tr>
+            </table>
+
+
+            <div class="chat">
+                <div class="q">그럼 IOCP 스레드 수의 정답은?</div>
+                <div class="a">
+                    <p>일반적으로 <span class="key-point">CPU 코어 수 × 1~2</span>가 권장값이야.</p>
+                    <p>하지만 진짜 중요한 건 공식이 아니라 <span class="highlight">측정</span>이야:</p>
+                    <p>1. 현재 IOCP 스레드들의 CPU 사용률을 봐</p>
+                    <p>2. 10% 미만이면 → 이미 충분 (줄여도 됨)</p>
+                    <p>3. 70% 이상이면 → 늘려야 함</p>
+                    <p>4. ReadQueue 오버플로우가 발생하면 → 확실히 부족</p>
+                    <p>대부분의 게임 서버에서는 4개면 동접 수천 명까지 문제없어.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 메모리 — 동접 1000명이면 얼마나 필요해?</h2>
+
+            <div class="chat">
+                <div class="q">서버 메모리는 뭐가 차지해?</div>
+                <div class="a">
+                    <p>게임 서버에서 메모리를 먹는 주범 3가지:</p>
+                    <p><span class="highlight">1. 유저당 메모리</span></p>
+                    <p>- 캐릭터 데이터 (스탯, 인벤토리, 퀘스트)</p>
+                    <p>- 소켓 버퍼 (수신 + 송신)</p>
+                    <p>- 세션 정보</p>
+                    <p><span class="highlight">2. 고정 메모리</span></p>
+                    <p>- ReadQueue (10MB 기본)</p>
+                    <p>- CSV 데이터 테이블 (게임 데이터)</p>
+                    <p>- 클라이언트 배열 (최대 접속자 슬롯)</p>
+                    <p><span class="highlight">3. DB 캐시</span></p>
+                    <p>- DB 서버가 같은 머신에 있다면 이게 제일 큼</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">구체적으로 계산하면?</div>
+                <div class="a">
+                    <p>실제 예시로 계산해보자:</p>
+                    <p><span class="key-point">유저 1명당</span>:</p>
+                    <p>- 캐릭터 구조체: ~8KB</p>
+                    <p>- 인벤토리 (200슬롯 × 아이템 구조체): ~16KB</p>
+                    <p>- 소켓 수신 버퍼: 88KB (MAX_ONETIME_RECEIVE_BUFFER)</p>
+                    <p>- 소켓 송신 버퍼: 설정값 (보통 8~256KB)</p>
+                    <p>- 합계: 약 <span class="highlight">120~370KB/유저</span></p>
+                    <p><span class="key-point">동접 1000명이면</span>:</p>
+                    <p>- 유저 메모리: 120MB ~ 370MB</p>
+                    <p>- 고정 메모리: ~200MB</p>
+                    <p>- OS + 기타: ~500MB</p>
+                    <p>- <span class="highlight">합계: 약 1~1.5GB</span></p>
+                    <p><span class="key-point">동접 5000명이면</span>:</p>
+                    <p>- 유저 메모리: 600MB ~ 1.8GB</p>
+                    <p>- 고정 + OS: ~700MB</p>
+                    <p>- <span class="highlight">합계: 약 1.5~3GB</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>동접</th>
+                    <th>유저 메모리</th>
+                    <th>고정 메모리</th>
+                    <th>합계</th>
+                    <th>권장 RAM</th>
+                </tr>
+                <tr>
+                    <td>500명</td>
+                    <td>60~180MB</td>
+                    <td>~700MB</td>
+                    <td>~1GB</td>
+                    <td>4GB</td>
+                </tr>
+                <tr>
+                    <td>1,000명</td>
+                    <td>120~370MB</td>
+                    <td>~700MB</td>
+                    <td>~1.5GB</td>
+                    <td>4GB</td>
+                </tr>
+                <tr>
+                    <td>3,000명</td>
+                    <td>360MB~1.1GB</td>
+                    <td>~700MB</td>
+                    <td>~2GB</td>
+                    <td>8GB</td>
+                </tr>
+                <tr>
+                    <td>5,000명</td>
+                    <td>600MB~1.8GB</td>
+                    <td>~700MB</td>
+                    <td>~3GB</td>
+                    <td>8GB</td>
+                </tr>
+                <tr>
+                    <td>10,000명</td>
+                    <td>1.2~3.7GB</td>
+                    <td>~700MB</td>
+                    <td>~5GB</td>
+                    <td>16GB</td>
+                </tr>
+            </table>
+
+
+            <div class="chat">
+                <div class="q">메모리는 넉넉하게 잡으면 안 돼?</div>
+                <div class="a">
+                    <p>클라우드에서는 <span class="warning">메모리 = 돈</span>이야. 월 과금이니까.</p>
+                    <p>- 4GB 인스턴스: 월 ~5만원</p>
+                    <p>- 16GB 인스턴스: 월 ~15만원</p>
+                    <p>- 64GB 인스턴스: 월 ~50만원</p>
+                    <p>실제로 3GB만 쓰는데 64GB를 신청하면 매달 35만원을 버리는 거야.</p>
+                    <p>그래서 <span class="key-point">측정해서 실사용량 × 1.5~2배</span>로 잡는 게 정석이야.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 네트워크 — 대역폭 얼마면 충분해?</h2>
+
+            <div class="chat">
+                <div class="q">게임 서버 네트워크 비용이 클까?</div>
+                <div class="a">
+                    <p>생각보다 안 커. 계산해보면:</p>
+                    <p>게임 패킷은 보통 50~200바이트로 작아.</p>
+                    <p><span class="key-point">동접 1000명, 초당 패킷 10개/유저 기준</span>:</p>
+                    <p>- 수신: 1000명 × 10패킷 × 100바이트 = <span class="highlight">1MB/초</span></p>
+                    <p>- 송신: 보통 수신의 3~5배 = <span class="highlight">3~5MB/초</span></p>
+                    <p>- 합계: 약 <span class="highlight">40~50Mbps</span></p>
+                    <p>100Mbps 회선이면 동접 1000명은 여유야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 네트워크가 병목인 경우는?</div>
+                <div class="a">
+                    <p>두 가지 상황에서 터져:</p>
+                    <p><span class="warning">1. 브로드캐스트 폭발</span></p>
+                    <p>100명이 한 화면에 모이면 → 각 유저에게 99명의 이동 패킷 전송</p>
+                    <p>= 100 × 99 × 50바이트 × 초당 5회 = <span class="warning">2.5MB/초 (이 지역만)</span></p>
+                    <p>공성전에 3000명이 모이면? 수학적으로 불가능한 수치가 나와.</p>
+                    <p><span class="warning">2. 대용량 패킷</span></p>
+                    <p>캐릭터 로딩 시 인벤토리 전체 전송 = 수십KB</p>
+                    <p>동시 로그인 러시(점검 해제 후) → 순간 폭주</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>자원</th>
+                    <th>측정 도구</th>
+                    <th>주요 지표</th>
+                    <th>위험 신호</th>
+                </tr>
+                <tr>
+                    <td>CPU</td>
+                    <td>Task Manager, perf</td>
+                    <td>코어별 사용률 %</td>
+                    <td>메인 스레드 코어 90%↑</td>
+                </tr>
+                <tr>
+                    <td>메모리</td>
+                    <td>Task Manager, VMMap</td>
+                    <td>Working Set, Commit</td>
+                    <td>물리 RAM 80%↑</td>
+                </tr>
+                <tr>
+                    <td>네트워크</td>
+                    <td>perfmon, netstat</td>
+                    <td>Bytes/sec, PPS</td>
+                    <td>대역폭 70%↑</td>
+                </tr>
+                <tr>
+                    <td>디스크</td>
+                    <td>perfmon, iostat</td>
+                    <td>Queue Length, IOPS</td>
+                    <td>Queue > 2</td>
+                </tr>
+            </table>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 클라우드 머신 실전 배치 — NCP/AWS에서 어떻게 골라?</h2>
+
+            <div class="chat">
+                <div class="q">클라우드 인스턴스 유형이 너무 많은데, 게임 서버는 뭘 골라?</div>
+                <div class="a">
+                    <p>클라우드 인스턴스는 보통 이렇게 나눠져:</p>
+                    <p>- <span class="highlight">범용 (General Purpose)</span>: CPU/메모리 균형 — 대부분의 게임 서버</p>
+                    <p>- <span class="highlight">컴퓨팅 최적화 (Compute Optimized)</span>: 높은 클럭 — 싱글스레드 병목인 게임 서버에 최적</p>
+                    <p>- <span class="highlight">메모리 최적화 (Memory Optimized)</span>: 대용량 RAM — DB 서버</p>
+                    <p>- 스토리지 최적화: 높은 I/O — 로그 서버</p>
+                    <p>게임 서버(싱글스레드 메인루프)라면 <span class="key-point">컴퓨팅 최적화 인스턴스</span>가 가성비 최고야. 코어 수보다 단일 코어 클럭이 높은 타입.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">실전에서 어떻게 배치해?</div>
+                <div class="a">
+                    <p>우리 서버 구조 기준으로 실전 예시:</p>
+                    <p><span class="key-point">방법 1: 프로세스별 머신 분리 (안전, 비쌈)</span></p>
+                    <p>- 게임서버 1대 = 4코어 고클럭 × 1대</p>
+                    <p>- GameDB서버 = 4코어 × 1대</p>
+                    <p>- DB(MSSQL) = 8코어 메모리최적화 × 1대</p>
+                    <p><span class="key-point">방법 2: 한 머신에 여러 프로세스 (효율적)</span></p>
+                    <p>- 16코어 머신에 게임서버 2개 + GameDB 2개 = 28스레드/16코어</p>
+                    <p>- 비용 절감 효과: 머신 4대 → 1대</p>
+                    <p>판단 기준은 <span class="highlight">총 스레드 수 ≤ 코어 수 × 1.5</span> 를 넘지 않는 것.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">클라우드 머신 배치 예시 (16코어 머신 1대):
+
+┌─────────────────────────────────────────────┐
+│              16코어 머신 (32GB RAM)            │
+│                                               │
+│  ┌─────────────┐  ┌─────────────┐            │
+│  │  Game11      │  │  Game12      │            │
+│  │  7스레드      │  │  7스레드      │            │
+│  │  코어 0~3    │  │  코어 4~7    │            │
+│  └─────────────┘  └─────────────┘            │
+│                                               │
+│  ┌─────────────┐  ┌─────────────┐            │
+│  │  GameDB1     │  │  GameDB2     │            │
+│  │  7스레드      │  │  7스레드      │            │
+│  │  코어 8~11   │  │  코어 12~15  │            │
+│  └─────────────┘  └─────────────┘            │
+│                                               │
+│  총 28스레드 / 16코어 = 1.75배 (약간 오버)       │
+│  → 실제로는 대부분 대기 상태라 OK               │
+└─────────────────────────────────────────────┘</div>
+
+
+            <div class="chat">
+                <div class="q">비용 절감 팁 있어?</div>
+                <div class="a">
+                    <p><span class="key-point">1. 측정 먼저, 스펙 나중</span></p>
+                    <p>최소 스펙으로 시작 → 모니터링 → 병목 발견 → 해당 자원만 업그레이드</p>
+                    <p><span class="key-point">2. 스케일 아웃 > 스케일 업</span></p>
+                    <p>16코어 1대(비쌈) < 8코어 2대(쌈) — 게임 서버는 프로세스 단위로 나뉘니까</p>
+                    <p><span class="key-point">3. 자원별로 다른 인스턴스</span></p>
+                    <p>게임 서버 → 컴퓨팅 최적화 (고클럭)</p>
+                    <p>DB 서버 → 메모리 최적화 (대용량 RAM)</p>
+                    <p>로그 서버 → 범용 (대충 돌아도 됨)</p>
+                    <p><span class="key-point">4. 야간/비피크 시간 축소</span></p>
+                    <p>새벽 2~7시 동접 100명인데 풀스펙 유지? 클라우드는 시간제야.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 이 능력을 키우려면 — 필요한 지식 체계</h2>
+
+            <div class="chat">
+                <div class="q">서버 인프라 사이징 능력을 키우려면 뭘 공부해야 해?</div>
+                <div class="a">
+                    <p>크게 4개 영역이야:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">서버 인프라 사이징 지식 체계:
+
+📚 1. OS/시스템 기초                    🔧 2. 서버 내부 구조
+├─ 프로세스 vs 스레드                   ├─ 스레드 모델 (싱글/멀티)
+├─ 컨텍스트 스위칭 비용                 ├─ 메인 루프 구조
+├─ 가상 메모리 / Working Set           ├─ 네트워크 I/O (IOCP, epoll)
+├─ CPU 캐시 (L1/L2/L3)               ├─ 동기 vs 비동기 DB
+├─ 커널 모드 vs 유저 모드               └─ 메시지 큐 / 버퍼 구조
+└─ CriticalSection / 뮤텍스
+
+📊 3. 모니터링/측정                     ☁️  4. 클라우드/인프라
+├─ CPU 프로파일링                      ├─ 인스턴스 타입 이해
+├─ 메모리 분석 (VMMap, Heap)           ├─ 네트워크 토폴로지
+├─ 네트워크 측정 (PPS, BPS)            ├─ 로드밸런서
+├─ 병목 식별법                         ├─ 오토스케일링
+└─ 부하 테스트 (더미 클라이언트)          └─ 비용 최적화</div>
+
+
+            <div class="chat">
+                <div class="q">이걸 다 알아야 해?</div>
+                <div class="a">
+                    <p>전부 전문가 수준일 필요는 없어. 레벨별로 나누면:</p>
+                    <p><span class="highlight">레벨 1 — 최소 필수 (이것만 알아도 삽질 방지)</span></p>
+                    <p>- 스레드 모델 이해 (우리 서버가 스레드 몇 개 쓰는지)</p>
+                    <p>- CPU 코어 vs 클럭의 차이</p>
+                    <p>- Task Manager에서 프로세스별 CPU/메모리 읽기</p>
+                    <p>- 클라우드 인스턴스 카탈로그 읽는 법</p>
+                    <p><span class="highlight">레벨 2 — 실전 운영 (비용 최적화 가능)</span></p>
+                    <p>- 유저당 메모리 계산</p>
+                    <p>- 네트워크 대역폭 추정</p>
+                    <p>- perfmon/모니터링 도구 사용</p>
+                    <p>- 부하 테스트로 한계점 파악</p>
+                    <p><span class="highlight">레벨 3 — 아키텍처 수준 (설계 단계에서 판단)</span></p>
+                    <p>- IOCP/epoll 내부 동작 원리</p>
+                    <p>- CriticalSection 경쟁과 스레드 수의 관계</p>
+                    <p>- DB 동기/비동기의 성능 차이</p>
+                    <p>- NUMA, CPU affinity 최적화</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>공부 주제</th>
+                    <th>왜 필요한지</th>
+                    <th>추천 학습 방법</th>
+                </tr>
+                <tr>
+                    <td>OS 스레드/프로세스</td>
+                    <td>서버가 CPU를 어떻게 쓰는지 이해</td>
+                    <td>OSTEP 교재 (무료), Windows Internals</td>
+                </tr>
+                <tr>
+                    <td>IOCP / epoll</td>
+                    <td>네트워크 엔진의 스레드 구조 이해</td>
+                    <td>MSDN 문서 + 실제 서버 코드 읽기</td>
+                </tr>
+                <tr>
+                    <td>perfmon / 모니터링</td>
+                    <td>실제 부하를 숫자로 보는 능력</td>
+                    <td>라이브 서버에서 직접 측정해보기</td>
+                </tr>
+                <tr>
+                    <td>클라우드 인스턴스 카탈로그</td>
+                    <td>스펙 → 비용 변환 능력</td>
+                    <td>NCP/AWS 가격 계산기 실습</td>
+                </tr>
+                <tr>
+                    <td>부하 테스트</td>
+                    <td>한계점을 사전에 파악</td>
+                    <td>더미 클라이언트로 동접 올려보기</td>
+                </tr>
+            </table>
+
+        </div>
+
+        <div class="warning-box">
+            <h4>흔한 실수 — 이것만 피해도 절반은 성공</h4>
+            <p>CPU 느리면 코어 수부터 늘린다 → 싱글스레드 서버면 클럭이 중요</p>
+            <p>메모리 넉넉하게 64GB 신청 → 실사용 3GB인데 매달 35만원 낭비</p>
+            <p>스레드 늘리면 무조건 빨라진다 → 병목이 아닌 곳을 늘리면 오히려 느려짐</p>
+            <p>감으로 스펙 결정 → 측정 없이 결정하면 과잉 또는 부족</p>
+            <p>모든 서버에 같은 스펙 적용 → 게임/DB/로그 서버는 병목이 다 다름</p>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>게임 서버 CPU: 코어 수보다 단일 코어 클럭(GHz)이 중요 — 메인 루프가 싱글스레드</li>
+                <li>IOCP 스레드 늘리기: 이미 90% 놀고 있으면 늘려도 의미 없음 — 병목이 아닌 곳 최적화는 효과 0</li>
+                <li>코어 수의 실질적 가치: 한 머신에 서버 프로세스를 더 올릴 수 있는 '방 수'</li>
+                <li>메모리 산정: 유저당 메모리 × 최대 동접 × 1.5~2배 = 필요 RAM</li>
+                <li>인프라 사이징 핵심: 측정 → 병목 식별 → 해당 자원만 업그레이드 (감이 아닌 숫자로)</li>
+                <li>서버 프로그래머의 가치: 이 판단을 할 수 있느냐가 '관리직'과 '매출 기여자'의 차이</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <h4>생각해볼 질문</h4>
+            <p>우리 서버에서 DB 호출을 비동기로 바꾸면 코어 수 늘리는 게 의미 있어질까?</p>
+            <p>동접 10,000명을 버텨야 한다면, 머신 1대를 키울까 vs 머신 여러 대로 나눌까?</p>
+            <p>메인 스레드의 CPU 사용률이 95%야. 클럭 올리기 vs 로직 최적화, 뭐가 먼저일까?</p>
+        </div>
+
+
+        <div class="nav-links">
+            <a href="../devops/">← 데브옵스 목록</a>
+            <a href="../devops/">다음 →</a>
+        </div>
+    </div>
+</body>
+</html>
