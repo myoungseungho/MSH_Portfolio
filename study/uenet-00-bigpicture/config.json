@@ -1,0 +1,84 @@
+{
+  "slug": "uenet-00-bigpicture",
+  "title": "언리얼 네트워크는 어떻게 돌아갈까? — 한 장의 그림",
+  "subtitle": "서버가 진실, 클라는 복제본을 본다 + RPC. 이 두 개가 거의 전부야",
+  "category": "언리얼 네트워크",
+  "category_path": "../ue-network/",
+  "prev_link": "../ue-network/",
+  "prev_text": "← 언리얼 네트워크",
+  "next_link": "../uenet-01-socket/",
+  "next_text": "Ch1. 소켓 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5;transition:color .2s}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}.sim-controls{gap:8px}}\n    </style>\n    <script src='uenet00.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "이 섹션은 이렇게 진행돼",
+      "items": [
+        "가장 추상적인 질문 '언리얼 네트워크는 어떻게 돌아갈까?'에서 시작해, 시스템을 하나씩 파고들어.",
+        "매 챕터마다: 질문으로 예측 → 비유로 그림 → 인터랙티브로 직접 확인 → 우리 서버(조선협객전)와 비교 → 실제 UE 소스 클래스까지.",
+        "목표: 초보자도 '언리얼 네트워크가 어떻게 도는지' 머릿속에 그림을 그리고, 동시에 실제로 어떻게 동작하는지 안다."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 한마디로 뭐야?",
+      "items": [
+        { "type": "qa", "q": "온라인 게임에서, 내 화면 속 저 적은 '진짜' 거기 있는 걸까?", "a": "아니야. 네 화면 속 적은 '복제본'이야.\n진짜 적의 위치·체력은 서버에 있고, 네 화면은 그걸 베껴 그린 그림이야.\n그래서 핵심 명제 하나만 기억하면 돼: 서버가 진실, 클라는 복제본을 본다." },
+        { "type": "qa", "q": "그럼 언리얼 네트워크를 한 문장으로?", "a": "서버가 권위(진실)를 갖고, 상태는 '복제(Replication)'로 클라에 자동 동기화, 행동은 'RPC'로 호출한다.\n복제 + RPC — 이 두 개가 거의 전부야. 나머지 챕터는 전부 '이걸 어떻게 효율적으로·정확하게 하느냐'의 디테일이야." },
+        { "type": "qa", "q": "비유로?", "a": "스포츠 중계로 보면 — 실제 경기(서버)는 경기장에서 딱 한 번 벌어져. 집집마다 TV(클라)는 그 경기를 '중계 화면'으로 봐.\n시청자가 '리플레이 보여줘' 버튼을 누르면(RPC) 방송국(서버)이 받아서 모두에게 같은 리플레이를 송출해. 시청자가 경기 결과를 바꿀 순 없어 — 경기장이 진실이니까." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 직접 봐 — 복제와 RPC",
+      "items": [
+        { "type": "qa", "q": "두 메커니즘을 눈으로 보자.", "a": "탭으로 ① 상태 복제 / ② RPC 를 바꿔봐.\n① 서버 액터가 움직이면 상태가 클라들로 흘러가 복제본이 따라오는 것, ② 클라 이벤트가 서버로 올라갔다가 모든 클라로 뿌려지는 것을 비교해봐." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ue0tab active' type='button' data-m='rep'>① 상태 복제</button>\n    <button class='wtab ue0tab' type='button' data-m='rpc'>② RPC (이벤트)</button>\n  </div>\n  <canvas id='ue0-canvas' role='img' aria-label='언리얼 네트워크 큰 그림. 위에 서버, 아래에 클라이언트 2대. 상태 복제 모드에서는 서버 액터가 움직이면 상태가 클라들로 흘러가고, RPC 모드에서는 클라 이벤트가 서버로 올라간 뒤 모든 클라로 멀티캐스트된다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ue0-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue0-rep'>0</span><span class='sim-stat-lbl'>복제 메시지(서버→클라)</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue0-rpc'>0</span><span class='sim-stat-lbl'>RPC 호출</span></div>\n  </div>\n  <p class='sim-caption' id='ue0-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 복제 vs RPC — 언제 뭘 써?",
+      "items": [
+        { "type": "qa", "q": "둘 다 서버-클라 통신인데 뭐가 달라?", "a": "복제(Replication)는 '상태'를 동기화해. 체력, 위치 같은 값이 바뀌면 엔진이 알아서 보내. '지금 상태가 이래'를 계속 맞추는 거야.\nRPC는 '이벤트/행동'을 호출해. '점프해라', '폭발 이펙트 터뜨려라' 같은 일회성 신호야." },
+        { "type": "qa", "q": "예를 들면?", "a": "캐릭터 체력 70 → 복제(값이라 계속 동기화).\n'스킬 시전 이펙트' → Multicast RPC(한 번 터지고 끝, 값으로 들고 있을 필요 없음).\n둘을 섞어 써. 대부분의 게임 상태는 복제, 순간 이벤트는 RPC." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 우리 서버(조선협객전)랑 뭐가 같고 달라",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>항목</th><th>조선협객전 (우리)</th><th>언리얼</th></tr>\n<tr><td>권위</td><td class='good'>서버 권위 (게임로직 1 스레드)</td><td class='good'>서버 권위</td></tr>\n<tr><td>상태 동기화</td><td class='warn'>패킷 수동 (CM_/SM_ 직접 작성)</td><td class='good'>객체 자동 복제 (선언만)</td></tr>\n<tr><td>이벤트</td><td>패킷 핸들러</td><td>RPC (함수처럼 호출)</td></tr>\n<tr><td>구조 단위</td><td>채널·존 프로세스 분리</td><td>1 프로세스 = 1 월드 (세션형)</td></tr>\n<tr><td>영속·대규모</td><td class='good'>DB·서버간 통신·수천 명 상시</td><td class='warn'>세션형(보통 ~100명), 영속·DB는 직접 구현</td></tr>\n</table>" },
+        { "type": "qa", "q": "한 줄로?", "a": "둘 다 '서버가 진실'은 같아. 차이는 — 언리얼은 '객체 단위 자동 복제'를 엔진이 내장해서 편하지만 세션형(한 판)에 맞춰져 있고, 우리는 패킷을 손으로 짜지만 영속 MMO(수천 명·DB·서버간)에 맞춰 만든 거야.\n이 차이가 마지막 챕터의 결론으로 이어져: 'UE 데디서버가 왜 MMO를 그대로 못 하나.'" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. 실제로는? (UE 소스 첫걸음)",
+      "items": [
+        { "type": "qa", "q": "코드에서 '서버냐 클라냐'는 어떻게 구분해?", "a": "UE는 NetMode로 구분해: Standalone(혼자), ListenServer(호스트가 서버+클라 겸함), DedicatedServer(서버 전용), Client.\n같은 코드가 NetMode에 따라 다르게 동작해. 'HasAuthority()'가 true면 '나는 서버다'라는 뜻." },
+        { "type": "qa", "q": "그럼 '이 액터를 복제해'는 어디서?", "a": "AActor의 bReplicates = true 한 줄. 그러면 서버가 그 액터를 만들면 클라들에도 자동으로 생겨.\n실제 송수신은 UNetDriver / UNetConnection / UChannel이 담당하는데, 그건 다음 챕터들에서 하나씩 뜯어봐." },
+        { "type": "diagram", "content": "[UE 핵심 클래스 지도 — 이 섹션에서 차차 만남]\n\n ENetMode            서버/클라 구분 (HasAuthority)\n UWorld / AGameMode  월드, 게임 규칙(서버에만 존재)\n AActor::bReplicates 이 객체를 복제할까?\n   └ UNetDriver      실제 네트워크 송수신 엔진      (Ch5)\n       └ UNetConnection  클라 1명과의 연결           (Ch5)\n           └ UChannel / Bunch  데이터 단위           (Ch6)" }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>한 문장</strong>: 서버가 진실(권위), 클라는 복제본을 본다",
+        "<strong>두 메커니즘</strong>: 상태는 복제(Replication, 값 동기화), 행동은 RPC(이벤트 호출)",
+        "<strong>우리와 같은 점</strong>: 서버 권위. <strong>다른 점</strong>: UE는 객체 자동 복제 내장(세션형), 우리는 패킷 수동(영속 MMO)",
+        "<strong>NetMode</strong>로 서버/클라 구분, <strong>HasAuthority()</strong> = 내가 서버인가, <strong>bReplicates</strong> = 이 액터를 복제할까",
+        "다음부터: 소켓 → TCP/UDP → 우리 서버 한 바퀴 → NetDriver/Channel → 복제 → 이동예측 → 대규모/Iris"
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "다음 챕터",
+      "items": [
+        "Ch1. 컴퓨터끼리 어떻게 대화하나 — IP·포트·소켓 (모든 네트워크의 바닥)",
+        "큰 그림을 그렸으니, 이제 바닥부터 한 층씩 올라가며 '실제로 어떻게'를 채운다."
+      ]
+    }
+  ]
+}
