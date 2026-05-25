@@ -1,0 +1,83 @@
+{
+  "slug": "uenet-04-our-server",
+  "title": "우리 서버 한 바퀴 — 조선협객전은 어떻게 도나",
+  "subtitle": "UE를 더 파기 전에, 비교 기준점인 우리 서버의 패킷 여정을 본다",
+  "category": "언리얼 네트워크",
+  "category_path": "../ue-network/",
+  "prev_link": "../uenet-03-serialize-iocp/",
+  "prev_text": "← Ch3. 직렬화 & IOCP",
+  "next_link": "../uenet-05-netdriver/",
+  "next_text": "Ch5. NetDriver →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.5rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.76rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='uenet04.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "클라 → Gate → Game ↔ GameDB. Gate가 관문이고, Game이 게임 로직, GameDB가 저장.",
+        "패킷 종류: CM_(클라→서버), SM_(서버→클라), DSM_(서버↔서버). Gate는 클라 패킷을 Game으로 forward.",
+        "이게 UE와 비교할 기준점. 이후 챕터마다 'UE는 이걸 어떻게 다르게 하나'를 본다."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 왜 UE 전에 우리 서버부터?",
+      "items": [
+        { "type": "qa", "q": "UE 배우는데 왜 우리 서버를 봐?", "a": "비교 기준점이 있어야 'UE가 뭘 다르게 했는지'가 보이거든.\n우리 서버를 한 바퀴 돌아두면, 다음 챕터마다 'UE의 NetDriver = 우리 Gate+IOCP', 'UE의 RPC = 우리 CM_/SM_ 핸들러' 식으로 1:1로 꿰어져." },
+        { "type": "qa", "q": "큰 그림은?", "a": "클라가 Gate에 접속(Ch1의 15000 포트). Gate는 클라 패킷을 Game으로 넘기고, Game은 로직을 돌려 GameDB에 저장하거나 다른 서버와 통신해.\n핵심은 '클라는 Game에 직접 못 붙는다' — 무조건 Gate를 거쳐." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 패킷의 여정",
+      "items": [
+        { "type": "qa", "q": "패킷이 어디로 흐르는지 보자.", "a": "탭으로 ① 클라 패킷(CM_) / ② 브로드캐스트(SM_) / ③ 서버간(DSM_) 을 바꿔봐.\n노드 사이를 토큰이 흐르는 걸 따라가면 각 패킷 종류의 경로가 보여." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ue4tab active' type='button' data-m='cm'>① 클라 패킷 (CM_)</button>\n    <button class='wtab ue4tab' type='button' data-m='bc'>② 브로드캐스트 (SM_)</button>\n    <button class='wtab ue4tab' type='button' data-m='dsm'>③ 서버간 (DSM_)</button>\n  </div>\n  <canvas id='ue4-canvas' role='img' aria-label='조선협객전 서버 아키텍처 패킷 여정. 클라이언트, Gate, Game, GameDB, Login, 다른 서버 노드 사이로 패킷 토큰이 흐른다. CM_은 클라에서 Gate를 거쳐 Game으로, 브로드캐스트는 Game에서 Gate를 통해 여러 클라로, DSM_은 서버끼리 오간다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ue4-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue4-hops'>0</span><span class='sim-stat-lbl'>거친 홉(노드 이동) 수</span></div>\n  </div>\n  <p class='sim-caption' id='ue4-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. Gate — 모든 클라 패킷의 관문",
+      "items": [
+        { "type": "qa", "q": "Gate는 정확히 뭘 해?", "a": "클라이언트가 붙는 유일한 관문이야. 클라 패킷을 받아서 알맞은 서버(Game/Login/GameDB)로 forward해.\n그래서 새 CM_ 패킷을 만들면 Gate의 HandleMsg switch에 case를 꼭 등록해야 해 — 안 그러면 default로 drop돼서 Game까지 도달 못 해." },
+        { "type": "qa", "q": "왜 클라가 Game에 직접 안 붙어?", "a": "보안·구조 때문이야. 관문을 하나로 모으면 인증·필터링·연결 관리가 단순해지고, 내부 서버(Game/DB)를 외부에 직접 노출하지 않아.\nUE의 데디서버는 보통 클라가 서버에 직접 붙는 단순 구조 — 우리가 Gate를 두는 건 다중 서버·영속 MMO라서야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 브로드캐스트와 서버간 통신",
+      "items": [
+        { "type": "qa", "q": "내가 움직이면 남들 화면엔 어떻게 보여?", "a": "Game이 'A가 여기로 이동' SM_ 패킷을 만들어, Gate가 주변 클라들에게 뿌려(BroadCast).\n근데 '주변'이 누구까지냐가 문제 — 전부에게 뿌리면 부하 폭발이라, 관심 영역(AOI)으로 추려. UE의 Relevancy(Ch11)와 같은 고민이야." },
+        { "type": "qa", "q": "다른 서버(채널/지역) 데이터가 필요하면?", "a": "직접 그 서버 메모리·DB를 건드리지 않고, 서버끼리 DSM_ 메시지를 주고받아.\n이게 '서버 = 액터' 관점이야 — 각 서버가 자기 데이터만 갖고 메시지로만 통신. (액터모델 글 참고)" },
+        { "type": "diagram", "content": "[조선협객전 서버 아키텍처]\n\n        Client ──▶ Gate ──▶ Game ◀──▶ GameDB\n                    │         │\n                    │         ├──▶ Login\n                    │         └──▶ Game(다른 서버)  (DSM_)\n                    ▼\n           SM_ 브로드캐스트 → 주변 Client들\n\n CM_ 클라→서버 / SM_ 서버→클라 / DSM_ 서버↔서버" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. UE와 어떻게 대응되나 (예고)",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>우리 (조선협객전)</th><th>언리얼 대응</th><th>다룰 챕터</th></tr>\n<tr><td>IOCP 수신 + Gate</td><td>UNetDriver / UNetConnection</td><td>Ch5</td></tr>\n<tr><td>패킷 구조 / 큐</td><td>UChannel / Bunch</td><td>Ch6</td></tr>\n<tr><td>CM_ / SM_ 핸들러</td><td>RPC (Server/Client/Multicast)</td><td>Ch8</td></tr>\n<tr><td>SM_ 상태 동기화 패킷</td><td>Property Replication</td><td>Ch9~10</td></tr>\n<tr><td>BroadCast 대상 추리기(AOI)</td><td>Relevancy / NetCullDistance</td><td>Ch11</td></tr>\n</table>" },
+        { "type": "qa", "q": "한 줄로?", "a": "우리가 손으로 짜는 것(Gate forward, CM_/SM_, BroadCast)을 UE는 엔진이 자동(NetDriver, RPC, Replication)으로 해줘. 다음 챕터부터 그 '자동'의 속을 하나씩 열어볼 거야." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>구조</strong>: Client → Gate(관문) → Game ↔ GameDB / Login / 다른 서버",
+        "<strong>패킷</strong>: CM_(클라→서버), SM_(서버→클라), DSM_(서버↔서버)",
+        "<strong>Gate</strong> = 유일한 관문, 클라 패킷을 forward — case 등록 누락 시 drop",
+        "<strong>BroadCast</strong> = 주변에게 SM_ 뿌리기, 대상 추리기 = AOI(=UE Relevancy)",
+        "<strong>DSM_</strong> = 서버끼리 메시지(서버=액터), 직접 데이터 안 건드림",
+        "우리가 수동으로 하는 걸 UE는 엔진이 자동 — 다음 챕터부터 그 속을 연다"
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "다음 챕터",
+      "items": [
+        "Ch5. NetDriver & NetConnection — UE 네트워크의 엔진. 우리 'IOCP+Gate'에 대응하는 자리"
+      ]
+    }
+  ]
+}
