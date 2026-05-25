@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPC — 함수처럼 보이는 원격 호출 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+    <style>
+    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}
+    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}
+    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}
+    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    .sim canvas{width:100%;display:block;border-radius:12px}
+    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
+    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}
+    .sim-stats{display:flex;gap:10px;margin-top:16px}
+    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}
+    .sim-stat-num{display:block;font-size:1.5rem;font-weight:800;color:#e3eaf5}
+    .sim-stat-lbl{font-size:.76rem;color:#90a4c4}
+    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}
+    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}
+    </style>
+    <script src='uenet08.js' defer></script>
+</head>
+<body>
+    <div class="container">
+        <a href="../ue-network/" class="back-link">← 언리얼 네트워크</a>
+
+        <header class="header">
+            <h1>RPC — 함수처럼 보이는 원격 호출</h1>
+            <p>호출은 한 쪽에서, 실행은 다른 쪽에서. Server / Client / Multicast</p>
+        </header>
+
+        <div class="info-box">
+            <h4>30초 요약</h4>
+            <p>RPC = 함수를 호출하면 그 본문이 '다른 컴퓨터에서' 실행되는 것. 호출과 실행 위치가 다름.</p>
+            <p>3종: Server RPC(클라→서버 실행), Client RPC(서버→대상 클라 실행), Multicast(서버→모든 클라 실행).</p>
+            <p>우리 CM_/SM_ 핸들러가 곧 RPC. Server RPC는 반드시 검증(WithValidation) — 서버 권위.</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. '함수처럼 보인다'는 게 뭐야</h2>
+
+            <div class="chat">
+                <div class="q">RPC가 패킷이랑 뭐가 달라?</div>
+                <div class="a">
+                    <p>본질은 같아 — 결국 패킷이 오가. 근데 코드에선 그냥 함수 호출처럼 보이게 감싼 거야. ServerFire() 하면 마치 로컬 함수 부르듯 쓰지만, 실제론 그게 네트워크 타고 서버에서 실행돼.</p>
+                    <p>핵심 질문은 항상 '이 함수 본문이 어느 컴퓨터에서 도느냐'야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">어떻게 표시해?</div>
+                <div class="a">
+                    <p>UFUNCTION 매크로로: UFUNCTION(Server, Reliable, WithValidation) 같은 식. Server/Client/NetMulticast로 '어디서 실행'을, Reliable/Unreliable로 '꼭 도착 여부'를 정해.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 3종 RPC를 봐</h2>
+
+            <div class="chat">
+                <div class="q">방향을 직접 보자.</div>
+                <div class="a">
+                    <p>탭으로 ① Server ② Client ③ Multicast 를 바꿔봐. 호출이 출발하는 쪽과, '▶ 여기서 실행' 배지가 켜지는 쪽(=실제 실행 위치)을 비교해봐.</p>
+                    <p>Server는 클라가 쏘지만 서버에서, Client는 서버가 쏘면 대상 클라에서, Multicast는 모든 클라에서 실행돼.</p>
+                </div>
+            </div>
+
+            <div class='sim'>
+  <div class='sim-tabs'>
+    <button class='wtab ue8tab active' type='button' data-m='server'>① Server RPC</button>
+    <button class='wtab ue8tab' type='button' data-m='client'>② Client RPC</button>
+    <button class='wtab ue8tab' type='button' data-m='multicast'>③ Multicast</button>
+  </div>
+  <canvas id='ue8-canvas' role='img' aria-label='RPC 시뮬레이터. 서버와 3개 클라이언트 사이에서 Server RPC는 클라에서 호출해 서버에서 실행되고, Client RPC는 서버가 호출해 대상 클라에서, Multicast는 모든 클라에서 실행된다.'></canvas>
+  <div class='sim-controls'>
+    <button id='ue8-play' type='button'>⏸ 일시정지</button>
+  </div>
+  <div class='sim-stats'>
+    <div class='sim-stat'><span class='sim-stat-num' id='ue8-calls'>0</span><span class='sim-stat-lbl'>호출 수</span></div>
+    <div class='sim-stat'><span class='sim-stat-num' id='ue8-run'>서버</span><span class='sim-stat-lbl'>실행 위치</span></div>
+  </div>
+  <p class='sim-caption' id='ue8-caption'></p>
+</div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. Reliable / Validation</h2>
+
+            <div class="chat">
+                <div class="q">Reliable이랑 Unreliable은 언제 써?</div>
+                <div class="a">
+                    <p>Reliable = 꼭 도착(ACK·재전송). 결제·중요 이벤트. Unreliable = 잃어도 되는 잦은 것(이펙트 한 번).</p>
+                    <p>Unreliable을 남발하면 빠지고, Reliable을 남발하면 큐가 막혀. 적재적소가 실력.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">Server RPC에 검증이 왜 꼭 필요해?</div>
+                <div class="a">
+                    <p>클라가 호출하는 거라 '클라가 보낸 값'이 들어와. 그걸 그대로 믿으면 핵이 뚫려.</p>
+                    <p>그래서 WithValidation으로 _Validate 함수에서 범위·소유권·상태를 검사하고, 실패면 연결을 끊어. 우리 CM_ 핸들러에서 클라 값 검증하는 것과 똑같아 (Ch15에서 더).</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 우리와 대응</h2>
+            <table class='compare-table'>
+<tr><th>RPC</th><th>실행 위치</th><th>우리 대응</th></tr>
+<tr><td>Server RPC</td><td>서버</td><td class='good'>CM_ 핸들러 (+ 검증)</td></tr>
+<tr><td>Client RPC</td><td>대상 클라 1명</td><td>특정 클라에게 SM_</td></tr>
+<tr><td>Multicast</td><td>모든 클라</td><td>BroadCast (SM_ 뿌리기)</td></tr>
+</table>
+
+
+            <div class="chat">
+                <div class="q">한 줄로?</div>
+                <div class="a">
+                    <p>우리가 'CM_/SM_ + 핸들러 switch'로 손수 하는 걸, UE는 'UFUNCTION(Server/Client/Multicast)'로 함수처럼 보이게 추상화했어. 검증·신뢰성·서버 권위라는 본질은 완전히 같아.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>RPC</strong> = 함수 호출처럼 보이지만 본문은 '다른 컴퓨터'에서 실행 (호출 ≠ 실행 위치)</li>
+                <li><strong>Server</strong>(클라→서버 실행) · <strong>Client</strong>(서버→대상 클라) · <strong>Multicast</strong>(서버→모든 클라)</li>
+                <li><strong>Reliable/Unreliable</strong> = 꼭 도착 여부. 적재적소</li>
+                <li><strong>Server RPC는 WithValidation 필수</strong> — 클라 값 불신, 서버 권위</li>
+                <li>우리 CM_(서버 실행)·SM_(클라 실행)·BroadCast(멀티캐스트)와 1:1</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <h4>다음 챕터</h4>
+            <p>Ch9. 리플리케이션 본질 — RPC는 '이벤트', 이제 '상태'를 자동으로 맞추는 복제를 본다</p>
+        </div>
+
+
+        <div class="nav-links">
+            <a href="../uenet-07-handshake/">← Ch7. 핸드셰이크</a>
+            <a href="../uenet-09-replication/">Ch9. 리플리케이션 →</a>
+        </div>
+    </div>
+</body>
+</html>

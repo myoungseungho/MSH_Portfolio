@@ -1,0 +1,73 @@
+{
+  "slug": "uenet-08-rpc",
+  "title": "RPC — 함수처럼 보이는 원격 호출",
+  "subtitle": "호출은 한 쪽에서, 실행은 다른 쪽에서. Server / Client / Multicast",
+  "category": "언리얼 네트워크",
+  "category_path": "../ue-network/",
+  "prev_link": "../uenet-07-handshake/",
+  "prev_text": "← Ch7. 핸드셰이크",
+  "next_link": "../uenet-09-replication/",
+  "next_text": "Ch9. 리플리케이션 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.5rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.76rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='uenet08.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "RPC = 함수를 호출하면 그 본문이 '다른 컴퓨터에서' 실행되는 것. 호출과 실행 위치가 다름.",
+        "3종: Server RPC(클라→서버 실행), Client RPC(서버→대상 클라 실행), Multicast(서버→모든 클라 실행).",
+        "우리 CM_/SM_ 핸들러가 곧 RPC. Server RPC는 반드시 검증(WithValidation) — 서버 권위."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. '함수처럼 보인다'는 게 뭐야",
+      "items": [
+        { "type": "qa", "q": "RPC가 패킷이랑 뭐가 달라?", "a": "본질은 같아 — 결국 패킷이 오가. 근데 코드에선 그냥 함수 호출처럼 보이게 감싼 거야. ServerFire() 하면 마치 로컬 함수 부르듯 쓰지만, 실제론 그게 네트워크 타고 서버에서 실행돼.\n핵심 질문은 항상 '이 함수 본문이 어느 컴퓨터에서 도느냐'야." },
+        { "type": "qa", "q": "어떻게 표시해?", "a": "UFUNCTION 매크로로: UFUNCTION(Server, Reliable, WithValidation) 같은 식. Server/Client/NetMulticast로 '어디서 실행'을, Reliable/Unreliable로 '꼭 도착 여부'를 정해." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 3종 RPC를 봐",
+      "items": [
+        { "type": "qa", "q": "방향을 직접 보자.", "a": "탭으로 ① Server ② Client ③ Multicast 를 바꿔봐. 호출이 출발하는 쪽과, '▶ 여기서 실행' 배지가 켜지는 쪽(=실제 실행 위치)을 비교해봐.\nServer는 클라가 쏘지만 서버에서, Client는 서버가 쏘면 대상 클라에서, Multicast는 모든 클라에서 실행돼." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ue8tab active' type='button' data-m='server'>① Server RPC</button>\n    <button class='wtab ue8tab' type='button' data-m='client'>② Client RPC</button>\n    <button class='wtab ue8tab' type='button' data-m='multicast'>③ Multicast</button>\n  </div>\n  <canvas id='ue8-canvas' role='img' aria-label='RPC 시뮬레이터. 서버와 3개 클라이언트 사이에서 Server RPC는 클라에서 호출해 서버에서 실행되고, Client RPC는 서버가 호출해 대상 클라에서, Multicast는 모든 클라에서 실행된다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ue8-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue8-calls'>0</span><span class='sim-stat-lbl'>호출 수</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue8-run'>서버</span><span class='sim-stat-lbl'>실행 위치</span></div>\n  </div>\n  <p class='sim-caption' id='ue8-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. Reliable / Validation",
+      "items": [
+        { "type": "qa", "q": "Reliable이랑 Unreliable은 언제 써?", "a": "Reliable = 꼭 도착(ACK·재전송). 결제·중요 이벤트. Unreliable = 잃어도 되는 잦은 것(이펙트 한 번).\nUnreliable을 남발하면 빠지고, Reliable을 남발하면 큐가 막혀. 적재적소가 실력." },
+        { "type": "qa", "q": "Server RPC에 검증이 왜 꼭 필요해?", "a": "클라가 호출하는 거라 '클라가 보낸 값'이 들어와. 그걸 그대로 믿으면 핵이 뚫려.\n그래서 WithValidation으로 _Validate 함수에서 범위·소유권·상태를 검사하고, 실패면 연결을 끊어. 우리 CM_ 핸들러에서 클라 값 검증하는 것과 똑같아 (Ch15에서 더). " }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 우리와 대응",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>RPC</th><th>실행 위치</th><th>우리 대응</th></tr>\n<tr><td>Server RPC</td><td>서버</td><td class='good'>CM_ 핸들러 (+ 검증)</td></tr>\n<tr><td>Client RPC</td><td>대상 클라 1명</td><td>특정 클라에게 SM_</td></tr>\n<tr><td>Multicast</td><td>모든 클라</td><td>BroadCast (SM_ 뿌리기)</td></tr>\n</table>" },
+        { "type": "qa", "q": "한 줄로?", "a": "우리가 'CM_/SM_ + 핸들러 switch'로 손수 하는 걸, UE는 'UFUNCTION(Server/Client/Multicast)'로 함수처럼 보이게 추상화했어. 검증·신뢰성·서버 권위라는 본질은 완전히 같아." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>RPC</strong> = 함수 호출처럼 보이지만 본문은 '다른 컴퓨터'에서 실행 (호출 ≠ 실행 위치)",
+        "<strong>Server</strong>(클라→서버 실행) · <strong>Client</strong>(서버→대상 클라) · <strong>Multicast</strong>(서버→모든 클라)",
+        "<strong>Reliable/Unreliable</strong> = 꼭 도착 여부. 적재적소",
+        "<strong>Server RPC는 WithValidation 필수</strong> — 클라 값 불신, 서버 권위",
+        "우리 CM_(서버 실행)·SM_(클라 실행)·BroadCast(멀티캐스트)와 1:1"
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "다음 챕터",
+      "items": [
+        "Ch9. 리플리케이션 본질 — RPC는 '이벤트', 이제 '상태'를 자동으로 맞추는 복제를 본다"
+      ]
+    }
+  ]
+}
