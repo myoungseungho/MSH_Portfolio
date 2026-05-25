@@ -1,0 +1,81 @@
+{
+  "slug": "uenet-02-tcp-udp",
+  "title": "TCP vs UDP — 왜 UE는 UDP, 우리는 TCP?",
+  "subtitle": "잃으면 다시 보낼래(믿음직) vs 잃어도 넘어갈래(빠름)",
+  "category": "언리얼 네트워크",
+  "category_path": "../ue-network/",
+  "prev_link": "../uenet-01-socket/",
+  "prev_text": "← Ch1. 소켓",
+  "next_link": "../uenet-03-serialize-iocp/",
+  "next_text": "Ch3. 직렬화 & IOCP →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-load-lbl{display:flex;align-items:center;gap:8px;color:#90a4c4;font-size:.88rem}\n    .sim-stats{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}\n    .sim-stat{flex:1;min-width:120px;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.5rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.76rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='uenet02.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "TCP = 등기우편. 잃으면 재전송, 순서 보장. 대신 재전송 대기로 느려질 수 있음(HOL 블로킹).",
+        "UDP = 일반우편(빠름). 잃으면 그냥 사라짐, 순서도 안 보장. 대신 안 기다림.",
+        "우리 서버 = TCP(돈·아이템은 절대 유실 불가). UE = UDP(이동은 0.1초 늦은 옛 위치보다 '최신'이 중요)."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 잃으면 어떻게 할래?",
+      "items": [
+        { "type": "qa", "q": "네트워크에서 패킷은 가끔 사라져. 그럼 어떻게 해야 할까?", "a": "두 갈래야. ① 다시 보내서 꼭 도착시키고 순서도 맞춘다(TCP). ② 잃은 건 포기하고 다음 걸 빨리 보낸다(UDP).\n어느 게 맞냐고? 상황마다 달라 — 그게 이 챕터의 핵심이야." },
+        { "type": "qa", "q": "비유로?", "a": "TCP = 등기우편. 반드시 도착하고, 보낸 순서대로 받아. 분실되면 재발송 — 근데 그거 기다리느라 뒤 우편도 같이 늦어져.\nUDP = 길에 뿌리는 전단지. 빠르고 많이 뿌리지만 몇 장 바람에 날아가도 신경 안 써." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 같은 유실, 다른 결과",
+      "items": [
+        { "type": "qa", "q": "유실률을 올리며 둘을 비교해봐.", "a": "위는 TCP(잃으면 주황색으로 재전송, 결국 다 도착), 아래는 UDP(잃으면 빨갛게 사라지고 끝).\n슬라이더나 탭으로 유실을 올려봐 — TCP는 '도착=다, 순서 보장'이지만 재전송이 쌓이고, UDP는 '유실 카운트'가 늘지만 멈추지 않아." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ue2tab' type='button' data-loss='2'>유실 2%</button>\n    <button class='wtab ue2tab active' type='button' data-loss='15'>유실 15%</button>\n    <button class='wtab ue2tab' type='button' data-loss='35'>유실 35%</button>\n  </div>\n  <canvas id='ue2-canvas' role='img' aria-label='TCP와 UDP 비교 시뮬레이터. 위 레인은 TCP로 잃은 패킷을 재전송해 모두 순서대로 도착시키고, 아래 레인은 UDP로 잃은 패킷이 그대로 사라진다. 유실률을 올리면 차이가 커진다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ue2-play' type='button'>⏸ 일시정지</button>\n    <label class='sim-load-lbl'>유실률 <span id='ue2-loss-val'>15</span>%\n      <input id='ue2-loss' type='range' min='0' max='40' value='15' aria-label='유실률 조절'>\n    </label>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue2-tcp'>0</span><span class='sim-stat-lbl'>TCP 도착(순서 보장)</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue2-resent'>0</span><span class='sim-stat-lbl'>TCP 재전송</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue2-udp'>0</span><span class='sim-stat-lbl'>UDP 도착</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue2-lost'>0</span><span class='sim-stat-lbl'>UDP 유실</span></div>\n  </div>\n  <p class='sim-caption' id='ue2-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 그럼 게임은 뭘 써?",
+      "items": [
+        { "type": "qa", "q": "왜 UE 같은 액션 게임은 UDP를 써?", "a": "이동은 '최신'이 생명이야. 0.2초 전 위치를 재전송 받아봐야 이미 쓸모없어 — 그 사이 적은 딴 데 가 있거든.\nTCP면 잃은 옛 패킷을 재전송하느라 최신 패킷까지 막혀(HOL 블로킹). 그래서 '잃은 건 버리고 최신을 빨리'가 맞아 → UDP." },
+        { "type": "qa", "q": "근데 채팅·아이템·결제는?", "a": "그건 절대 유실되면 안 돼. 그래서 UE도 UDP 위에 'reliable' 채널을 따로 둬서 중요한 건 재전송으로 보장해.\n즉 UE는 UDP를 깔고, 신뢰성이 필요한 것만 골라서 reliable로 보내는 하이브리드야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 우리 서버 vs UE",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>항목</th><th>조선협객전 (우리)</th><th>언리얼</th></tr>\n<tr><td>기본 전송</td><td>TCP</td><td>UDP</td></tr>\n<tr><td>유실 처리</td><td class='good'>OS가 재전송·순서 보장(공짜)</td><td class='warn'>엔진이 직접 reliable 구현</td></tr>\n<tr><td>강점</td><td class='good'>돈·아이템·거래 무손실</td><td class='good'>이동 최신성·저지연</td></tr>\n<tr><td>약점</td><td class='warn'>HOL로 한 패킷 막히면 뒤도 대기</td><td class='warn'>신뢰성은 직접 책임</td></tr>\n<tr><td>맞는 장르</td><td>MMORPG(클릭이동·거래 중심)</td><td>FPS·액션(빠른 이동)</td></tr>\n</table>" },
+        { "type": "qa", "q": "정리하면?", "a": "둘 다 정답이야. '무엇을 잃으면 안 되나 vs 무엇이 최신이어야 하나'가 갈라.\n우리 게임은 거래·재화가 핵심이라 TCP의 무손실이 어울리고, UE의 주 무대인 액션은 최신성이 핵심이라 UDP가 어울려." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. 실제로는? (UE의 reliable UDP)",
+      "items": [
+        { "type": "qa", "q": "UE는 UDP인데 어떻게 '꼭 도착'을 보장해?", "a": "패킷을 'Bunch'라는 단위로 쪼개 보내는데, 각 Bunch에 reliable 플래그와 순번을 달아. 받는 쪽이 ACK를 안 보내면 재전송하고, 순번으로 순서를 맞춰.\n즉 TCP가 OS에서 해주는 일을, UE는 UDP 위에서 '필요한 것만' 골라서 직접 해. (자세한 Bunch는 Ch6)" },
+        { "type": "qa", "q": "우리(IOCP+TCP)는?", "a": "OS의 TCP가 재전송·순서를 다 해주니까 우리는 그 위에서 패킷 구조만 신경 써. 대신 모든 게 reliable이라 이동처럼 '최신만 중요한' 것도 무조건 순서 보장의 비용을 내는 셈이야." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>TCP</strong> = 재전송 + 순서 보장(등기우편). 무손실, 대신 HOL로 느려질 수 있음",
+        "<strong>UDP</strong> = 빠름, 유실·순서 미보장(전단지). 최신성 우선",
+        "<strong>게임 선택</strong>: 이동=UDP(최신), 결제·아이템=reliable(무손실)",
+        "<strong>우리</strong> = TCP(거래 무손실), <strong>UE</strong> = UDP + 필요한 것만 reliable bunch",
+        "정답은 '무엇을 잃으면 안 되나 vs 무엇이 최신이어야 하나'가 가른다"
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "다음 챕터",
+      "items": [
+        "Ch3. 직렬화 & IOCP — 보낼 데이터를 어떻게 '비트'로 만들고, 수천 연결을 어떻게 한 스레드가 받아내나"
+      ]
+    }
+  ]
+}
