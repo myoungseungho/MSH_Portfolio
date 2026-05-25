@@ -1,0 +1,58 @@
+{
+  "slug": "false-sharing",
+  "title": "변수를 나눠 썼는데 왜 느려? — false sharing",
+  "subtitle": "논리적으론 안 겹치는데 하드웨어가 겹친다고 우기는 캐시 함정",
+  "category": "멀티스레드",
+  "category_path": "../category-thread/",
+  "prev_link": "../category-thread/",
+  "prev_text": "← 멀티스레드",
+  "next_link": "../category-thread/",
+  "next_text": "멀티스레드 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:130px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='fs.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "CPU는 메모리를 '캐시라인'(보통 64바이트) 단위로 캐시해.",
+        "서로 다른 변수라도 같은 캐시라인에 있으면, 한 코어가 쓸 때 그 라인 전체가 무효화돼 다른 코어가 다시 읽어야 함.",
+        "→ 라인이 코어 사이를 핑퐁하며 느려짐(false sharing). 패딩으로 다른 라인에 분리하면 해결."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 안 겹치는데 왜 느려",
+      "items": [
+        { "type": "qa", "q": "두 스레드가 '각자 다른 변수'를 늘리는데 락도 없어. 왜 느리지?", "a": "코드만 보면 공유가 없어 보여. 근데 CPU는 변수 하나가 아니라 64바이트 '캐시라인' 통째로 다뤄.\n변수 A와 B가 우연히 같은 라인에 있으면, 코어1이 A를 쓰는 순간 그 라인이 '변경됨'으로 표시돼 코어2의 캐시가 무효화돼. 코어2는 B를 읽으려고 라인을 다시 가져와야 해 — 이 왕복이 반복돼." },
+        { "type": "qa", "q": "그래서 '거짓' 공유?", "a": "맞아. 논리적으론 A·B를 공유 안 하는데, 하드웨어가 '같은 라인'이라 공유처럼 취급해서 생기는 거라 false sharing이야. 코드가 멀쩡해 보여서 찾기 어려운 성능 버그지." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 핑퐁 vs 패딩",
+      "items": [
+        { "type": "qa", "q": "직접 봐.", "a": "탭으로 ① false sharing ② 패딩 적용 을 바꿔봐. false는 캐시라인이 코어 사이를 빨갛게 핑퐁하며 처리량이 낮고, 패딩은 각 변수가 다른 라인이라 간섭 없이 처리량이 확 높아." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab fstab active' type='button' data-m='false'>① false sharing</button>\n    <button class='wtab fstab' type='button' data-m='padded'>② 패딩 적용</button>\n  </div>\n  <canvas id='fs-canvas' role='img' aria-label='false sharing 시뮬레이터. 두 코어가 다른 변수를 같은 캐시라인에서 갱신하면 라인이 코어 사이를 핑퐁하며 느려지고, 패딩으로 다른 라인에 분리하면 빨라진다.'></canvas>\n  <div class='sim-controls'>\n    <button id='fs-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='fs-ops'>0</span><span class='sim-stat-lbl'>처리량(ops)</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='fs-bounce'>0</span><span class='sim-stat-lbl'>캐시라인 핑퐁</span></div>\n  </div>\n  <p class='sim-caption' id='fs-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 어디서 터지나",
+      "items": [
+        { "type": "qa", "q": "실제로 자주 생겨?", "a": "스레드별 카운터를 배열에 다닥다닥 둘 때 단골이야. int counters[8]을 8스레드가 각자 하나씩 늘리면, 여러 개가 같은 라인에 묶여 false sharing이 터져.\n그래서 스레드별 데이터는 캐시라인 단위로 정렬·패딩해(예: alignas(64), 더미 패딩 추가)." },
+        { "type": "qa", "q": "우리 서버는?", "a": "우리 게임 로직은 싱글스레드라 이 문제에서 자유로워(코어 간 공유 자체가 없으니까). 단, IOCP 워커 등 멀티스레드 영역에서 스레드별 통계를 다룰 땐 조심해야 해.\n'멀티스레드인데 이상하게 안 빨라진다'면 false sharing을 의심해봐." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "CPU는 메모리를 <strong>캐시라인(64B)</strong> 단위로 캐시",
+        "<strong>false sharing</strong> = 다른 변수라도 같은 라인이면 한쪽 쓰기가 상대 캐시를 무효화 → 라인 핑퐁",
+        "논리적 공유 없는데 하드웨어가 공유 취급 → 코드 멀쩡해 보이는 성능 버그",
+        "<strong>해결</strong>: 패딩/64B 정렬로 변수를 다른 라인에 분리(alignas(64))",
+        "스레드별 카운터 배열이 단골 — 우리 서버 로직은 싱글스레드라 무관, IOCP 영역은 주의"
+      ]
+    }
+  ]
+}
