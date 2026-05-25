@@ -1,0 +1,72 @@
+{
+  "slug": "uenet-11-relevancy",
+  "title": "Relevancy — 누구에게 보낼지 (= 우리 AOI)",
+  "subtitle": "안 보이는 액터는 아예 안 보낸다. UE의 관련성 = 조선협객전의 관심 영역",
+  "category": "언리얼 네트워크",
+  "category_path": "../ue-network/",
+  "prev_link": "../uenet-10-push-dormancy/",
+  "prev_text": "← Ch10. Push & Dormancy",
+  "next_link": "../uenet-12-movement/",
+  "next_text": "Ch12. 이동 복제 & 예측 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.5rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.76rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='uenet11.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "Relevancy = 한 클라에게 '관련 있는' 액터만 복제. 가장 흔한 기준은 거리(Net Cull Distance).",
+        "시야 밖 액터는 컬링(안 보냄) + ActorChannel 닫음. 플레이어가 움직이면 관련 집합이 갱신.",
+        "이게 우리 BroadCast의 AOI(관심 영역)와 정확히 같은 개념."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 왜 다 안 보내?",
+      "items": [
+        { "type": "qa", "q": "서버에 있는 모든 액터를 모든 클라한테 보내면 안 돼?", "a": "맵에 액터 1만 개, 접속 1천 명이면? 다 보내면 1만 × 1천 = 천만 건. 대역폭·CPU 폭발이야.\n근데 내가 서울에 있는데 부산 몬스터 정보가 필요해? 안 보이는데. 그래서 '관련 있는 것만' 보내 — 이게 Relevancy." },
+        { "type": "qa", "q": "관련 있다는 기준은?", "a": "기본은 거리야. 액터의 NetCullDistanceSquared 안(시야)에 있으면 관련 있음. 그 밖이면 컬링.\n거리 말고도 규칙이 있어 — 항상 관련(bAlwaysRelevant, 예: 매치 상태), 소유자에게만(bOnlyRelevantToOwner, 예: 내 인벤토리) 등." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 시야 안만 복제된다",
+      "items": [
+        { "type": "qa", "q": "플레이어 주변만 복제되는 걸 봐.", "a": "노란 '나'가 움직이면 시야(점선 원) 안 액터만 초록(복제 중, 선 연결)이 되고, 밖은 회색(컬링)이 돼.\n탭으로 시야 크기를 바꿔봐 — 시야가 크면 복제 수가 늘고(부하↑), 작으면 줄어(끊겨 보일 위험)." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ue11tab' type='button' data-r='90'>좁은 시야</button>\n    <button class='wtab ue11tab active' type='button' data-r='130'>보통 시야</button>\n    <button class='wtab ue11tab' type='button' data-r='190'>넓은 시야</button>\n  </div>\n  <canvas id='ue11-canvas' role='img' aria-label='Relevancy 시뮬레이터. 플레이어 주변 시야 반경 안의 액터만 복제(초록)되고 밖은 컬링(회색)된다. 플레이어가 움직이면 관련 집합이 갱신된다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ue11-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue11-in'>0</span><span class='sim-stat-lbl'>복제 중(관련 있음)</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue11-out'>0</span><span class='sim-stat-lbl'>컬링됨(안 보냄)</span></div>\n  </div>\n  <p class='sim-caption' id='ue11-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 우리 AOI와 같은 것",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>개념</th><th>조선협객전 (우리)</th><th>언리얼</th></tr>\n<tr><td>관심 영역</td><td>AOI (BroadCast 대상 추리기)</td><td>Relevancy</td></tr>\n<tr><td>거리 기준</td><td>시야/그리드 셀</td><td>NetCullDistanceSquared</td></tr>\n<tr><td>특수 규칙</td><td>전체 공지(전서버 방송)</td><td>bAlwaysRelevant / bOnlyRelevantToOwner</td></tr>\n<tr><td>경계 넘을 때</td><td>구독 갱신</td><td>ActorChannel 열고/닫음</td></tr>\n</table>" },
+        { "type": "qa", "q": "그럼 우리 AOI 글이랑 겹쳐?", "a": "맞아, 같은 문제·같은 해법이야. 우리가 'BroadCast를 누구한테까지'로 고민하던 게, UE에선 'Relevancy로 어떤 액터를 복제'로 나타나는 거지.\n다음 챕터(ReplicationGraph)는 이 관련성 계산을 대규모에서 빠르게 하는 방법이야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 트레이드오프",
+      "items": [
+        { "type": "qa", "q": "시야를 무조건 좁히면 좋은 거 아냐?", "a": "아니. 너무 좁으면 멀리 있는 적이 '갑툭튀'해(컬링됐다 갑자기 복제 시작). 저격수 시야 밖 적이 안 보이는 문제도 생겨.\n그래서 '거리'만으로 안 되고, 중요 액터는 항상 관련(bAlwaysRelevant)으로 빼거나 거리를 타입별로 다르게 줘. 부하 vs 체감의 균형이야." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>Relevancy</strong> = 관련 있는 액터만 복제. 기본 기준 = 거리(NetCullDistanceSquared)",
+        "시야 밖 = 컬링(안 보냄) + ActorChannel 닫음. 이동하면 관련 집합 갱신",
+        "<strong>= 우리 AOI</strong>. BroadCast 대상 추리기와 같은 문제·해법",
+        "특수 규칙: bAlwaysRelevant(항상), bOnlyRelevantToOwner(소유자만)",
+        "너무 좁으면 '갑툭튀' — 부하 vs 체감 균형, 중요 액터는 예외 처리"
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "다음 챕터",
+      "items": [
+        "Ch12. 이동 복제 & 클라 예측 — UE에서 가장 어려운 부분. 우리가 #1에서 본 예측/보정의 실제 구현(CharacterMovement)"
+      ]
+    }
+  ]
+}
