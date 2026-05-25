@@ -23,41 +23,82 @@
       "type": "conversation",
       "title": "Part 1. 직렬화 — 데이터를 어떻게 '비트'로?",
       "items": [
-        { "type": "qa", "q": "구조체 { id, x, y, hp } 를 그대로 네트워크에 보낼 수 있어?", "a": "메모리 속 객체는 포인터·정렬·패딩이 섞여 있어서 그대로는 못 보내. '바이트 줄'로 펴야 해 — 이게 직렬화(serialization).\n받는 쪽은 그 바이트를 다시 구조체로 복원(역직렬화)해." },
-        { "type": "qa", "q": "그냥 통째로 보내면 되잖아?", "a": "크기가 문제야. 수천 명 × 초당 수십 번이면 1바이트도 아껴야 해.\nhp가 0~100이면 32비트(4바이트) 정수로 보낼 필요 없어 — 7비트면 충분하거든. 좌표도 적당히 양자화(quantize)해서 줄여. 이게 비트 팩킹." },
-        { "type": "diagram", "content": "[그냥 보내면]   id:4B  x:4B  y:4B  hp:4B  = 16바이트\n\n[비트 팩킹]    hp 0~100 → 7비트면 충분\n              좌표 → 양자화(소수점 버림)\n              → 6바이트로 (62% 절감)\n\n  수천 명 × 60fps 면 이 차이가 대역폭을 좌우" }
+        {
+          "type": "qa",
+          "q": "구조체 { id, x, y, hp } 를 그대로 네트워크에 보낼 수 있어?",
+          "a": "메모리 속 객체는 포인터·정렬·패딩이 섞여 있어서 그대로는 못 보내. '바이트 줄'로 펴야 해 — 이게 직렬화(serialization).\n받는 쪽은 그 바이트를 다시 구조체로 복원(역직렬화)해."
+        },
+        {
+          "type": "qa",
+          "q": "그냥 통째로 보내면 되잖아?",
+          "a": "크기가 문제야. 수천 명 × 초당 수십 번이면 1바이트도 아껴야 해.\nhp가 0~100이면 32비트(4바이트) 정수로 보낼 필요 없어 — 7비트면 충분하거든. 좌표도 적당히 양자화(quantize)해서 줄여. 이게 비트 팩킹."
+        },
+        {
+          "type": "diagram",
+          "content": "[그냥 보내면]   id:4B  x:4B  y:4B  hp:4B  = 16바이트\n\n[비트 팩킹]    hp 0~100 → 7비트면 충분\n              좌표 → 양자화(소수점 버림)\n              → 6바이트로 (62% 절감)\n\n  수천 명 × 60fps 면 이 차이가 대역폭을 좌우"
+        }
       ]
     },
     {
       "type": "conversation",
       "title": "Part 2. 받는 구조 — IOCP",
       "items": [
-        { "type": "qa", "q": "연결이 수천 개인데 어떻게 다 받아?", "a": "워커 스레드 수를 바꿔보며 봐. 핵심은 — OS가 '완료된 I/O만' 큐에 올려주고, 소수 워커가 거기서 꺼내 처리해.\n워커를 1개로 줄이면 부하 시 큐가 쌓이고(빨강), 늘리면 잘 비워. 그래도 '연결 수'만큼 스레드가 필요한 건 아니라는 게 포인트." },
-        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ue3tab' type='button' data-w='1'>워커 1</button>\n    <button class='wtab ue3tab active' type='button' data-w='2'>워커 2</button>\n    <button class='wtab ue3tab' type='button' data-w='4'>워커 4</button>\n  </div>\n  <canvas id='ue3-canvas' role='img' aria-label='IOCP 시뮬레이터. 수많은 연결에서 완료된 I/O 이벤트가 완료 큐로 올라오고, 소수의 워커 스레드가 큐에서 꺼내 처리한다. 워커 수를 바꾸면 큐 적체가 달라진다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ue3-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num'>수천</span><span class='sim-stat-lbl'>연결 수</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue3-q'>0</span><span class='sim-stat-lbl'>완료 큐 대기</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue3-w'>2</span><span class='sim-stat-lbl'>워커 스레드</span></div>\n  </div>\n  <p class='sim-caption' id='ue3-caption'></p>\n</div>" }
+        {
+          "type": "qa",
+          "q": "연결이 수천 개인데 어떻게 다 받아?",
+          "a": "워커 스레드 수를 바꿔보며 봐. 핵심은 — OS가 '완료된 I/O만' 큐에 올려주고, 소수 워커가 거기서 꺼내 처리해.\n워커를 1개로 줄이면 부하 시 큐가 쌓이고(빨강), 늘리면 잘 비워. 그래도 '연결 수'만큼 스레드가 필요한 건 아니라는 게 포인트."
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ue3tab' type='button' data-w='1'>워커 1</button>\n    <button class='wtab ue3tab active' type='button' data-w='2'>워커 2</button>\n    <button class='wtab ue3tab' type='button' data-w='4'>워커 4</button>\n  </div>\n  <canvas id='ue3-canvas' role='img' aria-label='IOCP 시뮬레이터. 수많은 연결에서 완료된 I/O 이벤트가 완료 큐로 올라오고, 소수의 워커 스레드가 큐에서 꺼내 처리한다. 워커 수를 바꾸면 큐 적체가 달라진다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ue3-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num'>수천</span><span class='sim-stat-lbl'>연결 수</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue3-q'>0</span><span class='sim-stat-lbl'>완료 큐 대기</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue3-w'>2</span><span class='sim-stat-lbl'>워커 스레드</span></div>\n  </div>\n  <p class='sim-caption' id='ue3-caption'></p>\n</div>"
+        }
       ]
     },
     {
       "type": "conversation",
       "title": "Part 3. 왜 IOCP? — thread-per-connection의 함정",
       "items": [
-        { "type": "qa", "q": "연결마다 스레드 하나 주면 안 돼?", "a": "1,000 연결 = 1,000 스레드면 메모리·문맥전환 비용이 폭발해. 대부분 스레드는 '데이터 올 때까지' 그냥 잠들어 있어 — 낭비야.\nIOCP는 뒤집어. 연결은 수천이어도 '실제로 처리할 게 생긴 것만' 큐에 올리고, 소수 워커가 그것만 처리해. (Ch12의 액터≠스레드와 같은 사고방식)" },
-        { "type": "qa", "q": "리눅스는?", "a": "같은 발상의 epoll이 있어. '관심 있는 소켓들 중 준비된 것만 알려줘' 하는 방식. IOCP(윈도우) ↔ epoll(리눅스)은 사실상 같은 목적이야." }
+        {
+          "type": "qa",
+          "q": "연결마다 스레드 하나 주면 안 돼?",
+          "a": "1,000 연결 = 1,000 스레드면 메모리·문맥전환 비용이 폭발해. 대부분 스레드는 '데이터 올 때까지' 그냥 잠들어 있어 — 낭비야.\nIOCP는 뒤집어. 연결은 수천이어도 '실제로 처리할 게 생긴 것만' 큐에 올리고, 소수 워커가 그것만 처리해. (Ch12의 액터≠스레드와 같은 사고방식)"
+        },
+        {
+          "type": "qa",
+          "q": "리눅스는?",
+          "a": "같은 발상의 epoll이 있어. '관심 있는 소켓들 중 준비된 것만 알려줘' 하는 방식. IOCP(윈도우) ↔ epoll(리눅스)은 사실상 같은 목적이야."
+        }
       ]
     },
     {
       "type": "conversation",
       "title": "Part 4. 우리 vs UE",
       "items": [
-        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>항목</th><th>조선협객전 (우리)</th><th>언리얼</th></tr>\n<tr><td>받는 구조</td><td class='good'>IOCP (완료 포트)</td><td>비동기 소켓 (플랫폼별)</td></tr>\n<tr><td>직렬화</td><td>구조체 + AddParamBinding 등 직접</td><td>FArchive / NetSerialize</td></tr>\n<tr><td>비트 절감</td><td>구조체 설계로</td><td class='good'>FVector_NetQuantize 등 내장</td></tr>\n<tr><td>처리 흐름</td><td>워커가 받아 단일 게임로직 스레드로</td><td>NetDriver가 모아 틱에 처리</td></tr>\n</table>" },
-        { "type": "qa", "q": "한 줄로?", "a": "받는 방식(소수 스레드로 다수 연결)도, 보내는 방식(바이트로 펴서 비트 아끼기)도 둘 다 비슷한 원리를 써. UE는 그걸 엔진이 추상화(FArchive·NetQuantize)했고, 우리는 직접 구조체로 다룬다는 게 차이야." }
+        {
+          "type": "raw_html",
+          "content": "<table class='compare-table'>\n<tr><th>항목</th><th>조선협객전 (우리)</th><th>언리얼</th></tr>\n<tr><td>받는 구조</td><td class='good'>IOCP (완료 포트)</td><td>비동기 소켓 (플랫폼별)</td></tr>\n<tr><td>직렬화</td><td>구조체 + AddParamBinding 등 직접</td><td>FArchive / NetSerialize</td></tr>\n<tr><td>비트 절감</td><td>구조체 설계로</td><td class='good'>FVector_NetQuantize 등 내장</td></tr>\n<tr><td>처리 흐름</td><td>워커가 받아 단일 게임로직 스레드로</td><td>NetDriver가 모아 틱에 처리</td></tr>\n</table>"
+        },
+        {
+          "type": "qa",
+          "q": "한 줄로?",
+          "a": "받는 방식(소수 스레드로 다수 연결)도, 보내는 방식(바이트로 펴서 비트 아끼기)도 둘 다 비슷한 원리를 써. UE는 그걸 엔진이 추상화(FArchive·NetQuantize)했고, 우리는 직접 구조체로 다룬다는 게 차이야."
+        }
       ]
     },
     {
       "type": "conversation",
       "title": "Part 5. 실제로는? (클래스)",
       "items": [
-        { "type": "qa", "q": "UE에서 직렬화는 어떤 클래스?", "a": "FArchive가 직렬화의 기반이야 (<< 연산자로 읽기/쓰기 양방향). 네트워크 전용 최적화는 NetSerialize()를 오버라이드해서 직접 비트를 패킹해.\n좌표는 FVector_NetQuantize / FVector_NetQuantize10 같은 타입으로 정밀도를 낮춰 비트를 아껴." },
-        { "type": "qa", "q": "받는 쪽 엔진은?", "a": "UNetDriver가 소켓에서 데이터를 받아 연결(UNetConnection)별로 나누고, 그걸 다음 챕터에서 볼 Channel/Bunch로 푼다. 우리의 'IOCP 워커 → 게임로직 스레드'에 대응하는 자리야." }
+        {
+          "type": "qa",
+          "q": "UE에서 직렬화는 어떤 클래스?",
+          "a": "FArchive가 직렬화의 기반이야 (<< 연산자로 읽기/쓰기 양방향). 네트워크 전용 최적화는 NetSerialize()를 오버라이드해서 직접 비트를 패킹해.\n좌표는 FVector_NetQuantize / FVector_NetQuantize10 같은 타입으로 정밀도를 낮춰 비트를 아껴."
+        },
+        {
+          "type": "qa",
+          "q": "받는 쪽 엔진은?",
+          "a": "UNetDriver가 소켓에서 데이터를 받아 연결(UNetConnection)별로 나누고, 그걸 다음 챕터에서 볼 Channel/Bunch로 푼다. 우리의 'IOCP 워커 → 게임로직 스레드'에 대응하는 자리야."
+        }
       ]
     },
     {
@@ -70,6 +111,10 @@
         "<strong>우리</strong> = IOCP + 구조체 직접, <strong>UE</strong> = 비동기 I/O + FArchive/NetSerialize/NetQuantize",
         "받기(소수 스레드)·보내기(비트 절감) 둘 다 같은 원리, 추상화 수준만 다름"
       ]
+    },
+    {
+      "type": "raw_html",
+      "content": "<style>\n.faq{margin:30px 0}\n.faq-h{font-size:1.3rem;color:#1a237e;margin-bottom:6px}\n.faq-sub{color:#666;font-size:.9rem;margin-bottom:16px}\n.faq-i{background:#fff;border:1px solid #e0e0e0;border-radius:12px;margin-bottom:10px;padding:0 18px}\n.faq-i summary{cursor:pointer;padding:15px 30px 15px 0;font-weight:600;color:#222;list-style:none;position:relative}\n.faq-i summary::-webkit-details-marker{display:none}\n.faq-i summary::after{content:\"+\";position:absolute;right:2px;top:12px;font-size:1.25rem;color:#1565c0;font-weight:700}\n.faq-i[open] summary::after{content:\"\\2212\"}\n.faq-i summary:hover{color:#1565c0}\n.faq-a{padding:0 0 16px;color:#3a3a3a;line-height:1.8;font-size:.93rem}\n</style>\n<div class=\"faq\">\n<h2 class=\"faq-h\">이런 것도 궁금하지 않아?</h2>\n<p class=\"faq-sub\">읽다 보면 떠오르는 꼬리질문 — 눌러서 펼쳐봐</p>\n<details class=\"faq-i\"><summary>Q. 비트로 줄이면 멀리 있는 적이 미세하게 떨리는 거 아냐?</summary><div class=\"faq-a\">응, 양자화 오차야. 그래서 거리에 따라 정밀도를 다르게 주거나, 보간으로 떨림을 부드럽게 가려. 눈에 안 띄는 선까지만 줄이는 게 핵심.</div></details>\n<details class=\"faq-i\"><summary>Q. 서버·클라 CPU가 다르면 직렬화가 깨지지 않아?</summary><div class=\"faq-a\">구조체를 그대로 memcpy 하면 엔디언·패딩 때문에 깨져. 그래서 필드 단위로 직접 쓰고(엔디언 고정) 패딩에 의존 안 하게 직렬화 코드를 따로 둬.</div></details>\n<details class=\"faq-i\"><summary>Q. IOCP 워커→게임로직 스레드 큐는 결국 락 아냐?</summary><div class=\"faq-a\">맞아, 거기엔 큐 동기화가 필요해. 그래서 SPSC 락프리 큐(링버퍼)를 쓰거나 짧은 락만 잡아. 큐에서 꺼낸 뒤 게임 로직은 싱글스레드라 락이 없고.</div></details>\n<details class=\"faq-i\"><summary>Q. 패킷을 중간에서 까보면(스니핑) 다 보이는 거 아냐?</summary><div class=\"faq-a\">평문이면 다 보여. 그래서 민감한 건 TLS·자체 암호화를 얹고, 최소한 중요 판정은 서버가 하니까 봐도 조작은 못 하게 해.</div></details>\n</div>"
     },
     {
       "type": "info_box",
