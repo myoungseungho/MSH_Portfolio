@@ -1,0 +1,58 @@
+{
+  "slug": "delta-compression",
+  "title": "안 바뀐 건 왜 또 보내? — 델타 압축",
+  "subtitle": "전체 스냅샷 대신 '바뀐 필드만' 비트마스크로",
+  "category": "네트워크",
+  "category_path": "../network/",
+  "prev_link": "../network/",
+  "prev_text": "← 네트워크",
+  "next_link": "../uenet-14-iris/",
+  "next_text": "UE Iris →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='delta.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "매 틱 상태 전체를 보내면 안 바뀐 값까지 매번 전송 — 낭비.",
+        "델타 압축 = '뭐가 바뀌었나'를 비트마스크로 표시하고, 바뀐 필드만 붙여 보냄.",
+        "우리 더티플래그·DB 변경분 저장과 같은 원리. UE Push Model·Iris Delta도 동일."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 전체를 매번 보내는 낭비",
+      "items": [
+        { "type": "qa", "q": "상태가 6개 필드인데, 한 개만 바뀌어도 6개 다 보내야 해?", "a": "전체 스냅샷 방식이면 그래. hp만 깎였는데 pos·ammo·name까지 매 틱 다시 보내 — 안 바뀐 5개가 순수 낭비야.\n수천 명 × 수십 틱이면 이 낭비가 대역폭을 다 잡아먹어." },
+        { "type": "qa", "q": "그럼 어떻게?", "a": "'바뀐 것만' 보내면 돼. 단, 받는 쪽이 '몇 번 필드가 왔는지' 알아야 하니까, 앞에 비트마스크(어느 필드가 들었는지)를 붙여.\n비트마스크 1바이트 + 바뀐 필드들 = 델타. 안 바뀌면 거의 0." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 전체 vs 델타",
+      "items": [
+        { "type": "qa", "q": "대역폭 차이를 봐.", "a": "탭으로 ① 전체 스냅샷 ② 델타 를 바꿔봐. 노란 필드가 '이번에 바뀐 것'이야.\n전체는 매 틱 12B 고정(빨강 막대), 델타는 바뀐 만큼만(초록, 보통 훨씬 낮음). 누적 절감률을 봐." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab dctab' type='button' data-m='full'>① 전체 스냅샷</button>\n    <button class='wtab dctab active' type='button' data-m='delta'>② 델타(바뀐 것만)</button>\n  </div>\n  <canvas id='dc-canvas' role='img' aria-label='델타 압축 시뮬레이터. 상태 객체 6개 필드 중 바뀐 것만 비트마스크와 함께 보내는 델타 방식과 매 틱 전체를 보내는 방식의 대역폭을 비교한다.'></canvas>\n  <div class='sim-controls'>\n    <button id='dc-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='dc-cum'>0B</span><span class='sim-stat-lbl'>누적 전송</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='dc-save'>0%</span><span class='sim-stat-lbl'>전체 대비 절감</span></div>\n  </div>\n  <p class='sim-caption' id='dc-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 함정과 키프레임",
+      "items": [
+        { "type": "qa", "q": "델타만 보내면 위험한 거 없어?", "a": "있어. 델타는 '이전 상태 기준'이라, 중간 패킷이 유실되면 그 뒤가 어긋나(기준이 틀어짐). 신규 접속자는 이전 상태가 아예 없고.\n그래서 가끔 '전체 상태(키프레임)'를 통째로 보내 기준을 다시 맞춰. 영상 코덱의 I-frame/P-frame과 똑같은 발상이야." },
+        { "type": "qa", "q": "우리/UE는?", "a": "우리는 더티플래그로 '바뀐 것만' 저장·전송하고, 신규 접속 시 전체를 묶어 보내(키프레임). UE는 Push Model(바뀐 속성만) + 신규 채널 열 때 전체 → 이후 델타. Iris의 Delta도 같은 거야." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>전체 스냅샷</strong> = 매 틱 전부(낭비). <strong>델타</strong> = 비트마스크 + 바뀐 필드만",
+        "안 바뀌면 거의 0B → 대역폭 급감",
+        "<strong>함정</strong>: 델타는 이전 상태 기준 → 유실·신규접속 시 어긋남",
+        "<strong>키프레임</strong>(전체 상태)을 주기적/접속 시 보내 기준 재동기 (영상 I-frame과 동일)",
+        "우리 더티플래그 = UE Push Model = Iris Delta, 같은 원리"
+      ]
+    }
+  ]
+}
