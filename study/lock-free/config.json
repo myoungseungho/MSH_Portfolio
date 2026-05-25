@@ -1,0 +1,66 @@
+{
+  "slug": "lock-free",
+  "title": "스레드 셋이 같은 숫자를 동시에 +1 하면? — 락 vs 락프리 vs 액터",
+  "subtitle": "레이스 컨디션을 눈으로 보고, 세 가지 해법을 비교",
+  "category": "멀티스레드",
+  "category_path": "../category-thread/",
+  "prev_link": "../category-thread/",
+  "prev_text": "← 멀티스레드",
+  "next_link": "../actor-model/",
+  "next_text": "액터 모델 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='lockfree.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "보호 없이 여러 스레드가 같은 값을 '읽고 +1 하고 쓰기' 하면 한쪽 증가가 사라져(레이스 컨디션).",
+        "해법: 락(한 번에 하나, 대기 발생) / 락프리 CAS(충돌 시 재시도, 막힘 없음).",
+        "우리 게임 서버는 아예 싱글스레드(액터 1마리)라 이 고민 자체가 없어 — 그게 제일 단순한 해법."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 왜 증가가 사라지나",
+      "items": [
+        { "type": "qa", "q": "HP 100을 스레드 A가 -30, B가 -50 동시에 했어. 결과는?", "a": "20이라고 생각했지? 실제론 70이거나 50이 될 수 있어.\n둘 다 '100'을 동시에 읽고, A는 70을 쓰고 B는 50을 써 — 나중에 쓴 값이 앞 걸 덮어버려. 한쪽 연산이 통째로 사라지는 거야. 이게 레이스 컨디션." },
+        { "type": "qa", "q": "왜 그런 일이?", "a": "'읽기 → 계산 → 쓰기'가 한 덩어리(원자적)가 아니라서야. 그 사이에 다른 스레드가 끼어들면 둘이 같은 출발값을 보게 돼.\n그래서 이 구간(임계영역)을 보호해야 해." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 세 방식 비교",
+      "items": [
+        { "type": "qa", "q": "직접 돌려봐.", "a": "탭으로 ① race ② lock ③ lockfree 를 바꿔봐. 카운터가 기대값과 같은지 봐.\nrace는 카운터 < 기대값(유실 발생), lock은 정확하나 대기(빨강), lockfree는 정확하고 재시도만 늘어." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab lftab active' type='button' data-m='race'>① 보호 없음(race)</button>\n    <button class='wtab lftab' type='button' data-m='lock'>② 락(lock)</button>\n    <button class='wtab lftab' type='button' data-m='lockfree'>③ 락프리(CAS)</button>\n  </div>\n  <canvas id='lf-canvas' role='img' aria-label='락 락프리 비교 시뮬레이터. 세 스레드가 공유 카운터를 증가시킨다. 보호가 없으면 동시 쓰기로 증가가 유실되고, 락은 한 번에 하나만 통과하며 대기가 생기고, 락프리는 충돌 시 재시도로 유실 없이 처리한다.'></canvas>\n  <div class='sim-controls'>\n    <button id='lf-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='lf-counter'>0</span><span class='sim-stat-lbl'>실제 카운터</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='lf-expected'>0</span><span class='sim-stat-lbl'>기대값</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='lf-gap'>0</span><span class='sim-stat-lbl' id='lf-gap-lbl'>유실된 증가</span></div>\n  </div>\n  <p class='sim-caption' id='lf-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 락 vs 락프리 vs 싱글스레드",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>방식</th><th>정확성</th><th>비용</th></tr>\n<tr><td>보호 없음</td><td class='bad'>유실(틀림)</td><td>—</td></tr>\n<tr><td>락(Mutex)</td><td class='good'>정확</td><td class='warn'>대기·데드락 위험</td></tr>\n<tr><td>락프리(CAS)</td><td class='good'>정확</td><td class='warn'>경합 시 재시도 폭증</td></tr>\n<tr><td>싱글스레드(액터)</td><td class='good'>정확</td><td class='good'>락 0개 (1코어 천장)</td></tr>\n</table>" },
+        { "type": "qa", "q": "락프리가 항상 최고 아냐?", "a": "아니. 락프리는 막힘은 없지만, 경합이 심하면 재시도가 폭증해 오히려 느려질 수 있고 구현이 까다로워(ABA 문제 등).\n그리고 게임 로직처럼 '여러 값을 한꺼번에 원자적으로' 바꿔야 하면 단순 CAS로 안 돼. 그래서 우리 서버는 아예 싱글스레드로 가서 '락도 CAS도 없는' 길을 택했어 (액터 모델 글 참고)." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>레이스 컨디션</strong> = '읽기-계산-쓰기'가 원자적이 아니라 한쪽 증가가 덮여 사라짐",
+        "<strong>락</strong> = 한 번에 하나(정확, 대기·데드락 위험)",
+        "<strong>락프리(CAS)</strong> = 충돌 시 재시도(막힘 없음, 경합 심하면 재시도 폭증)",
+        "<strong>싱글스레드(액터)</strong> = 락도 CAS도 없음 — 우리 서버의 선택(1코어 천장은 샤딩으로)",
+        "락프리가 만능은 아님 — 다중 값 원자 처리엔 부적합"
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "이어서 보면",
+      "items": [
+        "데드락 — 락을 두 개 엇갈려 잡으면 생기는 교착",
+        "액터 모델 — 락을 아예 안 쓰는 길(우리 서버가 택한 방식)"
+      ]
+    }
+  ]
+}
