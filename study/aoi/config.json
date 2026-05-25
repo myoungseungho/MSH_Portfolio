@@ -1,0 +1,66 @@
+{
+  "slug": "aoi",
+  "title": "MMO에서 1만 명을 어떻게 처리할까? — 관심 영역(AOI)",
+  "subtitle": "안 보이는 건 안 보낸다. 우리 서버가 브로드캐스트 대상을 추리는 법",
+  "category": "네트워크",
+  "category_path": "../network/",
+  "prev_link": "../network/",
+  "prev_text": "← 네트워크",
+  "next_link": "../uenet-11-relevancy/",
+  "next_text": "UE Relevancy →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='aoi.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "맵에 1만 명, 1만 몬스터면 모두에게 모두를 보내면 N² 폭발. 안 보이는 건 안 보내야 해.",
+        "AOI(Area of Interest, 관심 영역) = 내 주변 일정 범위만 구독. 브로드캐스트 대상을 그 범위로 추림.",
+        "UE에선 이걸 Relevancy(거리 기반)라 부름 — 같은 개념."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 왜 다 보내면 안 되나",
+      "items": [
+        { "type": "qa", "q": "한 맵에 5천 명이 있어. 한 명이 움직이면 누구한테 알려?", "a": "다 알리면? 5천 명 × 5천 명 = 2,500만 건. 한 명만 움직여도 전체에 뿌리면 서버가 폭발해(N² 문제).\n근데 내가 서울 광장에 있는데 부산 골목 사람 움직임이 필요해? 안 보이는데. 그래서 '내 주변'만 보내." },
+        { "type": "qa", "q": "그 '주변'을 뭐라고 해?", "a": "AOI(Area of Interest), 관심 영역. 내가 관심 가질 범위(보통 시야 반경 또는 격자 셀 몇 개)만 구독하고, 그 안 객체의 변화만 받아.\n움직이면 구독 범위도 따라 갱신돼." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 시야 안만 받는다",
+      "items": [
+        { "type": "qa", "q": "직접 봐.", "a": "노란 '나'가 움직이면 시야(점선 원) 안 객체만 초록(구독·수신)이 되고, 밖은 회색(제외)이 돼.\n탭으로 시야 크기를 바꿔봐 — 크면 받는 게 늘고(부하↑), 작으면 줄어(멀리 '갑툭튀' 위험)." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ue11tab' type='button' data-r='90'>좁은 시야</button>\n    <button class='wtab ue11tab active' type='button' data-r='130'>보통 시야</button>\n    <button class='wtab ue11tab' type='button' data-r='190'>넓은 시야</button>\n  </div>\n  <canvas id='ue11-canvas' role='img' aria-label='AOI 관심 영역 시뮬레이터. 플레이어 시야 안 객체만 구독해 수신(초록)하고 밖은 제외(회색)한다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ue11-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue11-in'>0</span><span class='sim-stat-lbl'>구독(수신) 중</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue11-out'>0</span><span class='sim-stat-lbl'>제외(안 받음)</span></div>\n  </div>\n  <p class='sim-caption' id='ue11-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 어떻게 빠르게 추리나 — 격자",
+      "items": [
+        { "type": "qa", "q": "매번 모든 객체와 거리 재면 그것도 N²이잖아?", "a": "맞아. 그래서 맵을 격자(grid) 셀로 나눠 객체를 칸에 넣어둬. 그럼 내 칸 + 이웃 칸만 보면 돼 — 멀리는 거리 계산조차 안 해.\n이게 공간 분할(spatial partitioning)이고, UE의 ReplicationGraph도 같은 격자 방식이야." },
+        { "type": "qa", "q": "경계를 넘으면?", "a": "내가 옆 셀로 가면 새로 보이는 셀을 구독하고, 안 보이게 된 셀은 구독 해제(객체 사라짐 처리). 이 '구독 갱신'이 깔끔해야 유령 객체나 누락이 안 생겨." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 트레이드오프 + 우리/UE",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>개념</th><th>조선협객전 (우리)</th><th>언리얼</th></tr>\n<tr><td>관심 영역</td><td class='good'>AOI (BroadCast 대상)</td><td>Relevancy</td></tr>\n<tr><td>빠른 추리기</td><td>격자/존 셀</td><td>ReplicationGraph 격자</td></tr>\n<tr><td>거리 기준</td><td>시야 반경</td><td>NetCullDistance</td></tr>\n</table>" },
+        { "type": "qa", "q": "시야는 작을수록 좋아?", "a": "아니. 너무 좁으면 멀리서 다가오는 적이 갑자기 튀어나와(갑툭튀). 저격수 시야 밖 표적도 문제고.\n그래서 '거리'만으로 안 되고, 중요한 건 항상 보이게(전체 공지 등) 예외를 둬. 부하 vs 체감의 균형이야." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>문제</strong>: 모두에게 모두를 보내면 N² 폭발",
+        "<strong>AOI</strong> = 내 주변(시야/격자)만 구독 → 브로드캐스트 대상 추림",
+        "<strong>빠른 추리기</strong> = 격자 공간 분할 (내 셀 + 이웃만 검사)",
+        "경계 넘으면 <strong>구독 갱신</strong> — 누락/유령 객체 방지",
+        "<strong>= UE Relevancy/ReplicationGraph</strong>. 너무 좁으면 갑툭튀 — 균형 필요"
+      ]
+    }
+  ]
+}
