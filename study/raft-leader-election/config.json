@@ -1,0 +1,65 @@
+{
+  "slug": "raft-leader-election",
+  "title": "서버 5대가 '누가 리더야?'를 정하는 법 — Raft",
+  "subtitle": "투표로 리더를 뽑고, 리더가 죽으면 다시 뽑는다",
+  "category": "대규모 서버",
+  "category_path": "../distributed-systems/",
+  "prev_link": "../distributed-systems/",
+  "prev_text": "← 대규모 서버",
+  "next_link": "../consistent-hashing/",
+  "next_text": "일관성 해싱 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    #rf-kill{background:#c62828;color:#fff}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='raft.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "여러 서버가 하나의 '리더'를 뽑아 일관된 결정을 내리게 하는 합의 알고리즘이 Raft.",
+        "리더의 하트비트가 끊기면 후보가 나서서 임기(term)를 올리고 투표를 요청 → 과반수 받으면 새 리더.",
+        "과반수가 핵심이라 노드는 홀수(3, 5)로 둬."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 왜 리더가 필요해",
+      "items": [
+        { "type": "qa", "q": "서버가 여러 대면 누가 결정을 내려?", "a": "다 같이 멋대로 결정하면 서로 어긋나(분열). 그래서 한 명을 '리더'로 뽑아 그 리더의 결정을 모두 따르게 해 — 일관성이 생기지.\n근데 리더가 죽으면? 빨리 새 리더를 뽑아야 서비스가 안 멈춰. 그 '뽑는 규칙'이 Raft야." },
+        { "type": "qa", "q": "어떻게 뽑아?", "a": "평소 팔로워들은 리더의 하트비트를 받아. 일정 시간 하트비트가 없으면(리더 장애 의심), 한 노드가 후보가 되어 임기 번호를 +1 하고 '나 찍어줘' 투표를 요청해.\n과반수 표를 받으면 리더가 돼. 한 임기엔 한 명만 과반수를 받을 수 있어서 리더는 항상 하나야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 직접 죽여봐",
+      "items": [
+        { "type": "qa", "q": "선출과 재선출을 봐.", "a": "노랑 = 투표(후보↔팔로워), 파랑 = 하트비트(리더→팔로워). '리더 장애' 버튼으로 현재 리더를 죽이면, 곧 새 후보가 나서서 투표로 새 리더를 뽑아.\n임기(term)가 매 선거마다 올라가는 것도 봐." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <canvas id='rf-canvas' role='img' aria-label='Raft 리더 선출 시뮬레이터. 노드 5개가 투표로 리더를 뽑고, 리더가 하트비트를 보낸다. 리더 장애 시 후보가 나서서 임기를 올리고 과반수 투표로 새 리더를 뽑는다.'></canvas>\n  <div class='sim-controls'>\n    <button id='rf-play' type='button'>⏸ 일시정지</button>\n    <button id='rf-kill' type='button'>💀 리더 장애</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='rf-leader'>선출 중…</span><span class='sim-stat-lbl'>현재 리더</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='rf-term'>0</span><span class='sim-stat-lbl'>임기(term)</span></div>\n  </div>\n  <p class='sim-caption' id='rf-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 왜 홀수, 왜 과반수",
+      "items": [
+        { "type": "qa", "q": "왜 노드를 홀수로 둬?", "a": "과반수(다수결)로 결정하니까. 5대면 3대만 살아있으면 리더를 뽑고 운영돼(2대 장애 견딤). 4대는 3대 견디는 게 아니라 똑같이 2대까지라, 1대 더 쓰고도 내결함성은 같아 — 낭비야.\n그래서 3, 5, 7 같은 홀수가 효율적이야." },
+        { "type": "qa", "q": "표가 갈리면(분열)?", "a": "두 후보가 동시에 나서 표가 갈리면 아무도 과반수를 못 받아 → 그 임기는 무산되고, 랜덤 타임아웃 후 다시 선거를 해. 타임아웃을 노드마다 다르게 줘서 동시에 후보가 되는 일을 줄여.\n그래서 가끔 선거가 한 번에 안 끝나지만, 결국 한 명이 과반수를 받아 안정화돼." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 어디 쓰나",
+      "items": [
+        { "type": "qa", "q": "게임 서버랑 무슨 상관이야?", "a": "매치메이킹·세션 관리·구성 정보(어떤 채널이 어디 떠 있나) 같은 '하나의 진실'이 필요한 메타 데이터를 여러 대가 합의해 관리할 때 써. etcd, Consul, Kafka의 컨트롤러 선출 등이 Raft류 합의를 써.\n우리 게임 로직 자체는 단일 권위(Gate/Game)라 Raft가 필수는 아니지만, 인프라(서비스 디스커버리·구성 저장소)에는 이 합의가 깔려 있어." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>Raft</strong> = 여러 서버가 하나의 리더를 뽑아 일관된 결정을 내리는 합의 알고리즘",
+        "<strong>선출</strong>: 하트비트 끊김 → 후보가 임기+1 + 투표 요청 → 과반수면 리더",
+        "<strong>과반수</strong>가 핵심 → 노드는 홀수(3,5,7), N대면 (N-1)/2대 장애 견딤",
+        "<strong>분열표</strong> = 무산 후 랜덤 타임아웃으로 재선거",
+        "쓰임: etcd·Consul·Kafka 등 인프라의 구성·디스커버리 합의"
+      ]
+    }
+  ]
+}
