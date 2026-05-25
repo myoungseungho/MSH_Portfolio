@@ -1,0 +1,65 @@
+{
+  "slug": "tickrate-design",
+  "title": "서버는 초당 20번인데 왜 안 끊겨 보일까? — 틱레이트와 보간",
+  "subtitle": "저틱 서버 + 60fps 클라를 잇는 보간(interpolation)",
+  "category": "네트워크",
+  "category_path": "../network/",
+  "prev_link": "../network/",
+  "prev_text": "← 네트워크",
+  "next_link": "../network/",
+  "next_text": "네트워크 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-load-lbl{display:flex;align-items:center;gap:8px;color:#90a4c4;font-size:.88rem}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='tick.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "틱레이트 = 서버가 초당 몇 번 상태를 갱신·전송하나(예: 20~60Hz). 클라는 보통 60fps로 그림.",
+        "그 사이 빈틈을 보간(interpolation)으로 메워 부드럽게 보여줘 — 대신 '살짝 과거'를 보는 대가.",
+        "남의 캐릭터는 보간으로, 내 캐릭터는 예측으로 — 처리 방식이 다름."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 틱과 프레임은 다르다",
+      "items": [
+        { "type": "qa", "q": "서버가 초당 20번만 보내면 화면도 20fps로 끊겨야 하는 거 아냐?", "a": "예측해봐 — 끊길까? 실제론 안 끊겨. 클라는 60fps로 그리되, 서버가 준 '점'들 사이를 부드럽게 이어 그리거든.\n틱(서버 갱신)과 프레임(화면 그리기)은 별개야. 적은 점만 받아도 그 사이를 메우면 매끄러워." },
+        { "type": "qa", "q": "어떻게 메워?", "a": "받은 최근 두 스냅샷 사이를 시간 비율로 보간(lerp)해. 단, 다음 스냅샷이 와 있어야 '사이'를 그릴 수 있으니, 일부러 한 틱쯤 '과거'를 그려(보간 버퍼). 그래서 부드러움의 대가는 약간의 지연이야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 틱레이트를 낮춰봐",
+      "items": [
+        { "type": "qa", "q": "보간 유무 × 틱레이트를 만져봐.", "a": "탭으로 보간을 끄고 슬라이더로 틱레이트를 낮춰봐 — 초록 점이 뚝뚝 끊겨(계단). 보간을 켜면 같은 저틱에서도 부드러워져.\n연한 점 = 실제 위치, 아래 파란 점들 = 서버가 보낸 스냅샷, 초록 = 화면에 그려지는 위치." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab tktab' type='button' data-m='off'>보간 끔</button>\n    <button class='wtab tktab active' type='button' data-m='on'>보간 켬</button>\n  </div>\n  <canvas id='tk-canvas' role='img' aria-label='틱레이트와 보간 시뮬레이터. 서버가 저틱으로 보낸 스냅샷 점들 사이를 보간으로 메워 부드럽게 렌더한다. 보간을 끄면 최신 스냅샷으로 점프해 끊긴다.'></canvas>\n  <div class='sim-controls'>\n    <button id='tk-play' type='button'>⏸ 일시정지</button>\n    <label class='sim-load-lbl'>틱레이트 <span id='tk-rate-val'>10</span>Hz\n      <input id='tk-rate-sl' type='range' min='4' max='30' value='10' aria-label='틱레이트 조절'>\n    </label>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='tk-rate'>10 Hz</span><span class='sim-stat-lbl'>틱레이트</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='tk-int'>100 ms</span><span class='sim-stat-lbl'>스냅샷 간격</span></div>\n  </div>\n  <p class='sim-caption' id='tk-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 왜 틱을 무작정 안 올려?",
+      "items": [
+        { "type": "qa", "q": "그냥 틱을 60~128로 올리면 보간도 필요 없잖아?", "a": "올리면 부드럽지만 비용이 커. 틱마다 모든 관련 액터 상태를 계산·전송하니까, 틱 2배 = 대역폭·CPU 약 2배.\n그래서 대부분 '적당한 틱(20~30) + 보간'으로 타협해. 경쟁 FPS만 64~128틱을 쓰고 그만큼 서버를 쏟아부어." },
+        { "type": "qa", "q": "보간 vs 예측 차이는?", "a": "남의 캐릭터 = 보간(받은 과거를 부드럽게). 내 캐릭터 = 예측(미래를 미리). 그래서 내 건 즉각 반응하고, 남은 약간 과거지만 부드러워. 지연 보상(히트 판정)은 이 '내가 본 과거'를 서버가 되감아 맞춰주는 거고." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 우리 서버는?",
+      "items": [
+        { "type": "qa", "q": "조선협객전도 틱·보간을 써?", "a": "우리도 서버는 일정 주기로 상태를 갱신·브로드캐스트하고, 클라는 이동을 부드럽게 보간해 그려. 다만 클릭 이동 MMO라 경쟁 FPS만큼 높은 틱이 필요하진 않아.\n핵심 원리는 같아 — '적은 갱신 + 클라 보간'으로 대역폭을 아끼면서 부드럽게 보이게 한다." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>틱레이트</strong>(서버 갱신 주기) ≠ <strong>프레임</strong>(화면 그리기). 별개로 돔",
+        "<strong>보간</strong> = 스냅샷 사이를 메워 부드럽게. 대가 = 약간의 과거(버퍼 지연)",
+        "틱을 무작정 올리면 대역폭·CPU 비례 증가 → 보통 20~30틱 + 보간으로 타협",
+        "<strong>남의 캐릭터=보간, 내 캐릭터=예측</strong>, 히트 판정=지연 보상",
+        "우리도 같은 원리: 적은 갱신 + 클라 보간"
+      ]
+    }
+  ]
+}
