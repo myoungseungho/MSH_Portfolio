@@ -1,0 +1,58 @@
+{
+  "slug": "reliable-udp",
+  "title": "UDP는 안 믿음인데, 어떻게 '꼭 도착'을 만들까? — 신뢰성 UDP",
+  "subtitle": "한 UDP 채널에 unreliable과 reliable을 섞어 쓰는 법",
+  "category": "네트워크",
+  "category_path": "../network/",
+  "prev_link": "../uenet-02-tcp-udp/",
+  "prev_text": "← UE TCP vs UDP",
+  "next_link": "../network/",
+  "next_text": "네트워크 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='reludp.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "UDP는 기본이 '안 믿음'(유실·순서 미보장). 대신 빠름.",
+        "그래서 '꼭 도착해야 하는' 메시지에만 ACK + 재전송을 직접 얹어 신뢰성을 만들어.",
+        "한 UDP 채널에 unreliable(이동)과 reliable(중요)을 섞어 쓴다 — UE의 Bunch reliable 플래그가 이것."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 왜 TCP 안 쓰고 굳이?",
+      "items": [
+        { "type": "qa", "q": "꼭 도착시킬 거면 그냥 TCP 쓰면 되잖아?", "a": "TCP는 '전부 reliable + 순서 보장'이라, 잃은 옛 패킷 하나를 재전송하느라 최신 패킷까지 다 막혀(HOL 블로킹). 액션 게임엔 치명적이야.\n그래서 UDP를 깔고, '이 메시지는 꼭, 저 메시지는 잃어도 됨'을 메시지별로 고르는 거야. TCP의 전부-아니면-전무를 피하는 거지." },
+        { "type": "qa", "q": "어떻게 '꼭 도착'을 만들어?", "a": "보낼 때 순번(seq)을 붙이고, 받는 쪽이 ACK를 보내. 일정 시간 ACK가 안 오면 재전송. 순번으로 중복 제거·순서 정렬도 해.\nTCP가 OS 안에서 해주는 일을, 필요한 메시지에만 골라서 직접 구현하는 거야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 섞어 쓰는 걸 봐",
+      "items": [
+        { "type": "qa", "q": "두 종류가 한 채널에 어떻게 흐르나 봐.", "a": "파랑=이동(unreliable, 잃으면 빨갛게 사라지고 끝), 노랑=중요(reliable, 잃으면 주황으로 재전송돼 결국 도착).\n탭으로 유실률을 올려봐 — 이동은 유실 카운트가 늘지만, 중요는 재전송으로 끝까지 보장돼." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab rutab' type='button' data-loss='5'>유실 5%</button>\n    <button class='wtab rutab active' type='button' data-loss='20'>유실 20%</button>\n    <button class='wtab rutab' type='button' data-loss='40'>유실 40%</button>\n  </div>\n  <canvas id='ru-canvas' role='img' aria-label='신뢰성 UDP 시뮬레이터. 한 UDP 채널에 이동(unreliable)과 중요(reliable) 메시지가 흐르고, 유실 지대에서 이동은 사라지고 중요는 재전송으로 보장된다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ru-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ru-lost'>0</span><span class='sim-stat-lbl'>이동 유실(무시)</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ru-resent'>0</span><span class='sim-stat-lbl'>중요 재전송(보장)</span></div>\n  </div>\n  <p class='sim-caption' id='ru-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 우리/UE의 실제",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>메시지</th><th>신뢰성</th><th>이유</th></tr>\n<tr><td>이동·회전</td><td class='warn'>unreliable</td><td>최신이 곧 옴, 옛 건 쓸모없음</td></tr>\n<tr><td>발사·피격 이벤트</td><td class='good'>reliable</td><td>놓치면 게임 어긋남</td></tr>\n<tr><td>채팅·아이템·결제</td><td class='good'>reliable</td><td>절대 유실 불가</td></tr>\n</table>" },
+        { "type": "qa", "q": "UE는 이걸 어디서?", "a": "UE는 데이터를 Bunch로 보내는데, 각 Bunch에 bReliable 플래그가 있어. reliable이면 ACK·재전송·순서 보장, 아니면 그냥 보내고 잊어.\n우리(조선협객전)는 TCP 기반이라 모든 게 reliable이지만, 그래서 이동처럼 '최신만 중요한' 것도 순서 보장 비용을 내는 셈. 장르(MMO vs FPS)에 따라 선택이 갈려." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>UDP</strong> = 기본 안 믿음(빠름). 신뢰성은 필요한 메시지에만 직접 얹음",
+        "<strong>reliable</strong> = 순번(seq) + ACK + 재전송 + 중복제거. TCP가 OS에서 하는 걸 선택적으로",
+        "한 채널에 <strong>unreliable(이동) + reliable(중요)</strong> 혼합",
+        "<strong>TCP를 안 쓰는 이유</strong> = 전부-reliable의 HOL 블로킹 회피",
+        "UE = Bunch의 bReliable 플래그, 우리 = TCP(전부 reliable)"
+      ]
+    }
+  ]
+}

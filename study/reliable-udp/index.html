@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UDP는 안 믿음인데, 어떻게 '꼭 도착'을 만들까? — 신뢰성 UDP - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+    <style>
+    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}
+    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}
+    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}
+    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    .sim canvas{width:100%;display:block;border-radius:12px}
+    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
+    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}
+    .sim-stats{display:flex;gap:10px;margin-top:16px}
+    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}
+    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}
+    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}
+    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}
+    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}
+    </style>
+    <script src='reludp.js' defer></script>
+</head>
+<body>
+    <div class="container">
+        <a href="../network/" class="back-link">← 네트워크</a>
+
+        <header class="header">
+            <h1>UDP는 안 믿음인데, 어떻게 '꼭 도착'을 만들까? — 신뢰성 UDP</h1>
+            <p>한 UDP 채널에 unreliable과 reliable을 섞어 쓰는 법</p>
+        </header>
+
+        <div class="info-box">
+            <h4>30초 요약</h4>
+            <p>UDP는 기본이 '안 믿음'(유실·순서 미보장). 대신 빠름.</p>
+            <p>그래서 '꼭 도착해야 하는' 메시지에만 ACK + 재전송을 직접 얹어 신뢰성을 만들어.</p>
+            <p>한 UDP 채널에 unreliable(이동)과 reliable(중요)을 섞어 쓴다 — UE의 Bunch reliable 플래그가 이것.</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 왜 TCP 안 쓰고 굳이?</h2>
+
+            <div class="chat">
+                <div class="q">꼭 도착시킬 거면 그냥 TCP 쓰면 되잖아?</div>
+                <div class="a">
+                    <p>TCP는 '전부 reliable + 순서 보장'이라, 잃은 옛 패킷 하나를 재전송하느라 최신 패킷까지 다 막혀(HOL 블로킹). 액션 게임엔 치명적이야.</p>
+                    <p>그래서 UDP를 깔고, '이 메시지는 꼭, 저 메시지는 잃어도 됨'을 메시지별로 고르는 거야. TCP의 전부-아니면-전무를 피하는 거지.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">어떻게 '꼭 도착'을 만들어?</div>
+                <div class="a">
+                    <p>보낼 때 순번(seq)을 붙이고, 받는 쪽이 ACK를 보내. 일정 시간 ACK가 안 오면 재전송. 순번으로 중복 제거·순서 정렬도 해.</p>
+                    <p>TCP가 OS 안에서 해주는 일을, 필요한 메시지에만 골라서 직접 구현하는 거야.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 섞어 쓰는 걸 봐</h2>
+
+            <div class="chat">
+                <div class="q">두 종류가 한 채널에 어떻게 흐르나 봐.</div>
+                <div class="a">
+                    <p>파랑=이동(unreliable, 잃으면 빨갛게 사라지고 끝), 노랑=중요(reliable, 잃으면 주황으로 재전송돼 결국 도착).</p>
+                    <p>탭으로 유실률을 올려봐 — 이동은 유실 카운트가 늘지만, 중요는 재전송으로 끝까지 보장돼.</p>
+                </div>
+            </div>
+
+            <div class='sim'>
+  <div class='sim-tabs'>
+    <button class='wtab rutab' type='button' data-loss='5'>유실 5%</button>
+    <button class='wtab rutab active' type='button' data-loss='20'>유실 20%</button>
+    <button class='wtab rutab' type='button' data-loss='40'>유실 40%</button>
+  </div>
+  <canvas id='ru-canvas' role='img' aria-label='신뢰성 UDP 시뮬레이터. 한 UDP 채널에 이동(unreliable)과 중요(reliable) 메시지가 흐르고, 유실 지대에서 이동은 사라지고 중요는 재전송으로 보장된다.'></canvas>
+  <div class='sim-controls'>
+    <button id='ru-play' type='button'>⏸ 일시정지</button>
+  </div>
+  <div class='sim-stats'>
+    <div class='sim-stat'><span class='sim-stat-num' id='ru-lost'>0</span><span class='sim-stat-lbl'>이동 유실(무시)</span></div>
+    <div class='sim-stat'><span class='sim-stat-num' id='ru-resent'>0</span><span class='sim-stat-lbl'>중요 재전송(보장)</span></div>
+  </div>
+  <p class='sim-caption' id='ru-caption'></p>
+</div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 우리/UE의 실제</h2>
+            <table class='compare-table'>
+<tr><th>메시지</th><th>신뢰성</th><th>이유</th></tr>
+<tr><td>이동·회전</td><td class='warn'>unreliable</td><td>최신이 곧 옴, 옛 건 쓸모없음</td></tr>
+<tr><td>발사·피격 이벤트</td><td class='good'>reliable</td><td>놓치면 게임 어긋남</td></tr>
+<tr><td>채팅·아이템·결제</td><td class='good'>reliable</td><td>절대 유실 불가</td></tr>
+</table>
+
+
+            <div class="chat">
+                <div class="q">UE는 이걸 어디서?</div>
+                <div class="a">
+                    <p>UE는 데이터를 Bunch로 보내는데, 각 Bunch에 bReliable 플래그가 있어. reliable이면 ACK·재전송·순서 보장, 아니면 그냥 보내고 잊어.</p>
+                    <p>우리(조선협객전)는 TCP 기반이라 모든 게 reliable이지만, 그래서 이동처럼 '최신만 중요한' 것도 순서 보장 비용을 내는 셈. 장르(MMO vs FPS)에 따라 선택이 갈려.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>UDP</strong> = 기본 안 믿음(빠름). 신뢰성은 필요한 메시지에만 직접 얹음</li>
+                <li><strong>reliable</strong> = 순번(seq) + ACK + 재전송 + 중복제거. TCP가 OS에서 하는 걸 선택적으로</li>
+                <li>한 채널에 <strong>unreliable(이동) + reliable(중요)</strong> 혼합</li>
+                <li><strong>TCP를 안 쓰는 이유</strong> = 전부-reliable의 HOL 블로킹 회피</li>
+                <li>UE = Bunch의 bReliable 플래그, 우리 = TCP(전부 reliable)</li>
+            </ul>
+        </div>
+
+
+        <div class="nav-links">
+            <a href="../uenet-02-tcp-udp/">← UE TCP vs UDP</a>
+            <a href="../network/">네트워크 →</a>
+        </div>
+    </div>
+</body>
+</html>
