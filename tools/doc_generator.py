@@ -130,6 +130,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
         .nav-links a {{ color: #1a237e; text-decoration: none; }}
         .nav-links a:hover {{ text-decoration: underline; }}
     </style>
+{extra_head}
 </head>
 <body>
     <div class="container">
@@ -193,6 +194,12 @@ class ComponentBuilder:
     def code(content: str, language: str = "") -> str:
         """코드 블록 생성"""
         return f'''            <div class="code-block">{content}</div>
+'''
+
+    @staticmethod
+    def raw(content: str) -> str:
+        """원본 HTML 통과 (인터랙티브 위젯/애니메이션 컨테이너용)"""
+        return f'''            {content}
 '''
 
     @staticmethod
@@ -263,6 +270,7 @@ class DocConfig:
     prev_text: str = "← 이전"    # 이전 문서 텍스트
     next_link: str = ""          # 다음 문서 링크
     next_text: str = "다음 →"    # 다음 문서 텍스트
+    extra_head: str = ""         # <head>에 주입할 추가 CSS/JS (인터랙티브 문서용)
     parts: List[Dict] = field(default_factory=list)  # 파트별 내용
 
 
@@ -296,6 +304,7 @@ class DocGenerator:
             back_link=config.category_path,
             back_text=config.category,
             content=content,
+            extra_head=config.extra_head,
             prev_link=config.prev_link or config.category_path,
             prev_text=config.prev_text,
             next_link=config.next_link or config.category_path,
@@ -321,6 +330,10 @@ class DocGenerator:
         elif part.get('type') == 'info_box':
             return self.component.info_box(part['title'], part['items'])
 
+        elif part.get('type') == 'raw_html':
+            # Part 레벨에서도 원본 HTML 통과 (섹션 전체가 커스텀일 때)
+            return self.component.raw(part['content'])
+
         return ''
 
     def _build_item(self, item: Dict) -> str:
@@ -335,6 +348,9 @@ class DocGenerator:
 
         elif item_type == 'code':
             return self.component.code(item['content'], item.get('language', ''))
+
+        elif item_type == 'raw_html':
+            return self.component.raw(item['content'])
 
         elif item_type == 'table':
             return self.component.table(item['headers'], item['rows'])
@@ -354,7 +370,7 @@ class DocGenerator:
         file_path = doc_path / "index.html"
         file_path.write_text(html, encoding='utf-8')
 
-        print(f"✅ 생성 완료: {file_path}")
+        print(f"OK 생성 완료: {file_path}")
         return file_path
 
     def generate_from_json(self, json_path: str) -> Path:

@@ -3,478 +3,337 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Actor 모델 - 락 없이 동시성 처리하기 - MSH Portfolio</title>
+    <title>우리 게임 서버, 알고 보면 '액터가 1마리뿐인' 액터 모델이야 - MSH Portfolio</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #fafafa;
-            color: #333;
-            line-height: 1.9;
-        }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
         .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
-        .back-link {
-            display: inline-block;
-            margin-bottom: 24px;
-            color: #666;
-            text-decoration: none;
-        }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
         .back-link:hover { color: #111; }
         .header { margin-bottom: 48px; }
         .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
         .header p { color: #666; font-size: 1.1rem; }
 
-        .conversation {
-            background: white;
-            border-radius: 16px;
-            padding: 32px;
-            margin: 32px 0;
-            border: 1px solid #e0e0e0;
-        }
-        .conversation h2 {
-            font-size: 1.3rem;
-            color: #1a237e;
-            margin-bottom: 24px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid #e8eaf6;
-        }
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
 
         .chat { margin-bottom: 20px; }
-        .q {
-            background: #fff3e0;
-            border-left: 4px solid #ff9800;
-            padding: 16px 20px;
-            margin: 16px 0;
-            border-radius: 0 12px 12px 0;
-            font-weight: 500;
-        }
-        .q::before {
-            content: "Q. ";
-            color: #e65100;
-            font-weight: 700;
-        }
-        .a {
-            padding: 8px 0 8px 20px;
-            border-left: 4px solid #e0e0e0;
-            margin: 12px 0;
-        }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
         .a p { margin-bottom: 12px; }
         .a p:last-child { margin-bottom: 0; }
 
-        .highlight {
-            background: #e3f2fd;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 600;
-            color: #1565c0;
-        }
-        .key-point {
-            background: #c8e6c9;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 600;
-            color: #2e7d32;
-        }
-        .warning {
-            background: #ffcdd2;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-weight: 600;
-            color: #c62828;
-        }
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
 
-        .code-block {
-            background: #263238;
-            border-radius: 8px;
-            padding: 16px 20px;
-            margin: 16px 0;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 0.9rem;
-            color: #eceff1;
-            overflow-x: auto;
-            line-height: 1.6;
-            white-space: pre-wrap;
-        }
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
 
-        .compare-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 16px 0;
-            font-size: 0.9rem;
-        }
-        .compare-table th, .compare-table td {
-            padding: 12px;
-            border: 1px solid #e0e0e0;
-            text-align: left;
-        }
-        .compare-table th {
-            background: #f5f5f5;
-            font-weight: 600;
-        }
-        .compare-table .good {
-            background: #c8e6c9;
-            font-weight: 600;
-        }
-        .compare-table .bad {
-            background: #ffcdd2;
-        }
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
 
-        .summary-box {
-            background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
-            border-radius: 16px;
-            padding: 32px;
-            color: white;
-            margin: 32px 0;
-        }
-        .summary-box h3 {
-            font-size: 1.2rem;
-            margin-bottom: 20px;
-        }
-        .summary-box ul {
-            list-style: none;
-        }
-        .summary-box li {
-            padding: 8px 0;
-            padding-left: 24px;
-            position: relative;
-        }
-        .summary-box li::before {
-            content: "→";
-            position: absolute;
-            left: 0;
-            color: #90caf9;
-        }
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
 
-        .etymology-box {
-            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
-            border-radius: 16px;
-            padding: 32px;
-            color: white;
-            margin: 32px 0;
-        }
-        .etymology-box h3 {
-            font-size: 1.2rem;
-            margin-bottom: 20px;
-        }
-        .etymology-box p {
-            margin-bottom: 12px;
-            opacity: 0.95;
-        }
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
 
-        .nav-links {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 60px;
-            padding-top: 24px;
-            border-top: 1px solid #e0e0e0;
-        }
-        .nav-links a {
-            color: #1a237e;
-            text-decoration: none;
-        }
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
     </style>
+    <style>
+    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}
+    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+    .sim-tab{flex:1;min-width:150px;padding:12px 14px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.95rem;font-weight:600;cursor:pointer;transition:.15s}
+    .sim-tab:hover{border-color:#42a5f5;color:#e3eaf5}
+    .sim-tab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    #sim-canvas{width:100%;display:block;border-radius:12px}
+    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
+    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem}
+    #sim-play{background:#37474f;color:#e3eaf5}
+    #sim-burst{background:#c62828;color:#fff}
+    .sim-load-lbl{display:flex;align-items:center;gap:8px;color:#90a4c4;font-size:.88rem}
+    .sim-load-lbl input{cursor:pointer}
+    .sim-stats{display:flex;gap:10px;margin-top:16px}
+    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}
+    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5;transition:color .2s}
+    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}
+    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}
+    @media(max-width:520px){.sim-stat-num{font-size:1.3rem}.sim-controls{gap:8px}}
+    </style>
+    <script src='anim.js' defer></script>
 </head>
 <body>
     <div class="container">
         <a href="../category-thread/" class="back-link">← 멀티스레드</a>
 
         <header class="header">
-            <h1>Actor 모델 - 락 없이 동시성 처리하기</h1>
-            <p>공유 데이터 대신 메시지 패싱으로 동시성 문제 해결</p>
+            <h1>우리 게임 서버, 알고 보면 '액터가 1마리뿐인' 액터 모델이야</h1>
+            <p>IOCP → 큐 → 게임로직 스레드 1개 vs 진짜 액터 모델, 직접 움직여보며 비교</p>
         </header>
 
-        <!-- Part 1: 어원 -->
-        <div class="etymology-box">
-            <h3>Actor는 무슨 뜻일까?</h3>
-            <p><strong>Actor = 배우(演員)</strong></p>
-            <p>연극 무대의 배우처럼:</p>
-            <p>• 각자 맡은 역할(상태)이 있고</p>
-            <p>• 다른 배우를 직접 조종하지 않고</p>
-            <p>• 대사(메시지)로만 소통하고</p>
-            <p>• 큐(cue)를 받으면 연기를 시작한다</p>
-            <p style="margin-top: 16px; opacity: 0.8;">1973년 칼 휴잇(Carl Hewitt)이 "독립적으로 행동하는 개체"라는 비유로 명명</p>
+        <div class="info-box">
+            <h4>30초 요약</h4>
+            <p>우리 서버의 'IOCP 스레드 → 큐 → 게임로직 스레드 1개'는 액터 모델과 메커니즘이 똑같아 — 큐에 줄 세워 하나씩 처리해서 락을 없애는 것.</p>
+            <p>결정적 차이는 딱 하나, '액터 수'. 우리는 1마리(월드 전체를 스레드 1개가 처리), 진짜 액터 모델은 N마리(유저·방·NPC마다).</p>
+            <p>아래 시뮬레이터를 직접 만져보면 그 차이가 눈에 보여.</p>
         </div>
 
-        <!-- Part 2: 문제 상황 -->
         <div class="conversation">
-            <h2>Part 1. 멀티스레드의 골칫거리</h2>
+            <h2>Part 1. 우리 서버, 사실 이렇게 돌아가</h2>
 
             <div class="chat">
-                <div class="q">멀티스레드에서 제일 힘든 게 뭐야?</div>
+                <div class="q">우리 게임 서버, 네트워크 패킷이 들어오면 누가 처리해?</div>
                 <div class="a">
-                    <p><span class="warning">락, 데드락, 경쟁 조건</span></p>
-                    <p>공유 데이터를 여러 스레드가 건드리니까 생기는 문제들.</p>
+                    <p>IOCP 스레드(보통 여러 개)가 소켓에서 패킷을 꺼내.</p>
+                    <p>근데 걔네가 게임 로직을 직접 돌리진 않아.</p>
+                    <p>그냥 패킷을 큐 하나에 차곡차곡 넣어두기만 해.</p>
                 </div>
             </div>
 
-            <div class="code-block">[기존 멀티스레드]
-스레드 A ──┐
-           ├── 공유 데이터 ── 락 필요!
-스레드 B ──┘
-
-player.gold -= 100;  // 스레드 A
-player.gold += 50;   // 스레드 B
-→ 동시에 건드리면 데이터 꼬임</div>
 
             <div class="chat">
-                <div class="q">어떻게 해결해?</div>
+                <div class="q">그 다음은?</div>
                 <div class="a">
-                    <p>락 걸어서 한 번에 하나만 접근하게...</p>
-                    <p>근데 락 쓰면 데드락 위험, 성능 저하...</p>
+                    <p>게임로직 스레드가 그 큐에서 메시지를 하나씩 꺼내서 처리해.</p>
+                    <p>공격, 이동, 거래... 전부 이 스레드 1개가 순서대로 처리하지.</p>
+                    <p>그래서 우리 서버 로직엔 락이 거의 없어. 혼자 다 하니까 동시에 꼬일 일이 없거든.</p>
                 </div>
             </div>
+
+            <div class="diagram-box">[우리 게임 서버]
+
+IOCP #1 ┐
+IOCP #2 ┼──▶  큐 1개  ──▶  게임로직 스레드 ×1  ──▶ (순차 처리)
+IOCP #3 ┘
+         받아서 쌓기만            한 번에 딱 하나씩</div>
+
         </div>
 
-        <!-- Part 3: Actor 모델 아이디어 -->
         <div class="conversation">
-            <h2>Part 2. Actor 모델의 발상</h2>
+            <h2>Part 2. 직접 만져봐 (어디서 본 구조 같지 않아?)</h2>
 
             <div class="chat">
-                <div class="q">락을 안 쓸 순 없을까?</div>
+                <div class="q">'큐에 넣고 하나씩 처리'... 이거 어디서 많이 들어본 느낌 아냐?</div>
                 <div class="a">
-                    <p><span class="key-point">"공유를 안 하면 되는 거 아니야?"</span></p>
+                    <p>맞아, 액터 모델이랑 똑 닮았어.</p>
+                    <p>근데 '닮았다'랑 '같다'는 달라. 결정적인 차이가 딱 하나 있는데 — 맞춰봐. 뭘까?</p>
+                    <p>아래에서 ① 우리 서버와 ② 진짜 액터 모델을 번갈아 보면서, '패킷 유입량'을 올리거나 '공성전' 버튼을 눌러봐. 큐 적체 숫자를 비교해보면 차이가 보일 거야.</p>
                 </div>
             </div>
 
-            <div class="code-block">[Actor 모델]
-Actor A ── 자기 데이터 (독점)
-Actor B ── 자기 데이터 (독점)
-    ↓
-   메시지로만 통신</div>
+            <div class='sim'>
+  <div class='sim-tabs'>
+    <button class='sim-tab active' type='button' data-mode='game'>① 우리 게임 서버</button>
+    <button class='sim-tab' type='button' data-mode='actor'>② 진짜 액터 모델</button>
+  </div>
+  <canvas id='sim-canvas' role='img' aria-label='두 동시성 모델 비교 애니메이션. 우리 게임 서버는 IOCP 스레드 여러 개가 큐 하나에 패킷을 쌓고 게임로직 스레드 1개가 순차 처리한다. 액터 모델은 액터마다 메일박스를 두고 코어 여러 개가 동시에 처리한다.'></canvas>
+  <div class='sim-controls'>
+    <button id='sim-play' type='button'>⏸ 일시정지</button>
+    <label class='sim-load-lbl'>패킷 유입량 <span id='sim-load-val'>3</span>
+      <input id='sim-load' type='range' min='1' max='10' value='3' aria-label='패킷 유입량 조절'>
+    </label>
+    <button id='sim-burst' type='button'>⚔ 공성전 3,000명 몰림</button>
+  </div>
+  <div class='sim-stats'>
+    <div class='sim-stat'><span class='sim-stat-num' id='stat-queue'>0</span><span class='sim-stat-lbl'>큐 적체</span></div>
+    <div class='sim-stat'><span class='sim-stat-num' id='stat-done'>0</span><span class='sim-stat-lbl'>처리 완료</span></div>
+    <div class='sim-stat'><span class='sim-stat-num' id='stat-cores'>1</span><span class='sim-stat-lbl'>동시 처리 코어</span></div>
+  </div>
+  <p class='sim-caption' id='sim-caption'></p>
+</div>
 
-            <div class="chat">
-                <div class="a">
-                    <p><strong>Actor = 자기만의 데이터 + 메시지 큐를 가진 독립된 단위</strong></p>
-                    <p>Actor끼리 직접 데이터 안 건드리고, 메시지만 주고받음.</p>
-                </div>
-            </div>
         </div>
 
-        <!-- Part 4: 게임 서버 예시 -->
         <div class="conversation">
-            <h2>Part 3. 이미 쓰고 있다?</h2>
+            <h2>Part 3. 그래서, 같은 거 맞아?</h2>
 
             <div class="chat">
-                <div class="q">게임 서버 11이 서버 12의 데이터 필요하면?</div>
+                <div class="q">① 우리 서버는 큐가 막 쌓이는데 ② 액터 모델은 잘 안 쌓이더라. 왜 그래?</div>
                 <div class="a">
-                    <p><span class="highlight">패킷 보내지!</span> 직접 DB 안 건드려.</p>
+                    <p>①은 처리하는 스레드가 딱 1개거든. 아무리 쌓여도 한 번에 하나씩.</p>
+                    <p>②는 코어 4개가 서로 다른 액터를 동시에 처리해. 같은 양이 들어와도 4배 빨리 비워내지.</p>
                 </div>
             </div>
 
-            <div class="code-block">[게임 서버 구조]
-서버 11 ── 자기 데이터 (DB_11)
-서버 12 ── 자기 데이터 (DB_12)
-     ↓
-   패킷으로만 통신
-
-[Actor 모델]
-Actor A ── 자기 데이터
-Actor B ── 자기 데이터
-     ↓
-   메시지로만 통신
-
-→ 똑같은 구조!</div>
 
             <div class="chat">
+                <div class="q">그럼 둘이 메커니즘은 같은 거네?</div>
                 <div class="a">
-                    <p>서버 간 통신 구조가 이미 <span class="key-point">Actor 모델</span>과 같은 패턴.</p>
+                    <p>락을 없애는 원리는 같아. 둘 다 '큐에 줄 세워서 하나씩' 처리하니까, 같은 데이터를 동시에 건드릴 일이 구조적으로 없어.</p>
+                    <p>근데 '몇 개를 동시에 굴리느냐'가 완전히 달라. 바로 이게 핵심.</p>
                 </div>
             </div>
+
         </div>
 
-        <!-- Part 5: 비교 -->
         <div class="conversation">
-            <h2>Part 4. 기존 방식 vs Actor 모델</h2>
-
-            <div class="code-block">[기존 멀티스레드 - 락 필요]
-스레드 A: player.gold -= 100;  // 락 걸어야 함
-스레드 B: player.gold += 50;   // 동시에 건드리면 터짐
-
-[Actor 모델 - 락 불필요]
-ActorA → PlayerActor: "골드 100 빼줘"
-ActorB → PlayerActor: "골드 50 더해줘"
-PlayerActor: 메시지 큐에서 하나씩 꺼내서 처리</div>
-
-            <table class="compare-table">
-                <tr>
-                    <th></th>
-                    <th>기존 멀티스레드</th>
-                    <th>Actor 모델</th>
-                </tr>
-                <tr>
-                    <td>데이터 접근</td>
-                    <td class="bad">공유 (락 필요)</td>
-                    <td class="good">독점 (락 불필요)</td>
-                </tr>
-                <tr>
-                    <td>통신 방식</td>
-                    <td>직접 메모리 접근</td>
-                    <td>메시지 패싱</td>
-                </tr>
-                <tr>
-                    <td>데드락</td>
-                    <td class="bad">발생 가능</td>
-                    <td class="good">구조적으로 회피</td>
-                </tr>
-                <tr>
-                    <td>디버깅</td>
-                    <td class="bad">어려움</td>
-                    <td class="good">메시지 추적 가능</td>
-                </tr>
-            </table>
+            <h2>Part 4. 결정적 차이 = 액터가 몇 마리야?</h2>
 
             <div class="chat">
-                <div class="q">왜 락이 필요 없어?</div>
+                <div class="q">그 결정적 차이가 뭔데?</div>
                 <div class="a">
-                    <p><span class="key-point">데이터 주인이 혼자만 건드리니까!</span></p>
-                    <p>메시지는 큐에 쌓이고, Actor가 하나씩 처리.</p>
+                    <p>액터 수.</p>
+                    <p>우리 서버 = 액터 1마리. 게임로직 스레드 1개가 온 세상(모든 유저·몬스터·방)을 혼자 맡아.</p>
+                    <p>진짜 액터 모델 = 액터 N마리. 유저마다, 방마다, NPC마다 따로 존재하고, 각자 자기 메일박스를 가져.</p>
                 </div>
             </div>
+
+            <div class="diagram-box">[우리 = 거대한 액터 1마리]          [액터 모델 = 작은 액터 N마리]
+
+   ┌──────────────────┐            ┌─유저A─┐ ┌─유저B─┐ ┌─방1─┐
+   │  게임로직 스레드   │            │메일박스│ │메일박스│ │메일박스│
+   │  (월드 전체 담당)  │            └───┬──┘ └───┬──┘ └──┬─┘
+   │   메일박스 1개     │                └──── 코어풀이 동시에 ────┘
+   └──────────────────┘                     (멀티코어 병렬)</div>
+
+            <table class='compare-table'>
+<tr><th>항목</th><th>우리 게임 서버</th><th>진짜 액터 모델</th></tr>
+<tr><td>액터 수</td><td class='warn'>1개 (월드 전체)</td><td class='good'>N개 (유저·방·NPC마다)</td></tr>
+<tr><td>메일박스(큐)</td><td>전역 큐 1개</td><td>액터마다 1개</td></tr>
+<tr><td>동시 처리</td><td class='bad'>1코어 — 천장 있음</td><td class='good'>멀티코어 병렬</td></tr>
+<tr><td>락 필요?</td><td class='good'>불필요 (혼자 다 하니까)</td><td class='good'>불필요 (상태가 격리돼서)</td></tr>
+<tr><td>두 유저 상호작용</td><td class='good'>메모리 직접 접근 (간단·빠름)</td><td class='warn'>반드시 메시지로 (번거로움)</td></tr>
+<tr><td>확장 방법</td><td>채널·존으로 프로세스 분리</td><td>액터 추가 → 자동 분산</td></tr>
+</table>
+
         </div>
 
-        <!-- Part 6: 컴퓨터공학에서의 Actor -->
         <div class="conversation">
-            <h2>Part 5. 컴퓨터공학에서 "Actor"의 공통 개념</h2>
+            <h2>Part 5. IOCP 스레드는 액터가 아니야 (흔한 오해)</h2>
 
             <div class="chat">
-                <div class="q">언리얼의 Actor도 이거랑 관련 있어?</div>
+                <div class="q">잠깐, IOCP 스레드도 여러 개잖아. 걔네가 액터들 아냐?</div>
                 <div class="a">
-                    <p>이름이 같은 건 우연이 아니야. <span class="highlight">공통된 개념</span>을 공유해.</p>
+                    <p>아니, 그게 제일 흔한 오해야.</p>
+                    <p>IOCP 스레드는 게임 판단을 1도 안 해. 소켓에서 바이트 꺼내서 큐에 넣는 게 전부인 우편배달부거든.</p>
+                    <p>액터의 핵심은 '자기 상태를 갖고 스스로 판단'하는 건데, IOCP 스레드는 상태도 없고 판단도 안 해.</p>
                 </div>
             </div>
 
-            <div class="code-block">[Actor의 공통 개념]
-"독립적으로 행동하는 개체"
 
-- 자기 상태를 가짐
-- 스스로 행동함
-- 외부에서 직접 조종당하지 않음</div>
+            <div class="chat">
+                <div class="q">비유로 들면?</div>
+                <div class="a">
+                    <p>식당으로 보면 — IOCP 스레드는 손님 주문을 받아 적어서 주방에 거는 '서빙 직원'이야. 요리는 안 해.</p>
+                    <p>게임로직 스레드는 그 주문표를 하나씩 떼어 요리하는 '주방장 1명'이고.</p>
+                    <p>진짜 액터 모델은 주방장이 여러 명이라 동시에 여러 요리를 해. 그게 차이야.</p>
+                </div>
+            </div>
 
-            <table class="compare-table">
-                <tr>
-                    <th>분야</th>
-                    <th>Actor</th>
-                    <th>공통점</th>
-                </tr>
-                <tr>
-                    <td>멀티스레드</td>
-                    <td>Actor Model</td>
-                    <td>자기 데이터, 메시지 통신</td>
-                </tr>
-                <tr>
-                    <td>언리얼 엔진</td>
-                    <td>AActor</td>
-                    <td>자기 상태, 독립적 Tick, 월드에서 독립 존재</td>
-                </tr>
-                <tr>
-                    <td>AI</td>
-                    <td>Agent (유사 개념)</td>
-                    <td>자율적 판단, 독립적 행동</td>
-                </tr>
-                <tr>
-                    <td>연극</td>
-                    <td>배우</td>
-                    <td>자기 역할, 대사로 소통, 큐 받으면 연기</td>
-                </tr>
-            </table>
+            <div class="diagram-box">IOCP 스레드 = 우편배달부 / 서빙 직원
+   - 상태 없음, 판단 없음
+   - 받아서 큐(메일박스)에 넣기만
+
+게임로직 스레드 = 액터 (단 1마리)
+   - 월드 상태를 들고 있음
+   - 메시지를 보고 스스로 판단·처리</div>
+
         </div>
 
-        <!-- Part 7: 언제 좋고 언제 별로인가 -->
         <div class="conversation">
-            <h2>Part 6. Actor 모델이 만능일까?</h2>
+            <h2>Part 6. '서버가 곧 액터다'는 반만 맞아</h2>
 
             <div class="chat">
-                <div class="q">Actor 모델 좋아 보이는데, 항상 쓰면 되는 거 아니야?</div>
+                <div class="q">예전엔 '게임 서버 11, 12가 패킷으로 통신하니까 그게 액터 모델이다'라고 들었는데?</div>
                 <div class="a">
-                    <p><span class="warning">아니, 상황에 따라 다르다.</span></p>
+                    <p>그건 '서버끼리' 봤을 때 얘기야. 서버 하나하나를 액터로 보면 — 맞아, 여러 서버 = 여러 액터.</p>
+                    <p>근데 서버 '안'을 들여다보면? 그 안엔 게임로직 스레드가 1개뿐이야. 즉 액터 1마리.</p>
+                    <p>그래서 똑같은 시스템이 보는 각도에 따라 'N 액터'도 되고 '1 액터'도 돼.</p>
                 </div>
             </div>
 
-            <table class="compare-table">
-                <tr>
-                    <th>상황</th>
-                    <th>추천</th>
-                    <th>이유</th>
-                </tr>
-                <tr>
-                    <td>독립 개체 (유저, 방, NPC)</td>
-                    <td class="good">✅ Actor</td>
-                    <td>각자 상태 독립적</td>
-                </tr>
-                <tr>
-                    <td>서버 간 통신</td>
-                    <td class="good">✅ Actor</td>
-                    <td>어차피 패킷으로 통신</td>
-                </tr>
-                <tr>
-                    <td>여러 데이터 동시 수정</td>
-                    <td class="bad">❌ 락</td>
-                    <td>트랜잭션이 복잡해짐</td>
-                </tr>
-                <tr>
-                    <td>초저지연 (0.1ms)</td>
-                    <td class="bad">❌ 락</td>
-                    <td>메시지 오버헤드</td>
-                </tr>
-            </table>
+            <div class="diagram-box">[멀리서 보면 = N 액터]        [가까이서 보면 = 1 액터]
+
+ 서버11 ⇄ 서버12 ⇄ 서버13          서버11 내부:
+  (패킷으로만 통신)              IOCP들 ─▶ 큐 ─▶ 게임로직 ×1
+  서버 = 액터 N개                       = 액터 1마리</div>
+
 
             <div class="chat">
-                <div class="q">왜 동시 수정은 Actor가 별로야?</div>
-            </div>
-
-            <div class="code-block">[1:1 거래 - Actor 모델]
-TradeActor → Player1Actor: "골드 100 빼줘"
-TradeActor → Player2Actor: "골드 100 더해줘"
-
-근데 Player1이 "골드 부족"이면?
-→ 이미 Player2한테 메시지 보냄
-→ 롤백 메시지 또 보내야 함
-→ 복잡해짐!
-
-[1:1 거래 - 락]
-lock(player1, player2) {
-    if (player1.gold >= 100) {
-        player1.gold -= 100;
-        player2.gold += 100;
-    }
-}
-→ 한 번에 원자적 처리, 간단!</div>
-
-            <div class="chat">
+                <div class="q">그럼 진짜 액터 모델이라고 부르려면?</div>
                 <div class="a">
-                    <p><strong>실무에서는 섞어 씀:</strong></p>
-                    <p>• 서버 간 = Actor 모델 (패킷 통신)</p>
-                    <p>• 서버 내부 = 필요한 곳만 락</p>
+                    <p>한 프로세스 '안'에서 액터가 여러 마리여야 해. 유저A 액터, 유저B 액터가 각자 메일박스를 갖고 멀티코어로 동시에 도는 구조.</p>
+                    <p>우리는 그걸 프로세스 단위(채널·존)로 쪼개서 비슷한 효과를 내는 거고.</p>
                 </div>
             </div>
+
         </div>
 
-        <!-- Part 8: 실제 사용 -->
         <div class="conversation">
-            <h2>Part 7. Actor 모델을 쓰는 기술들</h2>
+            <h2>Part 7. 왜 우리는 굳이 액터 1마리로?</h2>
 
             <div class="chat">
+                <div class="q">멀티코어로 N 액터 굴리면 더 빠른데, 왜 굳이 1개로 해?</div>
                 <div class="a">
-                    <p><strong>Erlang/Elixir</strong> - 언어 자체가 Actor 모델 기반</p>
-                    <p><strong>Akka</strong> (Java/Scala) - 게임 서버에서 많이 사용</p>
-                    <p><strong>Orleans</strong> (C#) - MS에서 만든 Actor 프레임워크, Halo에서 사용</p>
-                    <p><strong>게임 서버 아키텍처</strong> - 서버 간 통신이 이미 Actor 패턴</p>
+                    <p>단순함 때문이야.</p>
+                    <p>싱글스레드면 락이 0개, 레이스컨디션이 0개. 새벽 3시에 '데드락 터졌어요' 전화 올 일이 없거든.</p>
+                    <p>게다가 게임 로직은 한 스킬이 여러 유저·몬스터를 동시에 건드리는 거미줄이라, 액터로 잘게 쪼개면 메시지 폭발 + 분산 트랜잭션 지옥이 돼.</p>
                 </div>
             </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 1코어 천장은 어떻게 넘어?</div>
+                <div class="a">
+                    <p>수직(스레드 늘리기) 대신 수평으로 쪼개.</p>
+                    <p>한 프로세스 안에서 스레드를 늘리는 대신, 채널·존(맵) 단위로 프로세스 자체를 여러 개 띄우는 거야.</p>
+                    <p>공성전에 한 채널로 3,000명이 몰리면? 그 채널의 게임로직 1코어가 밀려서 렉이 걸려. 그래서 채널 정원을 두고, 맵을 쪼개는 거지.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">한 줄로 정리하면?</div>
+                <div class="a">
+                    <p>구체: 우리는 채널 하나당 게임로직 스레드 1개 = 액터 1마리로 묶어서 락 없는 단순함을 샀어.</p>
+                    <p>추상: 동시성을 '한 단위 안에선 순차, 단위 사이는 분리'로 푼 거야.</p>
+                    <p>구체: 그래서 동접이 늘면 코어를 늘리는 게 아니라 채널·서버를 늘려. WoW가 대륙별로 서버를 쪼개는 거랑 같은 원리.</p>
+                </div>
+            </div>
+
         </div>
 
-        <!-- 핵심 정리 -->
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>Actor</strong> = 배우(演員), 독립적으로 행동하는 개체</li>
-                <li><strong>핵심 규칙</strong> = 자기 데이터만 건드림 + 메시지로만 통신</li>
-                <li><strong>장점</strong> = 락 불필요, 데드락 회피, 디버깅 쉬움</li>
-                <li><strong>게임 서버</strong> = 서버 간 통신 구조가 이미 Actor 모델과 유사</li>
-                <li><strong>언리얼 Actor</strong> = 같은 어원, "독립적 개체"라는 개념 공유</li>
+                <li><strong>우리 서버</strong> = IOCP(우편배달부) → 큐 1개 → 게임로직 스레드 1개 = <strong>액터가 1마리뿐인 액터 모델</strong></li>
+                <li><strong>메커니즘은 동일</strong> — 큐에 줄 세워 순차 처리해서 락을 없애는 방식</li>
+                <li><strong>결정적 차이 = 액터 수</strong>. 우리는 1개(월드 전체), 진짜 액터 모델은 N개(유저·방·NPC)</li>
+                <li><strong>IOCP 스레드는 액터가 아님</strong> — 상태도 판단도 없는 I/O 전담</li>
+                <li><strong>'서버=액터'는 서버 간에서만 성립</strong> — 서버 안은 액터 1마리</li>
+                <li><strong>왜 1마리?</strong> 락 0개의 단순함을 얻고, 1코어 천장은 채널·존 샤딩으로 수평 확장</li>
             </ul>
         </div>
+
+        <div class="info-box">
+            <h4>더 생각해볼 거리</h4>
+            <p>만약 우리 서버를 진짜 멀티 액터로 바꾼다면, 1:1 골드 거래(한쪽 빼고 한쪽 더하기)는 어떻게 처리해야 중간에 서버가 죽어도 안전할까?</p>
+            <p>채팅 서버는 게임 서버랑 달리 상태 의존성이 약해. 그럼 채팅은 액터 N개로 쪼개는 게 유리할까, 1개가 나을까?</p>
+        </div>
+
 
         <div class="nav-links">
             <a href="../category-thread/">← 멀티스레드</a>

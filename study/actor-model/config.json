@@ -1,0 +1,104 @@
+{
+  "slug": "actor-model",
+  "title": "우리 게임 서버, 알고 보면 '액터가 1마리뿐인' 액터 모델이야",
+  "subtitle": "IOCP → 큐 → 게임로직 스레드 1개 vs 진짜 액터 모델, 직접 움직여보며 비교",
+  "category": "멀티스레드",
+  "category_path": "../category-thread/",
+  "prev_link": "../category-thread/",
+  "prev_text": "← 멀티스레드",
+  "next_link": "../../",
+  "next_text": "메인으로 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .sim-tab{flex:1;min-width:150px;padding:12px 14px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.95rem;font-weight:600;cursor:pointer;transition:.15s}\n    .sim-tab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .sim-tab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    #sim-canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem}\n    #sim-play{background:#37474f;color:#e3eaf5}\n    #sim-burst{background:#c62828;color:#fff}\n    .sim-load-lbl{display:flex;align-items:center;gap:8px;color:#90a4c4;font-size:.88rem}\n    .sim-load-lbl input{cursor:pointer}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5;transition:color .2s}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.3rem}.sim-controls{gap:8px}}\n    </style>\n    <script src='anim.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "우리 서버의 'IOCP 스레드 → 큐 → 게임로직 스레드 1개'는 액터 모델과 메커니즘이 똑같아 — 큐에 줄 세워 하나씩 처리해서 락을 없애는 것.",
+        "결정적 차이는 딱 하나, '액터 수'. 우리는 1마리(월드 전체를 스레드 1개가 처리), 진짜 액터 모델은 N마리(유저·방·NPC마다).",
+        "아래 시뮬레이터를 직접 만져보면 그 차이가 눈에 보여."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 우리 서버, 사실 이렇게 돌아가",
+      "items": [
+        { "type": "qa", "q": "우리 게임 서버, 네트워크 패킷이 들어오면 누가 처리해?", "a": "IOCP 스레드(보통 여러 개)가 소켓에서 패킷을 꺼내.\n근데 걔네가 게임 로직을 직접 돌리진 않아.\n그냥 패킷을 큐 하나에 차곡차곡 넣어두기만 해." },
+        { "type": "qa", "q": "그 다음은?", "a": "게임로직 스레드가 그 큐에서 메시지를 하나씩 꺼내서 처리해.\n공격, 이동, 거래... 전부 이 스레드 1개가 순서대로 처리하지.\n그래서 우리 서버 로직엔 락이 거의 없어. 혼자 다 하니까 동시에 꼬일 일이 없거든." },
+        { "type": "diagram", "content": "[우리 게임 서버]\n\nIOCP #1 ┐\nIOCP #2 ┼──▶  큐 1개  ──▶  게임로직 스레드 ×1  ──▶ (순차 처리)\nIOCP #3 ┘\n         받아서 쌓기만            한 번에 딱 하나씩" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 직접 만져봐 (어디서 본 구조 같지 않아?)",
+      "items": [
+        { "type": "qa", "q": "'큐에 넣고 하나씩 처리'... 이거 어디서 많이 들어본 느낌 아냐?", "a": "맞아, 액터 모델이랑 똑 닮았어.\n근데 '닮았다'랑 '같다'는 달라. 결정적인 차이가 딱 하나 있는데 — 맞춰봐. 뭘까?\n아래에서 ① 우리 서버와 ② 진짜 액터 모델을 번갈아 보면서, '패킷 유입량'을 올리거나 '공성전' 버튼을 눌러봐. 큐 적체 숫자를 비교해보면 차이가 보일 거야." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='sim-tab active' type='button' data-mode='game'>① 우리 게임 서버</button>\n    <button class='sim-tab' type='button' data-mode='actor'>② 진짜 액터 모델</button>\n  </div>\n  <canvas id='sim-canvas' role='img' aria-label='두 동시성 모델 비교 애니메이션. 우리 게임 서버는 IOCP 스레드 여러 개가 큐 하나에 패킷을 쌓고 게임로직 스레드 1개가 순차 처리한다. 액터 모델은 액터마다 메일박스를 두고 코어 여러 개가 동시에 처리한다.'></canvas>\n  <div class='sim-controls'>\n    <button id='sim-play' type='button'>⏸ 일시정지</button>\n    <label class='sim-load-lbl'>패킷 유입량 <span id='sim-load-val'>3</span>\n      <input id='sim-load' type='range' min='1' max='10' value='3' aria-label='패킷 유입량 조절'>\n    </label>\n    <button id='sim-burst' type='button'>⚔ 공성전 3,000명 몰림</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='stat-queue'>0</span><span class='sim-stat-lbl'>큐 적체</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='stat-done'>0</span><span class='sim-stat-lbl'>처리 완료</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='stat-cores'>1</span><span class='sim-stat-lbl'>동시 처리 코어</span></div>\n  </div>\n  <p class='sim-caption' id='sim-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 그래서, 같은 거 맞아?",
+      "items": [
+        { "type": "qa", "q": "① 우리 서버는 큐가 막 쌓이는데 ② 액터 모델은 잘 안 쌓이더라. 왜 그래?", "a": "①은 처리하는 스레드가 딱 1개거든. 아무리 쌓여도 한 번에 하나씩.\n②는 코어 4개가 서로 다른 액터를 동시에 처리해. 같은 양이 들어와도 4배 빨리 비워내지." },
+        { "type": "qa", "q": "그럼 둘이 메커니즘은 같은 거네?", "a": "락을 없애는 원리는 같아. 둘 다 '큐에 줄 세워서 하나씩' 처리하니까, 같은 데이터를 동시에 건드릴 일이 구조적으로 없어.\n근데 '몇 개를 동시에 굴리느냐'가 완전히 달라. 바로 이게 핵심." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 결정적 차이 = 액터가 몇 마리야?",
+      "items": [
+        { "type": "qa", "q": "그 결정적 차이가 뭔데?", "a": "액터 수.\n우리 서버 = 액터 1마리. 게임로직 스레드 1개가 온 세상(모든 유저·몬스터·방)을 혼자 맡아.\n진짜 액터 모델 = 액터 N마리. 유저마다, 방마다, NPC마다 따로 존재하고, 각자 자기 메일박스를 가져." },
+        { "type": "diagram", "content": "[우리 = 거대한 액터 1마리]          [액터 모델 = 작은 액터 N마리]\n\n   ┌──────────────────┐            ┌─유저A─┐ ┌─유저B─┐ ┌─방1─┐\n   │  게임로직 스레드   │            │메일박스│ │메일박스│ │메일박스│\n   │  (월드 전체 담당)  │            └───┬──┘ └───┬──┘ └──┬─┘\n   │   메일박스 1개     │                └──── 코어풀이 동시에 ────┘\n   └──────────────────┘                     (멀티코어 병렬)" },
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>항목</th><th>우리 게임 서버</th><th>진짜 액터 모델</th></tr>\n<tr><td>액터 수</td><td class='warn'>1개 (월드 전체)</td><td class='good'>N개 (유저·방·NPC마다)</td></tr>\n<tr><td>메일박스(큐)</td><td>전역 큐 1개</td><td>액터마다 1개</td></tr>\n<tr><td>동시 처리</td><td class='bad'>1코어 — 천장 있음</td><td class='good'>멀티코어 병렬</td></tr>\n<tr><td>락 필요?</td><td class='good'>불필요 (혼자 다 하니까)</td><td class='good'>불필요 (상태가 격리돼서)</td></tr>\n<tr><td>두 유저 상호작용</td><td class='good'>메모리 직접 접근 (간단·빠름)</td><td class='warn'>반드시 메시지로 (번거로움)</td></tr>\n<tr><td>확장 방법</td><td>채널·존으로 프로세스 분리</td><td>액터 추가 → 자동 분산</td></tr>\n</table>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. IOCP 스레드는 액터가 아니야 (흔한 오해)",
+      "items": [
+        { "type": "qa", "q": "잠깐, IOCP 스레드도 여러 개잖아. 걔네가 액터들 아냐?", "a": "아니, 그게 제일 흔한 오해야.\nIOCP 스레드는 게임 판단을 1도 안 해. 소켓에서 바이트 꺼내서 큐에 넣는 게 전부인 우편배달부거든.\n액터의 핵심은 '자기 상태를 갖고 스스로 판단'하는 건데, IOCP 스레드는 상태도 없고 판단도 안 해." },
+        { "type": "qa", "q": "비유로 들면?", "a": "식당으로 보면 — IOCP 스레드는 손님 주문을 받아 적어서 주방에 거는 '서빙 직원'이야. 요리는 안 해.\n게임로직 스레드는 그 주문표를 하나씩 떼어 요리하는 '주방장 1명'이고.\n진짜 액터 모델은 주방장이 여러 명이라 동시에 여러 요리를 해. 그게 차이야." },
+        { "type": "diagram", "content": "IOCP 스레드 = 우편배달부 / 서빙 직원\n   - 상태 없음, 판단 없음\n   - 받아서 큐(메일박스)에 넣기만\n\n게임로직 스레드 = 액터 (단 1마리)\n   - 월드 상태를 들고 있음\n   - 메시지를 보고 스스로 판단·처리" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 6. '서버가 곧 액터다'는 반만 맞아",
+      "items": [
+        { "type": "qa", "q": "예전엔 '게임 서버 11, 12가 패킷으로 통신하니까 그게 액터 모델이다'라고 들었는데?", "a": "그건 '서버끼리' 봤을 때 얘기야. 서버 하나하나를 액터로 보면 — 맞아, 여러 서버 = 여러 액터.\n근데 서버 '안'을 들여다보면? 그 안엔 게임로직 스레드가 1개뿐이야. 즉 액터 1마리.\n그래서 똑같은 시스템이 보는 각도에 따라 'N 액터'도 되고 '1 액터'도 돼." },
+        { "type": "diagram", "content": "[멀리서 보면 = N 액터]        [가까이서 보면 = 1 액터]\n\n 서버11 ⇄ 서버12 ⇄ 서버13          서버11 내부:\n  (패킷으로만 통신)              IOCP들 ─▶ 큐 ─▶ 게임로직 ×1\n  서버 = 액터 N개                       = 액터 1마리" },
+        { "type": "qa", "q": "그럼 진짜 액터 모델이라고 부르려면?", "a": "한 프로세스 '안'에서 액터가 여러 마리여야 해. 유저A 액터, 유저B 액터가 각자 메일박스를 갖고 멀티코어로 동시에 도는 구조.\n우리는 그걸 프로세스 단위(채널·존)로 쪼개서 비슷한 효과를 내는 거고." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 7. 왜 우리는 굳이 액터 1마리로?",
+      "items": [
+        { "type": "qa", "q": "멀티코어로 N 액터 굴리면 더 빠른데, 왜 굳이 1개로 해?", "a": "단순함 때문이야.\n싱글스레드면 락이 0개, 레이스컨디션이 0개. 새벽 3시에 '데드락 터졌어요' 전화 올 일이 없거든.\n게다가 게임 로직은 한 스킬이 여러 유저·몬스터를 동시에 건드리는 거미줄이라, 액터로 잘게 쪼개면 메시지 폭발 + 분산 트랜잭션 지옥이 돼." },
+        { "type": "qa", "q": "그럼 1코어 천장은 어떻게 넘어?", "a": "수직(스레드 늘리기) 대신 수평으로 쪼개.\n한 프로세스 안에서 스레드를 늘리는 대신, 채널·존(맵) 단위로 프로세스 자체를 여러 개 띄우는 거야.\n공성전에 한 채널로 3,000명이 몰리면? 그 채널의 게임로직 1코어가 밀려서 렉이 걸려. 그래서 채널 정원을 두고, 맵을 쪼개는 거지." },
+        { "type": "qa", "q": "한 줄로 정리하면?", "a": "구체: 우리는 채널 하나당 게임로직 스레드 1개 = 액터 1마리로 묶어서 락 없는 단순함을 샀어.\n추상: 동시성을 '한 단위 안에선 순차, 단위 사이는 분리'로 푼 거야.\n구체: 그래서 동접이 늘면 코어를 늘리는 게 아니라 채널·서버를 늘려. WoW가 대륙별로 서버를 쪼개는 거랑 같은 원리." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>우리 서버</strong> = IOCP(우편배달부) → 큐 1개 → 게임로직 스레드 1개 = <strong>액터가 1마리뿐인 액터 모델</strong>",
+        "<strong>메커니즘은 동일</strong> — 큐에 줄 세워 순차 처리해서 락을 없애는 방식",
+        "<strong>결정적 차이 = 액터 수</strong>. 우리는 1개(월드 전체), 진짜 액터 모델은 N개(유저·방·NPC)",
+        "<strong>IOCP 스레드는 액터가 아님</strong> — 상태도 판단도 없는 I/O 전담",
+        "<strong>'서버=액터'는 서버 간에서만 성립</strong> — 서버 안은 액터 1마리",
+        "<strong>왜 1마리?</strong> 락 0개의 단순함을 얻고, 1코어 천장은 채널·존 샤딩으로 수평 확장"
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "더 생각해볼 거리",
+      "items": [
+        "만약 우리 서버를 진짜 멀티 액터로 바꾼다면, 1:1 골드 거래(한쪽 빼고 한쪽 더하기)는 어떻게 처리해야 중간에 서버가 죽어도 안전할까?",
+        "채팅 서버는 게임 서버랑 달리 상태 의존성이 약해. 그럼 채팅은 액터 N개로 쪼개는 게 유리할까, 1개가 나을까?"
+      ]
+    }
+  ]
+}
