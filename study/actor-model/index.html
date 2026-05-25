@@ -66,15 +66,16 @@
     <style>
     .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}
     .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-    .sim-tab,.otab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}
+    .sim-tab,.otab,.gtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}
     .sim-tab{min-width:150px;font-size:.95rem;padding:12px 14px}
-    .sim-tab:hover,.otab:hover{border-color:#42a5f5;color:#e3eaf5}
+    .sim-tab:hover,.otab:hover,.gtab:hover{border-color:#42a5f5;color:#e3eaf5}
     .sim-tab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
     .otab.active{background:linear-gradient(135deg,#00838f,#5e35b1);color:#fff;border-color:transparent}
-    #sim-canvas,#order-canvas{width:100%;display:block;border-radius:12px}
+    .gtab.active{background:linear-gradient(135deg,#2e7d32,#00838f);color:#fff;border-color:transparent}
+    #sim-canvas,#order-canvas,#gran-canvas{width:100%;display:block;border-radius:12px}
     .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
     .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem}
-    #sim-play,#order-play,#order-reset{background:#37474f;color:#e3eaf5}
+    #sim-play,#order-play,#order-reset,#gran-play{background:#37474f;color:#e3eaf5}
     #sim-burst{background:#c62828;color:#fff}
     .sim-load-lbl{display:flex;align-items:center;gap:8px;color:#90a4c4;font-size:.88rem}
     .sim-load-lbl input{cursor:pointer}
@@ -87,6 +88,7 @@
     </style>
     <script src='anim.js' defer></script>
     <script src='order.js' defer></script>
+    <script src='granularity.js' defer></script>
 </head>
 <body>
     <div class="container">
@@ -94,15 +96,16 @@
 
         <header class="header">
             <h1>우리 게임 서버, 알고 보면 '액터가 1마리뿐인' 액터 모델이야</h1>
-            <p>IOCP → 큐 → 게임로직 스레드 1개 vs 진짜 액터 모델 — 그리고 '순서'는 누가 보장하나</p>
+            <p>IOCP → 큐 → 게임로직 스레드 1개 vs 진짜 액터 모델 — 순서·정합성·액터 단위까지</p>
         </header>
 
         <div class="info-box">
             <h4>30초 요약</h4>
             <p>우리 서버의 'IOCP → 큐 → 게임로직 스레드 1개'는 액터 모델과 메커니즘이 똑같아 — 큐에 줄 세워 하나씩 처리해서 락을 없애는 것.</p>
             <p>결정적 차이는 '액터 수'. 우리는 1마리(월드 전체를 스레드 1개가 처리), 진짜 액터 모델은 N마리(유저·방·NPC마다).</p>
-            <p>진짜 핵심은 '순서'. 우리는 싱글스레드라 전역 순서·정합성이 공짜로 보장되는 대신, DB 갔다올 때 월드 전체가 멈춰. 액터 모델은 그 시간에 다른 일을 하지만, 순서를 지키려면 stash 같은 장치를 직접 넣어야 해.</p>
-            <p>아래 시뮬레이터 2개를 직접 만져보면 그 차이가 눈에 보여.</p>
+            <p>진짜 핵심은 '순서'. 우리는 싱글스레드라 전역 순서·정합성이 공짜지만 DB 갔다올 때 월드 전체가 멈춰. 액터 모델은 그 시간에 다른 일을 하지만, 순서를 지키려면 stash 같은 장치를 직접 넣어야 해.</p>
+            <p>그리고 액터 단위는 '일관성 경계'로 잡아 — 객체마다 X, 서버 전체 X. 액터는 스레드가 아니라서 1,000명이어도 스레드 1,000개가 아니야.</p>
+            <p>아래 시뮬레이터 3개를 직접 만져보면 다 눈에 보여.</p>
         </div>
 
         <div class="conversation">
@@ -369,7 +372,96 @@ IOCP #3 ┘
         </div>
 
         <div class="conversation">
-            <h2>Part 8. 이 모델에서 나오는 의문들</h2>
+            <h2>Part 8. 그래서 액터 '단위'를 어떻게 잡아?</h2>
+
+            <div class="chat">
+                <div class="q">유저=액터는 알겠어. 근데 몬스터가 수백만 마리잖아. 하나하나 액터로?</div>
+                <div class="a">
+                    <p>아니, 그건 함정이야. 그리고 그 전에 더 큰 오해부터 풀자 — '액터 = 스레드'가 아니야.</p>
+                    <p>액터는 그냥 상태+메일박스를 가진 가벼운 객체(수 KB)야. 스케줄러가 그걸 코어 수만큼의 스레드풀(보통 8~16개)에 얹어 돌려.</p>
+                    <p>그래서 유저 1,000명 = 액터 1,000개여도 스레드는 여전히 ~8개. 그 순간 실제로 도는 건 메일 있는 액터 ≤8개뿐이야. 아래에서 직접 봐 — 액터를 600개로 늘려도 '지금 동시 실행'은 8을 안 넘어.</p>
+                </div>
+            </div>
+
+            <div class='sim'>
+  <div class='sim-tabs'>
+    <button class='gtab' type='button' data-gmode='coarse'>굵게 (서버=1 액터)</button>
+    <button class='gtab active' type='button' data-gmode='balanced'>적정 (유저·존 단위)</button>
+    <button class='gtab' type='button' data-gmode='fine'>너무 잘게 (객체마다)</button>
+  </div>
+  <canvas id='gran-canvas' role='img' aria-label='액터 단위 시뮬레이터. 액터를 1개로 두면 코어 8개 중 1개만 일하고, 유저 존 단위로 40개를 두면 코어 8개가 골고루 일한다. 객체마다 600개로 쪼개도 동시 실행은 코어 수 8개를 넘지 못하며 액터끼리 메시지 오버헤드만 늘어난다.'></canvas>
+  <div class='sim-controls'>
+    <button id='gran-play' type='button'>⏸ 일시정지</button>
+  </div>
+  <div class='sim-stats'>
+    <div class='sim-stat'><span class='sim-stat-num' id='gran-actors'>40</span><span class='sim-stat-lbl'>액터 수</span></div>
+    <div class='sim-stat'><span class='sim-stat-num' id='gran-threads'>8</span><span class='sim-stat-lbl'>스레드(코어)</span></div>
+    <div class='sim-stat'><span class='sim-stat-num' id='gran-running'>0</span><span class='sim-stat-lbl'>지금 동시 실행</span></div>
+  </div>
+  <p class='sim-caption' id='gran-caption'></p>
+</div>
+
+
+            <div class="chat">
+                <div class="q">그럼 액터 단위는 무슨 기준으로 잡아?</div>
+                <div class="a">
+                    <p>딱 두 가지야.</p>
+                    <p>① 일관성 경계: '같이 원자적으로 바뀌어야 하는 것'은 한 액터로. (예: 한 유저의 인벤·골드·스탯 → 구매 한 번에 다 같이 바뀌니까 PlayerActor 하나.)</p>
+                    <p>② 직렬화 지점: '동시 요청이 몰리는 핫스팟'은 한 액터로 묶어 메일박스가 줄 세우게. (예: 거래소 한 품목, 문파 하나.)</p>
+                    <p>반대로 서로 거의 안 엮이는 건 따로 둬서 병렬로 돌려(유저A, 유저B).</p>
+                </div>
+            </div>
+
+            <table class='compare-table'>
+<tr><th>단위</th><th>액터 수</th><th>결과</th></tr>
+<tr><td>굵게: 서버 전체 1개 (우리 현재)</td><td>1</td><td class='bad'>1코어 천장 (단순·순서 완벽하지만 못 키움)</td></tr>
+<tr><td>적정: 유저·존·문파·거래소</td><td>수천~수만</td><td class='good'>멀티코어 활용 + 경계 명확</td></tr>
+<tr><td>너무 잘게: 객체(몬스터·아이템)마다</td><td>수백만</td><td class='bad'>스케줄링·메시지 폭발, 일관성 경계도 없음</td></tr>
+</table>
+
+
+            <div class="chat">
+                <div class="q">몬스터 수백만은 그럼 어떻게?</div>
+                <div class="a">
+                    <p>'존(zone) 액터'로 묶어. 채널×맵 하나가 액터 1개고, 그 안의 몬스터들은 그냥 객체야 — 존 액터가 루프 돌려 틱 처리해.</p>
+                    <p>몬스터는 독립적인 일관성 경계가 없거든(주변 존 상태에 의존). 그래서 몬스터 100만 마리여도 존 액터는 수백~수천 개. 사실 이게 지금 우리 채널 스레드가 하는 일이랑 똑같아 — 범위가 '채널 전체'에서 '존 하나'로 좁아질 뿐이야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 우리 조선협객전을 액터로 쪼갠다면 너는 어떻게 나눌래?</div>
+                <div class="a">
+                    <p>이렇게 나눌 거야 ↓ — 핵심은 'DB의 PK·일관성 경계'를 그대로 액터 경계로 가져가는 거야. 그래야 한 액터가 자기 데이터만 책임지고, 저장 단위랑도 안 어긋나.</p>
+                </div>
+            </div>
+
+            <table class='compare-table'>
+<tr><th>콘텐츠 / 상태</th><th>액터 단위</th><th>왜</th></tr>
+<tr><td>캐릭터(인벤·골드·스탯·버프)</td><td>캐릭터 1명 = PlayerActor</td><td>구매·강화가 이 안에서 원자적</td></tr>
+<tr><td>계정 공유(출석·이벤트 진행·캐시·보물찾기 보드)</td><td>계정 1개 = AccountActor</td><td class='warn'>한 계정의 여러 캐릭이 공유 → charunique 아닌 accunique 경계</td></tr>
+<tr><td>몬스터·지면 아이템·AOI</td><td>채널×맵 = ZoneActor</td><td>몬스터는 객체일 뿐, 존이 직렬화 단위</td></tr>
+<tr><td>파티</td><td>파티 1개 = PartyActor</td><td>분배·초대 직렬화</td></tr>
+<tr><td>문파(길드)</td><td>문파 1개 = GuildActor</td><td>문파홀·가입 경합 직렬화</td></tr>
+<tr><td>거래소</td><td>품목/샤드 = MarketActor</td><td>동시 구매 핫스팟 직렬화(복제 방지)</td></tr>
+<tr><td>점령전</td><td>성 1개 = CastleActor</td><td>성별 독립</td></tr>
+<tr><td>채팅</td><td>방 1개 = ChatRoomActor</td><td>방 단위 순서면 충분</td></tr>
+<tr><td>DB(Game/Account/Cash)</td><td class='good'>액터 아님 (영속 백엔드)</td><td>async 호출 + stash로 순서</td></tr>
+</table>
+
+
+            <div class="chat">
+                <div class="q">계정이랑 캐릭터를 굳이 나누는 이유는?</div>
+                <div class="a">
+                    <p>그게 진짜 사고 났던 부분이라 그래. 보물찾기 이벤트에서 보드 데이터 PK는 계정(accunique)인데, 보드 시드는 캐릭터(charunique)로 만들었어. 같은 계정의 두 캐릭터가 번갈아 진행하니까 서로의 보드를 덮어써서 1등 칸이 유실됐지.</p>
+                    <p>액터로 치면 '액터 경계(계정)'와 '메시지 키(캐릭터)'가 어긋난 거야. 그래서 공유 자원은 반드시 그 자원의 일관성 경계(=DB PK)를 액터 단위로 잡아야 해.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 9. 이 모델에서 나오는 의문들</h2>
 
             <div class="chat">
                 <div class="q">Q1. 액터 모델에서 메시지 순서는 어디까지 보장돼?</div>
@@ -399,7 +491,16 @@ IOCP #3 ┘
 
 
             <div class="chat">
-                <div class="q">Q4. 메시지가 유실되거나 중복되면?</div>
+                <div class="q">Q4. 액터가 너무 많아지면 스레드도 그만큼 필요한 거 아냐?</div>
+                <div class="a">
+                    <p>아니, 그게 위에서 본 핵심이야. 액터는 스레드가 아니라 상태+메일박스(수 KB)일 뿐이고, 코어 수만큼의 스레드풀이 그걸 번갈아 돌려.</p>
+                    <p>메일 없는 액터는 그냥 메모리에 가만히 있어(스레드 0개 점유). Erlang은 수백만 프로세스를 OS 스레드 몇 개로 굴려. 그래서 액터 수와 스레드 수는 별개야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">Q5. 메시지가 유실되거나 중복되면?</div>
                 <div class="a">
                     <p>전달 보장 등급을 골라야 해 — at-most-once(유실 가능)/at-least-once(중복 가능)/exactly-once(비쌈).</p>
                     <p>보통 at-least-once + 멱등성(같은 메시지 두 번 와도 결과 같게) 설계로 가. 우리 서버는 인메모리 큐라 유실은 거의 없지만, 액터가 네트워크로 분산되면 재전송+중복 방어가 필수야.</p>
@@ -408,7 +509,7 @@ IOCP #3 ┘
 
 
             <div class="chat">
-                <div class="q">Q5. 액터가 죽으면 메일박스에 쌓인 메시지는?</div>
+                <div class="q">Q6. 액터가 죽으면 메일박스에 쌓인 메시지는?</div>
                 <div class="a">
                     <p>Erlang의 'let it crash' 철학 + supervisor가 재시작하고, 메일박스·상태를 영속화해서 복구해.</p>
                     <p>우리 서버는 프로세스가 1개라 죽으면 그 채널 전체가 죽고, 자동저장(2~5분) 사이 데이터는 날아가 — 다른 종류의 트레이드오프지.</p>
@@ -417,7 +518,7 @@ IOCP #3 ┘
 
 
             <div class="chat">
-                <div class="q">Q6. 예전엔 '서버끼리 패킷 통신이 액터 모델'이라던데?</div>
+                <div class="q">Q7. 예전엔 '서버끼리 패킷 통신이 액터 모델'이라던데?</div>
                 <div class="a">
                     <p>그건 '서버끼리' 봤을 때 맞아 — 서버 하나를 액터로 보면 여러 서버 = 여러 액터.</p>
                     <p>근데 서버 '안'은 게임로직 스레드 1개뿐이라 액터 1마리. 같은 시스템이 보는 각도에 따라 'N 액터'도 '1 액터'도 되는 거야.</p>
@@ -426,10 +527,10 @@ IOCP #3 ┘
 
 
             <div class="chat">
-                <div class="q">Q7. 그럼 우리 서버는 순서 때문에 액터 모델을 영영 못 써?</div>
+                <div class="q">Q8. 그럼 우리 서버는 순서 때문에 액터 모델을 영영 못 써?</div>
                 <div class="a">
                     <p>못 쓰는 게 아니라 '채널당 액터 1마리'가 이미 최적해였던 거야. 게임 로직은 순서+원자성이 생명이라, 잘게 쪼개면 stash·saga·멱등성 코드가 폭발하거든.</p>
-                    <p>그 복잡도를 안 치르는 대신 1코어 천장과 DB 블로킹을 받아들인 선택이야. 진화한다면 Orleans grain 방향이 가장 자연스럽고.</p>
+                    <p>그 복잡도를 안 치르는 대신 1코어 천장과 DB 블로킹을 받아들인 선택이야. 진화한다면 존 단위로 쪼개 Orleans grain처럼 가는 게 가장 자연스럽고.</p>
                 </div>
             </div>
 
@@ -442,14 +543,16 @@ IOCP #3 ┘
                 <li><strong>메커니즘은 동일</strong>(큐+순차처리로 락 제거), <strong>결정적 차이는 액터 수</strong>(1 vs N)</li>
                 <li><strong>진짜 핵심은 순서</strong> — 우리는 '전역 순서 + 원자성'이 공짜, 액터 모델은 '액터별 순서'만</li>
                 <li><strong>DB가 끼면</strong>: 우리는 동기 블로킹(순서 100%, 대신 월드 정지), 액터는 stash/await로 순서를 직접 지켜야 함(②순진한 비동기는 안티패턴)</li>
-                <li><strong>거래·정합성</strong>: 우리는 한 함수 원자 처리, 액터 모델은 Saga/코디네이터 필요</li>
-                <li><strong>왜 1마리?</strong> 순서·원자성을 공짜로 얻고, 1코어 천장은 채널·존 샤딩으로 수평 확장. 진화하면 Orleans grain 방향</li>
+                <li><strong>액터 ≠ 스레드</strong> — 액터는 코어 수만큼의 스레드풀에 얹혀 돔. 1,000 유저 = 1,000 액터지만 동시 실행은 ≤ 코어 수</li>
+                <li><strong>액터 단위</strong> = 일관성 경계 + 직렬화 지점. 객체마다 X(몬스터=존 액터), 서버 전체 X(=우리 현재). 우리 게임이면 캐릭터·계정·존·문파·거래소·성 단위</li>
+                <li><strong>왜 1마리?</strong> 순서·원자성을 공짜로 얻고, 1코어 천장은 채널·존 샤딩으로 수평 확장. 진화하면 존 단위 Orleans grain 방향</li>
             </ul>
         </div>
 
         <div class="info-box">
             <h4>더 생각해볼 거리</h4>
             <p>우리 서버의 DB 호출을 (순서를 지키면서) 비동기로 바꾼다면, 어느 단계에 stash를 넣어야 '때리고 → 죽고 → 보상 → 저장' 순서가 안 깨질까?</p>
+            <p>거래소를 '품목 1개 = 액터 1개'로 잡으면 인기 품목 하나에 요청이 몰려. 그럼 그 액터가 또 병목이 되는데, 어떻게 더 쪼갤까?</p>
             <p>채팅 서버는 상태 의존성이 약하고 순서도 '방 단위'면 충분해. 그럼 채팅은 액터 N개로 쪼개는 게 유리할까, 1개가 나을까?</p>
         </div>
 
