@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>컴퓨터끼리 어떻게 대화하나 — IP·포트·소켓 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+    <style>
+    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}
+    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}
+    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}
+    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    .sim canvas{width:100%;display:block;border-radius:12px}
+    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
+    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}
+    .sim-stats{display:flex;gap:10px;margin-top:16px}
+    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}
+    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}
+    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}
+    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}
+    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}.sim-controls{gap:8px}}
+    </style>
+    <script src='uenet01.js' defer></script>
+</head>
+<body>
+    <div class="container">
+        <a href="../ue-network/" class="back-link">← 언리얼 네트워크</a>
+
+        <header class="header">
+            <h1>컴퓨터끼리 어떻게 대화하나 — IP·포트·소켓</h1>
+            <p>같은 컴퓨터에 프로그램이 여럿인데, 데이터는 어떻게 제대로 찾아갈까</p>
+        </header>
+
+        <div class="info-box">
+            <h4>30초 요약</h4>
+            <p>IP = 건물 주소(어느 컴퓨터), 포트 = 호수(그 안 어느 프로그램). 둘이 있어야 데이터가 정확히 배달돼.</p>
+            <p>소켓 = 프로그램이 네트워크를 쓰려고 OS한테 받는 '전화기'. 서버는 받는 쪽(bind→listen→accept), 클라는 거는 쪽(connect).</p>
+            <p>UE도 우리도 결국 이 위에서 돈다. UE는 ISocketSubsystem, 우리는 IOCP로 소켓을 다뤄.</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 데이터는 어떻게 '제대로' 찾아가나</h2>
+
+            <div class="chat">
+                <div class="q">한 컴퓨터에서 게임, 브라우저, 디스코드가 동시에 도는데, 들어온 데이터가 어떻게 게임한테만 가?</div>
+                <div class="a">
+                    <p>어떻게 될 거 같아? IP만으로 될까?</p>
+                    <p>안 돼. IP는 '컴퓨터(건물)'까지만 가리켜. 그 안에서 누구한테 줄지는 포트(호수)가 정해.</p>
+                    <p>IP:포트 = '49.50.138.124:15000' = 그 컴퓨터의 Gate 프로그램.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">비유로?</div>
+                <div class="a">
+                    <p>택배야. '101동'(IP)까지만 적으면 경비실에서 멈춰 — 누구 거인지 모르거든.</p>
+                    <p>'101동 1501호'(IP:포트)까지 적어야 정확히 그 집(프로그램)에 배달돼.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">127.0.0.1은 뭐야?</div>
+                <div class="a">
+                    <p>'나 자신'을 가리키는 약속된 주소(루프백). 개발할 때 같은 컴퓨터에 서버랑 클라를 띄우고 127.0.0.1로 붙이면 = 내 컴퓨터의 그 프로그램에 접속.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 직접 배달해봐</h2>
+
+            <div class="chat">
+                <div class="q">포트가 맞아야 배달된다는 걸 보자.</div>
+                <div class="a">
+                    <p>탭으로 보낼 포트를 골라봐. 열린 포트(:15000 Gate, :10111 GameDB)면 그 방에 배달(초록), 닫힌 포트(:9999)면 전부 드롭(빨강).</p>
+                    <p>서버가 그 포트를 Listen하고 있어야만 받을 수 있다는 게 핵심이야.</p>
+                </div>
+            </div>
+
+            <div class='sim'>
+  <div class='sim-tabs'>
+    <button class='wtab ue1tab active' type='button' data-t='auto'>자동(여러 포트)</button>
+    <button class='wtab ue1tab' type='button' data-t='15000'>:15000 Gate</button>
+    <button class='wtab ue1tab' type='button' data-t='10111'>:10111 GameDB</button>
+    <button class='wtab ue1tab' type='button' data-t='9999'>:9999 (닫힘)</button>
+  </div>
+  <canvas id='ue1-canvas' role='img' aria-label='IP와 포트 라우팅 시뮬레이터. 한 서버 컴퓨터(IP) 안에 여러 포트(프로그램)가 방처럼 있고, 들어오는 패킷은 목적지 포트가 맞는 방에만 배달된다. 닫힌 포트로 보낸 패킷은 드롭된다.'></canvas>
+  <div class='sim-controls'>
+    <button id='ue1-play' type='button'>⏸ 일시정지</button>
+  </div>
+  <div class='sim-stats'>
+    <div class='sim-stat'><span class='sim-stat-num' id='ue1-ok'>0</span><span class='sim-stat-lbl'>전달 성공</span></div>
+    <div class='sim-stat'><span class='sim-stat-num' id='ue1-drop'>0</span><span class='sim-stat-lbl'>드롭(닫힌 포트)</span></div>
+  </div>
+  <p class='sim-caption' id='ue1-caption'></p>
+</div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 소켓 — 프로그램이 네트워크를 쓰는 '전화기'</h2>
+
+            <div class="chat">
+                <div class="q">그럼 프로그램은 포트를 어떻게 차지해?</div>
+                <div class="a">
+                    <p>OS한테 '전화기 하나 주세요' 하고 소켓을 받아.</p>
+                    <p>서버: 소켓 만들기 → 포트에 bind(내 번호 등록) → listen(대기) → accept(전화 받기).</p>
+                    <p>클라: 소켓 만들기 → connect(서버 IP:포트로 걸기). 연결되면 둘 다 send/recv → 끝나면 close.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">[서버 — 받는 쪽]            [클라 — 거는 쪽]
+ socket()  소켓 생성          socket()
+ bind()    포트 등록
+ listen()  대기 모드
+           ←──── connect() ── connect()  서버로 연결
+ accept()  수락
+ send/recv ◀──────────────▶  send/recv   대화
+ close()                      close()</div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 우리 서버 포트 지도</h2>
+            <table class='compare-table'>
+<tr><th>프로그램</th><th>포트</th><th>역할</th></tr>
+<tr><td>Gate</td><td>15000</td><td class='good'>클라이언트가 접속하는 관문</td></tr>
+<tr><td>Login</td><td>10034</td><td>로그인 인증</td></tr>
+<tr><td>AccountDB</td><td>10083</td><td>계정 DB</td></tr>
+<tr><td>GameDB</td><td>10111</td><td>게임 DB</td></tr>
+<tr><td>Tool</td><td>9886</td><td>툴 서버</td></tr>
+</table>
+
+
+            <div class="chat">
+                <div class="q">이 포트들은 어디 적혀 있어?</div>
+                <div class="a">
+                    <p>connect.txt에 적혀 있고, 서버가 시작할 때 읽어서 '어디로 연결할지' 알게 돼.</p>
+                    <p>전부 같은 컴퓨터(같은 IP)에 띄우면 IP는 같고 포트만 다르고, 여러 컴퓨터에 나누면 IP도 달라져.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 실제로는? (UE & 우리)</h2>
+
+            <div class="chat">
+                <div class="q">UE는 소켓을 어떻게 다뤄?</div>
+                <div class="a">
+                    <p>ISocketSubsystem이 OS 소켓을 추상화해(플랫폼마다 다른 소켓 API를 한 인터페이스로). 그 위에 UIpNetDriver가 UDP 소켓을 열어 게임 패킷을 주고받아.</p>
+                    <p>우리는 IOCP(완료 포트) 기반으로 TCP 소켓을 다뤄 — 이 차이(UDP vs TCP, IOCP)는 다음 두 챕터에서 깊게 봐.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">포트 번호는 아무거나 써도 돼?</div>
+                <div class="a">
+                    <p>0~65535 중 고르되, 0~1023은 OS 예약(80 HTTP, 443 HTTPS)이라 피하고 보통 1024~65535를 써. 우리가 15000, 10111 쓰는 건 개발자가 정한 거야.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>IP = 건물(컴퓨터), 포트 = 호수(프로그램)</strong>. IP:포트라야 정확히 배달</li>
+                <li><strong>소켓</strong> = OS한테 받는 네트워크 '전화기'. 서버 bind→listen→accept, 클라 connect</li>
+                <li><strong>닫힌 포트</strong>(Listen 안 함) = 드롭. 서버가 그 포트를 열고 있어야 받음</li>
+                <li><strong>127.0.0.1</strong> = 나 자신(루프백)</li>
+                <li><strong>UE</strong> = ISocketSubsystem/UIpNetDriver(UDP), <strong>우리</strong> = IOCP(TCP)</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <h4>다음 챕터</h4>
+            <p>Ch2. TCP vs UDP — 소켓은 알았으니, '믿을 수 있게 vs 빠르게' 중 뭘 고를까? 왜 UE는 UDP, 우리는 TCP?</p>
+        </div>
+
+
+        <div class="nav-links">
+            <a href="../uenet-00-bigpicture/">← Ch0. 한 장의 그림</a>
+            <a href="../uenet-02-tcp-udp/">Ch2. TCP vs UDP →</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,82 @@
+{
+  "slug": "uenet-01-socket",
+  "title": "컴퓨터끼리 어떻게 대화하나 — IP·포트·소켓",
+  "subtitle": "같은 컴퓨터에 프로그램이 여럿인데, 데이터는 어떻게 제대로 찾아갈까",
+  "category": "언리얼 네트워크",
+  "category_path": "../ue-network/",
+  "prev_link": "../uenet-00-bigpicture/",
+  "prev_text": "← Ch0. 한 장의 그림",
+  "next_link": "../uenet-02-tcp-udp/",
+  "next_text": "Ch2. TCP vs UDP →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}.sim-controls{gap:8px}}\n    </style>\n    <script src='uenet01.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "IP = 건물 주소(어느 컴퓨터), 포트 = 호수(그 안 어느 프로그램). 둘이 있어야 데이터가 정확히 배달돼.",
+        "소켓 = 프로그램이 네트워크를 쓰려고 OS한테 받는 '전화기'. 서버는 받는 쪽(bind→listen→accept), 클라는 거는 쪽(connect).",
+        "UE도 우리도 결국 이 위에서 돈다. UE는 ISocketSubsystem, 우리는 IOCP로 소켓을 다뤄."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 데이터는 어떻게 '제대로' 찾아가나",
+      "items": [
+        { "type": "qa", "q": "한 컴퓨터에서 게임, 브라우저, 디스코드가 동시에 도는데, 들어온 데이터가 어떻게 게임한테만 가?", "a": "어떻게 될 거 같아? IP만으로 될까?\n안 돼. IP는 '컴퓨터(건물)'까지만 가리켜. 그 안에서 누구한테 줄지는 포트(호수)가 정해.\nIP:포트 = '49.50.138.124:15000' = 그 컴퓨터의 Gate 프로그램." },
+        { "type": "qa", "q": "비유로?", "a": "택배야. '101동'(IP)까지만 적으면 경비실에서 멈춰 — 누구 거인지 모르거든.\n'101동 1501호'(IP:포트)까지 적어야 정확히 그 집(프로그램)에 배달돼." },
+        { "type": "qa", "q": "127.0.0.1은 뭐야?", "a": "'나 자신'을 가리키는 약속된 주소(루프백). 개발할 때 같은 컴퓨터에 서버랑 클라를 띄우고 127.0.0.1로 붙이면 = 내 컴퓨터의 그 프로그램에 접속." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 직접 배달해봐",
+      "items": [
+        { "type": "qa", "q": "포트가 맞아야 배달된다는 걸 보자.", "a": "탭으로 보낼 포트를 골라봐. 열린 포트(:15000 Gate, :10111 GameDB)면 그 방에 배달(초록), 닫힌 포트(:9999)면 전부 드롭(빨강).\n서버가 그 포트를 Listen하고 있어야만 받을 수 있다는 게 핵심이야." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ue1tab active' type='button' data-t='auto'>자동(여러 포트)</button>\n    <button class='wtab ue1tab' type='button' data-t='15000'>:15000 Gate</button>\n    <button class='wtab ue1tab' type='button' data-t='10111'>:10111 GameDB</button>\n    <button class='wtab ue1tab' type='button' data-t='9999'>:9999 (닫힘)</button>\n  </div>\n  <canvas id='ue1-canvas' role='img' aria-label='IP와 포트 라우팅 시뮬레이터. 한 서버 컴퓨터(IP) 안에 여러 포트(프로그램)가 방처럼 있고, 들어오는 패킷은 목적지 포트가 맞는 방에만 배달된다. 닫힌 포트로 보낸 패킷은 드롭된다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ue1-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue1-ok'>0</span><span class='sim-stat-lbl'>전달 성공</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue1-drop'>0</span><span class='sim-stat-lbl'>드롭(닫힌 포트)</span></div>\n  </div>\n  <p class='sim-caption' id='ue1-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 소켓 — 프로그램이 네트워크를 쓰는 '전화기'",
+      "items": [
+        { "type": "qa", "q": "그럼 프로그램은 포트를 어떻게 차지해?", "a": "OS한테 '전화기 하나 주세요' 하고 소켓을 받아.\n서버: 소켓 만들기 → 포트에 bind(내 번호 등록) → listen(대기) → accept(전화 받기).\n클라: 소켓 만들기 → connect(서버 IP:포트로 걸기). 연결되면 둘 다 send/recv → 끝나면 close." },
+        { "type": "diagram", "content": "[서버 — 받는 쪽]            [클라 — 거는 쪽]\n socket()  소켓 생성          socket()\n bind()    포트 등록\n listen()  대기 모드\n           ←──── connect() ── connect()  서버로 연결\n accept()  수락\n send/recv ◀──────────────▶  send/recv   대화\n close()                      close()" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 우리 서버 포트 지도",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>프로그램</th><th>포트</th><th>역할</th></tr>\n<tr><td>Gate</td><td>15000</td><td class='good'>클라이언트가 접속하는 관문</td></tr>\n<tr><td>Login</td><td>10034</td><td>로그인 인증</td></tr>\n<tr><td>AccountDB</td><td>10083</td><td>계정 DB</td></tr>\n<tr><td>GameDB</td><td>10111</td><td>게임 DB</td></tr>\n<tr><td>Tool</td><td>9886</td><td>툴 서버</td></tr>\n</table>" },
+        { "type": "qa", "q": "이 포트들은 어디 적혀 있어?", "a": "connect.txt에 적혀 있고, 서버가 시작할 때 읽어서 '어디로 연결할지' 알게 돼.\n전부 같은 컴퓨터(같은 IP)에 띄우면 IP는 같고 포트만 다르고, 여러 컴퓨터에 나누면 IP도 달라져." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. 실제로는? (UE & 우리)",
+      "items": [
+        { "type": "qa", "q": "UE는 소켓을 어떻게 다뤄?", "a": "ISocketSubsystem이 OS 소켓을 추상화해(플랫폼마다 다른 소켓 API를 한 인터페이스로). 그 위에 UIpNetDriver가 UDP 소켓을 열어 게임 패킷을 주고받아.\n우리는 IOCP(완료 포트) 기반으로 TCP 소켓을 다뤄 — 이 차이(UDP vs TCP, IOCP)는 다음 두 챕터에서 깊게 봐." },
+        { "type": "qa", "q": "포트 번호는 아무거나 써도 돼?", "a": "0~65535 중 고르되, 0~1023은 OS 예약(80 HTTP, 443 HTTPS)이라 피하고 보통 1024~65535를 써. 우리가 15000, 10111 쓰는 건 개발자가 정한 거야." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>IP = 건물(컴퓨터), 포트 = 호수(프로그램)</strong>. IP:포트라야 정확히 배달",
+        "<strong>소켓</strong> = OS한테 받는 네트워크 '전화기'. 서버 bind→listen→accept, 클라 connect",
+        "<strong>닫힌 포트</strong>(Listen 안 함) = 드롭. 서버가 그 포트를 열고 있어야 받음",
+        "<strong>127.0.0.1</strong> = 나 자신(루프백)",
+        "<strong>UE</strong> = ISocketSubsystem/UIpNetDriver(UDP), <strong>우리</strong> = IOCP(TCP)"
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "다음 챕터",
+      "items": [
+        "Ch2. TCP vs UDP — 소켓은 알았으니, '믿을 수 있게 vs 빠르게' 중 뭘 고를까? 왜 UE는 UDP, 우리는 TCP?"
+      ]
+    }
+  ]
+}
