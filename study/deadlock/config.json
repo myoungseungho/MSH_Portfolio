@@ -1,0 +1,58 @@
+{
+  "slug": "deadlock",
+  "title": "서버가 통째로 얼어붙었다 — 데드락",
+  "subtitle": "락 2개를 엇갈려 잡으면 생기는 교착, 그리고 가장 쉬운 예방법",
+  "category": "멀티스레드",
+  "category_path": "../category-thread/",
+  "prev_link": "../lock-free/",
+  "prev_text": "← 락 vs 락프리",
+  "next_link": "../category-thread/",
+  "next_text": "멀티스레드 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='dl.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "데드락 = 두 스레드가 서로 상대가 쥔 락을 기다리며 영원히 멈추는 교착(순환 대기).",
+        "조건: 각자 락을 쥔 채 + 상대 락을 기다림 + 엇갈린 순서.",
+        "가장 쉬운 예방: 모두가 '같은 순서'로만 락을 잡게 한다 (락 순서 통일)."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 왜 멈추나",
+      "items": [
+        { "type": "qa", "q": "락을 잘 걸었는데 왜 멈춰?", "a": "락 하나는 안전해. 문제는 둘 이상을 '엇갈린 순서'로 잡을 때야.\nA가 Lock1을 쥐고 Lock2를 기다리는데, 동시에 B가 Lock2를 쥐고 Lock1을 기다리면? 둘 다 상대가 놓길 기다리며 영원히 안 움직여. 게임 서버라면 그 순간 통째로 멈춰." },
+        { "type": "qa", "q": "흔한 오해가 있다며?", "a": "'락만 잘 걸면 된다'고 생각하기 쉬운데 — 그게 함정이야. 락을 잘 걸어도 '여러 개를 어떤 순서로' 잡느냐에서 데드락이 나. 락은 쓰면 쓸수록 이 순서 관리가 어려워져." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 교착 vs 순서 통일",
+      "items": [
+        { "type": "qa", "q": "직접 봐.", "a": "탭으로 ① 데드락 발생 ② 락 순서 통일 을 바꿔봐. 실선=쥠, 점선=원함.\n데드락은 두 화살표가 순환을 이뤄 영원히 멈춰(교착 시간↑). 순서 통일은 둘 다 Lock1→Lock2 순서라 한 명씩 완료돼." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab dltab active' type='button' data-m='deadlock'>① 데드락 발생</button>\n    <button class='wtab dltab' type='button' data-m='ordered'>② 락 순서 통일</button>\n  </div>\n  <canvas id='dl-canvas' role='img' aria-label='데드락 시뮬레이터. 두 스레드가 두 락을 엇갈린 순서로 잡으면 순환 대기로 교착되고, 같은 순서로 잡으면 한 명씩 완료된다.'></canvas>\n  <div class='sim-controls'>\n    <button id='dl-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='dl-state'>💀 교착</span><span class='sim-stat-lbl'>상태</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='dl-done'>0</span><span class='sim-stat-lbl'>완료 횟수</span></div>\n  </div>\n  <p class='sim-caption' id='dl-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 예방법들",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>방법</th><th>내용</th></tr>\n<tr><td class='good'>락 순서 통일</td><td>모두 같은 순서로만 잡기 (가장 기본·강력)</td></tr>\n<tr><td>타임아웃</td><td>일정 시간 못 잡으면 포기·재시도</td></tr>\n<tr><td>한 번에 다 잡기</td><td>필요한 락을 원자적으로 한꺼번에(try-lock-all)</td></tr>\n<tr><td class='good'>락 자체를 안 씀</td><td>싱글스레드/액터 모델로 — 우리 서버의 선택</td></tr>\n</table>" },
+        { "type": "qa", "q": "우리 게임 서버는?", "a": "우리는 게임 로직이 싱글스레드라 락이 거의 없어 — 데드락 가능성 자체가 0에 가까워(액터 1마리).\n그래서 우리 코드에서 '레이스/데드락 분석'은 보통 잘못된 분석이야. 진짜 문제는 서버간 메시지 순서·타임아웃·상태 불일치 쪽이지." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>데드락</strong> = 서로 상대 락을 기다리는 순환 대기 → 영원히 멈춤",
+        "<strong>조건</strong>: 락 쥔 채 + 상대 락 대기 + 엇갈린 순서",
+        "<strong>오해</strong>: '락만 잘 걸면 됨' ❌ — 여러 락의 '순서'가 진짜 문제",
+        "<strong>예방</strong>: 락 순서 통일(기본), 타임아웃, 한 번에 다 잡기",
+        "<strong>우리 서버</strong>: 싱글스레드라 데드락 거의 0 — 진짜 문제는 서버간 순서·타임아웃"
+      ]
+    }
+  ]
+}
