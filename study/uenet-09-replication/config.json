@@ -1,0 +1,73 @@
+{
+  "slug": "uenet-09-replication",
+  "title": "리플리케이션 본질 — 상태를 자동으로 맞춘다",
+  "subtitle": "변수에 표시만 하면 엔진이 변경분을 클라로. RPC가 '이벤트'면 이건 '상태'",
+  "category": "언리얼 네트워크",
+  "category_path": "../ue-network/",
+  "prev_link": "../uenet-08-rpc/",
+  "prev_text": "← Ch8. RPC",
+  "next_link": "../uenet-10-push-dormancy/",
+  "next_text": "Ch10. Push & Dormancy →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.5rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.76rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='uenet09.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "리플리케이션 = 서버 변수에 'Replicated' 표시만 하면 값이 바뀔 때 엔진이 클라로 자동 전송.",
+        "클라는 받으면 그 변수를 갱신하고 OnRep 콜백을 호출(예: 체력바 갱신).",
+        "핵심: ① 패킷 수동 작성 불필요(선언만) ② 바뀐 속성만 전송(안 바뀐 건 생략)."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. RPC랑 뭐가 달라?",
+      "items": [
+        { "type": "qa", "q": "Ch8에서 RPC 했는데, 또 다른 동기화 방법이야?", "a": "RPC는 '이벤트'(한 번 일어나는 행동)야. 리플리케이션은 '상태'(계속 유지되는 값)야.\n체력 70 → 이건 값이라 복제, '스킬 이펙트 터짐' → 이건 이벤트라 RPC. 새로 접속한 클라도 복제로 '현재 상태'를 받아 맞춰." },
+        { "type": "qa", "q": "그럼 뭘 어떻게 표시해?", "a": "변수에 Replicated를 달고, GetLifetimeReplicatedProps에서 DOREPLIFETIME(클래스, 변수)로 등록해. 그럼 끝 — 엔진이 값 변화를 감지해 보내.\n받는 쪽에서 반응이 필요하면 그 변수에 RepNotify를 달아 OnRep_변수() 함수를 만들어." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 값이 바뀌면 클라가 따라온다",
+      "items": [
+        { "type": "qa", "q": "서버 값이 바뀌면 클라가 어떻게 되는지 보자.", "a": "서버 속성이 바뀌면 그 값이 클라로 날아가고, 클라 패널의 값이 갱신되며 'OnRep!'이 깜빡여.\n탭으로 어떤 값이 바뀌게 할지 골라봐. 그리고 — 안 바뀐 속성은 안 보낸다는 것(아래 '전송 절약' 카운트)에 주목." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ue9tab active' type='button' data-m='all'>여러 값 변화</button>\n    <button class='wtab ue9tab' type='button' data-m='hp'>Health만</button>\n    <button class='wtab ue9tab' type='button' data-m='ammo'>Ammo만</button>\n  </div>\n  <canvas id='ue9-canvas' role='img' aria-label='리플리케이션 시뮬레이터. 서버의 Replicated 변수가 바뀌면 그 변경분이 클라이언트로 전송되어 값이 갱신되고 OnRep 콜백이 발화한다. 바뀌지 않은 속성은 전송되지 않는다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ue9-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue9-sent'>0</span><span class='sim-stat-lbl'>복제 전송(변경분)</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue9-saved'>0</span><span class='sim-stat-lbl'>전송 절약(안 바뀜)</span></div>\n  </div>\n  <p class='sim-caption' id='ue9-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. OnRep — 받았을 때 반응하기",
+      "items": [
+        { "type": "qa", "q": "OnRep은 언제 불려?", "a": "그 변수가 '복제로 갱신될 때' 클라에서 불려. 서버에선 안 불려(서버는 그냥 값을 바꾼 거니까).\n그래서 체력바·이펙트처럼 '값이 바뀌면 화면을 갱신'하는 코드를 OnRep에 둬. 값 동기화(엔진)와 반응(OnRep)을 분리하는 거야." },
+        { "type": "qa", "q": "우리 서버는 이걸 어떻게 해?", "a": "우리는 값이 바뀌면 SM_ 패킷을 직접 만들어 보내고, 클라는 그 패킷 핸들러에서 화면을 갱신해. 즉 'DOREPLIFETIME + OnRep'을 우리는 'SM_ 송신 + 클라 핸들러'로 손수 하는 셈.\nUE는 '뭘 보낼지'를 엔진이 정하고, 우리는 '언제 뭘 보낼지'를 개발자가 정해 — 더 세밀하지만 더 손이 가." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 우리 vs UE",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>항목</th><th>조선협객전 (우리)</th><th>언리얼</th></tr>\n<tr><td>무엇을 보낼지</td><td class='warn'>개발자가 SM_ 직접 작성</td><td class='good'>엔진이 변경 감지·자동</td></tr>\n<tr><td>변경분만</td><td>개발자가 더티플래그로 관리</td><td class='good'>엔진이 last state와 비교</td></tr>\n<tr><td>받았을 때 반응</td><td>클라 패킷 핸들러</td><td>OnRep 콜백</td></tr>\n<tr><td>신규 접속자 동기화</td><td>로그인 시 상태 패킷 묶음</td><td class='good'>복제가 자동으로 현재 상태 전달</td></tr>\n</table>" },
+        { "type": "qa", "q": "한 줄로?", "a": "UE 리플리케이션의 매력은 '선언만 하면 됨'이야. 대신 '언제·누구에게·얼마나 자주'를 더 통제하려면 다음 챕터들(Push Model, Dormancy, Relevancy)을 알아야 해. 우리는 처음부터 그걸 다 손으로 통제하는 거고." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>리플리케이션</strong> = 상태(값) 자동 동기화. RPC(이벤트)와 짝",
+        "<strong>표시</strong>: Replicated + DOREPLIFETIME → 엔진이 변경분 자동 전송",
+        "<strong>OnRep</strong> = 클라가 복제로 값을 받았을 때 호출(서버 X) → 화면 갱신",
+        "<strong>변경분만</strong> 보냄(안 바뀐 속성 생략) — last state와 비교",
+        "우리 = SM_ 수동 + 더티플래그 + 클라 핸들러, UE = 선언 + 엔진 자동 + OnRep"
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "다음 챕터",
+      "items": [
+        "Ch10. Push Model & Dormancy — '변경분만'을 더 똑똑하게: 안 바뀌면 아예 검사도 안 하고, 잠재운다"
+      ]
+    }
+  ]
+}
