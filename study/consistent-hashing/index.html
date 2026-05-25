@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>서버 한 대 늘렸더니 캐시가 전부 날아갔다 — 일관성 해싱 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+    <style>
+    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}
+    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}
+    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}
+    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    .sim canvas{width:100%;display:block;border-radius:12px}
+    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
+    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}
+    #ch-add{background:#2e7d32;color:#fff}
+    #ch-rem{background:#c62828;color:#fff}
+    .sim-stats{display:flex;gap:10px;margin-top:16px}
+    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}
+    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}
+    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}
+    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}
+    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}
+    </style>
+    <script src='ch.js' defer></script>
+</head>
+<body>
+    <div class="container">
+        <a href="../distributed-systems/" class="back-link">← 대규모 서버</a>
+
+        <header class="header">
+            <h1>서버 한 대 늘렸더니 캐시가 전부 날아갔다 — 일관성 해싱</h1>
+            <p>노드를 추가/제거해도 데이터 재배치를 최소로 만드는 해시 링</p>
+        </header>
+
+        <div class="info-box">
+            <h4>30초 요약</h4>
+            <p>단순 'key % N'으로 서버를 고르면, N(서버 수)이 바뀌는 순간 거의 모든 키가 다른 서버로 옮겨가.</p>
+            <p>일관성 해싱 = 노드·키를 같은 해시 링에 올리고 '시계방향 다음 노드'가 맡음.</p>
+            <p>노드를 추가/제거해도 근처 키만 옮겨가고 나머지는 그대로 — 재배치 최소.</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. modulo의 재앙</h2>
+
+            <div class="chat">
+                <div class="q">캐시 서버 3대에 key % 3으로 분산했어. 1대 추가하면?</div>
+                <div class="a">
+                    <p>key % 3 → key % 4로 바뀌어. 거의 모든 키의 나머지가 달라져서 — 대부분의 데이터가 '다른 서버 담당'이 돼.</p>
+                    <p>캐시라면 전부 미스 나서 한순간에 DB로 요청이 폭주해(thundering herd). 서버 늘리려다 서비스를 죽이는 거지.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">어떻게 줄여?</div>
+                <div class="a">
+                    <p>서버 수를 나눗셈에 직접 안 쓰면 돼. 노드와 키를 같은 '원(해시 링)'에 올리고, 키는 자기 위치에서 시계방향으로 만나는 첫 노드가 맡게 해.</p>
+                    <p>그럼 노드 하나가 빠져도 그 노드가 맡던 키만 다음 노드로 넘어가고, 나머지는 그대로야.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 직접 노드를 넣고 빼봐</h2>
+
+            <div class="chat">
+                <div class="q">재배치 수를 비교해봐.</div>
+                <div class="a">
+                    <p>탭으로 ① 해시 링 ② 단순 modulo 를 고르고, '노드 추가/제거'를 눌러봐.</p>
+                    <p>해시 링은 변경 시 재배치가 소수(근처 키만), modulo는 거의 전부 재배치되는 걸 '재배치 수'로 비교해.</p>
+                </div>
+            </div>
+
+            <div class='sim'>
+  <div class='sim-tabs'>
+    <button class='wtab chtab active' type='button' data-m='ring'>① 해시 링(일관성 해싱)</button>
+    <button class='wtab chtab' type='button' data-m='modulo'>② 단순 modulo</button>
+  </div>
+  <canvas id='ch-canvas' role='img' aria-label='일관성 해싱 시뮬레이터. 해시 링에 노드와 키를 올리고 키는 시계방향 다음 노드에 배정된다. 노드를 추가하거나 제거하면 일관성 해싱은 일부 키만, 단순 modulo는 대부분의 키가 재배치된다.'></canvas>
+  <div class='sim-controls'>
+    <button id='ch-add' type='button'>＋ 노드 추가</button>
+    <button id='ch-rem' type='button'>－ 노드 제거</button>
+  </div>
+  <div class='sim-stats'>
+    <div class='sim-stat'><span class='sim-stat-num' id='ch-nodes'>4</span><span class='sim-stat-lbl'>노드 수</span></div>
+    <div class='sim-stat'><span class='sim-stat-num' id='ch-remap'>0 / 40</span><span class='sim-stat-lbl'>마지막 재배치 키</span></div>
+  </div>
+  <p class='sim-caption' id='ch-caption'></p>
+</div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 가상 노드와 쓰임</h2>
+
+            <div class="chat">
+                <div class="q">노드가 링에 몰리면 한쪽만 부하 받는 거 아냐?</div>
+                <div class="a">
+                    <p>맞아. 그래서 실제론 노드 하나를 링 위 여러 지점에 '가상 노드(vnode)'로 흩뿌려. 그럼 키가 더 고르게 나뉘고, 노드 제거 시 그 부하가 여러 노드로 분산돼.</p>
+                    <p>노드 수가 적을 때 쏠림을 막는 핵심 기법이야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">어디 쓰여?</div>
+                <div class="a">
+                    <p>분산 캐시(Memcached 클라이언트), 분산 DB(Cassandra, DynamoDB), 로드밸런서의 세션 고정 등. '서버 풀이 동적으로 늘었다 줄었다 하는데 데이터 이동을 줄이고 싶을 때' 단골이야.</p>
+                    <p>게임이라면 유저/방을 서버 풀에 분산할 때, 서버를 증설해도 대부분의 세션이 안 옮겨가게 할 수 있어.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>key % N</strong> = N 바뀌면 거의 전부 재배치 → 캐시 전멸(thundering herd)</li>
+                <li><strong>일관성 해싱</strong> = 해시 링 + '시계방향 다음 노드' → 변경 시 근처 키만 이동</li>
+                <li>재배치량 ≈ 1/N (노드 하나 몫만) — 규모 변화에 강함</li>
+                <li><strong>가상 노드(vnode)</strong>로 쏠림 방지 + 부하 고르게</li>
+                <li>쓰임: 분산 캐시·DB(Cassandra/Dynamo)·LB 세션 분산</li>
+            </ul>
+        </div>
+
+
+        <div class="nav-links">
+            <a href="../raft-leader-election/">← Raft</a>
+            <a href="../distributed-systems/">대규모 서버 →</a>
+        </div>
+    </div>
+</body>
+</html>

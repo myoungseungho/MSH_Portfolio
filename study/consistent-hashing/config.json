@@ -1,0 +1,58 @@
+{
+  "slug": "consistent-hashing",
+  "title": "서버 한 대 늘렸더니 캐시가 전부 날아갔다 — 일관성 해싱",
+  "subtitle": "노드를 추가/제거해도 데이터 재배치를 최소로 만드는 해시 링",
+  "category": "대규모 서버",
+  "category_path": "../distributed-systems/",
+  "prev_link": "../raft-leader-election/",
+  "prev_text": "← Raft",
+  "next_link": "../distributed-systems/",
+  "next_text": "대규모 서버 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    #ch-add{background:#2e7d32;color:#fff}\n    #ch-rem{background:#c62828;color:#fff}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='ch.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "단순 'key % N'으로 서버를 고르면, N(서버 수)이 바뀌는 순간 거의 모든 키가 다른 서버로 옮겨가.",
+        "일관성 해싱 = 노드·키를 같은 해시 링에 올리고 '시계방향 다음 노드'가 맡음.",
+        "노드를 추가/제거해도 근처 키만 옮겨가고 나머지는 그대로 — 재배치 최소."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. modulo의 재앙",
+      "items": [
+        { "type": "qa", "q": "캐시 서버 3대에 key % 3으로 분산했어. 1대 추가하면?", "a": "key % 3 → key % 4로 바뀌어. 거의 모든 키의 나머지가 달라져서 — 대부분의 데이터가 '다른 서버 담당'이 돼.\n캐시라면 전부 미스 나서 한순간에 DB로 요청이 폭주해(thundering herd). 서버 늘리려다 서비스를 죽이는 거지." },
+        { "type": "qa", "q": "어떻게 줄여?", "a": "서버 수를 나눗셈에 직접 안 쓰면 돼. 노드와 키를 같은 '원(해시 링)'에 올리고, 키는 자기 위치에서 시계방향으로 만나는 첫 노드가 맡게 해.\n그럼 노드 하나가 빠져도 그 노드가 맡던 키만 다음 노드로 넘어가고, 나머지는 그대로야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 직접 노드를 넣고 빼봐",
+      "items": [
+        { "type": "qa", "q": "재배치 수를 비교해봐.", "a": "탭으로 ① 해시 링 ② 단순 modulo 를 고르고, '노드 추가/제거'를 눌러봐.\n해시 링은 변경 시 재배치가 소수(근처 키만), modulo는 거의 전부 재배치되는 걸 '재배치 수'로 비교해." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab chtab active' type='button' data-m='ring'>① 해시 링(일관성 해싱)</button>\n    <button class='wtab chtab' type='button' data-m='modulo'>② 단순 modulo</button>\n  </div>\n  <canvas id='ch-canvas' role='img' aria-label='일관성 해싱 시뮬레이터. 해시 링에 노드와 키를 올리고 키는 시계방향 다음 노드에 배정된다. 노드를 추가하거나 제거하면 일관성 해싱은 일부 키만, 단순 modulo는 대부분의 키가 재배치된다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ch-add' type='button'>＋ 노드 추가</button>\n    <button id='ch-rem' type='button'>－ 노드 제거</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ch-nodes'>4</span><span class='sim-stat-lbl'>노드 수</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ch-remap'>0 / 40</span><span class='sim-stat-lbl'>마지막 재배치 키</span></div>\n  </div>\n  <p class='sim-caption' id='ch-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 가상 노드와 쓰임",
+      "items": [
+        { "type": "qa", "q": "노드가 링에 몰리면 한쪽만 부하 받는 거 아냐?", "a": "맞아. 그래서 실제론 노드 하나를 링 위 여러 지점에 '가상 노드(vnode)'로 흩뿌려. 그럼 키가 더 고르게 나뉘고, 노드 제거 시 그 부하가 여러 노드로 분산돼.\n노드 수가 적을 때 쏠림을 막는 핵심 기법이야." },
+        { "type": "qa", "q": "어디 쓰여?", "a": "분산 캐시(Memcached 클라이언트), 분산 DB(Cassandra, DynamoDB), 로드밸런서의 세션 고정 등. '서버 풀이 동적으로 늘었다 줄었다 하는데 데이터 이동을 줄이고 싶을 때' 단골이야.\n게임이라면 유저/방을 서버 풀에 분산할 때, 서버를 증설해도 대부분의 세션이 안 옮겨가게 할 수 있어." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>key % N</strong> = N 바뀌면 거의 전부 재배치 → 캐시 전멸(thundering herd)",
+        "<strong>일관성 해싱</strong> = 해시 링 + '시계방향 다음 노드' → 변경 시 근처 키만 이동",
+        "재배치량 ≈ 1/N (노드 하나 몫만) — 규모 변화에 강함",
+        "<strong>가상 노드(vnode)</strong>로 쏠림 방지 + 부하 고르게",
+        "쓰임: 분산 캐시·DB(Cassandra/Dynamo)·LB 세션 분산"
+      ]
+    }
+  ]
+}
