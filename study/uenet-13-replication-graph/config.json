@@ -1,0 +1,73 @@
+{
+  "slug": "uenet-13-replication-graph",
+  "title": "ReplicationGraph — 1000명이 한 곳에 모이면",
+  "subtitle": "관련성 계산을 N×M에서 확 줄이는 공간 격자",
+  "category": "언리얼 네트워크",
+  "category_path": "../ue-network/",
+  "prev_link": "../uenet-12-movement/",
+  "prev_text": "← Ch12. 이동 예측",
+  "next_link": "../uenet-14-iris/",
+  "next_text": "Ch14. Iris →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.5rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.76rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='uenet13.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "기본 관련성 검사 = 매 틱 클라마다 모든 액터와 거리 계산 → N×M (수천 명이면 폭발).",
+        "ReplicationGraph = 액터를 공간 격자(노드)에 미리 넣어두고, 클라는 '자기 셀 + 이웃'만 검사.",
+        "우리 채널·존 격자(AOI 그리드)와 같은 발상 — 비교를 N×M에서 확 줄임."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 관련성 계산도 비싸다",
+      "items": [
+        { "type": "qa", "q": "Ch11에서 '관련 있는 것만 보낸다'고 했잖아. 그게 또 문제야?", "a": "보내는 건 줄었지. 근데 '누가 관련 있나'를 알려면 매 틱 거리 계산을 해야 해. 클라 1천 명 × 액터 1만 개 = 천만 번 비교. 보내기 전에 이 계산만으로 서버가 죽어.\n공성전에 한 곳으로 몰리면 더 심해 — 그래서 '관련성 계산 자체'를 빠르게 해야 해." },
+        { "type": "qa", "q": "어떻게 빠르게?", "a": "공간을 격자로 나눠 액터를 미리 칸에 넣어둬(버킷). 그럼 클라는 자기가 있는 칸과 이웃 칸만 보면 돼 — 멀리 있는 칸은 거리 계산조차 안 해.\n이게 ReplicationGraph. 우리가 AOI를 그리드 셀로 관리하던 거랑 똑같아." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 전수 vs 그리드",
+      "items": [
+        { "type": "qa", "q": "검사량 차이를 봐.", "a": "탭으로 ① 전수 검사 ② ReplicationGraph 를 바꿔봐. 노란 점이 '거리 계산하는 액터'야.\n전수는 모든 액터가 노랑, 그리드는 '내 셀 + 이웃 8칸'만 노랑. 플레이어가 움직여도 항상 주변만 본다는 걸 확인해." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ue13tab' type='button' data-m='naive'>① 전수 검사</button>\n    <button class='wtab ue13tab active' type='button' data-m='graph'>② ReplicationGraph</button>\n  </div>\n  <canvas id='ue13-canvas' role='img' aria-label='ReplicationGraph 시뮬레이터. 전수 검사는 모든 액터의 거리를 계산하고, ReplicationGraph는 플레이어의 셀과 이웃 8칸의 액터만 검사한다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ue13-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue13-checks'>0</span><span class='sim-stat-lbl'>이 클라가 검사하는 액터</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ue13-total'>80</span><span class='sim-stat-lbl'>전체 액터</span></div>\n  </div>\n  <p class='sim-caption' id='ue13-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 우리 샤딩/존과의 관계",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>개념</th><th>조선협객전 (우리)</th><th>언리얼</th></tr>\n<tr><td>공간 분할</td><td>존/맵 + AOI 그리드</td><td>ReplicationGraph 노드</td></tr>\n<tr><td>스케일 한계 돌파</td><td class='good'>채널·존 프로세스 분리</td><td class='warn'>한 프로세스 안 격자 최적화</td></tr>\n<tr><td>한계</td><td>채널 정원(1코어)</td><td>여전히 1 월드(보통 ~100명+)</td></tr>\n</table>" },
+        { "type": "qa", "q": "그럼 ReplicationGraph면 MMO 되나?", "a": "아니. ReplicationGraph는 '관련성 계산을 빠르게' 해서 한 서버가 감당하는 인원을 늘려주는 거지(예: 100명대 안정), 영속 상태·DB·서버간 통신·수천 명 상시는 별개야.\n우리는 애초에 채널·존으로 프로세스를 쪼개 그 한계를 넘은 거고. 이 차이가 마지막 챕터(Ch15)의 결론이야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 실제로는?",
+      "items": [
+        { "type": "qa", "q": "ReplicationGraph는 어떻게 구성돼?", "a": "UReplicationGraph 아래에 여러 'Node'가 있어. UReplicationGraphNode_GridSpatialization2D(공간 격자), AlwaysRelevant 노드(항상 관련), 팀/플레이어 전용 노드 등.\n각 노드가 '이 클라에게 보낼 액터 목록'을 만들어 합쳐. 게임마다 노드를 커스텀해서 자기 맵 특성에 맞춰." },
+        { "type": "qa", "q": "Iris는 또 뭐야?", "a": "ReplicationGraph 다음 세대 복제 시스템이야. 데이터 지향(배치 처리)으로 복제 효율을 더 끌어올린 거 — 다음 챕터에서 봐." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>관련성 계산</strong>도 비쌈: 전수 = 클라 × 액터 (N×M)",
+        "<strong>ReplicationGraph</strong> = 공간 격자 노드로 '내 셀 + 이웃'만 검사 → 비교 급감",
+        "<strong>= 우리 AOI 그리드/존</strong>과 같은 발상",
+        "이걸로 한 서버 수용 인원↑, 하지만 <strong>여전히 1 월드</strong> — 영속·DB·수천명은 별개",
+        "UReplicationGraphNode_GridSpatialization2D 등 노드 조합, 다음 세대 = Iris"
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "다음 챕터",
+      "items": [
+        "Ch14. Iris — Epic이 복제를 아예 새로 만든 이유. Quantize + Delta로 더 짜낸다"
+      ]
+    }
+  ]
+}
