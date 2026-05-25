@@ -1,0 +1,58 @@
+{
+  "slug": "ring-buffer",
+  "title": "할당 없이 무한히 돌려 쓰는 큐 — 링버퍼",
+  "subtitle": "고정 배열을 원처럼 돌려 쓰는 IOCP·로그·오디오의 단골 자료구조",
+  "category": "멀티스레드",
+  "category_path": "../category-thread/",
+  "prev_link": "../category-thread/",
+  "prev_text": "← 멀티스레드",
+  "next_link": "../back-pressure/",
+  "next_text": "백프레셔 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='rb.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "링버퍼 = 고정 크기 배열을 '원'처럼 돌려 쓰는 큐. 끝에 닿으면 처음으로(wrap).",
+        "쓰기(W)·읽기(R) 포인터가 따로 돌고, 둘 사이가 쌓인 데이터. W가 R을 따라잡으면 가득참, R이 W를 따라잡으면 빔.",
+        "메모리 할당/해제 없이 재활용해 빠름 — IOCP 수신 버퍼·로그·오디오 스트림에 단골."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 왜 '원'으로?",
+      "items": [
+        { "type": "qa", "q": "그냥 일반 큐 쓰면 안 돼?", "a": "일반 큐는 넣고 뺄 때 메모리 할당/해제나 원소 이동이 생겨. 초당 수만 번이면 그 비용이 커.\n링버퍼는 고정 배열을 미리 잡아두고 포인터만 돌려 — 할당 0, 이동 0. 그래서 고빈도 입출력에 딱이야." },
+        { "type": "qa", "q": "포인터 두 개로 어떻게?", "a": "쓰기 포인터(W)는 '다음에 쓸 칸', 읽기 포인터(R)는 '다음에 읽을 칸'. 생산자가 쓰면 W가 한 칸 전진, 소비자가 읽으면 R이 전진. 끝 칸 다음은 0번으로 돌아와.\nW와 R 사이 구간이 '아직 안 읽은 데이터'야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 가득참 / 빔을 봐",
+      "items": [
+        { "type": "qa", "q": "포인터가 만나는 두 경우를 봐.", "a": "탭으로 생산/소비 속도를 바꿔봐. 초록 W, 주황 R.\n생산이 빠르면 W가 R을 따라잡아 '가득참'(더 못 씀), 소비가 빠르면 R이 W를 따라잡아 '빔'(읽을 것 없음)이 돼." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab rbtab' type='button' data-m='prod'>생산 빠름</button>\n    <button class='wtab rbtab active' type='button' data-m='balanced'>균형</button>\n    <button class='wtab rbtab' type='button' data-m='cons'>소비 빠름</button>\n  </div>\n  <canvas id='rb-canvas' role='img' aria-label='링버퍼 시뮬레이터. 원형 배열에 쓰기 포인터 W와 읽기 포인터 R이 돌며 데이터를 채우고 비운다. 생산이 빠르면 가득차고 소비가 빠르면 빈다.'></canvas>\n  <div class='sim-controls'>\n    <button id='rb-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='rb-used'>0/12</span><span class='sim-stat-lbl'>사용 슬롯</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='rb-state'>정상</span><span class='sim-stat-lbl'>상태</span></div>\n  </div>\n  <p class='sim-caption' id='rb-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 빈/참 구분과 단일 생산자-소비자",
+      "items": [
+        { "type": "qa", "q": "W==R이면 빈 거야 가득 찬 거야?", "a": "헷갈리는 지점이야. 'W==R = 빈 상태'로 정의하면, 가득 찬 걸 표현하려면 한 칸을 비워두거나(용량 N-1), 별도 count 변수를 둬.\n이 시뮬은 count를 따로 세서 N까지 꽉 채워. 구현마다 '한 칸 희생 vs count 변수' 중 골라." },
+        { "type": "qa", "q": "락 없이 쓸 수 있어?", "a": "생산자 1 + 소비자 1(SPSC)이면 락 없이도 안전하게 만들 수 있어 — W는 생산자만, R은 소비자만 건드리니까(메모리 배리어만 신경). 그래서 IOCP 워커↔로직 스레드 같은 1:1 전달에 락프리 링버퍼가 인기야.\n생산자/소비자가 여럿(MPMC)이면 더 복잡한 동기화가 필요해." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>링버퍼</strong> = 고정 배열을 원처럼 돌려 씀(wrap). 할당/이동 0 → 빠름",
+        "<strong>W(쓰기)·R(읽기) 포인터</strong>가 따로 전진, 둘 사이가 데이터",
+        "<strong>가득참</strong> = W가 R 따라잡음, <strong>빔</strong> = R이 W 따라잡음",
+        "빈/참 구분 = 한 칸 비우기 또는 count 변수",
+        "<strong>SPSC(1:1)</strong>는 락프리 가능 → IOCP·로그·오디오 단골"
+      ]
+    }
+  ]
+}
