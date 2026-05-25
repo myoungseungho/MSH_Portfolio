@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>요청이 폭주해도 서버가 안 죽는 이유 - MSH Portfolio</title>
+    <title>큐가 5만 개 쌓였다 — 백프레셔 - MSH Portfolio</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
@@ -29,12 +29,17 @@
         .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
 
         .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
 
         .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
         .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
         .compare-table th { background: #f5f5f5; font-weight: 600; }
         .compare-table .good { background: #c8e6c9; }
         .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
 
         .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
 
@@ -47,263 +52,142 @@
         .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
         .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
         .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
 
         .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
         .nav-links a { color: #1a237e; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
     </style>
+    <style>
+    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}
+    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}
+    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}
+    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    .sim canvas{width:100%;display:block;border-radius:12px}
+    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
+    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}
+    .sim-load-lbl{display:flex;align-items:center;gap:8px;color:#90a4c4;font-size:.88rem}
+    .sim-stats{display:flex;gap:10px;margin-top:16px}
+    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}
+    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}
+    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}
+    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}
+    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}
+    </style>
+    <script src='bp.js' defer></script>
 </head>
 <body>
     <div class="container">
-        <a href="../async-systems/" class="back-link">← 메시지 큐 / 비동기</a>
+        <a href="../category-thread/" class="back-link">← 멀티스레드</a>
 
         <header class="header">
-            <h1>요청이 폭주해도 서버가 안 죽는 이유</h1>
-            <p>Back Pressure로 시스템 과부하 방지하기</p>
+            <h1>큐가 5만 개 쌓였다 — 백프레셔</h1>
+            <p>생산자가 소비자보다 빠를 때, 큐 폭발을 막는 법</p>
         </header>
 
-        <!-- Part 1: 문제 상황 -->
-        <div class="conversation">
-            <h2>Part 1. 요청 폭주하면 뭐가 문제야?</h2>
-
-            <div class="chat">
-                <div class="q">신규 서버 오픈인데 갑자기 10만 명이 몰리면?</div>
-                <div class="a">
-                    <p>Back Pressure 없으면 이렇게 돼:</p>
-                </div>
-            </div>
-
-            <div class="code-block">[Back Pressure 없는 시스템]
-
-유저 요청: 초당 10,000개
-서버 처리량: 초당 1,000개
-
-시간 경과:
-  1초: 큐에 9,000개 쌓임
-  2초: 큐에 18,000개 쌓임
-  3초: 큐에 27,000개 쌓임
-  ...
-  💥 메모리 폭발 → 서버 다운</div>
-
-            <div class="chat">
-                <div class="q">그냥 큐에 쌓아두면 나중에 처리하면 되는 거 아냐?</div>
-                <div class="a">
-                    <p><span class="warning">무한히 쌓을 수 없어!</span></p>
-                    <p>• 메모리 한계 → OOM(Out of Memory)</p>
-                    <p>• 처리 지연 → 유저는 "응답 없음"</p>
-                    <p>• 연쇄 장애 → 다른 서버까지 영향</p>
-                </div>
-            </div>
+        <div class="info-box">
+            <h4>30초 요약</h4>
+            <p>생산자(들어오는 일)가 소비자(처리)보다 빠르면 큐가 계속 쌓여 — 결국 유실되거나 메모리가 터져.</p>
+            <p>백프레셔 = 큐가 차면 '그만 보내!' 신호로 생산자를 멈춰 큐를 한도 내로 유지.</p>
+            <p>우리 서버의 '공성전에 큐 5만 개' 같은 상황이 정확히 이 문제.</p>
         </div>
 
-        <!-- Part 2: Back Pressure 개념 -->
         <div class="conversation">
-            <h2>Part 2. Back Pressure가 뭔데?</h2>
+            <h2>Part 1. 새벽 3시의 전화</h2>
 
             <div class="chat">
-                <div class="q">Back Pressure가 뭐야?</div>
+                <div class="q">'서버 터졌습니다' — 뭐가 터진 거야?</div>
                 <div class="a">
-                    <p><span class="highlight">"밀어내는 압력"</span>이라는 뜻이야.</p>
-                    <p>처리 못할 만큼 들어오면, <strong>입구에서 막거나 늦춰</strong>버리는 거.</p>
+                    <p>공성전에 3,000명이 몰렸어. 메시지는 초당 쏟아지는데 처리(소비)는 그 속도를 못 따라가. 큐에 5만 개가 쌓이면서 메모리가 부풀고 처리는 점점 밀려 — 결국 서버가 죽어.</p>
+                    <p>생산 > 소비가 지속되면 무조건 터져. 그게 이 챕터의 핵심.</p>
                 </div>
             </div>
 
-            <div class="code-block">[Back Pressure 비유]
-
-🚿 샤워기 비유:
-- 물(요청)이 너무 세게 나오면? → 수도꼭지를 잠금!
-- 배수구(서버)가 막히기 전에 물을 줄이는 것
-
-🚗 고속도로 비유:
-- 차(요청)가 너무 많으면? → 진입 신호등으로 조절!
-- 도로(서버)가 막히기 전에 진입 속도를 늦추는 것</div>
 
             <div class="chat">
-                <div class="q">그러면 유저 요청을 거절한다는 거야?</div>
+                <div class="q">큐를 무한히 키우면?</div>
                 <div class="a">
-                    <p><span class="key-point">일부는 거절하거나 늦추는 게 전체를 살리는 방법</span>이야.</p>
-                    <p>100명 다 죽이는 것보다, 20명 거절하고 80명 살리는 게 낫지.</p>
+                    <p>메모리가 한정이라 결국 터져. 큐에 한도를 두면 넘치는 건 유실되고(데이터 손실), 한도가 없으면 메모리 폭발(서버 다운). 둘 다 나빠.</p>
+                    <p>진짜 해법은 '들어오는 속도 자체를 조절'하는 거 — 백프레셔.</p>
                 </div>
             </div>
+
         </div>
 
-        <!-- Part 3: 전략 1 - 거절 -->
         <div class="conversation">
-            <h2>Part 3. 전략 1: 거절하기 (Drop)</h2>
-
-            <div class="code-block">[거절 전략]
-
-if (queue.size() >= MAX_QUEUE_SIZE) {
-    return "서버가 바쁩니다. 잠시 후 다시 시도해주세요.";
-    // HTTP 503 Service Unavailable
-    // 또는 HTTP 429 Too Many Requests
-}
-
-게임 서버 예:
-- 매칭 큐 꽉 참 → "잠시 후 다시 시도해주세요"
-- 채팅 도배 → 일정 속도 이상 메시지 무시</div>
+            <h2>Part 2. 무대응 vs 백프레셔</h2>
 
             <div class="chat">
-                <div class="q">유저한테 에러 보여주는 게 괜찮아?</div>
+                <div class="q">직접 만져봐.</div>
                 <div class="a">
-                    <p>친절한 메시지로 안내하면 돼:</p>
-                    <p>• "접속자가 많습니다. 순번: 1,234"</p>
-                    <p>• "잠시 후 자동 재시도됩니다"</p>
-                    <p>서버 죽는 것보단 <span class="key-point">대기열이 훨씬 나아</span>.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Part 4: 전략 2 - 속도 제한 -->
-        <div class="conversation">
-            <h2>Part 4. 전략 2: 속도 제한 (Rate Limiting)</h2>
-
-            <div class="code-block">[Rate Limiting]
-
-규칙: "각 유저당 초당 10회만 허용"
-
-유저 A: 1초에 100번 요청
-→ 10번만 처리, 90번은 거절 (429 Too Many Requests)
-
-구현 방법:
-1️⃣ Token Bucket
-   - 버킷에 토큰이 일정 속도로 채워짐
-   - 요청할 때마다 토큰 1개 소모
-   - 토큰 없으면 거절
-
-2️⃣ Sliding Window
-   - 최근 1초간 요청 수 카운트
-   - 한도 초과하면 거절</div>
-
-            <div class="chat">
-                <div class="q">게임에서 언제 써?</div>
-                <div class="a">
-                    <p>• <strong>API 호출</strong>: 상점 새로고침 도배 방지</p>
-                    <p>• <strong>채팅</strong>: 초당 메시지 수 제한</p>
-                    <p>• <strong>매크로 방지</strong>: 비정상적 속도 감지</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Part 5: 전략 3 - 버퍼 + 배치 -->
-        <div class="conversation">
-            <h2>Part 5. 전략 3: 모아서 처리 (Buffering)</h2>
-
-            <div class="code-block">[Buffering + Batching]
-
-[안 좋은 방식]
-로그 1개 → DB INSERT
-로그 1개 → DB INSERT
-로그 1개 → DB INSERT
-(초당 10,000번 INSERT → DB 죽음)
-
-[좋은 방식 - Buffer]
-로그 1개 → 버퍼에 저장
-로그 1개 → 버퍼에 저장
-... (1000개 모임)
-→ 한 번에 BULK INSERT!
-(초당 10번 INSERT → DB 여유)</div>
-
-            <div class="chat">
-                <div class="q">버퍼가 넘치면?</div>
-                <div class="a">
-                    <p>여기서도 Back Pressure 적용:</p>
-                    <p>• 버퍼 80% 차면 → Producer에게 "천천히" 신호</p>
-                    <p>• 버퍼 100% 차면 → Producer 일시 중단</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Part 6: 전략 4 - Circuit Breaker -->
-        <div class="conversation">
-            <h2>Part 6. 전략 4: 차단기 (Circuit Breaker)</h2>
-
-            <div class="chat">
-                <div class="q">하위 서버가 느려지면 어떻게 해?</div>
-                <div class="a">
-                    <p>문제 있는 서버로 <span class="highlight">요청 자체를 안 보내</span>버려.</p>
+                    <p>탭으로 ① 무대응 ② 백프레셔 를 바꾸고 생산량 슬라이더를 올려봐.</p>
+                    <p>무대응은 큐가 빨갛게 차서 넘쳐(유실), 백프레셔는 큐가 차면 생산자를 멈춰(억제) 한도 안에서 유지돼.</p>
                 </div>
             </div>
 
-            <div class="code-block">[Circuit Breaker 패턴]
+            <div class='sim'>
+  <div class='sim-tabs'>
+    <button class='wtab bptab' type='button' data-m='none'>① 무대응</button>
+    <button class='wtab bptab active' type='button' data-m='bp'>② 백프레셔</button>
+  </div>
+  <canvas id='bp-canvas' role='img' aria-label='백프레셔 시뮬레이터. 생산자가 소비자보다 빠르면 큐가 차오르는데, 무대응은 넘쳐 유실되고 백프레셔는 큐가 차면 생산자를 멈춰 한도 내로 유지한다.'></canvas>
+  <div class='sim-controls'>
+    <button id='bp-play' type='button'>⏸ 일시정지</button>
+    <label class='sim-load-lbl'>생산량 <span id='bp-rate-val'>5</span>/s
+      <input id='bp-rate' type='range' min='1' max='10' value='5' aria-label='생산량 조절'>
+    </label>
+  </div>
+  <div class='sim-stats'>
+    <div class='sim-stat'><span class='sim-stat-num' id='bp-queue'>0/24</span><span class='sim-stat-lbl'>큐 길이</span></div>
+    <div class='sim-stat'><span class='sim-stat-num' id='bp-extra'>0</span><span class='sim-stat-lbl' id='bp-extra-lbl'>생산 억제</span></div>
+  </div>
+  <p class='sim-caption' id='bp-caption'></p>
+</div>
 
-상태 3가지:
-┌─────────────────────────────────────────────────┐
-│  CLOSED (정상)                                  │
-│  → 요청 정상 전달                               │
-│  → 실패 5번 연속? → OPEN으로 전환               │
-└─────────────────────────────────────────────────┘
-           ↓ 실패 누적
-┌─────────────────────────────────────────────────┐
-│  OPEN (차단)                                    │
-│  → 요청 즉시 실패 반환 (하위 서버 호출 안 함)    │
-│  → 30초 후 → HALF-OPEN으로 전환                 │
-└─────────────────────────────────────────────────┘
-           ↓ 타임아웃
-┌─────────────────────────────────────────────────┐
-│  HALF-OPEN (테스트)                             │
-│  → 1개 요청만 보내봄                            │
-│  → 성공? → CLOSED로 복귀                        │
-│  → 실패? → OPEN으로 다시                        │
-└─────────────────────────────────────────────────┘</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 어디서 누르나</h2>
 
             <div class="chat">
+                <div class="q">생산자를 어떻게 멈춰?</div>
                 <div class="a">
-                    <p>결제 서버가 죽었는데 계속 호출하면?</p>
-                    <p>→ 게임 서버 스레드가 다 결제 대기하다 멈춤</p>
-                    <p>→ Circuit Breaker로 <span class="key-point">빠르게 실패</span> 처리!</p>
+                    <p>여러 층위가 있어. TCP는 수신 버퍼가 차면 '윈도우'를 줄여 송신을 늦춰(전송 계층 백프레셔). 애플리케이션은 '처리 가능할 때만 읽기'로 자연스럽게 누르거나, 요청을 거절(429)·우선순위 큐로 중요한 것만 받아.</p>
+                    <p>게임 서버는 보통 '한 틱에 처리할 메시지 수에 상한'을 두고, 넘치면 다음 틱으로 미루거나 덜 중요한 건 버려.</p>
                 </div>
             </div>
+
+
+            <div class="chat">
+                <div class="q">그냥 소비를 빠르게 하면?</div>
+                <div class="a">
+                    <p>근본 해결이긴 해(처리 최적화·벌크화·샤딩). 하지만 순간 폭주(공성전)는 아무리 빨라도 한계가 있어서, '들어오는 양을 조절하는' 백프레셔가 안전망으로 같이 필요해.</p>
+                </div>
+            </div>
+
         </div>
 
-        <!-- Part 7: 게임 서버 적용 -->
-        <div class="conversation">
-            <h2>Part 7. 게임 서버 Back Pressure 사례</h2>
-
-            <div class="code-block">[게임 서버 Back Pressure 적용]
-
-1️⃣ 로그인 큐
-   - 동시 접속 한도: 10,000명
-   - 초과 시: 대기열 (순번 표시)
-   - 이미 접속 중인 유저 보호
-
-2️⃣ 매칭 큐
-   - 매칭 요청 초당 100개 제한
-   - 초과 시: "잠시 후 다시 시도"
-   - 매칭 서버 과부하 방지
-
-3️⃣ 로그 버퍼
-   - 로그 버퍼 크기: 10,000개
-   - 80% 차면: flush 주기 단축
-   - 100% 차면: 오래된 로그 드롭
-
-4️⃣ DB 연결 풀
-   - 최대 연결: 100개
-   - 대기 큐: 500개
-   - 큐 꽉 차면: 즉시 에러 반환
-
-5️⃣ 채팅 Rate Limit
-   - 유저당 초당 5개 메시지
-   - 초과 시: 메시지 무시
-   - 도배/스팸 방지</div>
-        </div>
-
-        <!-- 핵심 정리 -->
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>Back Pressure</strong> = 처리량 초과 시 입구에서 제어</li>
-                <li><strong>거절(Drop)</strong> = 큐 꽉 차면 503/429 반환</li>
-                <li><strong>Rate Limiting</strong> = 유저/IP당 요청 속도 제한</li>
-                <li><strong>Buffering</strong> = 모아서 배치 처리, 버퍼도 제한</li>
-                <li><strong>Circuit Breaker</strong> = 문제 서버 호출 자체를 차단</li>
-                <li><strong>핵심</strong> = 일부 거절해서 전체를 살린다</li>
+                <li><strong>생산 > 소비</strong>가 지속되면 큐 폭발 → 유실 또는 메모리 다운</li>
+                <li><strong>백프레셔</strong> = 큐가 차면 생산자를 멈춰 큐를 한도 내 유지</li>
+                <li>층위: TCP 윈도우(전송), 요청 거절·우선순위(앱), 틱당 처리 상한(게임)</li>
+                <li>대가: 전체 처리량이 소비 속도에 맞춰짐 (생산자 대기)</li>
+                <li><strong>우리</strong>: 공성전 큐 폭증 = 이 문제 — 처리 최적화 + 유입 조절 둘 다 필요</li>
             </ul>
         </div>
 
+
         <div class="nav-links">
-            <a href="../kafka/">← Kafka</a>
-            <a href="../idempotency/">Idempotency →</a>
+            <a href="../category-thread/">← 멀티스레드</a>
+            <a href="../actor-model/">액터 모델 →</a>
         </div>
     </div>
 </body>

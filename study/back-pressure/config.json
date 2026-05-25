@@ -1,0 +1,58 @@
+{
+  "slug": "back-pressure",
+  "title": "큐가 5만 개 쌓였다 — 백프레셔",
+  "subtitle": "생산자가 소비자보다 빠를 때, 큐 폭발을 막는 법",
+  "category": "멀티스레드",
+  "category_path": "../category-thread/",
+  "prev_link": "../category-thread/",
+  "prev_text": "← 멀티스레드",
+  "next_link": "../actor-model/",
+  "next_text": "액터 모델 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-load-lbl{display:flex;align-items:center;gap:8px;color:#90a4c4;font-size:.88rem}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='bp.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "생산자(들어오는 일)가 소비자(처리)보다 빠르면 큐가 계속 쌓여 — 결국 유실되거나 메모리가 터져.",
+        "백프레셔 = 큐가 차면 '그만 보내!' 신호로 생산자를 멈춰 큐를 한도 내로 유지.",
+        "우리 서버의 '공성전에 큐 5만 개' 같은 상황이 정확히 이 문제."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 새벽 3시의 전화",
+      "items": [
+        { "type": "qa", "q": "'서버 터졌습니다' — 뭐가 터진 거야?", "a": "공성전에 3,000명이 몰렸어. 메시지는 초당 쏟아지는데 처리(소비)는 그 속도를 못 따라가. 큐에 5만 개가 쌓이면서 메모리가 부풀고 처리는 점점 밀려 — 결국 서버가 죽어.\n생산 > 소비가 지속되면 무조건 터져. 그게 이 챕터의 핵심." },
+        { "type": "qa", "q": "큐를 무한히 키우면?", "a": "메모리가 한정이라 결국 터져. 큐에 한도를 두면 넘치는 건 유실되고(데이터 손실), 한도가 없으면 메모리 폭발(서버 다운). 둘 다 나빠.\n진짜 해법은 '들어오는 속도 자체를 조절'하는 거 — 백프레셔." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 무대응 vs 백프레셔",
+      "items": [
+        { "type": "qa", "q": "직접 만져봐.", "a": "탭으로 ① 무대응 ② 백프레셔 를 바꾸고 생산량 슬라이더를 올려봐.\n무대응은 큐가 빨갛게 차서 넘쳐(유실), 백프레셔는 큐가 차면 생산자를 멈춰(억제) 한도 안에서 유지돼." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab bptab' type='button' data-m='none'>① 무대응</button>\n    <button class='wtab bptab active' type='button' data-m='bp'>② 백프레셔</button>\n  </div>\n  <canvas id='bp-canvas' role='img' aria-label='백프레셔 시뮬레이터. 생산자가 소비자보다 빠르면 큐가 차오르는데, 무대응은 넘쳐 유실되고 백프레셔는 큐가 차면 생산자를 멈춰 한도 내로 유지한다.'></canvas>\n  <div class='sim-controls'>\n    <button id='bp-play' type='button'>⏸ 일시정지</button>\n    <label class='sim-load-lbl'>생산량 <span id='bp-rate-val'>5</span>/s\n      <input id='bp-rate' type='range' min='1' max='10' value='5' aria-label='생산량 조절'>\n    </label>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='bp-queue'>0/24</span><span class='sim-stat-lbl'>큐 길이</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='bp-extra'>0</span><span class='sim-stat-lbl' id='bp-extra-lbl'>생산 억제</span></div>\n  </div>\n  <p class='sim-caption' id='bp-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 어디서 누르나",
+      "items": [
+        { "type": "qa", "q": "생산자를 어떻게 멈춰?", "a": "여러 층위가 있어. TCP는 수신 버퍼가 차면 '윈도우'를 줄여 송신을 늦춰(전송 계층 백프레셔). 애플리케이션은 '처리 가능할 때만 읽기'로 자연스럽게 누르거나, 요청을 거절(429)·우선순위 큐로 중요한 것만 받아.\n게임 서버는 보통 '한 틱에 처리할 메시지 수에 상한'을 두고, 넘치면 다음 틱으로 미루거나 덜 중요한 건 버려." },
+        { "type": "qa", "q": "그냥 소비를 빠르게 하면?", "a": "근본 해결이긴 해(처리 최적화·벌크화·샤딩). 하지만 순간 폭주(공성전)는 아무리 빨라도 한계가 있어서, '들어오는 양을 조절하는' 백프레셔가 안전망으로 같이 필요해." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>생산 > 소비</strong>가 지속되면 큐 폭발 → 유실 또는 메모리 다운",
+        "<strong>백프레셔</strong> = 큐가 차면 생산자를 멈춰 큐를 한도 내 유지",
+        "층위: TCP 윈도우(전송), 요청 거절·우선순위(앱), 틱당 처리 상한(게임)",
+        "대가: 전체 처리량이 소비 속도에 맞춰짐 (생산자 대기)",
+        "<strong>우리</strong>: 공성전 큐 폭증 = 이 문제 — 처리 최적화 + 유입 조절 둘 다 필요"
+      ]
+    }
+  ]
+}
