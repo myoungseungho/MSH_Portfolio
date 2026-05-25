@@ -1,0 +1,90 @@
+{
+  "slug": "client-prediction",
+  "title": "핑 100ms인데 왜 안 답답하지? — 클라 예측과 서버 보정",
+  "subtitle": "누르자마자 움직이는 비결: client prediction & server reconciliation",
+  "category": "네트워크",
+  "category_path": "../network/",
+  "prev_link": "../network/",
+  "prev_text": "← 네트워크",
+  "next_link": "../lag-compensation/",
+  "next_text": "지연 보상 →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-load-lbl{display:flex;align-items:center;gap:8px;color:#90a4c4;font-size:.88rem}\n    .sim-load-lbl input{cursor:pointer}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5;transition:color .2s}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}.sim-controls{gap:8px}}\n    </style>\n    <script src='predict.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "핑(왕복 지연)이 100ms면, 서버에 갔다와야 움직이는 구조에선 키를 눌러도 100ms 뒤에 캐릭터가 움직여 — 답답함의 정체가 이거야.",
+        "클라 예측: 서버 응답을 안 기다리고 내 화면에서 먼저 움직여. 즉시 반응.",
+        "서버 보정(reconciliation): 서버가 진짜 위치를 확정하면 그쪽으로 스냅. 빠르면서도 결국 서버가 진실. 가끔 '튀는' 게 이 보정이야."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 핑이 왜 '답답함'이 되나",
+      "items": [
+        { "type": "qa", "q": "핑 100ms가 정확히 뭐가 느린 거야?", "a": "왕복(RTT) 시간이야. 내 입력이 서버 가고(50ms), 결과가 나한테 오고(50ms) = 100ms.\n서버 응답을 받아야만 화면을 그리면, 키 누르고 100ms 뒤에 캐릭터가 움직여. 사람은 100ms도 '뚝뚝 끊긴다'고 느껴." },
+        { "type": "qa", "q": "그냥 서버 응답 기다리면 안 돼?", "a": "느린 게임(턴제, 클릭 이동)은 그래도 돼. 근데 FPS·액션은 못 버텨.\n조준하고 쐈는데 100ms 뒤 반응? 게임이 안 돼. 그래서 '예측'이 필요해." },
+        { "type": "diagram", "content": "[예측 없음]\n키 입력 ──(50ms)──▶ 서버 처리 ──(50ms)──▶ 화면 이동\n         └────────── 100ms 뒤에야 움직임 ──────────┘\n\n[예측]\n키 입력 ──▶ 화면 즉시 이동 (서버엔 따로 알림)\n         서버는 뒤에서 따라오며 진실을 확정" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 직접 핑을 올려봐",
+      "items": [
+        { "type": "qa", "q": "세 방식이 어떻게 다른지 보자.", "a": "탭으로 ① 예측 없음 / ② 예측만 / ③ 예측+보정 을 바꾸고, 핑 슬라이더를 올려봐.\n① 화면이 입력보다 핑만큼 뒤처지는 거, ② 빠르지만 서버랑 어긋나는 거, ③ 빠르면서 가끔 스냅 보정되는 거를 비교해봐." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab ptab active' type='button' data-pmode='naive'>① 예측 없음</button>\n    <button class='wtab ptab' type='button' data-pmode='predict'>② 예측만</button>\n    <button class='wtab ptab' type='button' data-pmode='reconcile'>③ 예측 + 보정</button>\n  </div>\n  <canvas id='pred-canvas' role='img' aria-label='클라이언트 예측 시뮬레이터. 입력 위치, 화면에 보이는 위치, 서버의 진짜 위치를 세 레인으로 보여준다. 예측이 없으면 화면이 입력보다 핑만큼 뒤처지고, 예측만 하면 서버와 어긋나며, 예측에 보정을 더하면 빠르면서도 서버 위치로 스냅된다.'></canvas>\n  <div class='sim-controls'>\n    <button id='pred-play' type='button'>⏸ 일시정지</button>\n    <label class='sim-load-lbl'>핑(RTT) <span id='pred-ping-val'>120</span>ms\n      <input id='pred-ping' type='range' min='20' max='300' value='120' aria-label='핑 조절'>\n    </label>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='pred-lag'>120</span><span class='sim-stat-lbl'>입력→화면 지연(ms)</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='pred-corr'>0</span><span class='sim-stat-lbl'>보정 횟수</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='pred-guard'>느림</span><span class='sim-stat-lbl'>상태</span></div>\n  </div>\n  <p class='sim-caption' id='pred-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 예측 = 일단 내 화면에서 먼저 움직여",
+      "items": [
+        { "type": "qa", "q": "예측이 정확히 뭘 하는 거야?", "a": "내 입력을 서버에 보내는 동시에, 클라가 '서버도 똑같이 처리할 거야'라고 가정하고 화면을 미리 움직여.\n대부분의 경우 서버도 같은 결과를 내니까, 결과적으로 핑이 0인 것처럼 느껴져." },
+        { "type": "qa", "q": "내 캐릭터만 예측해? 다른 사람은?", "a": "보통 '내 캐릭터'는 예측, '남의 캐릭터'는 보간(interpolation)으로 부드럽게 그려.\n남은 어차피 과거 상태를 받는 거라, 살짝 과거를 부드럽게 이어 붙이는 게 나아. (다음 글: 보간 vs 틱레이트)" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 어긋나면? — 서버 보정(reconciliation)",
+      "items": [
+        { "type": "qa", "q": "예측이 틀리면 어떻게 돼?", "a": "예: 벽 앞에서 내가 계속 전진키를 눌렀어. 클라는 '갔겠지' 하고 통과시켰는데, 서버는 '벽이라 못 감'이라고 확정해.\n그럼 클라는 서버 확정 위치로 화면을 되돌리고(롤백), 그 사이 눌렀던 입력들을 다시 적용해(replay). 이게 reconciliation." },
+        { "type": "qa", "q": "그 '튀는' 현상(러버밴딩)이 이거야?", "a": "맞아. 핑이 크거나 예측이 많이 틀리면 보정 폭이 커져서 캐릭터가 휙 끌려가. 그게 러버밴딩.\n그래서 예측은 '서버가 동의할 만한 것만' 예측하고, 보정은 부드럽게(smoothing) 하는 게 실력이야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. 세 방식 비교",
+      "items": [
+        { "type": "raw_html", "content": "<table class='compare-table'>\n<tr><th>방식</th><th>반응 속도</th><th>정확성</th><th>쓰는 곳</th></tr>\n<tr><td>예측 없음 (서버 권위만)</td><td class='bad'>핑만큼 느림</td><td class='good'>항상 정확</td><td>턴제, 클릭 이동 MMO</td></tr>\n<tr><td>예측만</td><td class='good'>즉시</td><td class='bad'>서버와 어긋남(핵 위험)</td><td>거의 안 씀</td></tr>\n<tr><td>예측 + 보정</td><td class='good'>즉시</td><td class='good'>결국 서버가 진실</td><td>FPS·액션 표준</td></tr>\n</table>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 6. 우리 게임은 어디에 해당해?",
+      "items": [
+        { "type": "qa", "q": "조선협객전 같은 클릭 이동 MMO도 예측이 필요해?", "a": "덜 절박해. 클릭 이동은 '목적지'를 보내고 서버가 경로를 도는 구조라, 약간의 지연이 액션 게임만큼 치명적이지 않아.\n대신 스킬 시전·타격감엔 가벼운 예측(이펙트 먼저 보여주기)을 써. 진짜 판정은 서버가 하고." },
+        { "type": "qa", "q": "예측을 클라가 하면 핵에 안 당해?", "a": "예측은 '화면 표시'만 클라가 미리 하는 거고, 진짜 판정·재화·아이템은 무조건 서버가 결정해. 클라가 '나 순간이동했어'라고 우겨도 서버가 'No'면 No.\n예측을 신뢰하는 순간 스피드핵·텔레포트핵이 뚫려 (마지막 편: 서버 권위 & 스피드핵 방어)." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>핑(RTT)</strong> = 입력 왕복 지연. 서버 응답을 기다려 그리면 그만큼 답답",
+        "<strong>클라 예측</strong> = 서버 안 기다리고 내 화면에서 먼저 움직임 → 즉시 반응",
+        "<strong>서버 보정</strong> = 서버 확정과 어긋나면 롤백 후 재적용(replay). 러버밴딩이 이것",
+        "<strong>예측만 ❌</strong> — 빠르지만 서버와 어긋남(핵). <strong>예측+보정 ✅</strong> = FPS·액션 표준",
+        "<strong>예측은 '표시'만</strong> — 판정·재화는 항상 서버 권위. 안 그러면 핵에 뚫림"
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "더 생각해볼 거리",
+      "items": [
+        "핑이 들쭉날쭉(지터)하면 예측 보정이 자주 터져 러버밴딩이 심해져. 어떻게 완화할까? (힌트: 버퍼링)",
+        "내 캐릭터는 예측, 남의 캐릭터는 보간. 그럼 '내가 본 적 위치'와 '서버의 적 위치'가 다른데, 히트 판정은 누구 기준이어야 공정할까? (다음 글: 지연 보상)"
+      ]
+    }
+  ]
+}
