@@ -1,0 +1,58 @@
+{
+  "slug": "coroutine-async",
+  "title": "한 스레드로 어떻게 수천 요청을? — 코루틴과 async",
+  "subtitle": "I/O를 기다리며 노는 대신, 그 시간에 다른 일을 한다",
+  "category": "멀티스레드",
+  "category_path": "../category-thread/",
+  "prev_link": "../category-thread/",
+  "prev_text": "← 멀티스레드",
+  "next_link": "../uenet-05-netdriver/",
+  "next_text": "UE NetDriver →",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='coasync.js' defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "대부분의 시간은 CPU가 아니라 I/O(DB·네트워크) 응답을 '기다리는' 데 쓰여.",
+        "블로킹: 기다리는 동안 워커가 묶여 아무 일도 못 함(유휴 낭비).",
+        "코루틴/async: I/O 중엔 yield하고 다른 일을 함 → 한 스레드로도 유휴 없이 꽉 채움."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 기다리는 시간이 아깝다",
+      "items": [
+        { "type": "qa", "q": "작업 하나에 CPU 0.3초 + I/O 0.9초면, 워커는 뭘 해?", "a": "블로킹이면 CPU 0.3초 일하고, I/O 0.9초는 응답 올 때까지 '그냥 기다려'. 그 0.9초 동안 워커는 놀고 있어 — 75%가 낭비야.\n근데 그 시간에 다른 작업의 CPU를 처리하면? 한 스레드로도 훨씬 많이 처리할 수 있어." },
+        { "type": "qa", "q": "코루틴/async가 그거야?", "a": "응. 'I/O를 기다려야 하는 지점'에서 함수를 잠시 멈추고(yield/await) 제어를 양보해. 워커는 다른 작업으로 가서 일하고, I/O가 끝나면 멈췄던 곳부터 재개해.\n스레드를 늘리는 게 아니라, 한 스레드를 '쪼개 쓰는' 거야 — 협력적 멀티태스킹." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 활용도를 봐",
+      "items": [
+        { "type": "qa", "q": "타임라인으로 비교해봐.", "a": "탭으로 ① 블로킹 ② async 를 바꿔봐. 아래 타임라인이 초록(CPU 일함)/회색(유휴)이야.\n블로킹은 I/O 대기마다 회색이 깔리고, async는 그 틈을 다른 작업으로 메워 거의 초록이야. 활용도 숫자를 비교해." },
+        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab catab' type='button' data-m='block'>① 블로킹</button>\n    <button class='wtab catab active' type='button' data-m='async'>② 코루틴/async</button>\n  </div>\n  <canvas id='ca-canvas' role='img' aria-label='코루틴 async 시뮬레이터. 한 워커 스레드가 블로킹 모드에서는 I/O 대기 동안 유휴 상태가 되고, async 모드에서는 I/O 중 다른 작업의 CPU를 처리해 활용도가 높다.'></canvas>\n  <div class='sim-controls'>\n    <button id='ca-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='ca-done'>0</span><span class='sim-stat-lbl'>완료 작업</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='ca-util'>0%</span><span class='sim-stat-lbl'>워커 활용도</span></div>\n  </div>\n  <p class='sim-caption' id='ca-caption'></p>\n</div>" }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 스레드 vs 코루틴",
+      "items": [
+        { "type": "qa", "q": "그냥 스레드 많이 만들면 되잖아?", "a": "스레드는 무거워(스택 MB 단위 + 문맥전환 비용). 1만 동시 요청에 1만 스레드는 낭비야.\n코루틴은 가벼워(수 KB) — 한 스레드 위에 수천 코루틴을 얹어 I/O 기다릴 때만 교대해. 'C10K 문제'(동시 1만 연결)를 적은 스레드로 푸는 핵심 기법이야. (IOCP·epoll도 같은 목적)" },
+        { "type": "qa", "q": "함정은?", "a": "I/O 지점에서 양보하니, 그 사이 다른 작업이 끼어들어 '순서'가 섞일 수 있어. 같은 자원을 다루면 await 전후로 상태가 바뀌어 있을 수 있고.\n그래서 순서·정합성이 중요하면 await 지점을 신중히 두거나, 액터처럼 한 단위 안에선 직렬 처리하게 설계해 (우리 서버가 싱글스레드 동기를 택한 이유와 닿아 있어)." }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "<strong>I/O 대기</strong>가 시간의 대부분 — 블로킹은 그동안 워커가 묶여 유휴",
+        "<strong>코루틴/async</strong> = I/O에서 yield/await → 다른 일 하고, 끝나면 재개",
+        "스레드를 늘리는 게 아니라 <strong>한 스레드를 쪼개 씀</strong>(협력적 멀티태스킹)",
+        "코루틴은 가벼움(수 KB) → C10K(동시 1만)를 적은 스레드로 (IOCP·epoll과 같은 목적)",
+        "<strong>함정</strong>: await 전후로 순서·상태가 바뀔 수 있음 → 정합성 설계 필요"
+      ]
+    }
+  ]
+}
