@@ -204,21 +204,37 @@
 .faq{margin:30px 0}
 .faq-h{font-size:1.3rem;color:#1a237e;margin-bottom:6px}
 .faq-sub{color:#666;font-size:.9rem;margin-bottom:16px}
-.faq-i{background:#fff;border:1px solid #e0e0e0;border-radius:12px;margin-bottom:10px;padding:0 18px}
+.faq-i{background:#fff;border:1px solid #e0e0e0;border-radius:12px;margin-bottom:10px;padding:0 20px}
 .faq-i summary{cursor:pointer;padding:15px 30px 15px 0;font-weight:600;color:#222;list-style:none;position:relative}
 .faq-i summary::-webkit-details-marker{display:none}
 .faq-i summary::after{content:"+";position:absolute;right:2px;top:12px;font-size:1.25rem;color:#1565c0;font-weight:700}
 .faq-i[open] summary::after{content:"\2212"}
 .faq-i summary:hover{color:#1565c0}
-.faq-a{padding:0 0 16px;color:#3a3a3a;line-height:1.8;font-size:.93rem}
+.faq-a{padding:4px 0 20px;color:#37474f;line-height:1.85;font-size:.93rem}
+.faq-a p{margin:8px 0}
+.faq-a strong{color:#1a237e;font-weight:700}
+.faq-a .mini{background:#f5f5f5;border-radius:8px;padding:12px 14px;margin:12px 0;font-family:Consolas,Monaco,monospace;font-size:.82rem;white-space:pre;color:#37474f;overflow-x:auto;line-height:1.6}
+.faq-a .ex{background:#fff8e1;border-left:3px solid #ffa726;padding:10px 14px;margin:12px 0;border-radius:0 8px 8px 0;font-size:.9rem;color:#5d4037}
+.faq-a .key{background:#e8f5e9;border-left:3px solid #66bb6a;padding:10px 14px;margin:12px 0;border-radius:0 8px 8px 0;font-size:.9rem;color:#1b5e20}
+.faq-a ul{margin:8px 0;padding-left:22px}
+.faq-a li{margin:4px 0}
+.faq-a code{background:#eceff1;padding:2px 6px;border-radius:4px;font-family:Consolas,monospace;font-size:.85rem;color:#37474f}
 </style>
 <div class="faq">
 <h2 class="faq-h">이런 것도 궁금하지 않아?</h2>
 <p class="faq-sub">읽다 보면 떠오르는 꼬리질문 — 눌러서 펼쳐봐</p>
-<details class="faq-i"><summary>Q. dirty 표시를 깜빡한 버그는 어떻게 찾아?</summary><div class="faq-a">재현이 어려워서 값 바꾸는 경로를 한 군데로 모으고 거기서만 dirty 표시하게 강제해. 검증 빌드에서 Pull과 비교해 누락을 잡기도 해.</div></details>
-<details class="faq-i"><summary>Q. Dormancy 깨우기(Flush)를 놓치면?</summary><div class="faq-a">그 액터가 멈춰 보여(갱신 안 됨). 그래서 상태 바꾸는 코드에 Flush를 같이 묶어두는 게 규칙이야. 빠뜨림이 흔한 함정.</div></details>
-<details class="faq-i"><summary>Q. 가끔 변하는 액터를 자주 재웠다 깨웠다 하면 더 비싼 거 아냐?</summary><div class="faq-a">맞아, 전이가 잦으면 오히려 손해. 그래서 한동안 확실히 안 변하는 액터에만 Dormancy를 적용해.</div></details>
-<details class="faq-i"><summary>Q. Push가 그렇게 좋으면 왜 기본이 Pull이야?</summary><div class="faq-a">Push는 표시 누락 = 안 보내짐 위험과 코드 규율이 필요해서야. Pull은 느리지만 빠뜨릴 일이 없어 안전해. 규모가 커질 때 선택적으로 Push로 전환해.</div></details>
+<details class="faq-i"><summary>Q. dirty 표시를 깜빡한 버그는 어떻게 찾아?</summary><div class="faq-a"><p>가장 까다로운 버그 유형 — "값이 바뀌었는데 클라에 안 가는" 상황이라 재현이 산발적이야.</p><p>예방·탐지 기법:</p><ul><li><strong>Setter 강제</strong>: 변수에 직접 대입을 막고 항상 Setter를 거치게. Setter 안에서 dirty 표시.</li><li><strong>검증 빌드</strong>: 디버그 빌드에서는 Push Model을 끄고 Pull과 비교해, "Pull에선 보내졌는데 Push에선 안 보낸" 케이스를 자동 검출.</li><li><strong>린트/매크로</strong>: 코드 분석으로 "Replicated 변수에 직접 = 대입"을 경고.</li></ul><div class="mini">[자동 비교 빌드]
+매 틱마다:
+  Pull 모드: 전 속성 검사 → 변경분 목록 A
+  Push 모드: dirty 표시된 것만 → 변경분 목록 B
+  if (A != B) Log("MARK_DIRTY 누락!");</div><div class="ex">우리 서버에서도 더티플래그 누락은 흔한 함정. "왜 클라에 안 보이지?" 디버깅 시 첫 의심은 "값은 바뀌었는데 변경 통지를 안 했나?".</div></div></details>
+<details class="faq-i"><summary>Q. Dormancy 깨우기(Flush)를 놓치면?</summary><div class="faq-a"><p>그 액터가 멈춰 보여. 값은 바뀌었는데 클라에 안 가니까 "프리즈"처럼 보이지.</p><div class="mini">[Flush 누락 시나리오]
+액터: 평소 안 변함 → Dormancy ON
+  코드: SomeProperty = NewValue;
+  ← FlushNetDormancy() 호출 누락
+결과: 변수는 변했지만 복제 대상에서 제외돼 클라가 옛 값 봄</div><p>예방:</p><ul><li><strong>Setter에 Flush 포함</strong>: 변경하는 코드 경로마다 자동으로 Flush 호출.</li><li><strong>이벤트 기반</strong>: "이 액터가 변하기 시작" 이벤트에서 Dormancy를 잠시 끔.</li><li><strong>주기적 강제 깨움</strong>: 안전하게 N초마다 한 번씩 Flush.</li></ul></div></details>
+<details class="faq-i"><summary>Q. 가끔 변하는 액터를 자주 재웠다 깨웠다 하면 더 비싼 거 아냐?</summary><div class="faq-a"><p>맞아. Dormancy 전이 자체에 비용이 있어 — 채널 정리·재개·상태 동기.</p><div class="key">Dormancy는 "한동안 확실히 안 변하는" 액터용. 자주 변하는 액터에 쓰면 오히려 손해.</div><p>판단 기준:</p><ul><li><strong>적용 좋음</strong>: 가구·간판·완료된 퀘스트 NPC·매치 종료된 액터 등 "사실상 정적".</li><li><strong>적용 나쁨</strong>: 캐릭터·발사체·동적 NPC.</li></ul><p>중간(가끔 변함): "한 번 변하면 N초간 안 변할 것"으로 예측 가능하면 그 N초 동안만 깨워두는 식으로 절충.</p></div></details>
+<details class="faq-i"><summary>Q. Push가 그렇게 좋으면 왜 기본이 Pull이야?</summary><div class="faq-a"><p>안전 마진 때문이야. Pull은 느리지만 절대로 "변했는데 안 보냄" 사고가 없어.</p><ul><li><strong>Pull(기본)</strong>: 모든 속성을 매 틱 검사 → 빠뜨림 불가능. 대신 비쌈.</li><li><strong>Push</strong>: 빠름. 대신 표시 누락 = 안 보냄 사고 가능 → 코드 규율 필요.</li></ul><div class="ex">실무 전략: 신규 프로젝트는 Pull로 시작 → 부하 측정으로 병목 액터 찾기 → 그 액터만 Push로 전환. 한 번에 전체 전환은 위험.</div><p>UE5 Iris부터는 Push가 더 권장 — 데이터 지향 구조라 Pull이 더 비싸짐. 시대가 바뀌는 중.</p></div></details>
 </div>
 
         <div class="info-box">

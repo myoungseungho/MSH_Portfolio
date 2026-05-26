@@ -204,21 +204,42 @@
 .faq{margin:30px 0}
 .faq-h{font-size:1.3rem;color:#1a237e;margin-bottom:6px}
 .faq-sub{color:#666;font-size:.9rem;margin-bottom:16px}
-.faq-i{background:#fff;border:1px solid #e0e0e0;border-radius:12px;margin-bottom:10px;padding:0 18px}
+.faq-i{background:#fff;border:1px solid #e0e0e0;border-radius:12px;margin-bottom:10px;padding:0 20px}
 .faq-i summary{cursor:pointer;padding:15px 30px 15px 0;font-weight:600;color:#222;list-style:none;position:relative}
 .faq-i summary::-webkit-details-marker{display:none}
 .faq-i summary::after{content:"+";position:absolute;right:2px;top:12px;font-size:1.25rem;color:#1565c0;font-weight:700}
 .faq-i[open] summary::after{content:"\2212"}
 .faq-i summary:hover{color:#1565c0}
-.faq-a{padding:0 0 16px;color:#3a3a3a;line-height:1.8;font-size:.93rem}
+.faq-a{padding:4px 0 20px;color:#37474f;line-height:1.85;font-size:.93rem}
+.faq-a p{margin:8px 0}
+.faq-a strong{color:#1a237e;font-weight:700}
+.faq-a .mini{background:#f5f5f5;border-radius:8px;padding:12px 14px;margin:12px 0;font-family:Consolas,Monaco,monospace;font-size:.82rem;white-space:pre;color:#37474f;overflow-x:auto;line-height:1.6}
+.faq-a .ex{background:#fff8e1;border-left:3px solid #ffa726;padding:10px 14px;margin:12px 0;border-radius:0 8px 8px 0;font-size:.9rem;color:#5d4037}
+.faq-a .key{background:#e8f5e9;border-left:3px solid #66bb6a;padding:10px 14px;margin:12px 0;border-radius:0 8px 8px 0;font-size:.9rem;color:#1b5e20}
+.faq-a ul{margin:8px 0;padding-left:22px}
+.faq-a li{margin:4px 0}
+.faq-a code{background:#eceff1;padding:2px 6px;border-radius:4px;font-family:Consolas,monospace;font-size:.85rem;color:#37474f}
 </style>
 <div class="faq">
 <h2 class="faq-h">이런 것도 궁금하지 않아?</h2>
 <p class="faq-sub">읽다 보면 떠오르는 꼬리질문 — 눌러서 펼쳐봐</p>
-<details class="faq-i"><summary>Q. 클라가 Server RPC를 초당 1000번 스팸하면?</summary><div class="faq-a">서버가 호출 빈도에 상한을 두고(레이트 리밋) 초과하면 무시하거나 연결을 끊어. 그래서 검증에 빈도 체크가 꼭 들어가.</div></details>
-<details class="faq-i"><summary>Q. Multicast가 unreliable이면 일부만 이펙트를 못 보잖아?</summary><div class="faq-a">응. 근데 이펙트는 놓쳐도 게임에 치명적이지 않아서 보통 unreliable로 둬. 꼭 봐야 하는 것(사망 연출)만 reliable로.</div></details>
-<details class="faq-i"><summary>Q. 큰 배열 파라미터는 매번 직렬화돼서 가? 비싸지 않아?</summary><div class="faq-a">응, RPC 인자는 호출마다 직렬화돼 비싸. 그래서 큰 상태는 RPC보다 복제(변경분만)로 보내는 게 맞아.</div></details>
-<details class="faq-i"><summary>Q. 대상 클라가 그 액터를 아직 복제 안 받았는데 Client RPC가 오면?</summary><div class="faq-a">그 RPC는 버려지거나 보류돼. 그래서 「RPC 받는 액터가 그 클라에 관련 있는지」를 신경 써야 해.</div></details>
+<details class="faq-i"><summary>Q. 클라가 Server RPC를 초당 1000번 스팸하면?</summary><div class="faq-a"><p>두 단계로 막아.</p><ul><li><strong>레이트 리밋</strong>: 한 RPC 함수마다 호출 빈도 상한. 예: "공격은 초당 5회까지". 초과는 무시.</li><li><strong>이상 행동 감지 + 끊기</strong>: 초당 1000번처럼 명백한 봇 행동은 즉시 연결 종료 + IP 블랙리스트.</li></ul><div class="mini">[레이트 리밋 체크]
+UFUNCTION(Server, Reliable, WithValidation)
+void ServerFire();
+
+bool ServerFire_Validate() {
+  if (Now - LastFireTime < 0.2f) return false;  // 5/s 상한
+  LastFireTime = Now;
+  return true;  // 통과
+}
+// false → 검증 실패 → 연결 끊김</div><div class="key">우리 서버 CLAUDE.md 안정성 9번이 정확히 이걸 강조 — "범위·소유권·상태·빈도" 4축 검증. 빈도 체크가 없으면 합법적인 RPC를 무한히 호출해서도 서버를 죽일 수 있어.</div></div></details>
+<details class="faq-i"><summary>Q. Multicast가 unreliable이면 일부만 이펙트를 못 보잖아?</summary><div class="faq-a"><p>응, 그게 트레이드오프야. 보통은 그래도 unreliable이 맞아:</p><ul><li>이펙트는 "그 순간만" 의미. 1초 뒤 재전송돼 봐야 이미 늦음.</li><li>한두 명 못 보는 비율이 게임 체감에 큰 영향 X.</li><li>reliable로 다 보내면 폭주 시 큐 폭발·HOL 위험.</li></ul><p>예외:</p><ul><li><strong>사망 연출·매치 종료</strong> → reliable. 못 보면 게임 진행 자체에 문제.</li><li><strong>스킬 시전 시작 알림</strong> → reliable(이걸 봐야 회피 가능).</li><li><strong>피격 이펙트·발자국·잎사귀 흔들림</strong> → unreliable.</li></ul><div class="ex">규칙: "이 이벤트를 놓치면 게임이 이상해지나?" Yes면 reliable, No면 unreliable. 의심되면 unreliable로 가는 게 안전(부하 적음).</div></div></details>
+<details class="faq-i"><summary>Q. 큰 배열 파라미터는 매번 직렬화돼서 가? 비싸지 않아?</summary><div class="faq-a"><p>비싸. RPC 호출마다 인자가 매번 직렬화돼 패킷에 실려.</p><div class="mini">[큰 인자 RPC의 함정]
+ServerSendInventory(TArray<FItem> Inventory);
+// 인벤 100칸 × 32B = 3200B
+// 호출마다 매번 3200B 송신
+// 1초 10번 호출 → 32KB/s 한 명에서만</div><p>대안:</p><ul><li><strong>복제로</strong>: 인벤토리 자체를 Replicated 상태로 두면 변경분만 전송(Push Model + Delta).</li><li><strong>참조만</strong>: 큰 데이터는 ID로 보내고 본체는 서버·DB에 두기. 클라는 ID로 조회.</li><li><strong>일부만</strong>: 정말 RPC로 가야 하면 변경된 슬롯만 인자에 담기.</li></ul><div class="key">RPC는 "이벤트 알림"에 적합하지 "상태 묶음 전송"엔 부적합. 큰 상태는 복제로 보내는 게 엔진이 기대하는 패턴.</div></div></details>
+<details class="faq-i"><summary>Q. 대상 클라가 그 액터를 아직 복제 안 받았는데 Client RPC가 오면?</summary><div class="faq-a"><p>그 RPC는 버려지거나 보류돼. 액터가 클라에 없으면 어디서 함수를 실행할지 모르니까.</p><p>UE의 처리:</p><ul><li>그 액터가 아직 복제 큐에 있으면 RPC를 잠깐 보류하다 액터 도착 후 호출.</li><li>관련성이 없어 영영 안 올 액터면 RPC는 그냥 폐기.</li></ul><div class="ex">설계 교훈: 중요한 통지는 "그 클라가 보는 액터"에서만 보내. 안 보이는 적이 "맞았어!" RPC를 보내봐야 받는 사람이 처리 못 함. 그래서 Multicast는 "관련 있는 클라들"에만 가게 엔진이 알아서 추려.</div><p>실수 패턴: 매치 종료 알림을 "임의의 액터"에서 Multicast로 보냈는데 그 액터가 일부 클라에 관련 없어 RPC가 누락 — "왜 한 명만 매치 종료를 못 받지?"의 원인. 매치 상태는 <code>bAlwaysRelevant</code> 액터(GameState)에서 보내는 게 정석.</p></div></details>
 </div>
 
         <div class="info-box">

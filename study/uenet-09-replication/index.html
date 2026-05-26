@@ -206,21 +206,56 @@
 .faq{margin:30px 0}
 .faq-h{font-size:1.3rem;color:#1a237e;margin-bottom:6px}
 .faq-sub{color:#666;font-size:.9rem;margin-bottom:16px}
-.faq-i{background:#fff;border:1px solid #e0e0e0;border-radius:12px;margin-bottom:10px;padding:0 18px}
+.faq-i{background:#fff;border:1px solid #e0e0e0;border-radius:12px;margin-bottom:10px;padding:0 20px}
 .faq-i summary{cursor:pointer;padding:15px 30px 15px 0;font-weight:600;color:#222;list-style:none;position:relative}
 .faq-i summary::-webkit-details-marker{display:none}
 .faq-i summary::after{content:"+";position:absolute;right:2px;top:12px;font-size:1.25rem;color:#1565c0;font-weight:700}
 .faq-i[open] summary::after{content:"\2212"}
 .faq-i summary:hover{color:#1565c0}
-.faq-a{padding:0 0 16px;color:#3a3a3a;line-height:1.8;font-size:.93rem}
+.faq-a{padding:4px 0 20px;color:#37474f;line-height:1.85;font-size:.93rem}
+.faq-a p{margin:8px 0}
+.faq-a strong{color:#1a237e;font-weight:700}
+.faq-a .mini{background:#f5f5f5;border-radius:8px;padding:12px 14px;margin:12px 0;font-family:Consolas,Monaco,monospace;font-size:.82rem;white-space:pre;color:#37474f;overflow-x:auto;line-height:1.6}
+.faq-a .ex{background:#fff8e1;border-left:3px solid #ffa726;padding:10px 14px;margin:12px 0;border-radius:0 8px 8px 0;font-size:.9rem;color:#5d4037}
+.faq-a .key{background:#e8f5e9;border-left:3px solid #66bb6a;padding:10px 14px;margin:12px 0;border-radius:0 8px 8px 0;font-size:.9rem;color:#1b5e20}
+.faq-a ul{margin:8px 0;padding-left:22px}
+.faq-a li{margin:4px 0}
+.faq-a code{background:#eceff1;padding:2px 6px;border-radius:4px;font-family:Consolas,monospace;font-size:.85rem;color:#37474f}
 </style>
 <div class="faq">
 <h2 class="faq-h">이런 것도 궁금하지 않아?</h2>
 <p class="faq-sub">읽다 보면 떠오르는 꼬리질문 — 눌러서 펼쳐봐</p>
-<details class="faq-i"><summary>Q. OnRep은 클라에서만 불린다며, 서버도 같은 반응하려면 두 번 짜?</summary><div class="faq-a">서버는 값을 직접 바꿨으니 그 자리에서 반응 함수를 부르면 돼. 흔히 「값 바꾸고 반응 함수 호출 + OnRep에서도 같은 함수 호출」로 한 함수를 양쪽이 부르게 해.</div></details>
-<details class="faq-i"><summary>Q. 변경분 패킷이 유실되면 클라는 옛 값에 머물러?</summary><div class="faq-a">reliable 속성이면 재전송돼 결국 맞춰져. 게다가 복제는 최신 상태를 계속 맞추는 거라 다음 갱신이 오면 최신으로 수렴해.</div></details>
-<details class="faq-i"><summary>Q. 한 틱에 100→50→100으로 두 번 바뀌면 중간값 50을 봐?</summary><div class="faq-a">보통 최종값만 봐. 복제는 틱 끝의 현재 상태를 보내서 중간 변화는 안 보일 수 있어. 중간이 중요하면(콤보) RPC로 이벤트를 따로 보내.</div></details>
-<details class="faq-i"><summary>Q. 복제 순서가 보장돼? B가 A보다 먼저 도착하면?</summary><div class="faq-a">같은 액터 안 속성들은 한 번에 묶여 일관돼. 단 액터 사이 순서는 보장이 약해서, 의존이 있으면 한 액터로 묶거나 RPC로 명시해.</div></details>
+<details class="faq-i"><summary>Q. OnRep은 클라에서만 불린다며, 서버도 같은 반응하려면 두 번 짜?</summary><div class="faq-a"><p>아니, 한 번만 짜면 돼. 패턴이 정해져 있어:</p><div class="mini">[Setter 패턴]
+void AMyChar::SetHealth(float NewHP) {
+  Health = NewHP;
+  OnHealthChanged();  // 서버에서 직접 호출
+}
+
+void AMyChar::OnRep_Health() {
+  OnHealthChanged();  // 클라에서 복제 받을 때 호출
+}
+
+void AMyChar::OnHealthChanged() {
+  // 체력바 갱신, 사운드 재생 등
+  // 서버·클라 공통 반응 로직
+}</div><p>이렇게 하면 서버는 SetHealth에서, 클라는 OnRep에서 모두 OnHealthChanged를 부르게 돼. 한 함수로 양쪽 반응을 통일.</p><div class="key">함정: 서버에서 그냥 <code>Health = 70</code>으로 변수에 직접 대입하면 OnHealthChanged가 안 불려서 서버 쪽 반응이 빠짐. 그래서 변경은 항상 Setter를 거치게 코드 규율을 잡아.</div></div></details>
+<details class="faq-i"><summary>Q. 변경분 패킷이 유실되면 클라는 옛 값에 머물러?</summary><div class="faq-a"><p>크게 걱정 안 해도 돼.</p><ul><li><strong>reliable 속성</strong>이면 자동 재전송 → 결국 맞춰져.</li><li><strong>unreliable</strong>이어도, 복제는 "최신 상태를 계속 맞추는" 거라 다음 갱신이 오면 최신 값으로 수렴.</li></ul><div class="mini">[유실 → 수렴]
+서버: HP 100 → 70 → 50
+클라: HP 100 → 70 → (50 패킷 유실) → 30 (다음 갱신)
+   └─ 50을 못 봤어도 30으로 따라옴, 결국 일치</div><p>위험은 "값을 본 순간 반응해야 하는데 못 본 경우" — 예: HP 50에서 트리거되는 이펙트가 안 발동. 그래서 중요한 트리거는 별도 RPC로 명시 송신해 보완해.</p></div></details>
+<details class="faq-i"><summary>Q. 한 틱에 100→50→100으로 두 번 바뀌면 중간값 50을 봐?</summary><div class="faq-a"><p>보통 못 봐. 복제는 <strong>틱 끝의 현재 상태</strong>를 보내. 100→50→100이면 클라는 그냥 "100 → (틱 후) 100"로 변화를 못 느낄 수도 있어.</p><div class="mini">[틱 안 다중 변경]
+서버 틱 시작: HP=100
+  데미지 50: HP=50  (안 보냄, 틱 내부)
+  포션 +50:  HP=100 (안 보냄)
+서버 틱 끝: HP=100, 변경 없음 → 클라에 안 보냄</div><p>중간 변화가 중요하면(피격 → 사운드 발화):</p><ul><li><strong>RPC로 명시 송신</strong>: "맞았어!"를 Multicast로 별도 알림. 값과 별개로 사건을 보장.</li><li><strong>OnRep RepNotify</strong>: 값이 같으면 OnRep이 안 불리니, 이벤트는 RPC가 정답.</li></ul><div class="ex">콤보가 빠른 격투 게임에서 흔한 함정. "체력 변화"가 아닌 "피격 이벤트"를 신호로 써야 콤보 카운트가 정확해.</div></div></details>
+<details class="faq-i"><summary>Q. 복제 순서가 보장돼? B가 A보다 먼저 도착하면?</summary><div class="faq-a"><p>같은 액터 안의 속성들은 한 묶음(Bunch)으로 한 번에 가서 일관돼. 단 <strong>액터 사이</strong> 순서는 보장 약함.</p><div class="mini">[액터 간 순서 함정]
+서버: PlayerA가 ItemB를 픽업
+  - PlayerA.Inventory에 B 추가
+  - ItemB.bDestroyed = true
+복제:
+  - 클라 A: ItemB 파괴 도착 → 이후 인벤 갱신
+  - 클라 B: 인벤 갱신 도착 → 이후 ItemB 파괴
+  → 일관성은 결국 맞지만 순간 짝짝이</div><p>의존이 있는 두 값은:</p><ul><li><strong>한 액터로 묶기</strong>: PlayerA 안에 두 값을 함께 두면 한 Bunch에 묶여 동기.</li><li><strong>RPC로 명시</strong>: "픽업 완료" 한 메시지로 두 변화를 함께 전달.</li><li><strong>OnRep에서 검증</strong>: 클라가 받았을 때 다른 액터 상태를 확인하고 필요시 보정.</li></ul></div></details>
 </div>
 
         <div class="info-box">
