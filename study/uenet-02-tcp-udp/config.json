@@ -87,13 +87,26 @@
       "items": [
         {
           "type": "qa",
-          "q": "UE는 UDP인데 어떻게 '꼭 도착'을 보장해?",
-          "a": "패킷을 'Bunch'라는 단위로 쪼개 보내는데, 각 Bunch에 reliable 플래그와 순번을 달아. 받는 쪽이 ACK를 안 보내면 재전송하고, 순번으로 순서를 맞춰.\n즉 TCP가 OS에서 해주는 일을, UE는 UDP 위에서 '필요한 것만' 골라서 직접 해. (자세한 Bunch는 Ch6)"
+          "q": "UE는 UDP인데 어떻게 '꼭 도착'을 보장해? 'Bunch'가 뭐길래?",
+          "a": "UDP는 기본이 '안 믿음'이야. UE는 그 위에 자기만의 신뢰성 레이어를 직접 얹어 — 그 핵심 단위가 <strong>Bunch</strong>야. 데이터를 Bunch 단위로 쪼개고, 각 Bunch에 'reliable 여부'와 '순번'을 박아. 그래서 reliable Bunch만 골라 ACK·재전송으로 보장하고, unreliable Bunch는 잃어도 무시. <em>TCP는 전부-아니면-전무지만, UE는 메시지마다 선택할 수 있어.</em>"
+        },
+        {
+          "type": "raw_html",
+          "content": "<style>\n.term-card{background:#f8fafc;border:1px solid #cbd5e1;border-left:4px solid #1565c0;border-radius:8px;padding:14px 16px;margin:14px 0}\n.term-card .tc-h{font-weight:700;color:#1565c0;margin-bottom:6px;font-size:.95rem}\n.term-card .tc-h .tc-tag{background:#1565c0;color:#fff;padding:2px 8px;border-radius:12px;font-size:.7rem;margin-right:8px;letter-spacing:.02em;display:inline-block;vertical-align:middle}\n.term-card p{margin:6px 0;font-size:.92rem;color:#37474f;line-height:1.75}\n.term-card .tc-code{background:#263238;color:#eceff1;padding:10px 12px;border-radius:6px;margin:8px 0;font-family:Consolas,Monaco,monospace;font-size:.82rem;white-space:pre;overflow-x:auto;line-height:1.55}\n.term-card .tc-code .kw{color:#82b1ff}\n.term-card .tc-code .ty{color:#80cbc4}\n.term-card .tc-code .cm{color:#b0bec5}\n.term-card .tc-vs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}\n.term-card .tc-col{background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:10px 12px}\n.term-card .tc-col h5{font-size:.78rem;color:#666;margin:0 0 4px;font-weight:600}\n.term-card .tc-col p{margin:2px 0;font-size:.85rem;color:#37474f;line-height:1.6}\n@media(max-width:520px){.term-card .tc-vs{grid-template-columns:1fr}}\n</style><div class=\"term-card\"><div class=\"tc-h\"><span class=\"tc-tag\">UE 용어</span>Bunch</div><p>한 채널의 한 메시지를 담은 작은 단위. UDP는 기본이 '안 믿음'이라, UE는 데이터를 Bunch 단위로 쪼개고 <strong>각 Bunch에 reliable/unreliable 플래그</strong>를 따로 단다. 그래서 같은 패킷에 reliable·unreliable이 섞일 수 있어.</p><div class=\"tc-code\"><span class='cm'>// 한 Bunch의 헤더(개념상)</span>\n<span class='ty'>struct</span> Bunch {\n  <span class='ty'>uint16</span> ChannelIndex;  <span class='cm'>// 어느 채널</span>\n  <span class='ty'>bool</span>   bReliable;     <span class='cm'>// 꼭 도착?</span>\n  <span class='ty'>uint16</span> SeqNum;        <span class='cm'>// 순번(재정렬용)</span>\n  <span class='ty'>uint8</span>  Payload[...];  <span class='cm'>// 실제 데이터</span>\n};</div><div class=\"tc-vs\"><div class=\"tc-col\"><h5>우리 서버</h5><p>패킷 종류(CM_/SM_) + 구조체로 메시지를 구분. 한 패킷에 한 메시지가 기본.</p></div><div class=\"tc-col\"><h5>언리얼</h5><p><strong>Bunch</strong>(채널 ID + reliable 플래그 + 순번 + 데이터). 여러 Bunch가 한 패킷에 합쳐져 감.</p></div></div><p style=\"margin-top:8px;color:#5d6b85;font-size:.85rem\"><em>자세한 구조와 동작은 Ch6에서 위젯으로 직접 봐. 여기선 '왜 UDP로도 꼭 도착이 되나'만 알면 돼.</em></p></div>"
         },
         {
           "type": "qa",
-          "q": "우리(IOCP+TCP)는?",
-          "a": "OS의 TCP가 재전송·순서를 다 해주니까 우리는 그 위에서 패킷 구조만 신경 써. 대신 모든 게 reliable이라 이동처럼 '최신만 중요한' 것도 무조건 순서 보장의 비용을 내는 셈이야."
+          "q": "그래서 Bunch 하나의 일생이 어떻게 돼?",
+          "a": "한 reliable Bunch가 유실됐을 때의 시간순 흐름이야:"
+        },
+        {
+          "type": "raw_html",
+          "content": "<style>\n.cycle{margin:14px 0}\n.cycle .row{display:grid;grid-template-columns:60px 1fr;gap:10px;padding:8px 0;border-bottom:1px dashed #e0e0e0;font-size:.92rem}\n.cycle .row:last-child{border-bottom:0}\n.cycle .row .t{color:#1565c0;font-weight:700;font-family:Consolas,monospace}\n.cycle .row .d{color:#37474f;line-height:1.7}\n.cycle .row .d strong{color:#1a237e}\n.cycle .row .ok{color:#2e7d32;font-weight:700}\n.cycle .row .bad{color:#c62828;font-weight:700}\n</style>\n<div class=\"cycle\">\n<div class=\"row\"><div class=\"t\">t=0</div><div class=\"d\">서버 → 클라: Bunch #1, #2, #3 (모두 <strong>reliable</strong>) — 한 패킷에 모여 전송</div></div>\n<div class=\"row\"><div class=\"t\">t=20ms</div><div class=\"d\">클라 수신: #1 ✓, #2 <span class=\"bad\">✗ 유실</span>, #3 ✓ — #1·#3는 즉시 처리, #2는 대기 큐</div></div>\n<div class=\"row\"><div class=\"t\">t=22ms</div><div class=\"d\">클라 → 서버: <strong>ACK #1, #3</strong> (받은 것만)</div></div>\n<div class=\"row\"><div class=\"t\">t=120ms</div><div class=\"d\">서버 타임아웃: #2 ACK 없음 → <strong>#2만 재전송</strong></div></div>\n<div class=\"row\"><div class=\"t\">t=140ms</div><div class=\"d\">클라 수신: #2 ✓ → 순번으로 끼워 넣어 처리. <span class=\"ok\">완료</span></div></div>\n</div>"
+        },
+        {
+          "type": "qa",
+          "q": "그럼 우리(TCP)는 왜 이런 짓을 안 해도 됐어?",
+          "a": "TCP가 OS 안에서 '재전송 + 순서'를 다 해줘서. 우리는 그 위에서 패킷 구조만 신경 쓰면 끝.\n대신 모든 게 reliable·ordered라 — 이동처럼 '최신만 중요'한 데이터도 순서 보장 비용을 항상 내. UE는 메시지별로 선택해서 그 비용을 안 내려고 자기 신뢰성 레이어를 따로 만든 거야. <em>Bunch 구조의 자세한 해부는 Ch6에서 다뤄.</em>"
         }
       ]
     },

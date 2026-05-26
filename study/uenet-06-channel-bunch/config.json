@@ -8,7 +8,7 @@
   "prev_text": "← Ch5. NetDriver",
   "next_link": "../uenet-07-handshake/",
   "next_text": "Ch7. 핸드셰이크 →",
-  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.5rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.76rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='uenet06.js' defer></script>",
+  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.5rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.76rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='uenet06.js' defer></script>\n    <script src='bunch.js' defer></script>",
   "parts": [
     {
       "type": "info_box",
@@ -32,6 +32,21 @@
           "type": "qa",
           "q": "그럼 Bunch는?",
           "a": "채널이 '이번에 보낼 내용'을 묶은 논리 단위가 Bunch야. 'Actor A의 위치가 바뀜' 같은 게 하나의 Bunch.\nBunch에는 reliable 여부·순번이 붙어. 여러 채널의 Bunch들을 NetConnection이 한 패킷에 모아 담아."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2.5. Bunch 해부 — 구조부터 TCP 비교까지",
+      "items": [
+        {
+          "type": "qa",
+          "q": "Bunch가 정확히 뭐야? 그림으로 보고 싶어",
+          "a": "한 채널의 한 메시지를 담은 작은 단위야. 헤더에 (1) 어느 채널인지, (2) reliable인지, (3) 순번을 박고 본체에 데이터를 실어. 여러 Bunch가 한 UDP 패킷에 합쳐져 가고, 각 Bunch는 신뢰성·재전송이 독립이야.\n아래 위젯의 ① 탭에서 한 개의 구조를, ② 탭에서 여러 개 + 유실 처리를, ③ 탭에서 TCP 스트림과의 결정적 차이(유실 시 HOL)를 봐."
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab bntab active' type='button' data-m='anat'>Bunch 한 개</button>\n    <button class='wtab bntab' type='button' data-m='multi'>여러 Bunch + 유실</button>\n    <button class='wtab bntab' type='button' data-m='compare'>TCP vs UE 비교</button>\n  </div>\n  <canvas id='bunch-canvas' role='img' aria-label='Bunch 해부도 시뮬레이터. 한 개의 Bunch 구조(채널·신뢰성·순번·페이로드), 여러 Bunch가 패킷에 모여 유실 시 reliable만 재전송, TCP 스트림과 UE Bunch의 유실 처리 비교.'></canvas>\n  <div class='sim-controls'>\n    <button id='bn-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='bn-stat-a'>0</span><span class='sim-stat-lbl' id='bn-lbl-a'>—</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='bn-stat-b'>0</span><span class='sim-stat-lbl' id='bn-lbl-b'>—</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='bn-stat-c'>0</span><span class='sim-stat-lbl' id='bn-lbl-c'>—</span></div>\n  </div>\n  <p class='sim-caption' id='bn-caption'></p>\n</div>"
         }
       ]
     },
