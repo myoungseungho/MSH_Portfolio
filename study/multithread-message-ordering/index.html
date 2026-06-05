@@ -129,6 +129,9 @@
 <section class="scene" id="sc4"></section>
 <section class="scene" id="sc5"></section>
 <section class="scene" id="sc6"></section>
+<section class="scene" id="sc7"></section>
+<section class="scene" id="sc8"></section>
+<section class="scene" id="sc9"></section>
 
 <div class="recap">
   <table>
@@ -140,6 +143,9 @@
       <tr><td>샤딩</td><td>데이터를 쪼갬 (플레이어/존별 → 같은 키는 같은 레인)</td><td>레인 안은 전순서, 레인끼리는 병렬</td></tr>
       <tr><td>파이프라이닝</td><td>작업 단계를 쪼갬 (세차장)</td><td>순서 보존하며 처리량↑ (지연은 그대로)</td></tr>
       <tr><td>디버깅</td><td>비결정성과 싸우기</td><td>결정적 재현(강제 단일) · seq/thread 로그 · 리플레이</td></tr>
+      <tr><td>크로스샤드 상호작용</td><td>다른 샤드의 둘이 거래/전투</td><td>상호작용 순간만 한 주인으로 재직렬화 (TradeDB). 순서≠원자성</td></tr>
+      <tr><td>핫 샤드</td><td>한 존에 인원 몰림 → 그 스레드만 과부하</td><td>동적 리밸런싱 / 더 잘게 분할</td></tr>
+      <tr><td>경계 핸드오프</td><td>존 이동 시 샤드 간 인계</td><td>원자적 인계(잠금) — 어설프면 복제/유실</td></tr>
     </tbody>
   </table>
 </div>
@@ -532,6 +538,143 @@ function scene6(sec){
   reset();
 }
 
+
+/* =====================================================================
+   SCENE 7 — 크로스샤드 상호작용
+   ===================================================================== */
+function scene7(sec){
+  const {stage,panel,info} = build(sec,'⑧ 샤딩의 함정 — 크로스샤드 상호작용','다른 샤드의 둘이 거래하면? 두 스레드가 동시에 두 지갑을 건드려야 한다. ④의 사고 부활.');
+  const W=stage.clientWidth||1040;
+  let safe=false, p1=500, p2=500;
+  const th0=mk('div','unit'); th0.style.cssText='left:90px;top:90px;width:160px;height:90px;';
+  th0.innerHTML='<div class="u-title">🧵 스레드0 · 샤드A</div><div class="u-sub" id="w0">P1 지갑: 500</div>';
+  const th1=mk('div','unit'); th1.style.cssText='right:90px;top:90px;width:160px;height:90px;border-color:#58a6ff;';
+  th1.innerHTML='<div class="u-title">🧵 스레드1 · 샤드B</div><div class="u-sub" id="w1">P2 지갑: 500</div>';
+  stage.appendChild(th0); stage.appendChild(th1);
+  const auth=mk('div','unit'); auth.style.cssText='left:'+(W/2-90)+'px;top:255px;width:180px;height:74px;border-color:#d29922;background:#1b1710;opacity:0;transition:opacity .4s;';
+  auth.innerHTML='<div class="u-title">🏛️ 거래 권위자 (TradeDB)</div><div class="u-sub">단일 주인 · 원자적</div>';
+  stage.appendChild(auth);
+  const tally=mk('div','tally'); tally.innerHTML='<div class="chip good" id="t7chip">합계 <b id="t7tot">1000</b></div>';
+  stage.appendChild(tally);
+  function setW(){ document.getElementById('w0').textContent='P1 지갑: '+p1; document.getElementById('w1').textContent='P2 지갑: '+p2; const tot=p1+p2; document.getElementById('t7tot').textContent=tot; document.getElementById('t7chip').className='chip '+(tot===1000?'good':'bad'); }
+  function reset(){ GEN++; p1=500;p2=500; setW(); stage.querySelectorAll('.pk').forEach(e=>e.remove()); th0.className='unit'; th1.className='unit'; th1.style.borderColor='#58a6ff'; auth.style.opacity=safe?'1':'0'; auth.className='unit'; info.innerHTML='P1이 P2에게 <b>엽전 100</b>을 건넵니다. 모드: <b>'+(safe?'한 주인에 모으기(안전)':'직접 처리(순진)')+'</b>. <b>거래 실행</b>.'; }
+  async function trade(){
+    GEN++; const g=GEN; const cx=W/2;
+    if(!safe){
+      info.innerHTML='스레드0이 P1 −100, 스레드1이 P2 +100을 <span class="warn">각자 따로</span> 처리…';
+      th0.className='unit busy'; th1.className='unit busy';
+      const dot=packet(stage,'-100','#f85149',170,120,'P1→'); await sleep(50); move(dot,cx-15,200);
+      const glitch=Math.random()<0.5;
+      await sleep(700); if(!alive(g))return;
+      p1-=100; setW(); th0.className='unit';
+      if(glitch){
+        th1.className='unit stuck'; dot.classList.add('done'); dot.style.background='#6e7681';
+        info.innerHTML='<span class="warn">끊김! P1은 −100 됐는데 P2 +100이 유실 → 엽전 증발(합계 900).</span> 두 스레드·두 단계라 원자적이 아님.';
+      } else {
+        await sleep(400); if(!alive(g))return; p2+=100; setW(); th1.className='unit';
+        const d2=packet(stage,'+100','#3fb950',cx-15,200,'→P2'); move(d2,W-250,120); d2.classList.add('done'); dot.classList.add('done');
+        info.innerHTML='이번엔 운 좋게 둘 다 성공(합계 1000). 하지만 <b>끊기는 순간 복제/증발</b> — 여러 번 눌러보면 사고가 터져.';
+      }
+    } else {
+      info.innerHTML='두 지갑을 <b>거래 권위자(TradeDB)</b> 한 곳으로 모아 한 스레드에서 <em>한 번에</em>.';
+      auth.className='unit busy';
+      const d1=packet(stage,'P1',PCOL[0],170,120,'소유→권위자'); const d2=packet(stage,'P2',PCOL[1],W-200,120,'소유→권위자');
+      await sleep(50); move(d1,cx-42,272); move(d2,cx+12,272);
+      await sleep(800); if(!alive(g))return;
+      p1-=100; p2+=100; setW(); d1.classList.add('pulse'); d2.classList.add('pulse');
+      await sleep(500); if(!alive(g))return;
+      move(d1,170,120); move(d2,W-200,120); d1.classList.add('done'); d2.classList.add('done'); auth.className='unit';
+      info.innerHTML='<em>원자적 처리 완료 — 합계 항상 1000.</em> 상호작용 순간만 ①천국(단일 스레드)으로 잠깐 되돌린 거야. 이게 너희 TradeDB가 하는 일.';
+    }
+  }
+  const tg=mk('label','toggle'); tg.innerHTML='<input type="checkbox" id="t7safe"> ⚠️ 직접 처리(순진)';
+  panel.appendChild(tg);
+  tg.querySelector('#t7safe').onchange=e=>{ safe=e.target.checked; tg.lastChild.textContent=' '+(safe?'🏛️ 한 주인에 모으기(안전)':'⚠️ 직접 처리(순진)'); reset(); };
+  ctrlBtn(panel,'거래 실행','primary',trade);
+  ctrlBtn(panel,'↻ 리셋',null,reset);
+  reset();
+}
+
+/* =====================================================================
+   SCENE 8 — 핫 샤드 (부하 불균형)
+   ===================================================================== */
+function scene8(sec){
+  const {stage,panel,info} = build(sec,'⑨ 샤딩의 함정 — 핫 샤드 (부하 불균형)','존별로 나눴는데 다들 수도로 몰리면? 그 스레드만 불타고 나머지는 논다.');
+  const W=stage.clientWidth||1040;
+  let dyn=false, load=[2,2,2], bars=[];
+  const zones=['수도(존①)','들판(존②)','광산(존③)'];
+  function draw(){
+    const max=20;
+    load.forEach((v,i)=>{ const pct=Math.min(100,v/max*100); const b=bars[i]; if(!b)return;
+      b.fill.style.width=pct+'%'; const hot=v>=12; b.fill.style.background=hot?'#f85149':(v>=7?'#d29922':'#3fb950');
+      b.lbl.textContent=v+'명'; b.u.className='unit'+(hot?' stuck':(v>=7?' busy':'')); });
+    const hot=load.findIndex(v=>v>=12);
+    if(hot>=0) info.innerHTML='<span class="warn">스레드'+(hot+1)+' 과부하(핫 샤드)</span> — 큐 폭주. 나머지 스레드는 놀고 있어요. '+(dyn?'동적 리밸런싱이 분산합니다.':'<b>동적 리밸런싱</b>을 켜고 다시 몰아보세요.');
+  }
+  function layout(){
+    stage.querySelectorAll('.unit,.pk,.zbar').forEach(e=>e.remove()); bars=[];
+    const top=70, gap=110;
+    zones.forEach((z,i)=>{ const y=top+i*gap;
+      const u=mk('div','unit'); u.style.cssText='left:60px;top:'+y+'px;width:160px;height:64px;';
+      u.innerHTML='<div class="u-title">🧵 스레드'+(i+1)+'</div><div class="u-sub">'+z+'</div>'; stage.appendChild(u);
+      const track=mk('div','zbar'); track.style.cssText='position:absolute;left:240px;top:'+(y+22)+'px;width:'+(W-320)+'px;height:22px;background:#161b22;border:1px solid #30363d;border-radius:6px;';
+      const fill=mk('div'); fill.style.cssText='height:100%;width:0;transition:width .4s ease;border-radius:6px;'; track.appendChild(fill);
+      const lbl=mk('div'); lbl.style.cssText='position:absolute;right:10px;top:1px;font-size:.72em;color:#e6edf3;'; track.appendChild(lbl);
+      stage.appendChild(track); bars.push({fill,lbl,u}); });
+    draw();
+  }
+  function crowd(){ GEN++; load[0]+=4;
+    if(dyn){ while(load[0]>8){ const idle=load.indexOf(Math.min.apply(null,load)); if(idle===0)break; load[0]-=2; load[idle]+=2; }
+      info.innerHTML='<em>동적 리밸런싱</em>: 수도 초과 인원을 놀고 있는 스레드로 이주 → 부하 평탄화.'; }
+    draw();
+  }
+  function reset(){ GEN++; load=[2,2,2]; layout(); info.innerHTML='세 존을 세 스레드에 나눴어요. <b>수도에 인원 몰기</b>를 눌러 한 존에 몰아보세요.'; }
+  const tg=mk('label','toggle'); tg.innerHTML='<input type="checkbox" id="t8dyn"> ⚖️ 동적 리밸런싱';
+  panel.appendChild(tg);
+  tg.querySelector('#t8dyn').onchange=e=>{ dyn=e.target.checked; if(dyn){ const tot=load.reduce((a,b)=>a+b,0); const each=Math.round(tot/3); load=[each,each,tot-2*each]; } draw(); };
+  ctrlBtn(panel,'🏙️ 수도에 인원 몰기','primary',crowd);
+  ctrlBtn(panel,'↻ 리셋',null,reset);
+  reset();
+}
+
+/* =====================================================================
+   SCENE 9 — 경계 핸드오프
+   ===================================================================== */
+function scene9(sec){
+  const {stage,panel,info} = build(sec,'⑩ 샤딩의 함정 — 경계 핸드오프','캐릭터가 존A→존B로 넘어가면 샤드0→샤드1로 인계. 어설프면 복제 또는 유실.');
+  const W=stage.clientWidth||1040, mid=W/2;
+  let atomic=false;
+  const zA=mk('div'); zA.style.cssText='position:absolute;left:20px;top:60px;width:'+(mid-30)+'px;height:300px;background:#10161d;border:1px solid #21262d;border-radius:10px;'; stage.appendChild(zA);
+  const zB=mk('div'); zB.style.cssText='position:absolute;right:20px;top:60px;width:'+(mid-30)+'px;height:300px;background:#10161d;border:1px solid #21262d;border-radius:10px;'; stage.appendChild(zB);
+  stage.appendChild(Object.assign(mk('div','zone-tag','존A · 스레드0'),{style:'left:34px;top:70px;'}));
+  stage.appendChild(Object.assign(mk('div','zone-tag','존B · 스레드1'),{style:'right:34px;top:70px;'}));
+  const line=mk('div'); line.style.cssText='position:absolute;left:'+mid+'px;top:60px;width:2px;height:300px;background:#f85149;opacity:.5;'; stage.appendChild(line);
+  function reset(){ GEN++; stage.querySelectorAll('.pk').forEach(e=>e.remove()); info.innerHTML='캐릭터가 존A에서 경계를 넘어 존B로 갑니다. 모드: <b>'+(atomic?'원자적 인계':'어설픈 인계')+'</b>. <b>이동</b>.'; }
+  async function walk(){
+    GEN++; const g=GEN; stage.querySelectorAll('.pk').forEach(e=>e.remove());
+    const ch=packet(stage,'🧍','#bc8cff',60,200,'스레드0 소유'); ch.style.fontSize='1em';
+    await sleep(50); move(ch,mid-60,200); await sleep(850); if(!alive(g))return;
+    if(!atomic){
+      const dup=Math.random()<0.5;
+      if(dup){ const ghost=packet(stage,'🧍','#bc8cff',mid-60,200,'스레드1도 소유?!'); ghost.style.fontSize='1em'; move(ghost,mid+30,200); ch.querySelector('.seq').textContent='스레드0도 소유?!';
+        info.innerHTML='<span class="warn">이중 존재! 두 스레드가 동시에 "내 거"라고 인계 → 캐릭터 복제(아이템 복사 사고).</span>'; }
+      else { ch.style.opacity='0';
+        info.innerHTML='<span class="warn">유실! 스레드0은 "넘겼다" 처리, 스레드1은 "아직 안 받음" → 캐릭터 사라짐.</span>'; }
+    } else {
+      ch.classList.add('pulse'); ch.querySelector('.seq').textContent='🔒 인계 잠금';
+      await sleep(600); if(!alive(g))return;
+      move(ch,W-120,200); ch.querySelector('.seq').textContent='스레드1 소유 ✓'; ch.style.background='#3fb950';
+      info.innerHTML='<em>원자적 인계: 넘기는 순간만 잠가 정확히 한쪽만 소유.</em> 복제도 유실도 없음.';
+    }
+  }
+  const tg=mk('label','toggle'); tg.innerHTML='<input type="checkbox" id="t9a"> 🔒 원자적 인계';
+  panel.appendChild(tg);
+  tg.querySelector('#t9a').onchange=e=>{ atomic=e.target.checked; tg.lastChild.textContent=' '+(atomic?'🔒 원자적 인계':'⚠️ 어설픈 인계'); reset(); };
+  ctrlBtn(panel,'🚶 이동','primary',walk);
+  ctrlBtn(panel,'↻ 리셋',null,reset);
+  reset();
+}
+
 /* ---------- 장면 등록 & 네비게이션 ---------- */
 const SCENES=[
   {t:'① 단일 스레드', f:scene0},
@@ -541,6 +684,9 @@ const SCENES=[
   {t:'⑤ 샤딩', f:scene4},
   {t:'⑥ 파이프라인', f:scene5},
   {t:'⑦ 디버깅', f:scene6},
+  {t:'⑧ 크로스샤드', f:scene7},
+  {t:'⑨ 핫 샤드', f:scene8},
+  {t:'⑩ 핸드오프', f:scene9},
 ];
 const nav=document.getElementById('nav');
 let cur=-1;
