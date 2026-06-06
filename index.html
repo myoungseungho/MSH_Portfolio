@@ -1006,16 +1006,19 @@
             if (e.key === 'Escape') closeSecret();
         });
 
-        // 검색 기능
+        // 검색 기능 — 인덱스는 전문(full-text)이라 용량이 커서, 첫 검색 시점에만 lazy-load
         let searchIndex = [];
+        let indexPromise = null;
 
-        // 검색 인덱스 로드
-        fetch('./search-index.json')
-            .then(res => res.json())
-            .then(data => {
-                searchIndex = data;
-            })
-            .catch(err => console.log('검색 인덱스 로드 실패:', err));
+        function ensureIndex() {
+            if (!indexPromise) {
+                indexPromise = fetch('./search-index.json')
+                    .then(res => res.json())
+                    .then(data => { searchIndex = data; })
+                    .catch(err => { indexPromise = null; console.log('검색 인덱스 로드 실패:', err); });
+            }
+            return indexPromise;
+        }
 
         const searchInput = document.getElementById('searchInput');
         const searchResults = document.getElementById('searchResults');
@@ -1052,6 +1055,16 @@
             }
 
             searchClear.style.display = 'block';
+
+            if (!searchIndex.length) {
+                searchResults.innerHTML = '<div class="search-no-result">검색 인덱스 로딩 중...</div>';
+                searchResults.classList.add('show');
+                ensureIndex().then(() => {
+                    if (searchIndex.length) doSearch(query);
+                    else searchResults.innerHTML = '<div class="search-no-result">검색 인덱스를 불러오지 못했습니다</div>';
+                });
+                return;
+            }
             const q = query.toLowerCase();
 
             const results = searchIndex.filter(item => {
@@ -1089,8 +1102,9 @@
             }, 150);
         });
 
-        // 검색창 포커스 시
+        // 검색창 포커스 시 — 인덱스 프리로드 시작
         searchInput.addEventListener('focus', () => {
+            ensureIndex();
             if (searchInput.value.trim()) {
                 doSearch(searchInput.value.trim());
             }
