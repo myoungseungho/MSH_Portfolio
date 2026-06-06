@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GC 도는 언어로 게임서버를 만든다고? - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+    <style>
+    .latsim{background:#0e1426;border-radius:16px;padding:22px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}
+    .ls-title{font-weight:800;font-size:1.02rem;margin-bottom:14px;color:#fff}
+    .ls-tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+    .ls-tab{flex:1;min-width:110px;padding:10px 8px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.88rem;font-weight:600;cursor:pointer;transition:.15s;line-height:1.4}
+    .ls-tab small{display:block;font-weight:400;font-size:.74rem;opacity:.75}
+    .ls-tab:hover{border-color:#42a5f5;color:#e3eaf5}
+    .ls-tab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    .ls-row{display:flex;align-items:center;gap:10px;margin:10px 0}
+    .ls-lbl{width:150px;font-size:.82rem;color:#b5c2db;text-align:right;flex-shrink:0;line-height:1.3}
+    .ls-bar{flex:1;height:30px;background:#172033;border-radius:7px;overflow:hidden;display:flex;position:relative}
+    .ls-seg{height:100%;transition:width .35s ease;min-width:0}
+    .ls-seg.net{background:#1e88e5}.ls-seg.ser{background:#ffb74d}.ls-seg.logic{background:#ab47bc}.ls-seg.db{background:#43a047}.ls-seg.gc{background:#e53935}
+    .ls-total{width:118px;flex-shrink:0;font-size:.84rem;font-weight:700;color:#fff;line-height:1.3}
+    .ls-total small{display:block;font-weight:500;font-size:.72rem;color:#90a4c4}
+    .ls-total small.worse{color:#ef9a9a}
+    .ls-spike{font-size:.76rem;color:#ef9a9a;margin:2px 0 0 160px}
+    .ls-opt{display:flex;align-items:center;gap:8px;margin:16px 0 4px;font-size:.88rem;color:#b5c2db;cursor:pointer}
+    .ls-opt input{accent-color:#42a5f5;width:16px;height:16px}
+    .ls-caption{margin-top:14px;font-size:.9rem;line-height:1.75;color:#b5c2db;background:#121a30;border-radius:10px;padding:14px 16px}
+    .ls-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:.78rem;color:#90a4c4}
+    .ls-legend span{display:inline-flex;align-items:center;gap:5px}
+    .ls-dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+    @media(max-width:560px){.ls-lbl{width:92px;font-size:.72rem}.ls-total{width:84px;font-size:.74rem}.ls-spike{margin-left:102px}}
+    </style>
+    <script src="widget.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <a href="../../" class="back-link">← MSH Portfolio</a>
+
+        <header class="header">
+            <h1>GC 도는 언어로 게임서버를 만든다고?</h1>
+            <p>C++ 서버 개발자가 C#에 던지는 4가지 반문, 그리고 정직한 답</p>
+        </header>
+
+        <div class="conversation">
+            <h2>Part 1. "C# 느리다"는 건 몇 년도 이야기일까?</h2>
+
+            <div class="chat">
+                <div class="q">솔직히 C#은 느리잖아. GC 도는 관리형 언어인데, 그걸로 게임서버를 만든다고?</div>
+                <div class="a">
+                    <p>그럼 하나 맞춰봐. 전 세계 웹 프레임워크 성능을 재는 <span class='highlight'>TechEmpower 벤치마크</span> plaintext 부문 최상위에 뭐가 있을까? 당연히 C++ 프레임워크라고 생각했지?</p>
+                    <p>마지막 라운드(Round 23, 2025년 2월) 기준 <span class='key-point'>ASP.NET Core(.NET 9)가 초당 2,750만 요청</span>을 처리하면서 1위권이야. 수많은 C++/Rust 프레임워크와 같은 줄에 서 있어.</p>
+                    <p>네가 아는 '느린 C#'은 2002년에 나온 .NET Framework 시절 이야기일 확률이 높아. 그동안 런타임이 사실상 다른 물건으로 바뀌었거든.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">관리형 언어가 어떻게 그 속도가 나와?</div>
+                <div class="a">
+                    <p>핵심은 하나야. 현대 .NET에는 <span class='highlight'>"C++처럼 쓸 수 있는 공식 탈출구"</span>가 뚫렸어.</p>
+                    <p>struct + 제네릭으로 힙 할당 없는 코드를 짜고, <span class='highlight'>Span&lt;T&gt; / stackalloc</span>으로 버퍼를 복사 없이 썰어 쓰고, JIT는 뜨거운 경로를 재컴파일(tiered compilation)해서 네이티브급 코드를 뽑아.</p>
+                    <p>즉 평소엔 편하게 짜다가, 패킷 처리 핫패스만 C++ 스타일로 조이는 게 가능해진 거야.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>옛날 .NET Framework (네가 아는 C#)</th>
+                    <th>현대 .NET 8/9</th>
+                </tr>
+                <tr>
+                    <td>개선 주기</td>
+                    <td><span class='bad'>수년에 한 번, 사실상 정체</span></td>
+                    <td>매년 메이저 릴리즈, 성능이 마케팅 포인트</td>
+                </tr>
+                <tr>
+                    <td>버퍼 처리</td>
+                    <td>복사 + 힙 할당 범벅</td>
+                    <td>Span&lt;T&gt;, stackalloc — 복사 0, 할당 0</td>
+                </tr>
+                <tr>
+                    <td>GC</td>
+                    <td>워크스테이션 GC 위주</td>
+                    <td>Server GC(코어별 힙) + Background GC</td>
+                </tr>
+                <tr>
+                    <td>네트워크 I/O</td>
+                    <td>스레드 블로킹 또는 수동 콜백</td>
+                    <td>async/await + IOCP를 런타임이 대신 관리</td>
+                </tr>
+                <tr>
+                    <td>게임서버 적합성</td>
+                    <td>무리</td>
+                    <td>장르에 따라 1군 선택지</td>
+                </tr>
+            </table>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 반문 ① — "GC 멈추면 게임 끊기잖아?"</h2>
+
+            <div class="chat">
+                <div class="q">GC가 도는 순간 전 유저가 멈출 거 아냐. 그건 어떻게 해결해?</div>
+                <div class="a">
+                    <p>먼저 맞춰봐. GC는 <b>언제</b> 돌까? 시간이 지나면? 메모리가 가득 차면?</p>
+                    <p>정답은 <span class='key-point'>"네가 할당하면"</span>이야. GC는 새 할당이 쌓여서 gen0 예산이 차야 출동해. 뒤집으면 — <span class='key-point'>할당이 없으면 수집도 없다</span>. 이게 C# 게임서버 설계의 제1원칙이야.</p>
+                    <p>식당으로 비유하면 GC는 설거지야. 손님이 접시(할당)를 안 쓰면 설거지할 게 없어. C# 게임서버는 '접시를 적게 쓰는 식당'을 설계하는 거지, '설거지가 없는 척'하는 게 아냐.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">말은 좋은데, 실제로 GC 때문에 끊긴 사례는 없어?</div>
+                <div class="a">
+                    <p>있어. 정직하게 가자. dotnet/runtime 저장소엔 <span class='warning'>"60fps 게임인데 GC 멈춤이 최대 55ms — 프레임 예산 16ms를 한참 초과"</span>라는 이슈가 실제로 올라와 있어. 기본 설정으로 할당을 막 쓰면 진짜 끊겨.</p>
+                    <p>그래서 C# 게임서버의 정석은 <span class='highlight'>핫패스 zero-allocation</span>이야: struct 사용, Span&lt;T&gt;로 버퍼 썰기, ArrayPool로 빌려쓰고 반납, 메시지 객체 풀링, 핫패스에서 문자열 보간 금지.</p>
+                    <p>여기에 <span class='highlight'>Server GC</span>(코어마다 전용 힙 + 전담 스레드 — 설거지 직원을 코어마다 한 명씩 두는 것)와 Background GC를 얹으면, 핫패스에서 GC가 출동할 일 자체가 사라져.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">할당을 막 쓰는 코드:
+  [new][new][new][new] → gen0 예산 초과 → 🛑 GC 멈춤 → [new][new]... (반복)
+
+zero-allocation 코드:
+  [풀에서 빌림]→[반납]→[빌림]→[반납] → gen0이 텅 빔 → GC 출동할 이유가 없음
+
+핵심: GC를 "버티는" 게 아니라 GC가 "올 일을 없애는" 설계</div>
+
+
+            <div class="chat">
+                <div class="q">그 정도 규율을 지킬 거면 C++ 메모리 풀 관리랑 노력이 똑같잖아. 뭐가 달라?</div>
+                <div class="a">
+                    <p>노력의 양은 비슷해. <span class='key-point'>실수했을 때의 결과가 달라.</span></p>
+                    <p>C++ 풀에서 실수하면? dangling pointer, 이중 해제, 메모리 오염. 그리고 3일 뒤 전혀 엉뚱한 코드에서 크래시가 터져서 새벽에 덤프를 까. 우리 다 해본 일이잖아.</p>
+                    <p>C# 풀에서 실수하면? GC가 좀 더 돌아서 느려져. 그게 끝이야. 모니터링 그래프에 보이고, 프로파일러가 어디서 할당하는지 찍어줘.</p>
+                    <p><span class='highlight'>사고의 등급이 다른 거야</span> — 한쪽은 '디버깅 지옥', 한쪽은 '성능 튜닝 거리'.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 반문 ② — "그래도 C++이 빠르잖아. 진짜 차이 없어?"</h2>
+
+            <div class="chat">
+                <div class="q">벤치마크 말고. 진짜 게임서버에서 속도차이가 없냐고.</div>
+                <div class="a">
+                    <p>질문을 바꿔야 해. <span class='key-point'>"어느 언어가 빠른가"가 아니라 "내 서버는 어디서 시간을 쓰는가"</span>야.</p>
+                    <p>요청 하나를 분해해 보면: 네트워크 수신 → 역직렬화 → 게임 로직 → DB 호출 → 응답. 이 중 언어가 영향을 주는 건 로직과 직렬화뿐이야.</p>
+                    <p>그런데 로직은 <span class='highlight'>마이크로초(µs)</span> 단위고, DB 왕복은 <span class='highlight'>밀리초(ms)</span> 단위야. 1,000배 차이 나는 항목 옆에서 µs를 아끼는 싸움인 거지.</p>
+                    <p>실제 MMO 서버에서 로그인 한 번이면 계정 검증 + 캐릭터 로드 프로시저가 줄줄이 도는데, 그 DB 왕복이 전체 시간을 지배해. 아래에서 직접 확인해봐.</p>
+                </div>
+            </div>
+
+            <div class="latsim" id="latsim">
+  <div class="ls-title">⚡ 요청 1건의 시간은 어디로 가는가 — 시나리오를 눌러봐</div>
+  <div class="ls-tabs">
+    <button class="ls-tab active" data-sc="login">로그인 요청<small>DB-bound</small></button>
+    <button class="ls-tab" data-sc="combat">필드 전투 1틱<small>CPU-bound · 500명 시야판정</small></button>
+    <button class="ls-tab" data-sc="chat">채팅 브로드캐스트<small>I/O-bound · 1,000명</small></button>
+  </div>
+  <div id="ls-bars"></div>
+  <label class="ls-opt"><input type="checkbox" id="ls-pool"> ③번 서버에 풀링·Span 최적화 적용 (zero-allocation)</label>
+  <div class="ls-caption" id="ls-caption"></div>
+  <div class="ls-legend">
+    <span><i class="ls-dot" style="background:#1e88e5"></i>네트워크</span>
+    <span><i class="ls-dot" style="background:#ffb74d"></i>직렬화</span>
+    <span><i class="ls-dot" style="background:#ab47bc"></i>게임 로직 (언어 영향)</span>
+    <span><i class="ls-dot" style="background:#43a047"></i>DB 왕복</span>
+    <span><i class="ls-dot" style="background:#e53935"></i>GC 비용</span>
+  </div>
+</div>
+<p style="font-size:.82rem;color:#888;margin-top:-12px">※ 수치는 구조를 보여주기 위한 예시값이다. 절대값은 워크로드마다 다르며, 실제 결정은 프로파일링 데이터로 해야 한다.</p>
+
+
+            <div class="chat">
+                <div class="q">그럼 C++이 진짜로 이기는 구간은 어디야?</div>
+                <div class="a">
+                    <p><span class='highlight'>CPU-bound 구간</span> — 위 시뮬레이터의 '필드 전투 1틱'이야. 매 틱마다 수백 명의 시야판정, 충돌, 패스파인딩이 도는 오픈필드 MMO의 필드서버. 여기선 언어 차이가 실존하고 체감돼.</p>
+                    <p>단, 거기서도 기억할 게 있어. O(n²) 전수 시야판정을 AOI 그리드로 바꾸면 <span class='key-point'>10배</span>가 바뀌고, 언어를 바꾸면 <span class='key-point'>1.5~2배</span>가 바뀌어. <span class='highlight'>알고리즘이 언어보다 항상 더 크게 좌우한다</span>는 것.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 반문 ③ — "소규모 서버에서나 가능한 얘기 아냐?"</h2>
+
+            <div class="chat">
+                <div class="q">동접 몇만짜리 MMO급은 무리잖아. C# 서버로 그게 돼?</div>
+                <div class="a">
+                    <p><span class='highlight'>Albion Online</span>을 봐. 샤드 없이 전 세계 유저가 한 월드에서 노는 풀루트 PvP MMO인데, <span class='key-point'>서버 애플리케이션 코드 전부가 C#</span>이야. 네트워크 미들웨어(Photon)의 코어만 C++이고, 그 위 게임 로직은 전부 C#. 클라이언트도 유니티(C#)라서 클라-서버가 코드를 공유해. 베어메탈 서버 + Cassandra로 운영하고.</p>
+                    <p>'C# = 소규모 인디 서버'라는 등식은 이 게임 하나로 깨져.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">또 다른 사례는?</div>
+                <div class="a">
+                    <p><span class='highlight'>Halo 4/5의 온라인 서비스</span>. Microsoft Research가 만든 C# 분산 액터 프레임워크 <span class='highlight'>Orleans</span> 위에서 돌았는데, 출시 첫날 동시 유저 100만, 일주일 만에 400만을 받아냈어.</p>
+                    <p>일본 쪽도 있어. Cygames는 아예 <span class='highlight'>Cysharp</span>라는 C# 전문 자회사를 세워서 게임서버용 RPC 프레임워크(MagicOnion)를 만들고 자사 타이틀에 써. 대형 게임사가 회사를 하나 차릴 만큼 C# 서버에 투자한다는 뜻이야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">성능이 비슷하다 치자. 그래서 굳이 C#으로 가는 이유가 뭔데?</div>
+                <div class="a">
+                    <p>순서가 중요해. 성능이 비슷<b>해서</b> 가는 게 아니라, <span class='key-point'>성능이 비슷해지니까 나머지 장점이 결정타가 되는 거야.</span></p>
+                    <p>① <span class='highlight'>async/await</span> — C++에서 IOCP 비동기 흐름은 콜백과 상태 보관용 구조체를 손으로 엮은 상태머신이야. C#은 그 상태머신을 컴파일러가 대신 써줘. 아래 코드 비교를 봐.</p>
+                    <p>② <span class='highlight'>메모리 안전</span> — use-after-free, 버퍼 오버런이 언어 차원에서 불가능해. 그리고 C++ 크래시는 프로세스 다운 = 그 채널 전 유저 튕김이지만, C# 예외는 요청 1건 실패 + 스택트레이스 로그야.</p>
+                    <p>③ <span class='highlight'>단일 언어</span> — 유니티 클라와 서버가 패킷 정의·로직 코드를 공유하고, 채용 풀도 훨씬 넓어.</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">// C++ IOCP — 비동기 한 번에 콜백 한 단계씩, 상태는 구조체로 손수 운반</span>
+<span class="keyword">void</span> OnRecvLogin(Ctx* c)   { gAccDB.Query(c->acc, OnAccLoaded, c); }
+<span class="keyword">void</span> OnAccLoaded(Ctx* c)   { gGameDB.Query(c->cid, OnCharLoaded, c); }
+<span class="keyword">void</span> OnCharLoaded(Ctx* c)  { Send(c->sock, MakeResult(c)); ReleaseCtx(c); } <span class="comment">// 해제 잊으면 leak, 두 번 하면 crash</span>
+
+<span class="comment">// C# — 같은 흐름. 상태머신은 컴파일러가 생성, 수명은 GC가 책임</span>
+<span class="keyword">async</span> Task HandleLogin(LoginReq req) {
+    <span class="keyword">var</span> acc  = <span class="keyword">await</span> _accDb.LoadAsync(req.Account);
+    <span class="keyword">var</span> ch   = <span class="keyword">await</span> _gameDb.LoadCharAsync(acc.CharId);
+    <span class="keyword">await</span> SendAsync(MakeResult(acc, ch));
+}</div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 반문 ④ — "그럼 C++을 버리라는 거야?"</h2>
+
+            <div class="chat">
+                <div class="q">결론이 뭐야. 기존 C++ 서버 다 갈아엎어?</div>
+                <div class="a">
+                    <p>아니. 결론은 <span class='key-point'>"서버 종류별로 답이 다르다"</span>이고, 업계의 실전 정답은 <span class='highlight'>하이브리드</span>야.</p>
+                    <p>Albion이 쓰는 Photon부터가 하이브리드잖아 — 패킷을 나르는 네트워크 코어는 C++, 그 위 게임 로직은 C#. 가장 뜨거운 바닥만 네이티브로 깔고, 자주 바뀌고 복잡한 로직은 생산적인 언어로 올리는 구조.</p>
+                    <p>분산 MMO 아키텍처에 대입하면 이렇게 갈라져.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">전형적인 분산 MMO 서버군 — 어디는 C++, 어디는 C#이어도 되는가
+
+  [C++ 유지가 정당한 곳]                 [C#이 더 나은 선택일 수 있는 곳]
+  ─────────────────────                 ─────────────────────────
+  🔥 필드/전투 서버                      🔑 로그인 · 인증 서버 (DB-bound)
+     매 틱 시야판정·충돌·AI                📦 로그 수집 서버 (I/O-bound)
+  🔥 게이트/릴레이 핫패스                  💰 결제 검증 · 운영 API
+     초당 수만 패킷 중계                   💬 채팅 · 매칭 · 랭킹 서비스
+
+  공통점: tick-heavy CPU-bound          공통점: DB/IO-bound, 로직이 자주 바뀜,
+                                        장애 시 예외 1건으로 끝나야 하는 곳</div>
+
+
+            <div class="chat">
+                <div class="q">신규 프로젝트를 백지에서 시작한다면?</div>
+                <div class="a">
+                    <p><span class='highlight'>장르가 결정해.</span></p>
+                    <p>오픈필드 대규모 MMO의 필드서버처럼 tick-heavy 시뮬레이션이 코어라면 — 여전히 C++(혹은 zero-alloc 규율이 잡힌 C# 팀)이 정당해.</p>
+                    <p>룸 기반 대전, 수집형 RPG, 모바일 게임처럼 요청-응답 + DB가 중심이라면 — C#이 사실상 기본값이 된 지 오래야. 이 장르 서버는 위 시뮬레이터의 '로그인 요청' 패턴이 일과의 95%거든.</p>
+                    <p>그리고 어느 쪽이든, 주변 서비스(로그인·로그·운영툴·매칭)는 C#으로 떼어내는 게 요즘 표준이야.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>서버</th>
+                    <th>부하 성격</th>
+                    <th>추천</th>
+                    <th>이유</th>
+                </tr>
+                <tr>
+                    <td>오픈필드 전투/필드</td>
+                    <td>CPU-bound (매 틱 시뮬레이션)</td>
+                    <td><span class='warn'>C++ 우세</span></td>
+                    <td>언어 차이가 실제로 체감되는 유일한 구간</td>
+                </tr>
+                <tr>
+                    <td>로그인/인증</td>
+                    <td>DB-bound</td>
+                    <td><span class='good'>C# 충분</span></td>
+                    <td>시간의 90%가 DB 대기 — 언어 무관</td>
+                </tr>
+                <tr>
+                    <td>채팅/알림</td>
+                    <td>I/O-bound</td>
+                    <td><span class='good'>C# 충분</span></td>
+                    <td>async/await가 콜백 지옥을 제거</td>
+                </tr>
+                <tr>
+                    <td>매칭/랭킹</td>
+                    <td>메모리 연산 + 상태 관리</td>
+                    <td><span class='good'>C# 적합</span></td>
+                    <td>Orleans 같은 액터 모델 생태계</td>
+                </tr>
+                <tr>
+                    <td>로그 수집</td>
+                    <td>쓰기 I/O</td>
+                    <td><span class='good'>C# 충분</span></td>
+                    <td>처리량보다 안정성·운영성</td>
+                </tr>
+                <tr>
+                    <td>룸 기반 게임 로직</td>
+                    <td>중간</td>
+                    <td><span class='good'>C# 기본값</span></td>
+                    <td>클라(유니티)와 코드 공유 + 생산성</td>
+                </tr>
+            </table>
+
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>"C# 느리다"는 .NET Framework 시절 이야기 — 현대 .NET은 TechEmpower 최상위권 (초당 2,750만 요청)</li>
+                <li>GC의 제1원칙: 할당이 없으면 수집도 없다 — 핫패스 zero-allocation(struct/Span/ArrayPool/풀링)이 정석</li>
+                <li>C++ 풀 실수 = 메모리 오염·크래시, C# 풀 실수 = 성능 저하 — 노력은 비슷해도 사고의 등급이 다르다</li>
+                <li>속도 질문은 "언어"가 아니라 "병목" — DB-bound/IO-bound 서버는 언어 차이가 1% 미만, CPU-bound 틱 서버만 체감</li>
+                <li>Albion Online(MMO 전체 C#), Halo 4/5(Orleans, 첫날 100만 동접) — "소규모만 가능"은 깨진 지 오래</li>
+                <li>실전 정답은 하이브리드: tick-heavy 코어는 C++, 주변 서비스(로그인·로그·매칭·채팅)는 C#</li>
+                <li>그리고 어디서든 — 알고리즘(AOI 그리드 10배)이 언어(1.5~2배)보다 크다</li>
+            </ul>
+        </div>
+
+        <div class="warning-box">
+            <h4>⚠ 이 문서의 정직한 한계</h4>
+            <p>시뮬레이터의 수치는 '구조'를 보여주는 예시값이다. 절대값은 패킷 크기, DB 스키마, 동접 규모에 따라 완전히 달라진다. 진짜 결정은 네 서버의 프로파일링 데이터로 해라.</p>
+            <p>"C#도 빠르다" ≠ "아무렇게나 짜도 빠르다". zero-allocation 규율 없이 할당을 방치하면 GC 멈춤 수십 ms가 p99 지연으로 직격한다 — 실제 dotnet 이슈로 보고된 사실이다.</p>
+            <p>기존에 잘 도는 C++ 서버를 C#으로 다시 쓰는 것은 거의 항상 손해다. 이 문서는 '신규 서비스/서버를 어디에 얹을까'의 판단 기준이다.</p>
+        </div>
+
+        <div class="info-box">
+            <h4>🤔 생각해볼 것 (정답 없음)</h4>
+            <p>거래소 서버를 새로 짠다면? 매 틱 도는 시뮬레이션은 없고, DB 트랜잭션 덩어리에 무결성이 생명인데 — 어느 언어가 맞을까?</p>
+            <p>동접 10만 채팅 서버라면? I/O-bound지만 브로드캐스트 팬아웃이 거대한데 — 언어보다 먼저 결정해야 할 건 뭘까?</p>
+            <p>우리 서버군에서 지금 당장 C#으로 떼어내도 리스크가 가장 적은 서버는 어디일까?</p>
+        </div>
+
+        <div class="info-box">
+            <h4>📚 출처</h4>
+            <p>TechEmpower Round 23 (2025-02) — ASP.NET Core plaintext 27.5M req/s: techempower.com/benchmarks</p>
+            <p>Albion Online 아키텍처 — Photon(코어 C++/앱 C#) + Unity + Cassandra: davidsalz.de 'Secrets of Albion Online', blog.photonengine.com/albion-online</p>
+            <p>Halo 4/5 + Orleans — 출시 첫날 100만 유저: InfoQ 'Building Halo 4 Using the Actor Model', ODBMS Phil Bernstein 인터뷰</p>
+            <p>GC 멈춤 실사례 — dotnet/runtime issue #65850 'GC pause time is too large for 60 fps'</p>
+            <p>MagicOnion — Cysharp(Cygames 자회사)의 .NET/Unity 통합 게임서버 RPC 프레임워크: github.com/Cysharp/MagicOnion</p>
+        </div>
+
+
+        <div class="nav-links">
+            <a href="../cpp-modern/why-cpp-game-server/">← 왜 게임서버는 C++인가 (짝 문서)</a>
+            <a href="../../">홈으로 →</a>
+        </div>
+    </div>
+</body>
+</html>
