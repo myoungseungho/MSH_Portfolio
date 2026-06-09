@@ -135,8 +135,14 @@ def main():
         return
 
     INDEX.write_text(json.dumps(entries, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    # 최신순 타임라인용 recent.json 동반 생성 (메인 페이지 뷰 토글) — 아래 print 가 cp949 에서 죽어도 먼저 실행
+    try:
+        import subprocess, sys as _sys
+        subprocess.run([_sys.executable, str(Path(__file__).parent / "build_recent.py")], check=False)
+    except Exception as _e:
+        print(f"  ! recent.json 생성 건너뜀: {_e}")
     size_kb = INDEX.stat().st_size // 1024
-    print(f"저장 완료: {INDEX.name} — {len(entries)}건, {size_kb}KB")
+    print(f"저장 완료: {INDEX.name} - {len(entries)}건, {size_kb}KB")
 
 
 if __name__ == "__main__":

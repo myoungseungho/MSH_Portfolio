@@ -557,6 +557,92 @@
             color: #555;
             font-size: 0.8rem;
         }
+
+        /* 뷰 토글 (분류별 / 최신순) */
+        .view-toggle {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin: 0 0 40px;
+        }
+        .vt-btn {
+            padding: 9px 20px;
+            border: 1px solid #e0e0e0;
+            background: #fff;
+            color: #666;
+            border-radius: 999px;
+            font-size: 0.92rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+        .vt-btn:hover { border-color: #2563eb; color: #2563eb; }
+        .vt-btn.active {
+            background: #111;
+            color: #fff;
+            border-color: #111;
+        }
+        /* 최신순 타임라인 */
+        .timeline-list { display: flex; flex-direction: column; gap: 6px; }
+        .tl-group-date {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #999;
+            letter-spacing: 0.02em;
+            margin: 22px 0 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .tl-group-date::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #ececec;
+        }
+        .tl-group-date:first-child { margin-top: 0; }
+        .tl-new {
+            background: #2563eb;
+            color: #fff;
+            font-size: 0.66rem;
+            font-weight: 700;
+            padding: 1px 7px;
+            border-radius: 999px;
+            letter-spacing: 0.04em;
+        }
+        .tl-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 13px 16px;
+            border: 1px solid #ececec;
+            border-radius: 12px;
+            background: #fff;
+            text-decoration: none;
+            transition: all 0.13s;
+        }
+        .tl-item:hover {
+            border-color: #2563eb;
+            box-shadow: 0 4px 14px rgba(37,99,235,0.08);
+            transform: translateX(2px);
+        }
+        .tl-cat {
+            flex-shrink: 0;
+            min-width: 96px;
+            text-align: center;
+            font-size: 0.74rem;
+            font-weight: 600;
+            color: #555;
+            background: #f3f4f6;
+            border-radius: 6px;
+            padding: 4px 8px;
+        }
+        .tl-title { color: #111; font-weight: 500; font-size: 0.98rem; }
+        @media (max-width: 560px) {
+            .tl-cat { min-width: 72px; font-size: 0.68rem; }
+            .tl-title { font-size: 0.88rem; }
+        }
     </style>
 </head>
 <body>
@@ -580,7 +666,12 @@
             <p class="search-hint">391개 문서 전체 본문 검색</p>
         </header>
 
-        <section class="section">
+        <div class="view-toggle">
+            <button class="vt-btn active" id="vtCategory" onclick="setView('category')">📂 분류별</button>
+            <button class="vt-btn" id="vtRecent" onclick="setView('recent')">🕒 최신순</button>
+        </div>
+
+        <section class="section" id="categorySection">
             <h2 class="section-title">학습 기록</h2>
 
             <div class="category-grid">
@@ -920,6 +1011,11 @@
             </div>
         </section>
 
+        <section class="section" id="timelineSection" style="display:none">
+            <h2 class="section-title">최신 업로드순</h2>
+            <div class="timeline-list" id="timelineList"></div>
+        </section>
+
         <footer class="footer">
             <p>
                 <a href="https://github.com/myoungseungho">GitHub</a>
@@ -1132,6 +1228,48 @@
                 searchInput.blur();
             }
         });
+
+        // 뷰 전환 (분류별 / 최신순) — recent.json 은 최신순 첫 진입 때만 lazy-load
+        let recentData = null, recentPromise = null;
+        function ensureRecent() {
+            if (!recentPromise) {
+                recentPromise = fetch('./recent.json')
+                    .then(res => res.json())
+                    .then(data => { recentData = data; })
+                    .catch(err => { recentPromise = null; console.log('recent.json 로드 실패:', err); });
+            }
+            return recentPromise;
+        }
+        function tlEscape(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        function renderTimeline() {
+            const wrap = document.getElementById('timelineList');
+            if (!recentData || !recentData.length) {
+                wrap.innerHTML = '<p style="color:#999;padding:20px 0">목록을 불러오지 못했어요.</p>';
+                return;
+            }
+            const newest = recentData[0].date;
+            let html = '', lastDate = null;
+            recentData.forEach(it => {
+                if (it.date !== lastDate) {
+                    lastDate = it.date;
+                    const badge = (it.date === newest) ? ' <span class="tl-new">NEW</span>' : '';
+                    html += '<div class="tl-group-date">' + it.date.replace(/-/g, '.') + badge + '</div>';
+                }
+                html += '<a class="tl-item" href="./' + it.url + '">'
+                      + '<span class="tl-cat">' + tlEscape(it.category || '기타') + '</span>'
+                      + '<span class="tl-title">' + tlEscape(it.title) + '</span></a>';
+            });
+            wrap.innerHTML = html;
+        }
+        function setView(v) {
+            document.getElementById('categorySection').style.display = (v === 'category') ? '' : 'none';
+            document.getElementById('timelineSection').style.display = (v === 'recent') ? '' : 'none';
+            document.getElementById('vtCategory').classList.toggle('active', v === 'category');
+            document.getElementById('vtRecent').classList.toggle('active', v === 'recent');
+            if (v === 'recent') ensureRecent().then(renderTimeline);
+        }
     </script>
 </body>
 </html>
