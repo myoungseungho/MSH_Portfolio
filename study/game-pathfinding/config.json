@@ -1,0 +1,110 @@
+{
+  "slug": "game-pathfinding",
+  "title": "1px씩 움직이는 게임은 타일을 그만큼 잘게 쪼갠 걸까?",
+  "subtitle": "A* = 그래프 탐색 / 우리 서버의 512×512 타일 길찾기 / NavMesh가 부하를 쳐내는 법",
+  "category": "게임",
+  "category_path": "../",
+  "prev_link": "../",
+  "prev_text": "← 목록으로",
+  "next_link": "../",
+  "next_text": "목록으로 →",
+  "extra_head": "    <style>\n    .pfw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}\n    .pfw h6{font-size:1rem;font-weight:800;color:#fff;margin:0 0 14px}\n    .pf-ctrl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:0 0 14px;font-size:.85rem;color:#b5c2db}\n    .pf-ctrl label{display:flex;align-items:center;gap:8px}\n    .pf-ctrl input[type=range]{width:120px;accent-color:#ffd54f}\n    .pf-btn{padding:7px 13px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.83rem;font-weight:600;cursor:pointer}\n    .pf-btn:hover{border-color:#42a5f5;color:#e3eaf5}\n    .pf-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .pf-panels{display:flex;gap:16px;flex-wrap:wrap}\n    .pf-panel{flex:1;min-width:280px}\n    .pf-cap{font-size:.82rem;font-weight:700;color:#cfd8e8;margin-bottom:7px}\n    .pf-panel canvas{width:100%;max-width:429px;border-radius:8px;background:#0e1426;border:1px solid #1c2740;cursor:crosshair}\n    .pf-stat{font-size:.8rem;color:#90a4c4;margin-top:8px}\n    .pf-load{margin-top:16px;padding:11px 14px;background:#121a30;border-radius:10px;font-size:.84rem;color:#b5c2db;line-height:1.6}\n    </style>\n    <script src=\"widget.js\" defer></script>",
+  "parts": [
+    {
+      "type": "conversation",
+      "title": "Part 1. 길찾기는 무조건 '타일'이어야 해?",
+      "items": [
+        { "type": "qa", "q": "우리는 타일 격자 위에서 A*를 돌리잖아. A*는 원래 타일(격자)이 있어야만 작동하는 거야?", "a": "아냐. 이게 가장 흔한 오해야.\nA*는 '격자 알고리즘'이 아니라 <span class=\"highlight\">그래프 탐색 알고리즘</span>이야. 타일 격자는 그래프를 표현하는 여러 방법 중 하나일 뿐이고." },
+        { "type": "qa", "q": "그래프? 타일이랑 뭐가 달라?", "a": "그래프는 딱 두 개로 끝나.\n<span class=\"highlight\">노드(node)</span> = 갈 수 있는 '지점'\n<span class=\"highlight\">엣지(edge)</span> = 두 지점을 잇는 '이동' + 그 비용\n\n타일 격자는 이 그래프의 특수형이야. '칸 하나 = 노드 하나, 옆칸 8개랑 엣지로 연결'. 칸이 격자로 줄 맞춰 있을 뿐, A*는 그게 격자인지 모르고 그냥 노드/엣지만 봐." },
+        { "type": "qa", "q": "그럼 격자 말고 다른 모양도 돼? 어떤 게 있는데?", "a": "응, 실무에서 쓰는 그래프 표현이 크게 4종류야. 전부 똑같은 A*로 풀려." },
+        { "type": "diagram", "content": "같은 맵을 4가지 그래프로 표현 (전부 A*로 탐색)\n\n① 균일 격자(Grid)        ② 웨이포인트(Waypoint)\n  ┌─┬─┬─┬─┐               ●───●\n  ├─┼─┼─┼─┤               │   │\n  ├─┼─┼─┼─┤               ●───●───●\n  └─┴─┴─┴─┘               (길목에 점만 콕콕)\n  칸=노드, 8방향=엣지       사람이 찍은 노드\n\n③ 내비메시(NavMesh)       ④ 가시성 그래프(Visibility)\n   ╱▔▔╲___                  ●╌╌╌╌╌●\n  ▕ A  ▏ B ▏                 ╲    ╱\n   ╲__╱▔▔▔                   ●╌╌╌●\n  걸을 수 있는 땅 =          장애물 모서리끼리\n  큰 볼록 다각형             직선으로 연결" },
+        { "type": "qa", "q": "BFS, DFS로 길찾기 한다는 말도 들었어. A*랑 뭐가 달라?", "a": "다 같은 '그래프 위를 걷는' 친척들이야. 차이는 '다음에 어디를 먼저 까볼까'를 정하는 기준이야.\n\nDFS는 한 방향으로 끝까지 파고들어 — 최단경로 보장이 안 돼서 길찾기엔 거의 안 써.\nBFS/다익스트라는 가까운 데부터 골고루 퍼져 — 최단은 맞는데 목표 반대쪽까지 다 까봐서 느려.\nA*는 거기에 <span class=\"key-point\">'목표 쪽으로 가까워지는 칸을 먼저 까보자'는 휴리스틱(heuristic)</span>을 더한 거야. 다익스트라 + 나침반이라고 보면 돼." },
+        { "type": "table", "headers": ["알고리즘", "다음 칸 고르는 기준", "최단경로?", "속도"], "rows": [["DFS", "무조건 깊이 먼저", "보장 안 됨", "빠르지만 엉뚱"], ["BFS", "가까운 순서대로 (비용 동일 가정)", "보장 (비용 같을 때)", "느림"], ["다익스트라", "지금까지 누적비용(G) 최소", "보장", "느림"], ["A*", "G + 목표까지 추정거리(H)", "보장 (H가 정직할 때)", "빠름"]] },
+        { "type": "info_box", "title": "그래서 결론은", "items": ["모든 게임 길찾기의 공통분모는 '타일'이 아니라 '그래프'다.", "타일/웨이포인트/내비메시는 그래프를 '어떻게 그릴지'의 선택지일 뿐.", "A*는 그 그래프 위에서 'G(온 거리) + H(남은 추정거리)'가 가장 작은 노드를 먼저 까보는 탐색이다."] }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 그래서 우리 서버는 실제로 어떻게 찾아?",
+      "items": [
+        { "type": "qa", "q": "조선협객전 서버는 그 중에 뭘 써?", "a": "<span class=\"highlight\">512×512 타일 격자 A*</span>를 써. 가장 단순하고 정직한 방식이야.\n맵 한 장이 가로·세로 512칸짜리 격자(server_Common/TIDefineServer.h: MAP_SIZE_WIDTH/HEIGHT = 512)이고, NPC가 그 위에서 8방향으로 한 칸씩 길을 찾아 (server_Game/AstarPath.cpp)." },
+        { "type": "qa", "q": "8방향이면 비용 계산은 어떻게 해? 대각선은 더 길잖아.", "a": "맞아. 그래서 직선과 대각선에 다른 비용을 줘.\n직선(상하좌우) = 10, 대각선 = 14 (≈ √2 × 10).\n목표까지 남은 거리(H)는 맨해튼 거리 × 10으로 어림잡아." },
+        { "type": "code", "language": "cpp", "content": "// server_Game/AstarPath.cpp — 노드 비용 계산 (요약)\nif (부모가 상하좌우 방향) {\n    G = pParent->G + 10;        // 직선 이동\n}\nelse if (부모가 대각선 방향) {\n    G = pParent->G + 14;        // 대각선 (≈√2)\n}\n\n// 목표까지 남은 거리 추정 (휴리스틱 H)\nH = (abs(end.x - point.x) + abs(end.y - point.y)) * 10;  // 맨해튼 × 10\n\nF = G + H;   // F가 가장 작은 노드를 먼저 까본다" },
+        { "type": "qa", "q": "잠깐, 대각선은 14인데 H는 맨해튼(직선 합)이면... H가 실제보다 크게 나오지 않아?", "a": "날카롭다. 맞아, 대각선으로 갈 수 있는데 H를 직선 합으로 재면 <span class=\"warning\">남은 거리를 살짝 과대평가</span>해. 이론적으로 A*는 H가 실제보다 크면 최단경로 보장이 깨져.\n근데 이건 <span class=\"key-point\">일부러 한 트레이드오프</span>야. H를 살짝 부풀리면 A*가 목표 쪽으로 더 공격적으로 직진해서 — 까보는 칸이 확 줄어 빨라져. 몬스터 길찾기는 '완벽한 최단'보다 '싸고 그럴듯한 길'이 이득이거든. 정확한 대각거리(옥타일)를 쓰면 최단은 맞지만 더 느려져." },
+        { "type": "qa", "q": "플레이어도 서버가 길을 찾아줘?", "a": "아니. 여기서 헷갈리기 쉬운데 — <span class=\"key-point\">길찾기는 NPC/몬스터만</span> 해.\n플레이어는 클라이언트가 직접 움직이고, 서버는 'CheckEnterPos / CheckMapTilePos'로 '그 칸에 들어갈 수 있냐'만 검증해. 플레이어 1명이 움직일 때마다 서버가 A*를 돌리면 그게 진짜 부하 폭발이지. 사람은 알아서 길을 보니까 서버는 검문만 하는 거야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 그럼 1px씩 움직이는 게임은 타일을 그만큼 잘게 쪼갠 거야?",
+      "items": [
+        { "type": "qa", "q": "다른 MMO 보면 아주 미세하게, 한 픽셀씩도 옆으로 움직이거든. 그러면 타일을 그만큼 잘게 쪼개놔야 하는 거 아냐? 근데 길찾기는 또 잘 돼.", "a": "바로 이 지점이 핵심 오해야. <span class=\"warning\">'미세 이동 = 타일을 잘게 쪼갬'이라는 등식이 틀렸어.</span>\n먼저 네 직관대로 계산해보자. 만약 정말로 타일을 픽셀 단위로 쪼갠다면?" },
+        { "type": "qa", "q": "음... 512칸을 4096칸쯤으로 쪼개면? 노드가 몇 개야?", "a": "512×512 = 약 26만 칸이야. 이걸 가로세로 8배만 잘게 쪼개도 4096×4096 = <span class=\"warning\">약 1,677만 칸</span>. 64배 폭증이지.\nA*가 한 번 도는 데 까보는 칸도 그만큼 늘고, 메모리도 칸 수만큼 먹어. 네 걱정이 정확히 맞아 — 이렇게 하면 진짜 터져. 그래서 <span class=\"key-point\">아무도 이렇게 안 해.</span>" },
+        { "type": "qa", "q": "그럼 미세 이동은 어떻게 되는 건데?", "a": "<span class=\"highlight\">이동 해상도와 길찾기 해상도를 분리</span>하는 거야.\n길은 굵게(노드 적게) 찾고, 실제 움직임은 그 길 위에서 연속 좌표(float)로 미끄러져. '어디로 갈지(길찾기)'와 '얼마나 잘게 움직이는지(이동)'는 별개의 문제거든." },
+        { "type": "qa", "q": "굵게 찾는데 어떻게 1px 옆으로도 가? 그게 가능해?", "a": "<span class=\"highlight\">NavMesh(내비메시)</span>가 그걸 해. 걸을 수 있는 바닥을 잘게 쪼개는 대신, 큰 볼록 다각형 몇 개로 '통째로' 덮어.\n핵심은 이거야 — <span class=\"key-point\">다각형 '안'에서는 좌표가 연속이라 아무 데나 설 수 있어.</span> 한 다각형이 방 전체를 덮으면, 그 방 안에서 1px씩 움직이든 부드럽게 돌든 자유야. 그런데 길찾기 입장에서 그 방은 '노드 1개'일 뿐이야. 미세 이동이 노드 수를 1도 안 늘려." },
+        { "type": "diagram", "content": "같은 방을 덮는 두 방식\n\n[격자] 1px 정밀 = 칸을 잘게         [내비메시] 다각형으로 통째\n ┌┬┬┬┬┬┬┬┬┬┬┬┬┐                  ┌───────────────┐\n ├┼┼┼┼┼┼┼┼┼┼┼┼┤                  │               │\n ├┼┼┼┼┼┼┼┼┼┼┼┼┤   ← 노드 수천 개   │   다각형 1개   │  ← 노드 1개\n ├┼┼┼┼┼┼┼┼┼┼┼┼┤                  │  (안은 연속좌표)│\n └┴┴┴┴┴┴┴┴┴┴┴┴┘                  └───────────────┘\n 미세이동 하려면 칸을              미세이동? 다각형 안이라\n 무한히 쪼개야 함 → 폭발          그냥 float 좌표 → 공짜" },
+        { "type": "table", "headers": ["항목", "잘게 쪼갠 격자", "내비메시(NavMesh)"], "rows": [["같은 방의 노드 수", "수천~수만 개", "다각형 몇 개"], ["1px 미세 이동", "칸을 더 쪼개야 (비용↑)", "다각형 안이면 공짜"], ["메모리", "칸 수에 비례 (큼)", "다각형 수에 비례 (작음)"], ["만들기", "쉬움 (자동 격자)", "어려움 (메시 생성·관리 복잡)"], ["좁은 길/계단", "칸 단위라 정밀", "다각형 경계 처리 까다로움"]] },
+        { "type": "info_box", "title": "트레이드오프 (공짜는 없다)", "items": ["내비메시는 노드 수를 수천 배 줄이고 미세 이동을 공짜로 주지만 — 메시를 만들고 관리하는 파이프라인이 복잡해진다.", "격자는 만들기 쉽고 칸 단위로 정밀하지만 — 정밀하게 가려면 칸이 폭증한다.", "우리 서버가 격자를 고른 건 '맵이 타일 기반이고 NPC 이동만 처리하면 되니, 단순함이 이득'이라는 판단이야."] }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 미세 이동의 진짜 정체 — 길찾기 ≠ 움직임",
+      "items": [
+        { "type": "qa", "q": "내비메시로 '다각형 A → B → C' 경로를 냈어. 근데 그 안에서 캐릭터가 1px씩 부드럽게 도는 건 누가 처리해?", "a": "그건 길찾기가 아냐. <span class=\"highlight\">조향(steering)</span>이라는 별개 단계야.\nA*는 굵은 골격(웨이포인트 몇 개)만 내놓고, 매 프레임 '다음 점을 향해 살짝 다가가기(seek/arrive)'는 단순 벡터 연산이 처리해. 이건 그래프 탐색이 아니라 '현재위치 → 목표점' 방향 벡터 계산이라 엄청 싸." },
+        { "type": "qa", "q": "그럼 다른 NPC랑 안 부딪히게 비키는 건? 그것도 A*가 다시 돌아?", "a": "아니, A*를 다시 돌리면 그것도 부하야. 그건 <span class=\"highlight\">지역 충돌 회피(local avoidance)</span>가 해 — RVO/ORCA, boids 같은 거.\n주변 몇 미터 안의 이웃만 보고 '이 속도로 가면 부딪히니 살짝 틀자'를 벡터로 계산해. 전역 경로(A*)는 그대로 두고, 그 위에서 국소적으로 비비적대는 거야." },
+        { "type": "qa", "q": "다각형/격자로 낸 경로는 꺾여서 계단처럼 보이지 않아?", "a": "맞아, 격자 경로는 'ㄱㄴㄱㄴ' 계단이 돼. 그래서 <span class=\"highlight\">경로 평활화(path smoothing)</span>를 한 번 더 걸어.\n내비메시에서는 funnel 알고리즘(string-pulling) — 다각형들을 통과하는 '실'을 팽팽히 당기면 모서리만 스치는 직선이 돼. 격자에서는 '두 점 사이에 벽이 없으면 중간 칸 버리기'로 직선화하고." },
+        { "type": "diagram", "content": "미세 이동의 실제 파이프라인 (각 단계가 다른 일)\n\n 🗺️ 전역 경로        ✂️ 평활화          🎯 조향           🚸 회피\n  (A* / 가끔)        (funnel)          (매 프레임)       (매 프레임)\n ┌────────┐        ┌────────┐        ┌────────┐        ┌────────┐\n │굵은 골격 │  ───▶  │계단→직선│  ───▶  │점 향해   │  ───▶  │이웃 보고 │\n │웨이포인트│        │모서리만 │        │부드럽게  │        │살짝 비킴 │\n └────────┘        └────────┘        └────────┘        └────────┘\n  무겁다             1회               가볍다(벡터)      가볍다(벡터)\n  → 가끔만 돌림                        → 여기서 1px 미세 이동이 나온다" },
+        { "type": "qa", "q": "그러니까 정리하면?", "a": "<span class=\"key-point\">미세 이동은 길찾기의 해상도가 아니라 '조향'의 결과물이야.</span>\n길찾기(A*)는 무겁지만 가끔만 돌리고, 미세하게 움직이는 건 매 프레임 도는 싼 벡터 연산이 맡아. 둘을 분리했기 때문에 '굵은 타일/다각형'으로도 '1px 미세 이동'이 가능한 거야." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. 그래서 부하를 어떻게 쳐냈나 (업계 기법 + 우리 코드)",
+      "items": [
+        { "type": "qa", "q": "결국 부하를 줄이는 큰 줄기는 뭐야?", "a": "세 방향이야.\n① <span class=\"highlight\">노드 수를 줄인다</span> (공간) — 내비메시, 계층화\n② <span class=\"highlight\">탐색 범위·횟수를 자른다</span> (시간) — 로컬 윈도우, 최대 시도 제한\n③ <span class=\"highlight\">메인 루프에서 빼낸다</span> (구조) — 비동기 워커 스레드\n\n업계 기법들도 다 이 셋 중 하나야: HPA*(계층=①), JPS(격자 가지치기=②), flow field(군중이 한 목표면 맵 1회 계산해 공유=①+②), 경로 캐싱, time-slicing(프레임당 예산=③)." },
+        { "type": "qa", "q": "우리 서버는 그 중 뭘 실제로 하고 있어?", "a": "놀랍게도 ②와 ③을 정직하게 다 하고 있어. 코드에 박혀 있어 (server_Game/AstarPath.cpp, PathFindManager.cpp)." },
+        { "type": "qa", "q": "②번 '탐색 범위 자르기'부터. 512×512 격자면 한 번 찾을 때 26만 칸을 다 까볼 수도 있는 거 아냐?", "a": "그게 핵심 트릭이야. <span class=\"key-point\">A*가 NPC 주변 31×31 칸 박스 밖으로는 아예 안 나가.</span>\nExploreMap()이 'corCenter ± 15(AstarPathMaxSizeHalf)' 밖이면 무조건 막힌 칸 취급해서 false를 줘. 그래서 탐색 공간이 26만 칸이 아니라 항상 ~961칸으로 고정돼. 게다가 800번(AstarPathMaxTry) 까보면 그냥 포기해." },
+        { "type": "code", "language": "cpp", "content": "// server_Game/AstarPath.cpp — ExploreMap()\nbool Astar::ExploreMap(int x, int y)\n{\n    // 속도 위해 AstarPathMaxSizeHalf(15) 안에서만 길찾기\n    if (x < corCenter.x - AstarPathMaxSizeHalf || x > corCenter.x + AstarPathMaxSizeHalf ||\n        y < corCenter.y - AstarPathMaxSizeHalf || y > corCenter.y + AstarPathMaxSizeHalf)\n        return false;   // 윈도우 밖 = 못 감 → 탐색 폭발 차단\n\n    return m_pGameMap->CheckEnterPos(corCenter.x, corCenter.y, x, y,\n                                     m_idistance, USER_TYPE::USER_TYPE_NPC, 0, NULL);\n}\n\n// FindPath_New() 의 탐색 루프 — 800번 넘으면 중단\nwhile ( OpenNode 남았고 && 목표 못찾음 && cntLimit < m_iAstarPathMaxTry /* =800 */ ) { ... }" },
+        { "type": "qa", "q": "근데 윈도우 밖에 목표가 있으면? 몬스터가 그냥 멈춰버려?", "a": "아니, 그러면 게임이 어색하지. 그래서 <span class=\"highlight\">최근접 노드 폴백(SNodeNear)</span>이 있어.\n목표에 못 닿아도, 탐색하면서 '목표에 가장 가까웠던 노드(H 최소)'를 기억해뒀다가 거기까지의 경로를 돌려줘. 몹은 정확히 못 가도 '대충 그쪽으로' 움직여. 멈추는 것보단 훨씬 자연스럽지." },
+        { "type": "qa", "q": "③번 '메인 루프에서 빼낸다'는 건?", "a": "이게 제일 중요한 구조야. 길찾기를 <span class=\"key-point\">메인 게임 루프가 직접 안 해.</span>\nNPC는 'PlaceOrder()'로 길찾기 주문을 큐에 넣기만 하고 자기 일 봐. 별도 워커 스레드(PathFindManager : CThread)가 큐에서 꺼내 A*를 돌리고, 결과는 'CheckPathQueue()'로 나중에 회수해. 길찾기가 아무리 무거워도 패킷 처리·전투 같은 메인 루프를 절대 안 막아." },
+        { "type": "code", "language": "cpp", "content": "// server_Game/PathFindManager.h — 비동기 주문/결과 구조\nclass PathFindManager : public CThread {     // ← 전용 워커 스레드\n    DWORD PlaceOrder(...);        // NPC: \"길 좀 찾아줘\" 주문만 큐에 넣음 (논블로킹)\n    PathResult* CheckPathQueue(); // 나중에 결과 회수 (없으면 NULL)\n    queue<PathOrder*>  m_queueOrder;   // 들어온 주문\n    queue<PathResult*> m_queuePath;    // 완성된 경로\n};\n\n// 추가 최적화\n// - 노드 풀: m_pNode = new Node[...] 를 Init 때 1번만 → 탐색마다 new/delete 안 함\n// - bitset 닫힘판정: m_CloseNode 로 '이미 까본 칸?'을 O(1) 비트 검사" },
+        { "type": "table", "headers": ["기법", "무엇을 줄이나", "우리 적용?", "트레이드오프"], "rows": [["내비메시", "노드 수 (공간)", "✗ (격자 사용)", "메시 관리 복잡"], ["로컬 윈도우 ±15", "탐색 범위 (시간)", "✓ 31×31로 고정", "맵 절반 우회로 못 찾음"], ["MaxTry 800", "탐색 횟수 (시간)", "✓", "복잡한 미로에서 실패 가능"], ["최근접 폴백", "실패 시 어색함", "✓ SNodeNear", "가끔 벽에 비비적댐"], ["비동기 워커 스레드", "메인 루프 부하 (구조)", "✓ PathFindManager", "결과가 몇 틱 늦게 옴"], ["노드 풀 + bitset", "할당/조회 비용", "✓", "최대 노드 수 미리 고정"]] },
+        { "type": "raw_html", "content": "<div class=\"pfw\"><h6>🧭 직접 돌려보기 — 같은 길찾기, 탐색 범위만 다르게</h6><div class=\"pf-ctrl\"><button id=\"pf-mode\" class=\"pf-btn\">목표점 이동 (클릭)</button><label>로컬 윈도우 ±<span id=\"pf-wlabel\">8</span><input id=\"pf-w\" type=\"range\" min=\"3\" max=\"15\" value=\"8\"></label><button id=\"pf-reset\" class=\"pf-btn\">초기화</button></div><div class=\"pf-panels\"><div class=\"pf-panel\"><div class=\"pf-cap\">① 전체 맵 탐색 (제한 없음)</div><canvas id=\"pf-a\"></canvas><div class=\"pf-stat\" id=\"pf-as\"></div></div><div class=\"pf-panel\"><div class=\"pf-cap\">② 로컬 윈도우 제한 (우리 서버 방식)</div><canvas id=\"pf-b\"></canvas><div class=\"pf-stat\" id=\"pf-bs\"></div></div></div><div class=\"pf-load\" id=\"pf-load\"></div><p style=\"font-size:.76rem;color:#6b7a99;margin-top:10px\">🟩 시작 · 🟥 목표 · 진한 파랑 = A*가 까본 칸 · 파란 경로 = 찾은 길 · 주황 점선 = 목표 못 닿아 '최근접까지만' (폴백) · 노란 점선 박스 = 로컬 윈도우. 수치는 구조를 보여주는 예시값.</p></div>" },
+        { "type": "qa", "q": "위젯 돌려보니까 윈도우 켜면 까보는 칸이 확 줄던데, 단점은 없어?", "a": "있지. 트레이드오프는 항상 있어.\n로컬 윈도우는 <span class=\"warning\">'맵 절반을 빙 둘러 가야만 도달하는 길'을 못 찾아.</span> 31×31 밖은 안 보니까. 우리 게임에선 NPC가 보통 '어그로 끌린 가까운 적'을 쫓으니 괜찮지만 — 보스가 맵 반대편으로 순간이동하고 그걸 추격해야 한다면 이 방식으론 안 돼. 그땐 계층적 길찾기(HPA*)나 워프 처리가 따로 필요해." }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 6. 왜 이렇게까지 해야 해?",
+      "items": [
+        { "type": "qa", "q": "솔직히 좀 과하다 싶은데. 그냥 격자에 A* 한 방이면 안 돼?", "a": "한 마리면 돼. 문제는 숫자야.\n공성전이나 필드 보스에 몬스터 100마리가 동시에 어그로 끌렸다고 해봐. 매 프레임 100마리가 각자 풀맵 A*를 돌리면? 메인 루프가 길찾기에 잡아먹혀서 <span class=\"warning\">전투 패킷이 밀리고 서버가 렉</span> 걸려. 길찾기는 '한 번이 비싼 게' 아니라 '많이·자주 부르는 게' 문제야." },
+        { "type": "qa", "q": "그래서 우리가 한 게 결국 뭐였지?", "a": "탐색 공간을 NPC 주변으로 <span class=\"key-point\">국소화</span>하고(31×31), 그걸 메인 루프 밖 워커 스레드로 빼낸 거야.\n이 원리는 우리만의 게 아냐 — 스타크래프트도 유닛 길찾기를 맵 구역 단위로 쪼개 처리했고, 대형 MMO들은 길찾기를 통째로 비동기 잡 시스템으로 빼. '비싼 계산은 작게 잘라서, 핫 패스 밖에서' — 이건 게임 서버 전반의 공통 문법이야." },
+        { "type": "qa", "q": "그럼 우리 방식이 정답이야?", "a": "'우리 규모엔' 정답에 가까워. 절대 정답은 없어.\n맵이 타일 기반이고 NPC 이동만 처리하면 되는 우리에겐 '격자 + 로컬 윈도우 + 비동기'가 단순하면서 충분히 싸. 하지만 끊김 없는 거대 월드에서 NPC가 먼 거리를 자연스럽게 순찰해야 한다면 내비메시 + 계층 길찾기로 갈아타야 하지. <span class=\"key-point\">길찾기 설계는 '맵 구조 × NPC 행동 범위 × 동시 마릿수'의 함수야.</span>" },
+        { "type": "info_box", "title": "🤔 생각해볼 질문 (정답 없음)", "items": ["우리 서버에 '맵 끝에서 끝까지 추격하는 보스'를 넣는다면, 31×31 로컬 윈도우로 될까? 안 되면 뭘 바꿔야 할까?", "몹 1000마리가 같은 성문 한 곳으로 몰려간다면 — 1000번 A*를 도는 것과 flow field 1장을 계산해 공유하는 것, 어느 쪽이 쌀까?", "플레이어 이동은 서버가 검증만 하는데, 만약 '자동 이동(클릭하면 알아서 감)'을 서버가 책임진다면 부하가 어떻게 변할까?"] }
+      ]
+    },
+    {
+      "type": "warning_box",
+      "title": "흔한 오해 4가지",
+      "items": [
+        "\"A*는 타일(격자) 전용이다\" → 아니다. A*는 그래프 탐색이고, 격자는 그래프의 한 표현일 뿐. 웨이포인트·내비메시도 똑같이 A*로 푼다.",
+        "\"미세하게 움직이려면 타일을 잘게 쪼개야 한다\" → 아니다. 이동 해상도와 길찾기 해상도는 분리된다. 내비메시 다각형 안에서는 연속 좌표라 미세 이동이 공짜다.",
+        "\"길찾기가 캐릭터 움직임을 다 처리한다\" → 아니다. A*는 굵은 골격만. 1px 미세 이동·충돌 회피는 매 프레임 도는 조향(steering)·RVO가 한다.",
+        "\"타일이 작을수록(정밀할수록) 좋다\" → 아니다. 정밀할수록 노드가 제곱으로 폭증해 부하가 터진다. 충분히 굵게 찾고 이동은 따로 미세화하는 게 정석이다."
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "모든 게임 길찾기의 공통분모는 '타일'이 아니라 '그래프(노드+엣지)'다. A* = 다익스트라 + 목표 방향 휴리스틱(H).",
+        "우리 서버 = 512×512 타일 격자 A*, NPC 이동 전용. 직선10/대각14, H=맨해튼×10(일부러 살짝 부풀려 속도↑).",
+        "미세 이동 ≠ 잘게 쪼갠 타일. 이동 해상도와 길찾기 해상도를 분리한다 — 내비메시 다각형 안은 연속 좌표라 1px 이동이 공짜.",
+        "미세 움직임의 정체는 길찾기가 아니라 '조향(steering) + 지역 회피(RVO)' — 매 프레임 도는 싼 벡터 연산이다.",
+        "부하 차단 3방향: ①노드 수↓(내비메시·계층) ②탐색 범위·횟수↓(로컬 윈도우·MaxTry) ③메인 루프 밖으로(비동기 워커).",
+        "우리 코드의 실제 방어: 31×31 로컬 윈도우(±15) + MaxTry 800 + 최근접 폴백 + PathFindManager 워커 스레드 + 노드풀/bitset."
+      ]
+    }
+  ]
+}
