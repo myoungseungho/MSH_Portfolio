@@ -1,0 +1,99 @@
+{
+  "slug": "pubg-net-2-tick",
+  "title": "서버는 1초에 몇 번 생각할까?",
+  "subtitle": "2장 — 틱레이트와 프레임타임, 그리고 '배그는 60틱'이라는 유명한 오해 깨기",
+  "category": "배그 네트워크 분해",
+  "category_path": "../pubg-netcode/",
+  "prev_link": "../pubg-net-1-desync/",
+  "prev_text": "← 1장. 데스싱크와 서버 권위",
+  "next_link": "../pubg-net-3-loop/",
+  "next_text": "3장. 서버가 한 번 도는 동안 →",
+  "extra_head": "    <style>\n    .pnw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}\n    .pnw h6{font-size:.95rem;font-weight:800;color:#fff;margin:0 0 12px}\n    .pn-ctrl{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:12px 0 4px;font-size:.84rem;color:#b5c2db}\n    .pn-ctrl label{display:flex;align-items:center;gap:7px;cursor:pointer}\n    .pn-ctrl input[type=range]{width:160px;accent-color:#26c6da}\n    .pn-ctrl input[type=checkbox]{accent-color:#ffd54f;width:15px;height:15px}\n    #pn2-canvas{width:100%;border-radius:12px;background:#0a0f1e}\n    .pn-stat{font-size:.82rem;color:#90a4c4;margin-top:10px;line-height:1.7}\n    .pn-stat b{color:#ffd54f}\n    </style>\n    <script src=\"widget.js\" defer></script>",
+  "parts": [
+    {
+      "type": "conversation",
+      "title": "Part 1. '틱'이라는 심장박동",
+      "items": [
+        {
+          "type": "qa",
+          "q": "1장에서 서버가 '1초에 수십 번 한 바퀴 돈다'고 했잖아. 그 한 바퀴가 정확히 뭐야?",
+          "a": "게임 서버는 사실 거대한 <b>무한 루프</b> 하나야. 이 루프가 한 번 돌 때마다 — <span class='highlight'>① 들어온 입력 다 받기 → ② 세계 갱신(이동·총알·물리 계산) → ③ 모두에게 결과 보내기</span> — 이 세 가지를 처리하고 다시 처음으로 돌아가.\n이 <b>한 바퀴를 '틱(tick)'</b>이라고 불러. 심장박동처럼 일정하게 뛰거든.\n그리고 <span class='key-point'>1초에 이 심장이 몇 번 뛰는지가 '틱레이트(tick-rate)'</span>야. 30틱이면 1초에 30번, 즉 세계를 1초에 30번 갱신한다는 뜻이지."
+        },
+        {
+          "type": "qa",
+          "q": "그럼 틱레이트랑 '프레임타임'은 다른 거야? 둘 다 들어본 거 같은데.",
+          "a": "같은 걸 <b>반대 방향</b>에서 본 거야. 동전의 양면이라고 보면 돼.\n<span class='highlight'>틱레이트</span> = 1초에 몇 번 (빈도). 단위: Hz, 틱/초.\n<span class='highlight'>프레임타임</span> = 한 번 도는 데 몇 ms (시간). 단위: ms.\n둘은 역수 관계야: <span class='key-point'>프레임타임 = 1000 ÷ 틱레이트</span>. 30틱이면 한 틱에 33.3ms, 60틱이면 16.7ms.\n왜 둘 다 쓰냐면 — \"얼마나 자주\"를 말할 땐 틱레이트가, \"이 작업이 한 바퀴 안에 들어가나\"를 따질 땐 프레임타임이 편하거든. 배그 데브레터가 \"서버 성능 = 틱레이트 또는 프레임타임\"이라고 쓴 게 이 뜻이야."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. [직접 만져보기] 틱이 낮으면 무슨 일이 생기나",
+      "items": [
+        {
+          "type": "qa",
+          "q": "틱이 높으면 좋다는 건 알겠는데, 낮으면 구체적으로 뭐가 나빠지는데?",
+          "a": "<b>위쪽 부드러운 점</b>이 진짜 움직임(연속)이고, <b>아래쪽 점</b>이 서버가 너에게 '틱마다 끊어서' 알려주는 위치야.\n틱 슬라이더를 <span class='key-point'>낮춰봐</span> — 받는 점이 뚝뚝 끊겨서 점프하지? 그 사이사이는 네 클라가 \"대충 이쯤이겠지\"하고 메꿔(보간). 틱이 낮을수록 메꿀 구간이 길어지고, 그만큼 추측이 틀릴 여지가 커져 — 1장의 데스싱크가 심해지는 거야.\n각 틱이 찍히는 순간을 아래 <b>박동 막대</b>로 표시했어. 틱을 내리면 박동이 듬성듬성해지는 게 보일 거야."
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"pnw\">\n  <h6>💓 틱레이트 체험 — 슬라이더를 내려 끊김을 만들어봐</h6>\n  <canvas id=\"pn2-canvas\" width=\"880\" height=\"300\"></canvas>\n  <div class=\"pn-ctrl\">\n    <label>서버 틱레이트 <input type=\"range\" id=\"pn2-tick\" min=\"5\" max=\"30\" step=\"1\" value=\"15\"> <b id=\"pn2-tick-v\">15</b> 틱/초</label>\n    <label><input type=\"checkbox\" id=\"pn2-net\"> 네트워크 업데이트 2배 (Update #14)</label>\n  </div>\n  <div class=\"pn-stat\" id=\"pn2-stat\"></div>\n</div>"
+        },
+        {
+          "type": "qa",
+          "q": "체크박스 '네트워크 업데이트 2배'를 켜니까 틱은 그대로인데 받는 점이 더 촘촘해졌어. 이게 뭐야?",
+          "a": "바로 이게 이 장의 하이라이트야. 잘 봐 — <span class='highlight'>위쪽 \"서버 틱\" 박동은 그대로</span>인데, <span class='highlight'>아래쪽 \"네트워크 전송\" 박동만 2배로 촘촘</span>해졌지?\n핵심: <span class='key-point'>\"세계를 계산하는 횟수(서버 틱)\"와 \"클라에게 위치를 보내는 횟수(네트워크 업데이트)\"는 별개의 숫자</span>야. 보통은 1틱에 1번 보내지만, 한 틱 안에서 전송을 한 번 더 끼워 넣으면 — 계산은 그대로여도 받는 쪽은 더 자주 갱신받아.\n배그가 2018년 Update #14에서 실제로 한 게 이거야. 다음 장에서 '어떻게' 끼워 넣었는지(Net Send Flush) 코드 흐름으로 볼 거고, 여기선 \"이 둘은 다른 숫자다\"만 가져가면 돼."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. '배그는 60틱'이라는 오해",
+      "items": [
+        {
+          "type": "qa",
+          "q": "어? 그러고 보니 옛날에 '배그 60틱 됐다'고 떠들썩했던 거 같은데. 그게 사실이 아니란 거야?",
+          "a": "흔히들 \"서버를 60틱으로 올렸다\"고 알고 있는데 — <span class='warning'>틀렸어.</span> 배그가 데브레터에서 직접 콕 집어 해명한 부분이야.\n실제로 올라간 건 <span class='key-point'>네트워크 업데이트 레이트가 60</span>이 된 거지, <b>서버 틱레이트가 60이 된 게 아니야</b>. 서버가 세계를 계산하는 횟수는 그대로였고, 같은 시간 안에 네트워크 전송만 2배로 늘린 거였어(방금 체크박스로 본 그것).\n사람들이 헷갈린 이유는 단순해 — 둘 다 그냥 '틱'이라고 부르니까. 근데 Part 2에서 봤듯이 <b>계산 빈도</b>와 <b>전송 빈도</b>는 완전히 다른 숫자야."
+        },
+        {
+          "type": "qa",
+          "q": "에이, 그게 그거 아냐? 어차피 더 자주 받으면 좋은 거잖아. 왜 굳이 구분해?",
+          "a": "구분이 중요한 이유는, <b>둘의 비용과 효과가 다르기 때문</b>이야.\n전송을 2배로 늘리는 건 상대적으로 싸 — 이미 계산해둔 결과를 한 번 더 부쳐주는 거니까. 그래서 배그는 이걸 먼저 했고 사격 딜레이가 18% 줄었어(4·6장에서 수치 확인).\n반면 <span class='warning'>서버 틱(계산)을 2배로 올리는 건 진짜 비싸</span> — 100명의 물리·충돌을 1초에 두 배 더 돌려야 하니까. CPU가 그걸 못 따라가면 오히려 틱이 밀려서 더 느려져.\n그래서 \"전송 빈도는 올렸지만 계산 빈도는 함부로 못 올린다\"는 게 핵심이고, 이 차이를 모르면 \"왜 60틱이라며 아직도 렉이야?\"라는 오해가 생기는 거야."
+        },
+        {
+          "type": "qa",
+          "q": "그럼 결국 서버 틱(계산 빈도)을 못 올리면 데스싱크 해결은 포기인 거야?",
+          "a": "아니, 길이 두 개로 갈려.\n<b>길 A — 전송을 더 자주</b>: 방금 본 네트워크 업데이트 2배. 싸지만 한계가 있어(계산이 느리면 부쳐줄 새 정보가 없음).\n<b>길 B — 계산 한 바퀴를 더 빠르게</b>: 같은 30틱이어도 한 틱이 33ms 안에 안 끝나고 50ms씩 걸리면 틱이 밀려. 그러니 <span class='key-point'>한 틱 안의 작업량 자체를 줄여서</span> 33ms를 지키게 만드는 거야.\n배그가 진짜 승부를 본 건 길 B야 — 5장의 Replication Interleaving이 \"한 틱이 하는 일\"을 줄여서 틱레이트를 18.5→22.9로 끌어올렸거든. 그 '한 틱이 하는 일'이 정확히 뭔지를 다음 장에서 분해할게."
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "2장 핵심 정리",
+      "items": [
+        "틱 = 서버 루프 한 바퀴(입력→갱신→전송). 틱레이트 = 1초에 몇 바퀴",
+        "틱레이트와 프레임타임은 역수: 프레임타임(ms) = 1000 ÷ 틱레이트. 30틱 = 33.3ms",
+        "서버 틱(계산 빈도)과 네트워크 업데이트 레이트(전송 빈도)는 별개의 숫자 — 위젯 체크박스로 직접 확인",
+        "'배그 60틱' 오해: 올라간 건 네트워크 업데이트 60이지 서버 틱 60이 아니다 (데브레터가 직접 해명)",
+        "전송 빈도↑는 싸지만 한계, 계산 빈도↑는 비쌈 → 그래서 '한 틱의 작업량을 줄이는' 길로 승부 (5장)",
+        "한 틱 안에서 정확히 무슨 일이 벌어지나 → 3장"
+      ]
+    },
+    {
+      "type": "warning_box",
+      "title": "⚠ 이 장의 정직한 한계",
+      "items": [
+        "위젯의 틱 범위(5~30)는 체감을 위한 예시다. 일반적인 FPS는 더 높고 MMO는 더 낮다 — 장르별 틱레이트 설계는 <a href='../tickrate-design/'>틱레이트 설계</a> 문서를 참고.",
+        "보간(interpolation)을 '대충 메꾼다'고 단순화했다. 실제론 직전 두 위치로 선형 보간하거나 속도로 외삽(extrapolation)하는 등 기법이 갈린다 — <a href='../client-prediction/'>클라이언트 예측</a> 참고."
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "🤔 생각해볼 것 · 다음 장",
+      "items": [
+        "네트워크 업데이트를 4배, 8배로 계속 올리면 데스싱크가 0이 될까? (힌트: 서버가 새로 계산한 정보가 없으면, 같은 위치를 두 번 보내는 헛전송이 된다)",
+        "다음 장 → <a href='../pubg-net-3-loop/'>3장. 서버가 한 번 도는 동안 무슨 일이?</a> — Net Dispatch / RPC·Replication / Simulate&Render / Net Flush"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "slug": "pubg-net-4-cost",
+  "title": "사람 많으면 왜 더 렉이 걸려?",
+  "subtitle": "4장 — 리플리케이션과 직렬화 비용, Net Flush가 프레임의 41%를 먹던 진짜 병목",
+  "category": "배그 네트워크 분해",
+  "category_path": "../pubg-netcode/",
+  "prev_link": "../pubg-net-3-loop/",
+  "prev_text": "← 3장. 게임 루프 4단계",
+  "next_link": "../pubg-net-5-interleave/",
+  "next_text": "5장. 멀리 있는 적은 덜 자주 →",
+  "extra_head": "    <style>\n    .pnw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}\n    .pnw h6{font-size:.95rem;font-weight:800;color:#fff;margin:0 0 14px}\n    .pn-ctrl{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:6px 0 14px;font-size:.85rem;color:#b5c2db}\n    .pn-ctrl input[type=range]{width:240px;accent-color:#ef5350}\n    .pn-bar{display:flex;height:54px;width:100%;border-radius:10px;overflow:hidden;border:1px solid #1c2740;background:#0a0f1e}\n    .pn-seg{display:flex;align-items:center;justify-content:center;font-size:.74rem;font-weight:700;color:#0a0f1e;transition:width .12s;white-space:nowrap;overflow:hidden}\n    .pn-seg.dispatch{background:#42a5f5}\n    .pn-seg.sim{background:#ab47bc;color:#fff}\n    .pn-seg.flush{background:#ef5350;color:#fff}\n    .pn-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:.78rem;color:#b5c2db}\n    .pn-legend span{display:inline-flex;align-items:center;gap:6px}\n    .pn-chip{width:12px;height:12px;border-radius:3px;display:inline-block}\n    .pn-read{display:flex;gap:24px;flex-wrap:wrap;margin-top:14px;font-size:.9rem}\n    .pn-read b{font-size:1.25rem;color:#fff}\n    .pn-read .lab{color:#90a4c4;font-size:.76rem}\n    </style>\n    <script src=\"widget.js\" defer></script>",
+  "parts": [
+    {
+      "type": "conversation",
+      "title": "Part 1. 직관부터 — 100명에게 100명을 알려준다",
+      "items": [
+        {
+          "type": "qa",
+          "q": "3장에서 전송 순서를 바꿔 18%를 줄였잖아. 근데 왜 사람 많으면 그 효과가 줄고 다시 렉이 걸려?",
+          "a": "곱셈 때문이야. 한번 따져보자 — 맞춰봐: 100명이 있는 방에서, 서버가 한 틱마다 '각자에게 보이는 사람들의 최신 위치'를 보내려면 대략 몇 건의 정보를 만들어야 할까?\n100명에게 각각 최대 99명의 위치를 알려줘야 하니 <span class='warning'>최악엔 100 × 99 ≈ 1만 건</span>이야. 사람이 2배가 되면 일이 4배(n²)로 불어나는 구조지.\n3장에서 본 ③Net Flush가 바로 이 '전송용 데이터 만들기'를 하는 단계인데 — <span class='key-point'>인원이 늘면 여기 일감이 폭발</span>해. 전송 순서를 아무리 잘 바꿔도, 부쳐야 할 양 자체가 많아지면 소용없어져. (이 n² 문제 자체는 <a href='../broadcast-optimization/'>브로드캐스트 최적화</a>와 <a href='../aoi/'>AOI</a>에서 더 다뤄.)"
+        },
+        {
+          "type": "qa",
+          "q": "근데 '위치를 보낸다'는 게 그렇게 무거운 일이야? 숫자 몇 개잖아.",
+          "a": "그 '숫자 몇 개'를 네트워크로 보내려면 먼저 <span class='highlight'>직렬화(serialization)</span>를 해야 해. 이게 숨은 비용이야.\n메모리 속 객체(캐릭터의 위치·회전·HP·상태…)는 여기저기 흩어져 있어. 이걸 네트워크로 부치려면 <b>정해진 순서대로 바이트 한 줄로 쭉 펴서 쓰는</b> 작업이 필요해 — 그게 직렬화야. 비유하면 <b>이삿짐 싸기</b>야: 집안 곳곳의 물건을 상자에 정해진 순서로 차곡차곡 담는 일. 짐(액터)이 많을수록 오래 걸려.\n배그가 프로파일링해보니 — ③Net Flush 시간의 대부분이 바로 이 <b>직렬화(짐 싸기)</b>에 쓰이고 있었어."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. [직접 만져보기] Net Flush가 프레임을 잡아먹는다",
+      "items": [
+        {
+          "type": "qa",
+          "q": "그 병목이 실제로 얼마나 컸는데?",
+          "a": "데브레터의 프로파일 수치야 — <span class='warning'>90명 생존 시 Net Flush가 43.2ms, 전체 프레임 시간의 41%</span>를 차지했어. 한 틱의 절반 가까이를 '짐 싸서 부치기'에 쓰고 있던 거지.\n아래 슬라이더로 <b>생존 인원</b>을 바꿔봐. 한 틱의 시간을 세 단계(Net Dispatch / Simulate&Render / Net Flush)로 쪼개서 막대로 보여줄게. 인원을 올릴수록 <span class='key-point'>빨간 Net Flush가 막대를 집어삼키는</span> 게 보일 거야. 90명에 맞추면 데브레터 수치(41%)가 나와."
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"pnw\">\n  <h6>📊 한 틱의 시간 분해 — 생존 인원을 올려봐</h6>\n  <div class=\"pn-ctrl\">\n    <label>생존 인원 <input type=\"range\" id=\"pn4-actors\" min=\"10\" max=\"100\" step=\"1\" value=\"90\"></label>\n    <b id=\"pn4-actors-v\" style=\"color:#fff\">90</b>명\n  </div>\n  <div class=\"pn-bar\">\n    <div class=\"pn-seg dispatch\" id=\"pn4-d\">Net Dispatch</div>\n    <div class=\"pn-seg sim\" id=\"pn4-s\">Simulate</div>\n    <div class=\"pn-seg flush\" id=\"pn4-f\">Net Flush</div>\n  </div>\n  <div class=\"pn-legend\">\n    <span><i class=\"pn-chip\" style=\"background:#42a5f5\"></i>Net Dispatch (입력 풀기)</span>\n    <span><i class=\"pn-chip\" style=\"background:#ab47bc\"></i>Simulate &amp; Render (계산)</span>\n    <span><i class=\"pn-chip\" style=\"background:#ef5350\"></i>Net Flush (직렬화+전송)</span>\n  </div>\n  <div class=\"pn-read\">\n    <div><span class=\"lab\">한 틱 총 시간</span><br><b id=\"pn4-total\">–</b> ms</div>\n    <div><span class=\"lab\">Net Flush 비중</span><br><b id=\"pn4-pct\">–</b> %</div>\n    <div><span class=\"lab\">그중 직렬화(짐싸기)</span><br><b id=\"pn4-ser\">–</b> ms</div>\n  </div>\n</div>"
+        },
+        {
+          "type": "qa",
+          "q": "인원을 10명으로 내리니까 빨간색이 확 줄어드네. 그럼 막판 1:1 상황은 서버가 널널한 거야?",
+          "a": "맞아 — 그게 핵심 통찰이야. <span class='key-point'>서버가 가장 괴로운 건 게임 초반(90~100명 생존)</span>이고, 막판으로 갈수록 편해져. 그래서 배그의 목표가 \"100명일 때부터 마지막 한 발까지 틱레이트 30 유지\"였어(6장).\n그리고 여기서 결정적인 질문이 나와 — <b>90명이 살아있어도, 그 90명이 다 내 근처에 있나?</b> 아니지. 대부분은 맵 저 반대편, 내 화면에 보이지도 않는 곳에 있어. 그런데 서버는 그 먼 사람들 위치까지 매 틱 꼬박꼬박 짐 싸서 부치고 있었던 거야.\n바로 여기서 5장의 해법이 나와."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 그래서 세운 가설",
+      "items": [
+        {
+          "type": "qa",
+          "q": "먼 사람 위치를 매 틱 안 보내면 되는 거 아냐? 그렇게 간단해?",
+          "a": "배그가 세운 가설이 정확히 그거였어 — <span class='highlight'>\"멀리 있는 캐릭터의 위치 갱신 빈도를 줄이면, 직렬화 일감이 줄어 Net Flush가 가벼워질 것이다. 그리고 어차피 멀어서 안 보이니 게임 체감엔 영향 없을 것이다.\"</span>\n근데 \"간단하다\"와 \"안전하다\"는 다른 얘기야. 위치를 덜 보내면 그 사람 움직임이 끊겨 보일 수 있고, 그게 전투에 영향을 주면 안 되니까. <b>얼마나 멀면 얼마나 덜 보낼지</b>의 경계를 잘못 잡으면 \"멀리 있는 적이 순간이동하는\" 버그가 돼.\n그 경계를 어떻게 정했고, 정말 게임에 영향이 없었는지를 — 다음 장에서 직접 그려볼게."
+        },
+        {
+          "type": "qa",
+          "q": "이거 어디서 들어본 거 같은데? '내 주변만 신경 쓴다'는 거.",
+          "a": "맞아, <span class='highlight'>AOI(Area of Interest, 관심 영역)</span>의 사촌이야. AOI는 \"안 보이는 먼 사람 정보는 아예 안 받는다\"는 <b>0/1(보낸다/안 보낸다)</b> 방식이고, 배그가 쓴 <span class='highlight'>Replication Interleaving</span>은 \"먼 사람도 보내긴 하되 <b>덜 자주</b> 보낸다\"는 <b>빈도 조절</b> 방식이야.\n<b>비교 대상</b>: 순수 AOI(반경 밖 컷오프). <b>나은 점</b>: 갑자기 사라졌다 나타나는 '팝핀'이 없고, 멀리서 저격하는 배그 특성상 '먼 적도 보이긴 해야 함'을 만족. <b>잃는 것</b>: 컷오프보다 절약량은 적음(아예 안 보내는 게 아니니까).\n배그는 '먼 적도 보여야 하는' 저격 게임이라 컷오프 대신 빈도 조절을 택한 거야. (AOI 자체는 <a href='../aoi/'>AOI 문서</a>에서.)"
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "4장 핵심 정리",
+      "items": [
+        "사람 N명 → 서로에게 알려줄 정보가 최악 N²로 폭발. 전송 순서를 바꿔도 양 자체가 많아지면 소용없음",
+        "직렬화(serialization) = 흩어진 객체를 바이트 한 줄로 펴는 '이삿짐 싸기'. 액터가 많을수록 오래 걸림",
+        "데브레터 프로파일: 90명 생존 시 Net Flush 43.2ms = 전체 프레임의 41%, 대부분이 직렬화 비용 (위젯에서 90명 맞추면 재현)",
+        "서버가 가장 괴로운 건 초반 90~100명, 막판일수록 편해짐",
+        "결정적 관찰: 90명이 살아도 대부분은 맵 저편 — 안 보이는 먼 사람 위치까지 매 틱 부치고 있었다",
+        "가설 = 멀면 덜 보내자. AOI(0/1 컷오프)의 사촌인 '빈도 조절' 방식 → 5장 Replication Interleaving"
+      ]
+    },
+    {
+      "type": "warning_box",
+      "title": "⚠ 이 장의 정직한 한계",
+      "items": [
+        "위젯의 막대 시간은 90명에서 데브레터 수치(Net Flush 43.2ms, 41%)에 맞춘 예시 모델이다. 인원-비용 곡선의 정확한 형태는 공개되지 않았고, 여기선 '직렬화가 인원에 따라 가파르게 는다'는 경향을 보여주는 용도다.",
+        "N² 는 최악의 상한이다. 실제론 AOI/관심도 때문에 모든 쌍을 다 보내지는 않는다 — 그래서 5장의 빈도 조절이 의미가 있는 것."
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "🤔 생각해볼 것 · 다음 장",
+      "items": [
+        "직렬화가 병목이라면, '한 번 직렬화한 결과를 여러 명에게 재사용'하는 것도 방법이다. 왜 그것만으론 부족했을까? (힌트: 받는 사람마다 '보이는 대상'이 달라 내용이 다르다)",
+        "다음 장 → <a href='../pubg-net-5-interleave/'>5장. 멀리 있는 적은 덜 자주 보낸다</a> — Replication Interleaving의 거리 경계와 그 대가"
+      ]
+    }
+  ]
+}
