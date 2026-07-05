@@ -204,4 +204,125 @@
     window.addEventListener('resize', () => { ctx = fitCanvas(cv); draw(); });
     draw();
   })();
+
+  /* ===== Widget 4: SQL(선언적) vs Redis(명령적) 파이프라인 ===== */
+  (function proto() {
+    const cv = $('#pr-canvas'); if (!cv) return;
+    let ctx = fitCanvas(cv);
+    const sqlOut = $('#pr-sql'), redisOut = $('#pr-redis'), cap = $('#pr-cap');
+    const SQL = ['SQL 문장 수신', '파싱', '옵티마이저', '실행계획 수립', '인덱스 탐색', '행 수정'];
+    const RED = ['RESP 명령 수신', 'skiplist 직접 갱신'];
+    let si = -1, ri = -1, raf = 0;
+    function col(x, w, title, steps, active, col1) {
+      ctx.textAlign = 'center'; ctx.font = '700 12px Pretendard'; ctx.fillStyle = col1;
+      ctx.fillText(title, x + w / 2, 16);
+      const bh = 30, gap = 6, y0 = 28;
+      steps.forEach((s, i) => {
+        const y = y0 + i * (bh + gap);
+        const on = active >= i && active >= 0;
+        ctx.fillStyle = on ? (col1 === '#ef5350' ? '#3a1a1a' : '#123024') : '#16233c';
+        rr(ctx, x, y, w, bh, 6); ctx.fill();
+        ctx.strokeStyle = on ? col1 : '#2f4468'; ctx.lineWidth = on ? 2 : 1; ctx.stroke();
+        ctx.fillStyle = on ? '#fff' : '#9fb0cc'; ctx.font = '600 11px Pretendard';
+        ctx.fillText(s, x + w / 2, y + bh / 2 + 4);
+      });
+      ctx.textAlign = 'left';
+    }
+    function draw() {
+      const w = cv._cw, h = cv._ch; ctx.clearRect(0, 0, w, h);
+      const cw = (w - 40) / 2;
+      col(14, cw, 'SQL (선언적)', SQL, si, '#ef5350');
+      col(26 + cw, cw, 'Redis (명령적)', RED, ri, '#66bb6a');
+      if (sqlOut) sqlOut.textContent = SQL.length + '단계';
+      if (redisOut) redisOut.textContent = RED.length + '단계';
+    }
+    function go() {
+      cancelAnimationFrame(raf); si = -1; ri = -1;
+      let t = 0;
+      (function a() {
+        t++;
+        si = Math.min(SQL.length - 1, Math.floor(t / 3));
+        ri = Math.min(RED.length - 1, Math.floor(t / 3));
+        draw();
+        if (si < SQL.length - 1) raf = requestAnimationFrame(a);
+        else if (cap) cap.textContent = 'SQL은 원하는 결과만 말하면 DB가 파싱→옵티마이저→실행계획→인덱스 탐색으로 방법을 찾아(6단계). Redis는 방법을 직접 지정해 자료구조를 바로 조작(2단계) — 그래서도 빠르고, 보내는 것도 짧은 명령어야.';
+      })();
+    }
+    $$('[data-pr]', cv.closest('.rdw')).forEach(b => b.addEventListener('click', go));
+    window.addEventListener('resize', () => { ctx = fitCanvas(cv); draw(); });
+    draw();
+  })();
+
+  /* ===== Widget 5: 단일 스레드 명령 처리 = 원자성 ===== */
+  (function thread() {
+    const cv = $('#th-canvas'); if (!cv) return;
+    let ctx = fitCanvas(cv);
+    const sentOut = $('#th-sent'), doneOut = $('#th-done'), cap = $('#th-cap');
+    let queue = [];      // 대기 명령 {from}
+    let sent = 0, done = 0, processing = null, procT = 0, raf = 0, tick = 0;
+    const COL = ['#42a5f5', '#ffca28', '#ef5350'];
+    function enqueue(from) { queue.push({ from }); sent++; if (sentOut) sentOut.textContent = sent; pump(); draw(); }
+    function pump() {
+      if (processing || queue.length === 0) return;
+      processing = queue.shift(); procT = 0;
+      cancelAnimationFrame(raf);
+      (function a() {
+        procT++;
+        if (procT > 26) { done++; if (doneOut) doneOut.textContent = done; processing = null; draw(); pump(); return; }
+        draw(); raf = requestAnimationFrame(a);
+      })();
+    }
+    function draw() {
+      const w = cv._cw, h = cv._ch; ctx.clearRect(0, 0, w, h);
+      // 좌: 클라이언트 3
+      ctx.textAlign = 'center'; ctx.font = '700 11px Pretendard';
+      for (let i = 0; i < 3; i++) {
+        const y = 24 + i * 62;
+        ctx.fillStyle = '#16233c'; rr(ctx, 12, y, 90, 48, 8); ctx.fill();
+        ctx.strokeStyle = COL[i]; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = COL[i]; ctx.fillText('🖥️ 서버' + (i + 1), 57, y + 20);
+        ctx.fillStyle = '#8ba0c4'; ctx.font = '9px Pretendard'; ctx.fillText('INCR', 57, y + 36); ctx.font = '700 11px Pretendard';
+      }
+      // 중앙: 큐
+      const qx = 128, qw = w - 128 - 150;
+      ctx.fillStyle = '#8ba0c4'; ctx.font = '700 11px Pretendard'; ctx.textAlign = 'left';
+      ctx.fillText('명령 큐 (한 줄로 대기)', qx, 16);
+      ctx.fillStyle = '#0c1424'; rr(ctx, qx, 22, qw, h - 34, 8); ctx.fill();
+      ctx.strokeStyle = '#223052'; ctx.lineWidth = 1; ctx.stroke();
+      queue.slice(0, 6).forEach((c, i) => {
+        const y = 30 + i * 30;
+        ctx.fillStyle = '#16233c'; rr(ctx, qx + 8, y, qw - 16, 24, 5); ctx.fill();
+        ctx.strokeStyle = COL[c.from]; ctx.stroke();
+        ctx.fillStyle = COL[c.from]; ctx.font = '700 11px Pretendard'; ctx.textAlign = 'center';
+        ctx.fillText('INCR kills  (서버' + (c.from + 1) + ')', qx + qw / 2, y + 16);
+      });
+      ctx.textAlign = 'left';
+      // 우: 이벤트 루프 + 카운터
+      const ex = w - 138;
+      ctx.fillStyle = processing ? '#123024' : '#101827'; rr(ctx, ex, 22, 126, 66, 8); ctx.fill();
+      ctx.strokeStyle = processing ? '#69f0ae' : '#223052'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = '#cfe0ff'; ctx.font = '700 11px Pretendard'; ctx.textAlign = 'center';
+      ctx.fillText('🧵 단일 스레드', ex + 63, 42);
+      ctx.fillStyle = processing ? '#69f0ae' : '#4a5670'; ctx.font = '700 11px Pretendard';
+      ctx.fillText(processing ? '처리중… (서버' + (processing.from + 1) + ')' : '대기', ex + 63, 66);
+      // counter
+      ctx.fillStyle = '#0c1424'; rr(ctx, ex, 100, 126, 60, 8); ctx.fill();
+      ctx.strokeStyle = '#66bb6a'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#8ba0c4'; ctx.font = '10px Pretendard'; ctx.fillText('kills (원자적)', ex + 63, 118);
+      ctx.fillStyle = '#fff'; ctx.font = '800 24px Pretendard'; ctx.fillText(String(done), ex + 63, 146);
+      ctx.textAlign = 'left';
+    }
+    function reset() { queue = []; sent = 0; done = 0; processing = null; if (sentOut) sentOut.textContent = 0; if (doneOut) doneOut.textContent = 0; draw(); if (cap) cap.textContent = '3대에서 동시에 INCR을 쏴봐. 명령들이 큐에 한 줄로 서고, 단일 스레드가 하나씩 처리해 — 카운터는 항상 정확해.'; }
+    $$('[data-th]', cv.closest('.rdw')).forEach(b => b.addEventListener('click', () => {
+      const a = b.getAttribute('data-th');
+      if (a === 'reset') { reset(); return; }
+      if (a === 'all') {
+        enqueue(0); enqueue(1); enqueue(2);
+        if (cap) cap.textContent = '3대가 동시에 쐈어! 그래도 명령이 큐에 한 줄로 서서 하나씩 처리돼 — 레이스 없이 정확히 +3. 게임 서버 싱글스레드와 똑같은 원리(락 불필요).';
+      } else enqueue(+a);
+    }));
+    window.addEventListener('resize', () => { ctx = fitCanvas(cv); draw(); });
+    reset();
+  })();
+
 })();

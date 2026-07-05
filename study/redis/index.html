@@ -150,7 +150,149 @@
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 근데 그냥 MSSQL 쓰면? 왜 굳이 Redis</h2>
+            <h2>Part 3. 직접 만들면 되잖아? — Redis는 '그 별도 프로세스'의 완성품</h2>
+
+            <div class="chat">
+                <div class="q">잠깐. '메모리에 자료구조 들고, 네트워크로 조회/삽입 받는 별도 프로세스'면 되잖아. 그거 내가 직접 만들면 안 돼? 왜 굳이 Redis를 써?</div>
+                <div class="a">
+                    <p>만들 수 있어! 근데 그렇게 만드는 순간 — <span class="key-point">넌 Redis를 재발명하는 거야.</span></p>
+                    <p>'메모리에 자료구조를 들고, 네트워크로 명령을 받아 조회/삽입/삭제해주는 별도 서버 프로그램' = <span class="highlight">그게 정확히 Redis의 정의</span>거든. Redis는 바로 그 아이디어를 10년 넘게 다듬어 놓은 완성품이야. <span class="key-point">네 직관이 맞았다는 뜻이야</span> — 개념은 정확히 이해한 거고, Redis는 그걸 프로덕션 수준으로 구현해둔 제품일 뿐.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그래도 간단하지 않아? 소켓 열고 map 하나 두면 될 것 같은데.</div>
+                <div class="a">
+                    <p>장난감이면 그래. 근데 <span class="warning">프로덕션이면 이걸 전부 풀어야 해:</span></p>
+                    <p>• 동시 수천 연결을 받는 네트워크 처리(우리가 배운 IOCP/epoll)</p>
+                    <p>• 여러 클라가 동시에 같은 값을 건드릴 때 <span class="highlight">원자성·레이스 방지</span></p>
+                    <p>• Sorted Set 같은 <span class="highlight">고성능 자료구조</span>(내부는 skiplist)</p>
+                    <p>• TTL 자동 만료, 메모리 꽉 차면 뭘 버릴지(eviction, LRU)</p>
+                    <p>• 죽어도 복구(지속성 RDB/AOF), 복제·장애조치</p>
+                    <p>• 초당 수십만 ops 성능</p>
+                    <p>이걸 다 만들고 버그 잡고 운영하느니, <span class="key-point">이미 검증된 Redis를 쓰는 거야.</span> '바퀴 재발명'을 안 하는 거지. 게다가 표준이라 클라이언트 라이브러리·모니터링·운영 노하우가 이미 다 있어.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 어떻게 시키나 — 명령어를 소켓으로 (SQL과 뭐가 다른가)</h2>
+
+            <div class="chat">
+                <div class="q">그 별도 프로세스한테 '조회해/넣어/지워'를 어떻게 시켜? 패킷을 보내는 거야?</div>
+                <div class="a">
+                    <p>맞아. <span class="highlight">TCP 소켓으로 통신</span>해 — 우리가 네트워크 편에서 배운 바로 그 소켓이야. 게임 서버가 Redis 서버(기본 포트 6379)에 연결해서 명령을 보내.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 DB 쿼리처럼 긴 문장을 보내?</div>
+                <div class="a">
+                    <p>비슷하지만 결정적으로 달라. SQL 같은 복잡한 문장이 아니라 <span class="key-point">'명령어 + 인자'</span> 형태야. 예: <span class="highlight">SET name alice</span> / <span class="highlight">GET name</span> / <span class="highlight">INCR kills</span> / <span class="highlight">ZADD board 980 alice</span>.</p>
+                    <p>이게 RESP라는 Redis 전용 포맷으로 인코딩돼 바이트로 나가. 아래처럼 생겼어:</p>
+                </div>
+            </div>
+
+            <div class="code-block"># 'SET name alice' 를 실제로 소켓에 보낼 때 (RESP 포맷)
+*3\r\n        # 인자 3개짜리 명령
+$3\r\nSET\r\n    # 3글자: SET
+$4\r\nname\r\n   # 4글자: name
+$5\r\nalice\r\n  # 5글자: alice
+
+# 응답:  +OK\r\n</div>
+
+
+            <div class="chat">
+                <div class="q">SQL이랑 근본적으로 뭐가 다른 거야?</div>
+                <div class="a">
+                    <p><span class="highlight">SQL은 선언적</span> — "이런 조건의 데이터 줘"라고 <b>원하는 결과</b>만 말하면 DB가 파싱→옵티마이저→실행계획→인덱스 탐색으로 <b>방법을 알아서 찾아</b>.</p>
+                    <p><span class="highlight">Redis 명령은 명령적</span> — "이 키에 이거 넣어"라고 <b>방법을 직접 지정</b>해. 그래서 <span class="key-point">파싱·옵티마이저·실행계획이 없어</span> → 이것도 빠른 이유 중 하나야.</p>
+                    <p>참고로 실무에선 게임 서버가 <span class="highlight">Redis 클라이언트 라이브러리</span>(hiredis 등)를 써서 함수만 호출하면, 라이브러리가 이 RESP 변환+소켓 전송을 대신 해줘.</p>
+                </div>
+            </div>
+
+            <div class="rdw" id="rd-w-proto"><h6>🔌 명령을 보내면 — SQL(선언적) vs Redis(명령적)</h6><p class="sub">'요청 보내기'를 눌러봐. 같은 일을 SQL은 '뭘 원하는지'만 말해 DB가 방법을 찾고(깊은 파이프라인), Redis는 '뭘 할지'를 직접 지정해(짧은 경로). 단계 수를 비교해봐.</p><div class="rd-ctrl"><button class="rd-btn" data-pr="go">▶ 요청 보내기</button></div><canvas class="rd-canvas" id="pr-canvas" height="250"></canvas><div class="rd-stat"><div class="rd-chip"><div class="k">SQL 처리 단계</div><div class="v warn" id="pr-sql">-</div></div><div class="rd-chip"><div class="k">Redis 처리 단계</div><div class="v good" id="pr-redis">-</div></div></div><div class="rd-cap" id="pr-cap">SQL은 파싱→옵티마이저→실행계획→인덱스 탐색을 거쳐(선언적). Redis 명령은 바로 자료구조를 조작(명령적) — 그래서도 빠르고, 보내는 것도 SQL 문장이 아니라 짧은 명령어+인자야.</div></div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 속을 열어보면 — 그냥 자료구조 + 단일 스레드</h2>
+
+            <div class="chat">
+                <div class="q">인메모리 프로세스니까, 내부적으로는 그냥 C++ 프로세스가 쓰는 자료구조랑 똑같은 거야?</div>
+                <div class="a">
+                    <p>놀랍게도 <span class="key-point">거의 그래!</span> Redis 속은 결국 C로 짠 자료구조 모음이야. 네 직관이 정확해 — '그냥 프로세스가 들고 있는 자료구조'야.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>Redis 타입</th>
+                    <th>내부 자료구조</th>
+                    <th>C++로 치면</th>
+                </tr>
+                <tr>
+                    <td>String</td>
+                    <td>동적 문자열(SDS)</td>
+                    <td>std::string</td>
+                </tr>
+                <tr>
+                    <td>Hash</td>
+                    <td>해시테이블</td>
+                    <td>unordered_map</td>
+                </tr>
+                <tr>
+                    <td>List</td>
+                    <td>연결리스트(quicklist)</td>
+                    <td>list/deque</td>
+                </tr>
+                <tr>
+                    <td>Set</td>
+                    <td>해시테이블 / intset</td>
+                    <td>unordered_set</td>
+                </tr>
+                <tr>
+                    <td>Sorted Set</td>
+                    <td>skiplist + 해시테이블</td>
+                    <td>정렬 유지 자료구조</td>
+                </tr>
+                <tr>
+                    <td>(전체 키 공간)</td>
+                    <td>하나의 큰 해시테이블</td>
+                    <td>unordered_map<key, value></td>
+                </tr>
+            </table>
+
+
+            <div class="chat">
+                <div class="q">그럼 우리 게임 서버 코드의 map이랑 진짜 똑같으면, 뭐가 특별한 거야?</div>
+                <div class="a">
+                    <p>세 가지가 얹혀:</p>
+                    <p>① <span class="highlight">네트워크로 노출</span>돼 여러 서버가 접근(그래서 '공유').</p>
+                    <p>② TTL·eviction·지속성·복제가 붙음.</p>
+                    <p>③ 제일 중요 — <span class="key-point">단일 스레드 이벤트 루프로 명령을 하나씩 순차 처리</span>해.</p>
+                    <p>③ 덕분에 여러 클라가 동시에 INCR을 해도 <span class="highlight">레이스가 안 나 — 락 없이 원자적</span>이야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">단일 스레드로 처리한다고? 그거 어디서 많이 봤는데…</div>
+                <div class="a">
+                    <p>맞아, <span class="key-point">우리가 맨 처음 배운 거랑 정확히 똑같아.</span> 게임 서버가 <span class="highlight">싱글스레드로 동시성을 회피</span>한 그 철학이야 — 명령을 한 줄로 세워 하나씩 처리하니, 처리 도중 남이 끼어들 수가 없어 원자성이 공짜로 나와.</p>
+                    <p>그래서 Redis의 INCR·ZADD 같은 게 <span class="key-point">'동시에 쏴도 안전'</span>한 거야. 락 걸 필요도, CAS 짤 필요도 없이. 아래에서 3대가 동시에 쏴도 정확한지 직접 봐 ↓</p>
+                </div>
+            </div>
+
+            <div class="rdw" id="rd-w-thread"><h6>🧵 속을 열어보면 — 단일 스레드가 명령을 한 줄로 처리(= 원자성)</h6><p class="sub">3대의 게임 서버에서 동시에 INCR을 쏴봐. Redis는 단일 스레드라 명령들을 하나의 큐에 세워 순서대로 하나씩 처리해 — 그래서 동시에 쏴도 레이스 없이 정확해(락 불필요).</p><div class="rd-ctrl">INCR 발사: <button class="rd-btn" data-th="0">서버1</button><button class="rd-btn" data-th="1">서버2</button><button class="rd-btn" data-th="2">서버3</button><button class="rd-btn" data-th="all">⚡ 3대 동시 발사</button><button class="rd-btn" data-th="reset">↺</button></div><canvas class="rd-canvas" id="th-canvas" height="250"></canvas><div class="rd-stat"><div class="rd-chip"><div class="k">발사한 명령</div><div class="v" id="th-sent">0</div></div><div class="rd-chip"><div class="k">처리 완료(카운터)</div><div class="v good" id="th-done">0</div></div></div><div class="rd-cap" id="th-cap">우리가 맨 처음 배운 거랑 똑같아 — 게임 서버가 싱글스레드로 동시성을 피한 그 철학. Redis도 명령을 한 줄로 세워 처리해서 락 없이 원자적이야.</div></div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 근데 그냥 MSSQL 쓰면? 왜 굳이 Redis</h2>
 
             <div class="chat">
                 <div class="q">공유·생존·원자성이면 MSSQL도 다 되잖아. 이미 게임 DB 있는데 왜 Redis를 또 도입해?</div>
@@ -166,7 +308,7 @@
         </div>
 
         <div class="conversation">
-            <h2>Part 4. 그럼 다 Redis 쓰면 되잖아?</h2>
+            <h2>Part 7. 그럼 다 Redis 쓰면 되잖아?</h2>
 
             <div class="chat">
                 <div class="q">이렇게 빠른데 그냥 다 Redis에 넣으면 안 돼?</div>
@@ -192,7 +334,7 @@
         </div>
 
         <div class="conversation">
-            <h2>Part 5. 우리 게임 실전 — 랭킹은 왜 Redis가 답인가</h2>
+            <h2>Part 8. 우리 게임 실전 — 랭킹은 왜 Redis가 답인가</h2>
 
             <div class="chat">
                 <div class="q">실제로 어디에 제일 효과가 커?</div>
