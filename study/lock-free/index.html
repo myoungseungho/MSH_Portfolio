@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>스레드 셋이 같은 숫자를 동시에 +1 하면? — 락 vs 락프리 vs 액터 - MSH Portfolio</title>
+    <title>스레드 셋이 같은 숫자를 동시에 +1 하면? — 락 vs 락프리(CAS) - MSH Portfolio</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
@@ -64,108 +64,184 @@
         .nav-links a:hover { text-decoration: underline; }
     </style>
     <style>
-    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}
-    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-    .wtab{flex:1;min-width:110px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}
-    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}
-    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
-    .sim canvas{width:100%;display:block;border-radius:12px}
-    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
-    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}
-    .sim-stats{display:flex;gap:10px;margin-top:16px}
-    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}
-    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}
-    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}
-    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}
-    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}
+    .lfw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}
+    .lfw h6{font-size:.98rem;font-weight:800;color:#fff;margin:0 0 4px}
+    .lfw .sub{font-size:.8rem;color:#8ba0c4;margin:0 0 14px}
+    .lf-ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:.84rem;color:#b5c2db}
+    .lf-ctrl label{display:flex;align-items:center;gap:7px;cursor:pointer}
+    .lf-ctrl input[type=range]{width:150px;accent-color:#42a5f5}
+    .lf-btn{padding:8px 13px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:.15s}
+    .lf-btn:hover{border-color:#42a5f5;color:#e3eaf5}
+    .lf-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    .lf-canvas{width:100%;border-radius:12px;background:#070b16;display:block;touch-action:none}
+    .lf-stat{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .lf-chip{flex:1;min-width:110px;background:#121a30;border:1px solid #223052;border-radius:10px;padding:10px 12px}
+    .lf-chip .k{font-size:.72rem;color:#8ba0c4;margin-bottom:3px}
+    .lf-chip .v{font-size:1.15rem;font-weight:800;color:#fff}
+    .lf-chip .v.warn{color:#ff8a80}
+    .lf-chip .v.good{color:#69f0ae}
+    .lf-cap{margin-top:12px;font-size:.86rem;line-height:1.7;color:#b5c2db;background:#121a30;border-radius:10px;padding:12px 14px;border-left:3px solid #42a5f5;min-height:1.7em}
     </style>
-    <script src='lockfree.js' defer></script>
+    <script src="lockfree.js" defer></script>
 </head>
 <body>
     <div class="container">
         <a href="../category-thread/" class="back-link">← 멀티스레드</a>
 
         <header class="header">
-            <h1>스레드 셋이 같은 숫자를 동시에 +1 하면? — 락 vs 락프리 vs 액터</h1>
-            <p>레이스 컨디션을 눈으로 보고, 세 가지 해법을 비교</p>
+            <h1>스레드 셋이 같은 숫자를 동시에 +1 하면? — 락 vs 락프리(CAS)</h1>
+            <p>레이스 컨디션을 눈으로 보고, 락프리가 '자물쇠 없이' 어떻게 안 깨지는지(CAS 재시도 루프)까지 인터랙티브로</p>
         </header>
 
         <div class="info-box">
             <h4>30초 요약</h4>
-            <p>보호 없이 여러 스레드가 같은 값을 '읽고 +1 하고 쓰기' 하면 한쪽 증가가 사라져(레이스 컨디션).</p>
-            <p>해법: 락(한 번에 하나, 대기 발생) / 락프리 CAS(충돌 시 재시도, 막힘 없음).</p>
-            <p>우리 게임 서버는 아예 싱글스레드(액터 1마리)라 이 고민 자체가 없어 — 그게 제일 단순한 해법.</p>
+            <p>보호 없이 여러 스레드가 같은 값을 '읽고 → 계산하고 → 쓰기' 하면 한쪽 결과가 덮여 사라져(레이스 컨디션).</p>
+            <p>락 = 자물쇠로 한 번에 한 명(안전하지만 줄서기·데드락 위험). 락프리 = 자물쇠 없이 CAS로 '충돌하면 다시 시도'(막힘 없음).</p>
+            <p>우리 게임 서버는 아예 싱글스레드(액터 1마리)라 이 고민 자체가 없어 — 제일 단순한 해법.</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 왜 증가가 사라지나</h2>
+            <h2>Part 1. 왜 증가가 사라지나 (레이스 컨디션)</h2>
 
             <div class="chat">
-                <div class="q">HP 100을 스레드 A가 -30, B가 -50 동시에 했어. 결과는?</div>
+                <div class="q">맞춰봐 — HP 100을 스레드 A가 -30, B가 -50 동시에 했어. 결과는?</div>
                 <div class="a">
-                    <p>20이라고 생각했지? 실제론 70이거나 50이 될 수 있어.</p>
-                    <p>둘 다 '100'을 동시에 읽고, A는 70을 쓰고 B는 50을 써 — 나중에 쓴 값이 앞 걸 덮어버려. 한쪽 연산이 통째로 사라지는 거야. 이게 레이스 컨디션.</p>
+                    <p>'20'이라고 생각했지? 실제론 <span class="warning">70이거나 50</span>이 될 수 있어.</p>
+                    <p>둘 다 '100'을 동시에 <span class="highlight">읽고</span>, A는 손에서 70을 만들고 B는 50을 만들어. 그리고 각자 자기 값을 써 — <span class="warning">나중에 쓴 값이 앞 걸 덮어버려.</span> 한쪽 연산이 통째로 사라지는 거야. 이게 레이스 컨디션(경쟁 상태)이야.</p>
                 </div>
             </div>
 
 
             <div class="chat">
-                <div class="q">왜 그런 일이?</div>
+                <div class="q">왜 그런 일이 생겨?</div>
                 <div class="a">
-                    <p>'읽기 → 계산 → 쓰기'가 한 덩어리(원자적)가 아니라서야. 그 사이에 다른 스레드가 끼어들면 둘이 같은 출발값을 보게 돼.</p>
-                    <p>그래서 이 구간(임계영역)을 보호해야 해.</p>
+                    <p><span class="highlight">'읽기 → 계산 → 쓰기'가 한 덩어리(원자적)가 아니라서</span> 그래. 그 사이에 다른 스레드가 끼어들면 둘이 같은 출발값(100)을 보게 돼.</p>
+                    <p>그래서 이 구간(임계영역)을 어떻게든 <span class="key-point">'한 번에 하나만' 또는 '끼어들면 다시'</span> 하도록 보호해야 해. 아래에서 직접 봐.</p>
+                </div>
+            </div>
+
+            <div class="lfw" id="lf-w-race"><h6>💥 왜 증가가 사라지나 — 레이스 컨디션</h6><p class="sub">▶ 단계 진행을 눌러 A·B 두 스레드가 HP 100을 각자 깎는 과정을 한 칸씩 따라와봐. 둘이 같은 100을 '읽는' 순간 사고가 시작돼.</p><div class="lf-ctrl"><button class="lf-btn" data-race="step">▶ 단계 진행</button><button class="lf-btn" data-race="reset">↺ 리셋</button></div><canvas class="lf-canvas" id="race-canvas" height="230"></canvas><div class="lf-stat"><div class="lf-chip"><div class="k">기대한 HP (100-30-50)</div><div class="v good">20</div></div><div class="lf-chip"><div class="k">실제 HP</div><div class="v warn" id="race-real">100</div></div></div><div class="lf-cap" id="race-cap">A는 -30, B는 -50. 순서대로 하면 20이어야 하는데…</div></div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 락(자물쇠) — 안전하지만 줄서기</h2>
+
+            <div class="chat">
+                <div class="q">제일 쉬운 해법은?</div>
+                <div class="a">
+                    <p>공용 화장실에 <span class="highlight">자물쇠</span>를 다는 거야. 한 명 들어가면 잠그고, 나머지는 밖에서 줄 서서 기다려. 임계영역을 한 번에 한 명만 지나가니 <span class="key-point">절대 안 깨져.</span> 이게 락(Mutex/CriticalSection)이야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 락이 정답 아냐? 뭐가 문제인데?</div>
+                <div class="a">
+                    <p>두 가지가 걸려.</p>
+                    <p>Q. 첫째 — 사람이 많으면?</p>
+                    <p>A. 다들 <span class="warning">밖에서 줄만 서.</span> 스레드를 아무리 늘려도 한 번에 하나씩만 통과하니 처리량이 천장에 막혀(Part 4에서 눈으로 봄).</p>
+                    <p>Q. 둘째 — 안에 있는 사람이 기절하면?</p>
+                    <p>A. <span class="warning">나머지 전원이 영원히 못 들어가.</span> 게다가 자물쇠를 두 개 엇갈려 잡으면(A가 1번 잠그고 2번 기다림, B가 2번 잠그고 1번 기다림) 서로 영원히 대기 — <span class="warning">데드락(교착)</span>이야.</p>
                 </div>
             </div>
 
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 세 방식 비교</h2>
+            <h2>Part 3. 락프리 — 자물쇠 없이 어떻게? (CAS)</h2>
 
             <div class="chat">
-                <div class="q">직접 돌려봐.</div>
+                <div class="q">자물쇠를 안 달면 안 깨지는 걸 어떻게 보장해?</div>
                 <div class="a">
-                    <p>탭으로 ① race ② lock ③ lockfree 를 바꿔봐. 카운터가 기대값과 같은지 봐.</p>
-                    <p>race는 카운터 < 기대값(유실 발생), lock은 정확하나 대기(빨강), lockfree는 정확하고 재시도만 늘어.</p>
+                    <p><span class="highlight">CAS(Compare-And-Swap, 비교 후 교체)</span>라는 하드웨어가 보장하는 특수 명령을 써. 초딩 버전으로 3단계야:</p>
+                    <p>1. <span class="highlight">읽기</span>: 지금 창고값을 손에 복사(예: 100)</p>
+                    <p>2. <span class="highlight">계산</span>: 손에서 +1 (101)</p>
+                    <p>3. <span class="highlight">비교교체(CAS)</span>: "창고값이 <b>아직도 100 맞아?</b> 맞으면 101로 바꿔치기"</p>
+                    <p>포인트는 3번이 <span class="key-point">'확인'과 '교체'를 쪼갤 수 없는 한 방(원자적)에 한다는 것.</span> 확인하는 찰나에 남이 끼어들 수 없어.</p>
                 </div>
             </div>
 
-            <div class='sim'>
-  <div class='sim-tabs'>
-    <button class='wtab lftab active' type='button' data-m='race'>① 보호 없음(race)</button>
-    <button class='wtab lftab' type='button' data-m='lock'>② 락(lock)</button>
-    <button class='wtab lftab' type='button' data-m='lockfree'>③ 락프리(CAS)</button>
-  </div>
-  <canvas id='lf-canvas' role='img' aria-label='락 락프리 비교 시뮬레이터. 세 스레드가 공유 카운터를 증가시킨다. 보호가 없으면 동시 쓰기로 증가가 유실되고, 락은 한 번에 하나만 통과하며 대기가 생기고, 락프리는 충돌 시 재시도로 유실 없이 처리한다.'></canvas>
-  <div class='sim-controls'>
-    <button id='lf-play' type='button'>⏸ 일시정지</button>
-  </div>
-  <div class='sim-stats'>
-    <div class='sim-stat'><span class='sim-stat-num' id='lf-counter'>0</span><span class='sim-stat-lbl'>실제 카운터</span></div>
-    <div class='sim-stat'><span class='sim-stat-num' id='lf-expected'>0</span><span class='sim-stat-lbl'>기대값</span></div>
-    <div class='sim-stat'><span class='sim-stat-num' id='lf-gap'>0</span><span class='sim-stat-lbl' id='lf-gap-lbl'>유실된 증가</span></div>
-  </div>
-  <p class='sim-caption' id='lf-caption'></p>
-</div>
+
+            <div class="chat">
+                <div class="q">근데 3번에서 '아직 100이 아니면'? 남이 먼저 바꿨으면?</div>
+                <div class="a">
+                    <p>그럼 <span class="warning">CAS가 실패</span>해. "앗, 100이 아니라 101이네 — 누가 먼저 넣었구나." 그러면 <span class="key-point">1번으로 돌아가 새 값(101)으로 다시 시도</span>해. 이게 <span class="highlight">재시도 루프</span>야.</p>
+                    <p>Q. 줄 서서 기다리는 락이랑 뭐가 달라?</p>
+                    <p>A. 락은 <b>남이 끝날 때까지 멈춰서</b> 기다려. CAS는 <b>안 멈추고 계속 재도전</b>해 — 그래서 누가 기절해도 나머지는 계속 진행돼(막힘 없음). 대신 부딪히면 <span class="warning">헛수고(재시도)</span>가 생기지. 아래에서 직접 돌려봐 ↓</p>
+                </div>
+            </div>
+
+            <div class="lfw" id="lf-w-cas"><h6>🔁 락프리는 어떻게 이뤄지나 — CAS 재시도 루프</h6><p class="sub">이게 핵심! ▶ 단계 진행으로 CAS가 실제로 도는 방식을 봐. 읽기→계산→"아직 그대로야?" 비교교체(CAS)→아니면 재시도. 자물쇠 없이 안전한 비밀이야.</p><div class="lf-ctrl"><button class="lf-btn" data-cas="step">▶ 단계 진행</button><button class="lf-btn" data-cas="auto">⏩ 자동</button><button class="lf-btn" data-cas="reset">↺ 리셋</button></div><canvas class="lf-canvas" id="cas-canvas" height="300"></canvas><div class="lf-stat"><div class="lf-chip"><div class="k">공유 카운터</div><div class="v" id="cas-shared">0</div></div><div class="lf-chip"><div class="k">CAS 성공</div><div class="v good" id="cas-ok">0</div></div><div class="lf-chip"><div class="k">CAS 실패→재시도</div><div class="v warn" id="cas-retry">0</div></div></div><div class="lf-cap" id="cas-cap">두 스레드가 같은 카운터를 +1 하려고 해. 자물쇠 없이 어떻게 안 깨질까?</div></div>
 
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 락 vs 락프리 vs 싱글스레드</h2>
-            <table class='compare-table'>
-<tr><th>방식</th><th>정확성</th><th>비용</th></tr>
-<tr><td>보호 없음</td><td class='bad'>유실(틀림)</td><td>—</td></tr>
-<tr><td>락(Mutex)</td><td class='good'>정확</td><td class='warn'>대기·데드락 위험</td></tr>
-<tr><td>락프리(CAS)</td><td class='good'>정확</td><td class='warn'>경합 시 재시도 폭증</td></tr>
-<tr><td>싱글스레드(액터)</td><td class='good'>정확</td><td class='good'>락 0개 (1코어 천장)</td></tr>
-</table>
+            <h2>Part 4. 락 vs 락프리 — 스레드가 늘면 처리량은?</h2>
+
+            <div class="chat">
+                <div class="q">그럼 락프리가 항상 더 빠른 거야?</div>
+                <div class="a">
+                    <p>경향은 그렇지만 <span class="warning">항상은 아냐.</span> 아래에서 스레드 수를 올려봐.</p>
+                    <p>• 락: '한 번에 하나'라 스레드를 늘려도 <span class="warning">처리량이 천장에 막혀</span>(다 줄만 섬).</p>
+                    <p>• 락프리: 막힘이 없어 더 잘 늘어. 하지만 <span class="warning">경합이 세지면 재시도(헛수고)가 폭증</span>해서 이득이 깎여.</p>
+                </div>
+            </div>
+
+            <div class="lfw" id="lf-w-tput"><h6>📈 락 vs 락프리 — 스레드가 늘면?</h6><p class="sub">스레드 수를 올려봐. 락은 '한 번에 하나'라 늘려도 처리량이 천장에 막히고(줄서기), 락프리는 더 잘 늘어. 단, 경합이 세지면 재시도 낭비도 같이 커져. (예시 모델값)</p><div class="lf-ctrl"><label>스레드 수 <input type="range" id="tp-n" min="1" max="32" step="1" value="8"><b id="tp-nv">8</b></label></div><canvas class="lf-canvas" id="tp-canvas" height="180"></canvas><div class="lf-stat"><div class="lf-chip"><div class="k">락 처리량</div><div class="v" id="tp-lock">-</div></div><div class="lf-chip"><div class="k">락프리 처리량</div><div class="v good" id="tp-lf">-</div></div><div class="lf-chip"><div class="k">락프리 재시도 낭비</div><div class="v warn" id="tp-waste">-</div></div></div><div class="lf-cap" id="tp-cap">-</div></div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>방식</th>
+                    <th>정확성</th>
+                    <th>비용</th>
+                    <th>비유</th>
+                </tr>
+                <tr>
+                    <td>보호 없음</td>
+                    <td>❌ 유실(틀림)</td>
+                    <td>—</td>
+                    <td>자물쇠 없는 화장실</td>
+                </tr>
+                <tr>
+                    <td>락(Mutex)</td>
+                    <td>✅ 정확</td>
+                    <td>줄서기·데드락 위험</td>
+                    <td>자물쇠+줄</td>
+                </tr>
+                <tr>
+                    <td>락프리(CAS)</td>
+                    <td>✅ 정확</td>
+                    <td>경합 시 재시도 폭증</td>
+                    <td>확인하고 확 들어가기</td>
+                </tr>
+                <tr>
+                    <td>싱글스레드(액터)</td>
+                    <td>✅ 정확</td>
+                    <td>락 0개 (1코어 천장)</td>
+                    <td>애초에 한 명만 씀</td>
+                </tr>
+            </table>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 그래서 우리 서버는?</h2>
+
+            <div class="chat">
+                <div class="q">락프리가 이렇게 좋은데 우리도 게임 로직에 써야 해?</div>
+                <div class="a">
+                    <p>아니. <span class="key-point">우리 서버는 아예 싱글스레드(액터 1마리)로 가서 '락도 CAS도 없는' 길을 택했어.</span></p>
+                    <p>이유 — 게임 로직은 '<span class="highlight">HP 깎고 + 아이템 주고 + 로그 남기고</span>'를 <b>한꺼번에 원자적으로</b> 바꿔야 하는데, 단순 CAS는 값 <b>하나</b>만 원자 교체할 수 있어. 여러 값을 묶어 안전하게 바꾸려면 CAS로는 지옥이야. 그래서 처리를 한 줄로 세워 동시성 자체를 없앤 거지(→ 액터 모델 글).</p>
+                </div>
+            </div>
 
 
             <div class="chat">
-                <div class="q">락프리가 항상 최고 아냐?</div>
+                <div class="q">락프리는 만들기가 왜 그렇게 어렵다는 거야?</div>
                 <div class="a">
-                    <p>아니. 락프리는 막힘은 없지만, 경합이 심하면 재시도가 폭증해 오히려 느려질 수 있고 구현이 까다로워(ABA 문제 등).</p>
-                    <p>그리고 게임 로직처럼 '여러 값을 한꺼번에 원자적으로' 바꿔야 하면 단순 CAS로 안 돼. 그래서 우리 서버는 아예 싱글스레드로 가서 '락도 CAS도 없는' 길을 택했어 (액터 모델 글 참고).</p>
+                    <p>대표 함정이 <span class="warning">ABA 문제</span>야. 값이 A→B→A로 돌아오면, CAS는 '어 아직 A네' 하고 <b>그 사이 변화를 눈치 못 채</b>. 겉값만 같고 속은 바뀐 거지.</p>
+                    <p>여기에 <span class="highlight">메모리 순서(memory ordering)</span> — CPU가 명령 순서를 제멋대로 바꿔 실행하는 것까지 통제해야 해서, '락프리 짜봤다'는 건 <span class="key-point">동시성·CPU·메모리 모델을 아주 깊이 안다는 뜻</span>이야. 그래서 공고 우대사항에 콕 집는 거고.</p>
                 </div>
             </div>
 
@@ -174,18 +250,21 @@
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>레이스 컨디션</strong> = '읽기-계산-쓰기'가 원자적이 아니라 한쪽 증가가 덮여 사라짐</li>
-                <li><strong>락</strong> = 한 번에 하나(정확, 대기·데드락 위험)</li>
-                <li><strong>락프리(CAS)</strong> = 충돌 시 재시도(막힘 없음, 경합 심하면 재시도 폭증)</li>
-                <li><strong>싱글스레드(액터)</strong> = 락도 CAS도 없음 — 우리 서버의 선택(1코어 천장은 샤딩으로)</li>
-                <li>락프리가 만능은 아님 — 다중 값 원자 처리엔 부적합</li>
+                <li>레이스 컨디션 = '읽기-계산-쓰기'가 원자적이 아니라 한쪽 결과가 덮여 사라짐</li>
+                <li>락 = 자물쇠로 한 번에 하나(정확, 줄서기·데드락 위험)</li>
+                <li>락프리(CAS) = 읽기→계산→비교교체, 충돌 시 재시도(막힘 없음, 경합 심하면 재시도 폭증)</li>
+                <li>CAS의 비밀 = '확인+교체'를 쪼갤 수 없는 한 방(원자적)에 → 확인하는 찰나 끼어들 수 없음</li>
+                <li>싱글스레드(액터) = 락도 CAS도 없음 — 우리 서버의 선택(1코어 천장은 샤딩으로)</li>
+                <li>락프리는 만능 아님 — 다중 값 원자 처리 부적합 + ABA/메모리순서 함정</li>
             </ul>
         </div>
 
         <div class="info-box">
             <h4>이어서 보면</h4>
-            <p>데드락 — 락을 두 개 엇갈려 잡으면 생기는 교착</p>
-            <p>액터 모델 — 락을 아예 안 쓰는 길(우리 서버가 택한 방식)</p>
+            <p>데드락 — 락을 두 개 엇갈려 잡으면 생기는 교착: deadlock</p>
+            <p>메모리 순서 & 배리어 — CPU가 순서를 바꾸는 문제: memory-order</p>
+            <p>액터 모델 — 락을 아예 안 쓰는 길(우리 서버가 택한 방식): actor-model</p>
+            <p>네트워크 I/O 통합 가이드 — IO 스레드↔로직 스레드 경계 큐에서 이게 왜 필요한지: network-io-evolution</p>
         </div>
 
 
