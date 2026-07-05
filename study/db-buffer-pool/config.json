@@ -1,0 +1,137 @@
+{
+  "slug": "db-buffer-pool",
+  "title": "디스크는 느린데 DB는 왜 빠를까? — 버퍼 풀",
+  "subtitle": "한 번 읽은 페이지를 RAM에 쟁여두는 법 — 캐시 히트, LRU, 더티 페이지, 체크포인트",
+  "category": "DB / 캐시",
+  "category_path": "../category-db/",
+  "prev_link": "../db-storage-internals/",
+  "prev_text": "← 데이터가 디스크에 눕는 법",
+  "next_link": "../category-db/",
+  "next_text": "DB 목록 →",
+  "extra_head": "    <style>\n    .bpw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}\n    .bpw h6{font-size:.98rem;font-weight:800;color:#fff;margin:0 0 4px}\n    .bpw .sub{font-size:.8rem;color:#8ba0c4;margin:0 0 14px}\n    .bp-ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:.84rem;color:#b5c2db}\n    .bp-ctrl label{display:flex;align-items:center;gap:7px;cursor:pointer}\n    .bp-ctrl input[type=range]{width:150px;accent-color:#42a5f5}\n    .bp-btn{padding:8px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:.15s}\n    .bp-btn:hover{border-color:#42a5f5;color:#e3eaf5}\n    .bp-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .bp-btn.pg{min-width:34px}\n    .bp-canvas{width:100%;border-radius:12px;background:#070b16;display:block;touch-action:none}\n    .bp-stat{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}\n    .bp-chip{flex:1;min-width:110px;background:#121a30;border:1px solid #223052;border-radius:10px;padding:10px 12px}\n    .bp-chip .k{font-size:.72rem;color:#8ba0c4;margin-bottom:3px}\n    .bp-chip .v{font-size:1.15rem;font-weight:800;color:#fff}\n    .bp-chip .v.warn{color:#ff8a80}\n    .bp-chip .v.good{color:#69f0ae}\n    .bp-cap{margin-top:12px;font-size:.86rem;line-height:1.7;color:#b5c2db;background:#121a30;border-radius:10px;padding:12px 14px;border-left:3px solid #42a5f5;min-height:1.7em}\n    .bp-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem;color:#9fb0cc;margin-top:8px}\n    .bp-legend span{display:flex;align-items:center;gap:6px}\n    .bp-dot{width:11px;height:11px;border-radius:3px;display:inline-block}\n    </style>\n    <script src=\"bufferpool.js\" defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "디스크는 RAM보다 수천~수십만 배 느려. 매번 디스크에서 페이지를 읽으면 DB가 기어가.",
+        "버퍼 풀 = 한 번 읽은 페이지를 RAM에 쟁여두는 캐시. 다음엔 디스크 안 가고 RAM에서(히트).",
+        "RAM은 유한 → 꽉 차면 LRU로 버림. 쓰기는 RAM에서 먼저(더티) 후 체크포인트로 디스크 flush.",
+        "그래서 'RAM이 DB 성능의 90%'. 근데 더티가 디스크 반영 전 죽으면? → 그걸 막는 게 WAL(다음 주제)."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 디스크는 생각보다 엄청 느리다",
+      "items": [
+        {
+          "type": "qa",
+          "q": "앞에서 데이터는 디스크의 8KB 페이지에 있다고 했잖아. 그럼 매번 디스크에서 읽으면 되는 거 아냐?",
+          "a": "그게 문제야. <span class=\"warning\">디스크는 RAM보다 어마어마하게 느려.</span>\n\n비유하면 <span class=\"highlight\">RAM은 지금 보고 있는 '책상 위', 디스크는 '지하 창고'</span>야. 책상 위 자료는 손만 뻗으면 되지만, 지하 창고는 엘리베이터 타고 내려갔다 와야 해."
+        },
+        {
+          "type": "qa",
+          "q": "얼마나 차이 나는데? 숫자로.",
+          "a": "대략 이래(예시):\n• RAM: <span class=\"good\">약 0.0001ms</span> (100나노초)\n• SSD: <span class=\"warn\">약 0.1ms</span> — RAM의 <span class=\"highlight\">약 1,000배</span> 느림\n• HDD: <span class=\"warning\">약 10ms</span> — RAM의 <span class=\"highlight\">약 100,000배</span> 느림\n\nQ. 그게 실제로 얼마나 큰 차이야?\nA. 같은 페이지를 100만 번 읽는다고 하면 — RAM은 0.1초, HDD는 <span class=\"warning\">약 2.7시간</span>이야. 아래에서 직접 눌러봐."
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"bpw\" id=\"bp-w-speed\"><h6>⏱️ 디스크는 대체 얼마나 느릴까?</h6><p class=\"sub\">페이지 100만 개를 읽는다고 해봐. RAM · SSD · HDD에서 각각 총 몇 초 걸리는지 눌러서 비교해봐. (예시 지연값)</p><div class=\"bp-ctrl\"><button class=\"bp-btn active\" data-sp=\"ram\">RAM</button><button class=\"bp-btn\" data-sp=\"ssd\">SSD</button><button class=\"bp-btn\" data-sp=\"hdd\">HDD</button><span style=\"margin-left:8px\">읽을 페이지: <b>100만 개</b></span></div><canvas class=\"bp-canvas\" id=\"sp-canvas\" height=\"150\"></canvas><div class=\"bp-stat\"><div class=\"bp-chip\"><div class=\"k\">1개 읽는 시간</div><div class=\"v\" id=\"sp-one\">-</div></div><div class=\"bp-chip\"><div class=\"k\">100만 개 총 시간</div><div class=\"v\" id=\"sp-total\">-</div></div><div class=\"bp-chip\"><div class=\"k\">RAM 대비</div><div class=\"v warn\" id=\"sp-ratio\">-</div></div></div><div class=\"bp-cap\" id=\"sp-cap\">RAM은 책상 위, 디스크는 지하 창고야. 같은 페이지를 매번 지하까지 다녀오면 DB가 기어가겠지.</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 그래서 버퍼 풀 — RAM에 쟁여둔다",
+      "items": [
+        {
+          "type": "qa",
+          "q": "매번 지하 창고를 다녀올 순 없고, 어떻게 해?",
+          "a": "<span class=\"key-point\">한 번 읽은 페이지를 RAM에 쟁여둬.</span> 이 RAM 캐시가 <span class=\"highlight\">버퍼 풀(Buffer Pool)</span>이야. 다음에 같은 페이지가 필요하면 지하 안 가고 책상 위(RAM)에서 바로 꺼내.\n\n• RAM에 있으면 = <span class=\"good\">캐시 히트</span> (빠름)\n• RAM에 없으면 = <span class=\"warning\">캐시 미스</span> → 디스크에서 로드(느림) 후 RAM에 올려둠"
+        },
+        {
+          "type": "qa",
+          "q": "그럼 실제 DB는 얼마나 히트해?",
+          "a": "잘 튜닝된 OLTP DB는 <span class=\"key-point\">히트율 99% 이상</span>이야. 즉 요청 100번 중 99번은 디스크를 아예 안 가. 그래서 <span class=\"highlight\">'RAM이 DB 성능의 90%'</span>라고 하는 거야 — 버퍼 풀이 클수록(=서버 메모리가 클수록) 더 많은 페이지가 RAM에 남아 히트율이 올라가.\n\n아래 위젯에서 페이지를 요청하며 히트/미스가 어떻게 갈리는지 봐 ↓"
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"bpw\" id=\"bp-w-pool\"><h6>🗂️ 버퍼 풀 — 한 번 읽은 건 RAM에 쟁여둔다</h6><p class=\"sub\">페이지 번호를 눌러 요청해봐(또는 자동). RAM(버퍼 풀) 4칸에 있으면 ⚡히트, 없으면 💽미스(지하 창고行). 꽉 차면 가장 오래 안 쓴 걸 버려(LRU).</p><div class=\"bp-ctrl\">요청: <button class=\"bp-btn pg\" data-req=\"1\">1</button><button class=\"bp-btn pg\" data-req=\"2\">2</button><button class=\"bp-btn pg\" data-req=\"3\">3</button><button class=\"bp-btn pg\" data-req=\"4\">4</button><button class=\"bp-btn pg\" data-req=\"5\">5</button><button class=\"bp-btn pg\" data-req=\"6\">6</button><button class=\"bp-btn\" data-req=\"auto\">⏩ 자동</button><button class=\"bp-btn\" data-req=\"reset\">↺</button></div><canvas class=\"bp-canvas\" id=\"pool-canvas\" height=\"220\"></canvas><div class=\"bp-stat\"><div class=\"bp-chip\"><div class=\"k\">⚡ 히트</div><div class=\"v good\" id=\"pool-hit\">0</div></div><div class=\"bp-chip\"><div class=\"k\">💽 미스(디스크)</div><div class=\"v warn\" id=\"pool-miss\">0</div></div><div class=\"bp-chip\"><div class=\"k\">히트율</div><div class=\"v\" id=\"pool-rate\">-</div></div></div><div class=\"bp-legend\"><span><i class=\"bp-dot\" style=\"background:#66bb6a\"></i>버퍼(RAM)에 있음</span><span><i class=\"bp-dot\" style=\"background:#ef5350\"></i>디스크에서 로드</span><span><i class=\"bp-dot\" style=\"background:#37475f\"></i>빈 칸</span></div><div class=\"bp-cap\" id=\"pool-cap\">페이지 번호를 눌러 요청해봐. 같은 페이지를 다시 요청하면 히트가 뜰 거야.</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. RAM은 유한하다 — 뭘 버리지? (LRU)",
+      "items": [
+        {
+          "type": "qa",
+          "q": "위 위젯에서 봤듯이 버퍼가 꽉 차면? 새 페이지를 올릴 자리가 없잖아.",
+          "a": "뭔가를 버려야 해. 뭘 버릴까? <span class=\"key-point\">가장 오래 안 쓴 페이지(LRU, Least Recently Used)</span>를 버려.\n\n논리는 간단해 — <span class=\"highlight\">최근에 쓴 건 또 쓸 확률이 높고, 오래 안 쓴 건 앞으로도 안 쓸 확률이 높아</span>(지역성). 그래서 접근할 때마다 그 페이지를 '맨 앞'으로 옮기고, 자리가 없으면 '맨 뒤'(가장 오래된 것)를 버려."
+        },
+        {
+          "type": "qa",
+          "q": "LRU면 항상 최적이야?",
+          "a": "대체로 좋지만 함정도 있어. <span class=\"warning\">큰 테이블을 한 번 통째로 스캔</span>하면(예: 배치 집계), 딱 한 번 쓸 페이지들이 버퍼를 싹 밀어내서 정작 자주 쓰던 페이지가 쫓겨나 — 히트율이 뚝 떨어져. 그래서 실제 DB는 순수 LRU가 아니라 <span class=\"highlight\">이런 스캔을 감지해 보호하는 변형</span>(예: LRU-K, 클럭 알고리즘)을 써. '공짜 최적화는 없다'는 여기서도 통해."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 쓰기는? — 더티 페이지",
+      "items": [
+        {
+          "type": "qa",
+          "q": "읽기는 알겠어. 데이터를 '바꿀' 땐 바로 디스크에 써?",
+          "a": "아니. <span class=\"key-point\">RAM(버퍼 풀)에 있는 페이지를 먼저 바꿔.</span> 디스크는 느리니까 매번 쓰면 안 되거든. RAM에서만 바뀌고 <span class=\"highlight\">아직 디스크엔 반영 안 된 페이지를 '더티 페이지'</span>라고 불러.\n\nQ. 그럼 디스크엔 언제 써?\nA. 나중에 <span class=\"highlight\">모아서 한꺼번에</span>. 매번 안 쓰고 모아 쓰니 훨씬 효율적이야."
+        },
+        {
+          "type": "qa",
+          "q": "잠깐 — 더티 페이지가 RAM에만 있는데 그 순간 서버가 죽으면?",
+          "a": "<span class=\"warning\">RAM은 전원 나가면 다 날아가.</span> 그럼 아직 디스크에 안 쓴 더티 페이지의 변경이 통째로 사라지겠지? 커밋했다고 유저한테 말해놓고 데이터가 없어지는 거야.\n\n<span class=\"key-point\">바로 이 문제를 막는 게 다음 주제 WAL(로깅·복구)</span>이야 — '더티를 디스크에 쓰기 전에, 변경 내용을 로그에 먼저 적어두는' 규칙이지. 아래에서 '지금 죽으면?'을 눌러 위험을 직접 봐 ↓"
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"bpw\" id=\"bp-w-dirty\"><h6>✏️ 더티 페이지 & 체크포인트</h6><p class=\"sub\">'수정'을 누르면 RAM의 페이지만 바꿔(빠름) — 아직 디스크엔 안 쓴 '더티' 상태야. '체크포인트'를 누르면 더티들을 한꺼번에 디스크로 flush 해.</p><div class=\"bp-ctrl\"><button class=\"bp-btn\" data-dt=\"mod\">✏️ 페이지 수정</button><button class=\"bp-btn\" data-dt=\"ckpt\">💾 체크포인트(flush)</button><button class=\"bp-btn\" data-dt=\"crash\">💥 지금 죽으면?</button></div><canvas class=\"bp-canvas\" id=\"dirty-canvas\" height=\"200\"></canvas><div class=\"bp-stat\"><div class=\"bp-chip\"><div class=\"k\">더티 페이지(RAM에만)</div><div class=\"v warn\" id=\"dt-dirty\">0</div></div><div class=\"bp-chip\"><div class=\"k\">디스크 반영 완료</div><div class=\"v good\" id=\"dt-clean\">6</div></div></div><div class=\"bp-cap\" id=\"dt-cap\">수정은 RAM에서 먼저 해서 빠르지만, 디스크에 아직 안 쓴 더티가 쌓여. 지금 죽으면 그게 다 날아가 — 이걸 막는 게 다음 주제 WAL이야.</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. 체크포인트 & 정리",
+      "items": [
+        {
+          "type": "qa",
+          "q": "더티 페이지는 결국 언제 디스크로 가?",
+          "a": "두 가지 계기로 가.\n1. <span class=\"highlight\">체크포인트</span>: 주기적으로 '지금까지의 더티를 디스크에 flush하자' 하는 시점. 복구 시간을 줄이려고 규칙적으로 함.\n2. <span class=\"highlight\">lazy writer</span>: 버퍼 풀이 꽉 차서 자리가 필요할 때, 백그라운드로 더티를 밀어내 자리 확보.\n\n둘 다 <span class=\"key-point\">'RAM에서 빠르게 처리하고, 디스크 쓰기는 몰아서 나중에'</span>라는 같은 철학이야."
+        },
+        {
+          "type": "qa",
+          "q": "결국 버퍼 풀의 핵심이 뭐야?",
+          "a": "<span class=\"key-point\">느린 디스크를 빠른 RAM으로 가려서, DB가 대부분의 일을 RAM 속도로 하게 만드는 것.</span>\n\n• 읽기: 히트율을 높여 디스크行을 최소화(RAM 클수록 유리)\n• 쓰기: RAM에서 먼저(더티) → 체크포인트로 몰아서 flush\n• 그래서 DB 서버는 <span class=\"highlight\">메모리가 곧 성능</span>이야.\n\n남은 숙제 하나 — 더티가 디스크 반영 전에 죽으면? 그 안전장치가 <span class=\"highlight\">WAL</span>이야. 다음 편에서."
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "디스크는 RAM보다 SSD 1,000배·HDD 100,000배 느리다 — 매번 디스크行은 재앙.",
+        "버퍼 풀 = 한 번 읽은 페이지를 RAM에 쟁여두는 캐시(히트=RAM, 미스=디스크 로드).",
+        "잘 튜닝된 DB는 히트율 99%+ → 'RAM이 성능의 90%', 버퍼 풀 클수록 유리.",
+        "RAM 유한 → LRU로 오래 안 쓴 페이지 버림(단, 큰 스캔이 캐시를 밀어내는 함정).",
+        "쓰기는 RAM에서 먼저(더티 페이지) → 체크포인트·lazy writer로 몰아서 디스크 flush.",
+        "더티가 디스크 반영 전 죽으면 유실 → 그 안전장치가 WAL(다음 주제)."
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "이어서 보면 (DB 원리 트리)",
+      "items": [
+        "앞 편: 데이터가 디스크에 눕는 법(페이지·B-Tree): db-storage-internals",
+        "다음 편 ★: 커밋했는데 죽으면? — WAL이 데이터를 살리는 법(로깅·복구)",
+        "대기 통계로 버퍼 풀 병목(PAGEIOLATCH 등) 읽기: wait-statistics"
+      ]
+    }
+  ]
+}
