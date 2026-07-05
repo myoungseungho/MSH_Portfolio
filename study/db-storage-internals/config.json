@@ -1,0 +1,187 @@
+{
+  "slug": "db-storage-internals",
+  "title": "메모장 저장이랑 DB 저장이 똑같을까? — 데이터가 디스크에 눕는 법",
+  "subtitle": "파일과 무엇이 같고 무엇이 다른가 — 8KB 페이지·힙·클러스터드·B-Tree, 그리고 '왜 그냥 파일이 아닌가'",
+  "category": "DB / 캐시",
+  "category_path": "../category-db/",
+  "prev_link": "../category-db/",
+  "prev_text": "← DB / 캐시",
+  "next_link": "../index-selectivity/",
+  "next_text": "인덱스 선택도 →",
+  "extra_head": "    <style>\n    .dbw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}\n    .dbw h6{font-size:.98rem;font-weight:800;color:#fff;margin:0 0 4px}\n    .dbw .sub{font-size:.8rem;color:#8ba0c4;margin:0 0 14px}\n    .db-ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:.84rem;color:#b5c2db}\n    .db-ctrl label{display:flex;align-items:center;gap:7px;cursor:pointer}\n    .db-ctrl input[type=range]{width:160px;accent-color:#42a5f5}\n    .db-btn{padding:8px 13px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:.15s}\n    .db-btn:hover{border-color:#42a5f5;color:#e3eaf5}\n    .db-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .db-canvas{width:100%;border-radius:12px;background:#070b16;display:block;touch-action:none}\n    .db-stat{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}\n    .db-chip{flex:1;min-width:120px;background:#121a30;border:1px solid #223052;border-radius:10px;padding:10px 12px}\n    .db-chip .k{font-size:.72rem;color:#8ba0c4;margin-bottom:3px}\n    .db-chip .v{font-size:1.15rem;font-weight:800;color:#fff}\n    .db-chip .v.warn{color:#ff8a80}\n    .db-chip .v.good{color:#69f0ae}\n    .db-cap{margin-top:12px;font-size:.86rem;line-height:1.7;color:#b5c2db;background:#121a30;border-radius:10px;padding:12px 14px;border-left:3px solid #42a5f5;min-height:1.7em}\n    </style>\n    <script src=\"dbstorage.js\" defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "DB 데이터도 결국 디스크의 '파일'이야(.mdf 등). 메모장 .txt처럼 파일은 파일이지.",
+        "다른 점 4가지: ① 8KB 페이지 단위로 잘라 저장(통째 X) ② 정렬/색인(B-Tree)으로 안 훑고 찾음 ③ 여러 명 동시 접근 안전 ④ 죽어도 복구(로그).",
+        "즉 '검색·동시성·안전'을 위해 파일 위에 특수 포맷과 규칙을 얹은 게 DB야."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. DB도 결국 '파일'이야 — 근데 열어보면?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "DB에 저장한 데이터도, 알고 보면 디스크 어딘가 파일로 있는 거야?",
+          "a": "응, 맞아. <span class=\"highlight\">MSSQL이면 .mdf 파일 하나</span>에 테이블·행이 다 들어있어. 메모장 .txt가 디스크에 있는 것과 똑같이, DB 파일도 그냥 디스크의 파일이야. <span class=\"key-point\">여기까진 완전히 같아.</span>"
+        },
+        {
+          "type": "qa",
+          "q": "그럼 그 .mdf 파일을 메모장으로 열면 내 데이터가 보여?",
+          "a": "<span class=\"warning\">안 보여.</span> 열면 알아볼 수 없는 깨진 이진 덩어리가 나와. 바로 <span class=\"key-point\">여기서 메모장 파일과 DB 파일이 갈라져.</span>\n\n둘 다 '파일'이지만 <span class=\"highlight\">내부를 채우는 방식(포맷)이 완전히 달라.</span> 메모장은 글자를 그냥 순서대로 죽 늘어놓지만, DB는 특수한 규칙으로 채워. 그 규칙이 뭔지가 이 글의 전부야 — 크게 4가지 차이가 있어."
+        },
+        {
+          "type": "diagram",
+          "content": "같은 '파일', 다른 '내부'\n\n[메모장 hello.txt]        [DB users.mdf]\n ┌──────────────┐         ┌──────────────┐\n │ 안녕 반가워    │         │ ▓8KB▓ ▓8KB▓  │ ← 페이지로 잘림\n │ 오늘 날씨...   │         │ ▓8KB▓ ▓8KB▓  │\n │ (글자 죽 나열) │         │ + B-Tree 색인 │ ← 찾기용 색인\n └──────────────┘         │ + 트랜잭션 로그│ ← 복구용\n  통째로 읽음              └──────────────┘\n                            필요한 페이지만"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 차이① — 통째로 vs 8KB 페이지 단위",
+      "items": [
+        {
+          "type": "qa",
+          "q": "메모장은 파일을 어떻게 다뤄?",
+          "a": "메모장은 파일을 열면 <span class=\"highlight\">통째로 메모리에 다 올려.</span> 한 글자만 바꿔도 파일 전체를 다시 저장하고. 파일이 작으니 괜찮지.\n\nQ. 근데 DB 파일이 100GB면? 메모장식으로 하면?\nA. 유저 한 명 조회하자고 <span class=\"warning\">100GB를 통째로 메모리에 올려야</span> 해. 말이 안 되지."
+        },
+        {
+          "type": "qa",
+          "q": "그래서 DB는 어떻게 해?",
+          "a": "파일을 <span class=\"highlight\">8KB짜리 '페이지'로 잘게 잘라</span> 관리해. 데이터를 읽고 쓰는 최소 단위가 이 페이지야. 유저 한 명이 필요하면 <span class=\"key-point\">그 유저가 든 페이지 몇 개만 콕 집어</span> 읽어.\n\n예측해봐 — 100GB 테이블에서 유저 1명 찾으면 디스크에서 얼마를 읽을까? '수십 GB?' 아니. <span class=\"key-point\">단 몇 개의 8KB 페이지 = 수십 KB</span>야. 아래에서 직접 비교해봐."
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"dbw\" id=\"db-w-page\"><h6>📄 통째로 읽기(메모장) vs 페이지 단위(DB)</h6><p class=\"sub\">파일 크기를 키우고 '유저 1명 조회'를 눌러봐. 메모장은 파일을 통째로, DB는 필요한 8KB 페이지만 읽어 — 큰 파일일수록 차이가 벌어져.</p><div class=\"db-ctrl\"><label>파일(테이블) 크기 <input type=\"range\" id=\"pg-size\" min=\"1\" max=\"100\" step=\"1\" value=\"50\"><b id=\"pg-sizev\">50</b> GB</label><button class=\"db-btn\" data-pg=\"read\">🔍 유저 1명 조회</button></div><canvas class=\"db-canvas\" id=\"pg-canvas\" height=\"180\"></canvas><div class=\"db-stat\"><div class=\"db-chip\"><div class=\"k\">메모장식: 읽는 양</div><div class=\"v warn\" id=\"pg-file\">-</div></div><div class=\"db-chip\"><div class=\"k\">DB식: 읽는 양</div><div class=\"v good\" id=\"pg-db\">-</div></div><div class=\"db-chip\"><div class=\"k\">차이</div><div class=\"v\" id=\"pg-ratio\">-</div></div></div><div class=\"db-cap\" id=\"pg-cap\">100GB 파일에서 유저 한 명 찾자고 100GB를 다 메모리에 올릴 순 없잖아. DB가 파일을 8KB 페이지로 잘라둔 이유야.</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 차이② — 순서 없이 쌓기(힙) vs 정렬(클러스터드)",
+      "items": [
+        {
+          "type": "qa",
+          "q": "메모장에서 특정 단어를 찾으려면?",
+          "a": "Ctrl+F로 <span class=\"warning\">처음부터 끝까지 훑어.</span> 글자가 쓴 순서대로 죽 나열돼 있을 뿐, 정렬돼 있지 않으니까.\n\nDB도 아무 설정 없으면 비슷해. 이걸 <span class=\"highlight\">힙(Heap)</span>이라 불러 — 행을 빈자리에 그냥 던져넣어(순서 없음). INSERT는 빠르지만, 특정 행 찾으려면 전부 훑어(풀 스캔)."
+        },
+        {
+          "type": "qa",
+          "q": "그럼 정렬해두면?",
+          "a": "행을 <span class=\"highlight\">키(예: id) 순서대로 정렬된 상태로 저장</span>하는 게 <span class=\"highlight\">클러스터드 인덱스</span>야. 전화번호부처럼 정렬돼 있으니 'ㄱ~ㄷ은 앞쪽'하고 확 좁힐 수 있어.\n\nQ. 그럼 항상 클러스터드가 좋아?\nA. 검색은 빠른데, 정렬을 유지하려면 <span class=\"warning\">중간에 INSERT할 때 자리를 만들어야 해(페이지 분할)</span>. 공짜는 없어. 아래에서 힙 vs 클러스터드로 42를 찾아봐."
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"dbw\" id=\"db-w-layout\"><h6>🗃️ 순서 없이 쌓기(힙) vs 정렬해두기(클러스터드)</h6><p class=\"sub\">탭을 바꿔봐. 힙은 빈자리에 막 던져넣어(INSERT 빠름·검색 느림), 클러스터드 인덱스는 정렬된 채 저장돼(검색 빠름·INSERT 시 자리 이동).</p><div class=\"db-ctrl\"><button class=\"db-btn active\" data-ly=\"heap\">힙(순서 없음)</button><button class=\"db-btn\" data-ly=\"clustered\">클러스터드(정렬)</button><button class=\"db-btn\" data-ly=\"find\">🔍 id=42 찾기</button></div><canvas class=\"db-canvas\" id=\"ly-canvas\" height=\"200\"></canvas><div class=\"db-stat\"><div class=\"db-chip\"><div class=\"k\">42 찾는 데 확인한 칸</div><div class=\"v\" id=\"ly-scan\">-</div></div><div class=\"db-chip\"><div class=\"k\">방식</div><div class=\"v\" id=\"ly-mode\">힙</div></div></div><div class=\"db-cap\" id=\"ly-cap\">힙은 Ctrl+F처럼 처음부터 훑어야 해. 클러스터드는 정렬돼 있어 전화번호부처럼 확 좁혀 — 다음 위젯의 B-Tree가 그 비밀이야.</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 차이③ — B-Tree라는 초강력 색인",
+      "items": [
+        {
+          "type": "qa",
+          "q": "정렬돼 있어도 100만 행이면 이진탐색도 20번인데, DB는 어떻게 3번 만에 찾아?",
+          "a": "<span class=\"highlight\">B-Tree</span>라는 트리 색인 덕분이야. 이진탐색은 갈래가 2개뿐이지만, B-Tree는 <span class=\"key-point\">한 노드에서 수백 갈래로 쫙 퍼져.</span>\n\n동작은 초딩 버전으로: 루트에서 \"42는 30~60 사이네\" → 그 갈래로. 다음 노드에서 \"40~50 사이\" → 그 갈래로. <span class=\"key-point\">몇 단계 만에 잎(실제 페이지)에 도착</span>해. 갈래가 넓으니 100만 행도 3~4단계면 끝이야."
+        },
+        {
+          "type": "qa",
+          "q": "그게 왜 그렇게 빠른 거야? 숫자로?",
+          "a": "한 노드가 400갈래라고 하면: 1단계 400개, 2단계 16만, <span class=\"key-point\">3단계 6400만 개</span>를 커버해. 즉 6400만 행을 <span class=\"good\">단 3번의 페이지 읽기</span>로 도달. 메모장엔 이런 색인이 아예 없어서 <span class=\"warning\">항상 전체 스캔</span>이지.\n\n아래에서 값을 골라 루트→잎으로 내려가는 길과 '읽은 페이지 수'를 직접 봐 ↓"
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"dbw\" id=\"db-w-btree\"><h6>🌲 B-Tree — 100만 행을 3번 만에 찾는 색인</h6><p class=\"sub\">찾을 값을 고르면 루트→중간→잎으로 내려가는 길을 애니메이션으로 보여줘. 읽은 페이지 수를 '전체 스캔'과 비교해봐. 이게 인덱스가 빠른 이유의 전부야.</p><div class=\"db-ctrl\"><span>찾을 id:</span><button class=\"db-btn\" data-bt=\"17\">17</button><button class=\"db-btn\" data-bt=\"42\">42</button><button class=\"db-btn\" data-bt=\"63\">63</button><button class=\"db-btn\" data-bt=\"88\">88</button></div><canvas class=\"db-canvas\" id=\"bt-canvas\" height=\"300\"></canvas><div class=\"db-stat\"><div class=\"db-chip\"><div class=\"k\">B-Tree: 읽은 페이지</div><div class=\"v good\" id=\"bt-reads\">-</div></div><div class=\"db-chip\"><div class=\"k\">전체 스캔이라면</div><div class=\"v warn\" id=\"bt-scan\">-</div></div></div><div class=\"db-cap\" id=\"bt-cap\">루트에서 \"42는 30~60 사이\" → 그 갈래로, 또 \"40~50 사이\" → 그 갈래로. 몇 단계 만에 도착해. 100만 행도 겨우 3~4번 페이지 읽기야.</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. 차이④ — 그냥 파일 안 쓰고 왜 DB를 쓰나",
+      "items": [
+        {
+          "type": "qa",
+          "q": "검색이 빠른 건 알겠어. 근데 그게 다야?",
+          "a": "아니, 두 개가 더 있어. <span class=\"highlight\">동시 접근</span>과 <span class=\"highlight\">안전</span>.\n\n메모장 파일을 두 사람이 동시에 저장하면? 한쪽이 통째로 덮어써서 <span class=\"warning\">한 명 작업이 통째로 날아가</span>(앞에서 본 레이스 컨디션!). DB는 트랜잭션·락으로 '동시에 만져도 안 깨지게' 조율해."
+        },
+        {
+          "type": "qa",
+          "q": "안전은? 저장 중 정전되면?",
+          "a": "메모장은 저장 중 정전이면 <span class=\"warning\">파일이 반만 써지거나 깨져.</span> 복구 수단이 없어.\n\nDB는 <span class=\"highlight\">'바꾸기 전에 로그에 먼저 적어두는'(WAL)</span> 규칙이 있어서, 죽었다 살아나도 로그를 보고 <span class=\"key-point\">정확히 그 시점으로 복구</span>해. (이건 다음 주제 — 로깅·복구에서 깊게)\n\n<span class=\"key-point\">정리하면: 검색·동시성·안전 이 세 가지 때문에, '그냥 파일' 위에 특수 포맷과 규칙을 얹은 게 DB야.</span>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "핵심 — 메모장 파일 vs DB, 같다/다르다",
+      "items": [
+        {
+          "type": "table",
+          "headers": [
+            "항목",
+            "메모장 파일",
+            "DB 파일"
+          ],
+          "rows": [
+            [
+              "디스크의 파일인가",
+              "✅ 그렇다",
+              "✅ 그렇다 (.mdf 등)"
+            ],
+            [
+              "읽는 단위",
+              "통째로 전부",
+              "8KB 페이지 단위"
+            ],
+            [
+              "정렬/색인",
+              "없음 (Ctrl+F 전체 훑기)",
+              "B-Tree 색인 (몇 단계로 도달)"
+            ],
+            [
+              "동시에 여럿이 쓰기",
+              "덮어써서 유실",
+              "트랜잭션·락으로 조율"
+            ],
+            [
+              "저장 중 죽으면",
+              "깨짐·반쪽 저장",
+              "로그(WAL)로 복구"
+            ],
+            [
+              "내부 포맷",
+              "글자 나열",
+              "페이지+색인+로그 구조"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "DB 데이터도 디스크의 파일이다 — 여기까진 메모장과 같다.",
+        "차이①: 통째로가 아니라 8KB 페이지 단위로 잘라 필요한 것만 읽는다.",
+        "차이②: 힙(순서 없이 쌓기) vs 클러스터드(정렬 저장) — 검색 속도가 갈린다.",
+        "차이③: B-Tree 색인으로 100만 행도 3~4번 페이지 읽기로 찾는다(전체 스캔 아님).",
+        "차이④: 동시 접근 조율(트랜잭션·락) + 죽어도 복구(WAL) — 파일엔 없는 규칙.",
+        "= DB는 '검색·동시성·안전'을 위해 파일 위에 특수 포맷을 얹은 것."
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "이어서 보면 (DB 원리 트리)",
+      "items": [
+        "인덱스 선택도 — 어떤 컬럼에 색인을 걸어야 효과: index-selectivity",
+        "커버링 인덱스 — 잎 페이지만으로 조회 끝내기: covering-index",
+        "실행 계획 — 옵티마이저가 seek/scan을 고르는 법: execution-plan",
+        "다음 주제: 버퍼 풀(페이지를 RAM에 올리는 법) & WAL(로깅·복구) — 아직 갭"
+      ]
+    }
+  ]
+}
