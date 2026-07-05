@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1만 명 접속을 스레드 8개로 — select에서 RIO까지 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+    <style>
+    .niow{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}
+    .niow h6{font-size:.98rem;font-weight:800;color:#fff;margin:0 0 4px}
+    .niow .sub{font-size:.8rem;color:#8ba0c4;margin:0 0 14px}
+    .nio-ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:.84rem;color:#b5c2db}
+    .nio-ctrl label{display:flex;align-items:center;gap:7px;cursor:pointer}
+    .nio-ctrl input[type=range]{width:150px;accent-color:#42a5f5}
+    .nio-btn{padding:8px 13px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:.15s}
+    .nio-btn:hover{border-color:#42a5f5;color:#e3eaf5}
+    .nio-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    .nio-canvas{width:100%;border-radius:12px;background:#070b16;display:block;touch-action:none}
+    .nio-stat{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .nio-chip{flex:1;min-width:120px;background:#121a30;border:1px solid #223052;border-radius:10px;padding:10px 12px}
+    .nio-chip .k{font-size:.72rem;color:#8ba0c4;margin-bottom:3px}
+    .nio-chip .v{font-size:1.15rem;font-weight:800;color:#fff}
+    .nio-chip .v.warn{color:#ff8a80}
+    .nio-chip .v.good{color:#69f0ae}
+    .nio-cap{margin-top:12px;font-size:.86rem;line-height:1.7;color:#b5c2db;background:#121a30;border-radius:10px;padding:12px 14px;border-left:3px solid #42a5f5}
+    .nio-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem;color:#9fb0cc;margin-top:8px}
+    .nio-legend span{display:flex;align-items:center;gap:6px}
+    .nio-dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+    .nio-fallback{display:none;background:#2a1a1a;border:1px solid #6b2b2b;border-radius:10px;padding:14px;font-size:.86rem;color:#ef9a9a;margin-top:10px}
+    </style>
+    <script src="widget.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <a href="../network/" class="back-link">← 네트워크</a>
+
+        <header class="header">
+            <h1>1만 명 접속을 스레드 8개로 — select에서 RIO까지</h1>
+            <p>동기/비동기의 진짜 정의부터 IOCP 완료 큐, 가상메모리 핀 고정, 패킷 한 개의 종단 여행까지 — 흩어진 네트워크 I/O 지식을 하나로</p>
+        </header>
+
+        <div class="conversation">
+            <h2>Part 1. 동기 vs 비동기, 진짜 정의부터</h2>
+
+            <div class="chat">
+                <div class="q">동기·비동기, 한 문장으로 뭐가 달라?</div>
+                <div class="a">
+                    <p>기준은 딱 하나야. <span class="highlight">결과 나올 때까지 그 자리에 멈춰(기다려) 있느냐, 안 멈추고 딴 일 하러 가느냐.</span></p>
+                    <p>동기 = 라면 시켜놓고 주방 앞에 서서 나올 때까지 멍하니 기다림.</p>
+                    <p>비동기 = 진동벨 받고 자리로 돌아와 딴 일 하다가, 벨 울리면 그때 받으러 감.</p>
+                    <p>멀티스레드/락 같은 거랑 헷갈리는데, 그거랑 별개야. <span class="key-point">'기다리냐 / 안 기다리냐' 이것만 기억하면 안 헷갈려.</span></p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">맞춰봐 — 우리 게임서버가 DB에 쿼리를 던져. 이건 동기야 비동기야?</div>
+                <div class="a">
+                    <p>'동기 아냐?' 싶지? 그런데 <span class="warning">게임서버 입장에선 반드시 비동기여야 해.</span></p>
+                    <p>우리 게임서버는 유저 패킷을 <span class="highlight">한 줄로 세워 하나씩</span> 처리하거든(싱글스레드 로직). 여기서 DB 응답을 동기로 기다리면? A유저 응답 기다리는 0.1초 동안 <span class="warning">B·C·D 모든 유저의 패킷이 멈춰버려.</span> 화장실 한 명이 안 나와서 뒷사람 전원이 막히는 거야.</p>
+                    <p>그래서 이렇게 해: DB한테 요청 패킷(DCM_)만 던지고 → 안 기다리고 다음 유저 처리하러 감 → 나중에 DB가 결과 돌려주면 그때 이어서 처리. 이게 비동기야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 DB서버는? 걔도 비동기야?</div>
+                <div class="a">
+                    <p>아니, <span class="highlight">DB서버가 실제 DB에 SELECT/UPDATE 날리는 건 동기야.</span> 결과 올 때까지 기다려.</p>
+                    <p>Q. 어? DB서버는 왜 기다려도 돼?</p>
+                    <p>A. DB 작업만 전담하니까. 걔가 좀 밀려도 <span class="key-point">게임 로직이 멈추는 게 아니거든.</span> 역할이 분리돼 있어.</p>
+                    <p>Q. 그럼 같은 하나의 흐름인데 동기랑 비동기가 둘 다 나오는 거 아냐?</p>
+                    <p>A. 맞아. 그래서 헷갈렸던 거야. <span class="key-point">'누구 입장에서?'를 붙이면 정리돼.</span> 게임서버 입장 = 비동기(안 기다림), DB서버 입장 = 동기(기다림). 같은 화살표를 양쪽에서 다르게 부르는 거야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">같은 흐름, 주체마다 다른 이름
+
+[게임서버] ──"쿼리 해줘"(던지고 감)──▶ [DB서버] ──"SELECT..."(기다림)──▶ [실제 DB]
+     ▲ 비동기 (안 기다림)                    ▲ 동기 (기다림)
+     │                                        │
+     └──────"결과 왔어!"(콜백)◀───────────────┘
+
+멈추면 안 되는 놈 = 비동기  /  멈춰도 되는 놈 = 동기</div>
+
+            <div class="niow" id="w-syncasync"><h6>🕐 동기 vs 비동기 타임라인</h6><p class="sub">▶ 재생을 눌러봐. 같은 일 3개를 동기(기다림) / 비동기(안 기다림)로 처리할 때 '뒤에 줄 선 유저'가 언제 처리되는지 비교돼. (수치는 구조를 보여주는 예시값)</p><div class="nio-ctrl"><button class="nio-btn" data-sa="play">▶ 재생</button><button class="nio-btn" data-sa="reset">↺ 리셋</button></div><canvas class="nio-canvas" id="sa-canvas" height="230"></canvas><div class="nio-stat"><div class="nio-chip"><div class="k">동기: 3번째 유저 대기</div><div class="v warn" id="sa-sync">-</div></div><div class="nio-chip"><div class="k">비동기: 3번째 유저 대기</div><div class="v good" id="sa-async">-</div></div></div><div class="nio-cap" id="sa-cap">동기는 DB 응답(회색)이 끝날 때까지 다음 유저가 못 들어와. 비동기는 요청만 던지고 바로 다음 유저를 처리하지 — 게임서버가 이걸 써야 하는 이유야.</div></div>
+
+
+            <div class="chat">
+                <div class="q">그럼 싱글스레드면 '동시성'이랑은 아예 무관한 거야?</div>
+                <div class="a">
+                    <p>이게 흔한 오해인데 — <span class="warning">아니야.</span> 동시성은 '여러 일이 시간적으로 겹쳐 일어날 때 안 꼬이게 하는 것' 전부야. 멀티스레드는 그 원인 하나일 뿐이고.</p>
+                    <p>우리는 로직을 한 줄로 세워서 <span class="highlight">동시성 버그(경쟁 상태)를 설계로 회피</span>하는 거야. 근데 회피했다고 없어진 게 아니라 경계로 밀려나 있어: IO 스레드↔로직 스레드 큐, DB·타 서버와의 비동기 통신 순서. <span class="key-point">'왜 싱글스레드로 하는지'를 아는 게 곧 동시성을 이해한다는 증거야.</span></p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 태초의 서버 — 한 손님당 알바 한 명 (C10K)</h2>
+
+            <div class="chat">
+                <div class="q">제일 원시적인 방법은 뭐야?</div>
+                <div class="a">
+                    <p>손님(접속) 1명당 알바(스레드) 1명 붙이는 거야. 알바는 <span class="highlight">recv()</span>라는 데서 손님이 패킷 보낼 때까지 얼어붙어 기다려(=blocking).</p>
+                    <p>손님 1명 → 알바 1명. 손님 10,000명 → 알바 10,000명. 😱</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">맞춰봐 — 알바를 손님 수만큼 두면 뭐가 터질까?</div>
+                <div class="a">
+                    <p>'좀 비싸겠지' 정도로 생각했지? 실제론 <span class="warning">CPU가 일할 시간이 사라져.</span></p>
+                    <p>스레드 하나가 스택 ~1MB를 먹는 것도 문제지만, 진짜 killer는 <span class="highlight">컨텍스트 스위칭</span>이야. 코어 8개로 알바 10,000명을 굴리려면 '1번 잠깐, 2번 잠깐, 3번...' 하고 미친듯이 교대만 하다가 정작 일할 시간이 없어져.</p>
+                    <p>이게 그 유명한 <span class="key-point">C10K 문제</span> — 동시접속 1만을 어떻게 감당하냐. 손님은 느는데 알바 늘리는 방식은 벽에 부딪혀.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. select/poll — 알바 1명이 다 물어보기 (폴링의 낭비)</h2>
+
+            <div class="chat">
+                <div class="q">그럼 알바 1명이 여러 손님을 담당하면?</div>
+                <div class="a">
+                    <p>그게 select/poll이야. 알바 1명이 계속 물어봐: "1번 할 말 있어? 2번은? 3번은? ... 10000번은?" 한 바퀴 돌고 또 처음부터.</p>
+                    <p>Q. 근데 이게 왜 문제야? 알바 수는 줄었잖아.</p>
+                    <p>A. 할 말 있는 손님이 <span class="warning">딱 1명이어도 10,000명 전부한테 매번 물어봐야</span> 그 1명을 찾거든(매번 전체 소켓 목록을 처음부터 훑음 = O(n)). 게다가 이 목록을 매번 커널에 통째로 복사해 넘겼다 받았다 해.</p>
+                    <p>Q. 그럼 손님이 많아질수록?</p>
+                    <p>A. 헛질문이 눈덩이처럼 커져. <span class="key-point">'물어보는 방식(폴링)' 자체가 낭비의 근원</span>이야.</p>
+                </div>
+            </div>
+
+            <div class="niow" id="w-polling"><h6>🔔 폴링 vs 완료 통보</h6><p class="sub">왼쪽(select)은 알바가 모든 소켓에 매번 '왔어?'를 물어. 오른쪽(IOCP)은 커널이 준비된 것만 접수함에 넣어두고 알바는 꺼내가. 소켓 수를 늘려봐 — 헛질문이 어떻게 벌어지는지.</p><div class="nio-ctrl"><label>소켓(연결) 수 <input type="range" id="pl-n" min="4" max="60" step="1" value="20"><b id="pl-nv">20</b></label><button class="nio-btn" data-pl="tick">▶ 한 바퀴</button><button class="nio-btn" data-pl="auto">⏩ 자동</button></div><canvas class="nio-canvas" id="pl-canvas" height="240"></canvas><div class="nio-stat"><div class="nio-chip"><div class="k">select 누적 헛질문</div><div class="v warn" id="pl-poll">0</div></div><div class="nio-chip"><div class="k">IOCP 누적 헛질문</div><div class="v good" id="pl-iocp">0</div></div></div><div class="nio-legend"><span><i class="nio-dot" style="background:#37475f"></i>조용한 소켓</span><span><i class="nio-dot" style="background:#ffca28"></i>데이터 도착</span><span><i class="nio-dot" style="background:#42a5f5"></i>알바가 확인</span></div></div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. IOCP — "묻지 마, 완료되면 통보한다"</h2>
+
+            <div class="chat">
+                <div class="q">그럼 발상을 어떻게 뒤집었어?</div>
+                <div class="a">
+                    <p>여기가 IOCP의 핵심이야. <span class="key-point">"알바가 계속 물어보지(폴링) 말고, 손님이 말 걸면 운영체제가 '접수함'에 넣어둘게. 알바는 접수함만 봐."</span></p>
+                    <p>이걸 '완료 통보' 방식이라고 해. IOCP 이름 자체가 <span class="highlight">I/O Completion Port(입출력 완료 포트)</span>야.</p>
+                    <p>Q. 그래서 뭐가 좋아진 거야?</p>
+                    <p>A. 세 가지. ① 알바를 손님 수가 아니라 <span class="highlight">CPU 코어 수만큼만</span>(10,000명 → 8명) 둬. ② 헛질문(폴링)을 안 해 — 접수함엔 진짜 일거리만 들어오니까. ③ 운영체제가 일거리 개수만큼만 알바를 똑똑하게 깨워(우르르 깨서 부딪히는 낭비 방지).</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 이제 완벽한 거야? 여기서 끝?</div>
+                <div class="a">
+                    <p>대부분 게임서버는 여기서 만족해 — <span class="key-point">우리 서버도 IOCP를 써(SIOCPPacket).</span> 근데 초당 수십만~수백만 패킷 가면 아직 남은 낭비가 두 개 보여.</p>
+                    <p>① 패킷마다 <span class="highlight">유저↔커널 '문턱'을 넘어야</span> 해(WSARecv/WSASend = syscall). 한 번은 싸지만 초당 100만 번이면 '출퇴근 시간'이 일하는 시간만큼 커져.</p>
+                    <p>② 패킷마다 <span class="highlight">버퍼 위치 찾고 메모리에 고정하는 잔손질</span>을 새로 해. (이게 왜 필요한지는 Part 7에서.)</p>
+                    <p><span class="warning">비교 대상 = 우리 IOCP 서버. RIO는 이 두 낭비를 없애. 대신 API가 복잡하고, 버퍼를 미리 다 등록해둬야 해서 유연성을 잃어.</span></p>
+                </div>
+            </div>
+
+            <div class="niow" id="w-evolution"><h6>🔧 select → IOCP → RIO : 낭비가 사라지는 진화</h6><p class="sub">모델을 바꾸고 초당 패킷 수를 올려봐. 같은 트래픽에서 '유저/커널 문턱 넘기(syscall)'·'헛스캔'·'버퍼 핀고정 잔손질'이 단계마다 어떻게 줄어드는지 숫자로 보여줘. (예시 모델값)</p><div class="nio-ctrl"><button class="nio-btn active" data-ev="select">select</button><button class="nio-btn" data-ev="iocp">IOCP</button><button class="nio-btn" data-ev="rio">RIO</button></div><div class="nio-ctrl"><label>동접(연결) <input type="range" id="ev-conn" min="100" max="20000" step="100" value="5000"><b id="ev-connv">5,000</b></label><label>초당 패킷 <input type="range" id="ev-pps" min="1000" max="1000000" step="1000" value="100000"><b id="ev-ppsv">100,000</b></label></div><canvas class="nio-canvas" id="ev-canvas" height="150"></canvas><div class="nio-stat"><div class="nio-chip"><div class="k">초당 커널 문턱 넘기(syscall)</div><div class="v" id="ev-sys">-</div></div><div class="nio-chip"><div class="k">초당 헛스캔(소켓 훑기)</div><div class="v" id="ev-scan">-</div></div><div class="nio-chip"><div class="k">초당 버퍼 변환·핀고정</div><div class="v" id="ev-pin">-</div></div></div><div class="nio-cap" id="ev-cap">-</div></div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. RIO — 미리 등록해서 문턱·잔손질을 없앤다</h2>
+
+            <div class="chat">
+                <div class="q">RIO는 그래서 뭘 어떻게 해?</div>
+                <div class="a">
+                    <p>RIO = <span class="highlight">Registered I/O(등록된 입출력)</span>. 이름에 답이 있어 — <span class="key-point">미리 등록</span>해두는 거야.</p>
+                    <p>택배로 비유하면: IOCP가 택배 올 때마다 '이거 누구 거? 어디 둘까? 박스 어디 있지?'를 매번 계산했다면, RIO는 <span class="highlight">주소·박스·컨베이어 벨트를 개업 때 미리 다 깔아두고</span>, 그 다음부턴 묻지도 따지지도 않고 벨트로 슉슉 흘려보내.</p>
+                    <p>버퍼(상자)와 완료 큐를 개업 때 딱 한 번 등록 → 그 뒤부턴 <span class="highlight">문턱 안 넘고 유저 영역에서 완료 큐를 바로 폴링</span>, 버퍼 변환·고정도 다시 안 함.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">공짜는 아니지? 뭘 포기해?</div>
+                <div class="a">
+                    <p>당연히 트레이드오프 있어. <span class="warning">① 버퍼를 미리 고정 등록하니 메모리를 상시 점유해(비페이지 풀 압박). ② 등록한 버퍼 개수·크기에 묶여서 유연성이 떨어져. ③ API가 IOCP보다 훨씬 손이 많이 가고, Windows 8/2012+에서만 돼.</span></p>
+                    <p>Q. 그럼 우리도 IOCP에서 RIO로 갈아타야 해?</p>
+                    <p>A. 아니. <span class="key-point">IOCP로 벅찰 만큼 극단적으로 패킷이 많은 곳</span>에서나 마지막 한 방울 짜내려고 쓰는 거야. 공고에 RIO가 있으면 '우리 트래픽이 그만큼 극한' 또는 '밑바닥 성능까지 파는 팀'이란 신호로 읽으면 돼.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr>
+                    <th>항목</th>
+                    <th>select</th>
+                    <th>IOCP</th>
+                    <th>RIO</th>
+                </tr>
+                <tr>
+                    <td>알바(스레드)</td>
+                    <td>1명이 다 폴링</td>
+                    <td>코어 수만큼</td>
+                    <td>코어 수만큼</td>
+                </tr>
+                <tr>
+                    <td>준비 감지</td>
+                    <td>매번 전체 스캔(O(n))</td>
+                    <td>완료 통보(접수함)</td>
+                    <td>완료 큐 유저모드 폴링</td>
+                </tr>
+                <tr>
+                    <td>커널 문턱(syscall)</td>
+                    <td>호출마다</td>
+                    <td>호출마다(IOCP도 있음)</td>
+                    <td>거의 0(미리 등록)</td>
+                </tr>
+                <tr>
+                    <td>버퍼 변환·핀고정</td>
+                    <td>매번</td>
+                    <td>매번</td>
+                    <td>개업 때 한 번</td>
+                </tr>
+                <tr>
+                    <td>언제 쓰나</td>
+                    <td>교육/소규모</td>
+                    <td>대부분 게임서버 ★</td>
+                    <td>초당 수십만+ 극한</td>
+                </tr>
+            </table>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 오개념 교정 — 운영체제는 언제부터 개입할까?</h2>
+
+            <div class="chat">
+                <div class="q">들어보면 IOCP부터 운영체제를 쓰는 것 같은데, 맞아?</div>
+                <div class="a">
+                    <p>흔히 그렇게 느끼는데 <span class="warning">틀렸어.</span> 패킷이 랜카드로 들어오는 순간 <span class="key-point">0단계부터 무조건 커널이 먼저 받아.</span> 유저 프로그램이 랜카드를 직접 만지는 일은 절대 없어.</p>
+                    <p>0·1·2·3단계 전부 '커널이 패킷 받아 소켓 버퍼에 쌓는 것'은 똑같아. 바뀌는 건 그게 아니야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 단계마다 진짜로 바뀌는 게 뭔데?</div>
+                <div class="a">
+                    <p><span class="highlight">'커널이 받아둔 데이터를, 우리 프로그램이 어떻게 알아채고 가져오느냐'</span> — 그 소통 프로토콜이야. 데이터는 이미 커널 창고에 있어. 문제는 '창고에 물건 왔는지 어떻게 확인하고, 몇 번 왔다갔다 하며 꺼내느냐'야.</p>
+                    <p>• 0단계: 창고 안에서 얼어붙어 기다림</p>
+                    <p>• 1단계: 자꾸 물어보러 출입문 넘음(폴링)</p>
+                    <p>• 2단계(IOCP): 모아두면 한 번에 받음 → 출입문 횟수↓</p>
+                    <p>• 3단계(RIO): 출입문 넘기·서류를 미리 처리 → 문턱 비용↓</p>
+                    <p><span class="key-point">진짜 축은 '운영체제 개입 여부'가 아니라 '유저/커널 문턱을 몇 번 넘느냐(syscall) + 준비를 폴링으로 아느냐 통보로 아느냐'야.</span> 커널의 존재 여부가 아니라, 커널과 대화하는 방식의 진화인 거지.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 왜 버퍼를 '못박아야' 하나 — 가상메모리와 핀 고정</h2>
+
+            <div class="chat">
+                <div class="q">Part 4에서 말한 '버퍼 위치 찾기'가 이해가 안 됐어. 상자는 그냥 거기 있는 거 아냐?</div>
+                <div class="a">
+                    <p>여기가 핵심이야. <span class="warning">우리 프로그램은 메모리의 '진짜 주소'를 몰라.</span></p>
+                    <p>회사가 너한테 사물함 7번을 줬어. 넌 평생 '내 상자는 7번'이라고만 알아. 근데 <span class="highlight">7번은 가짜 번호(가상 주소)</span>야. 진짜 물건은 거대한 창고 어딘가 선반에 있고, '7번 = 3층 B구역 42번 선반'이라는 대응표를 <span class="highlight">운영체제만</span> 갖고 있어. 이게 가상 메모리야.</p>
+                    <p>Q. 왜 이렇게 귀찮게 해?</p>
+                    <p>A. 프로그램마다 '나는 7번!' 하고 편하게 자기 번호를 쓰되, 운영체제가 뒤에서 진짜 선반은 안 겹치게 배분하려고. 격리·보안·메모리 관리의 기본이야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">그게 핀 고정이랑 무슨 상관인데?</div>
+                <div class="a">
+                    <p>더 골치아픈 게 있어 — <span class="warning">진짜 선반은 움직여.</span> RAM이 부족하면 운영체제가 '요즘 안 쓰는 상자는 잠깐 지하창고(하드디스크)로 빼놨다가' 필요할 때 다시 올려(=페이징/스와핑). '7번=3층 42번'이 5분 뒤엔 '7번=지하창고'가 될 수도 있어.</p>
+                    <p>이제 패킷이 네 7번 상자에 데이터를 부어야 하는데, 이걸 하는 건 <span class="highlight">하드웨어(랜카드)나 커널의 저수준 복사기</span>야. 얘넨 가짜 번호(7번) 못 알아들어 — 진짜 물리 주소가 필요해. 그래서 붓기 직전에 ① <span class="highlight">주소 변환</span>(7번이 지금 진짜 어느 선반?) ② <span class="highlight">핀 고정</span>(붓는 동안 이 선반 절대 옮기지 마!) 두 잔손질을 해.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">고정을 안 하면 진짜 뭐가 터져?</div>
+                <div class="a">
+                    <p>데이터를 3층 42번에 붓는 중인데 운영체제가 하필 그 순간 '이 상자 안 쓰네' 하고 지하로 빼버리면? <span class="warning">데이터가 엉뚱한 빈 선반에 쏟아지거나 날아가.</span> 대참사지. 그래서 붓는 동안엔 얼어붙게 고정해야 안전해.</p>
+                    <p><span class="key-point">IOCP의 아쉬운 점 2번이 이거야 — 패킷마다 '변환+고정+해제'를 새로 해.</span> 초당 수십만 번이면 티끌 모아 태산.</p>
+                    <p>RIO의 해결: 상자를 개업 때 딱 한 번 등록 = '이 상자들은 영원히 42번에 고정' → 그 뒤부턴 변환도 고정도 안 함. <span class="key-point">잔손질을 한 번으로 끝낸 거야.</span></p>
+                </div>
+            </div>
+
+            <div class="niow" id="w-pinning"><h6>📌 왜 버퍼를 '못박아야' 하나 — 핀 고정</h6><p class="sub">랜카드(DMA)가 네 버퍼에 데이터를 붓는 중에, 운영체제가 그 페이지를 다른 곳으로 옮기면(스와핑) 어떻게 될까? '핀 고정'을 껐다 켜며 DMA를 보내봐.</p><div class="nio-ctrl"><label class="nio-pinlbl"><input type="checkbox" id="pn-pin" checked> 핀 고정 ON</label><button class="nio-btn" data-pn="dma">📥 DMA 전송</button><button class="nio-btn" data-pn="swap">🔀 OS 스와핑</button></div><canvas class="nio-canvas" id="pn-canvas" height="220"></canvas><div class="nio-stat"><div class="nio-chip"><div class="k">전송 성공</div><div class="v good" id="pn-ok">0</div></div><div class="nio-chip"><div class="k">데이터 유실(엉뚱한 선반)</div><div class="v warn" id="pn-lost">0</div></div></div><div class="nio-cap" id="pn-cap">핀 고정을 켜면 페이지가 얼어붙어 스와핑돼도 안전해. 끄면 DMA 도중 페이지가 지하창고로 빠져서 데이터가 엉뚱한 곳에 쏟아져. IOCP는 이 고정을 패킷마다, RIO는 개업 때 한 번만.</div></div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 8. 패킷 한 개의 종단 여행 (NIC → 커널 → 유저)</h2>
+
+            <div class="chat">
+                <div class="q">지금까지 조각들을 하나로 꿰면 어떻게 돼?</div>
+                <div class="a">
+                    <p>패킷 한 개가 인터넷에서 네 게임로직까지 오는 8단계 여행이야. 아래 위젯에서 ▶를 눌러 직접 따라와봐. <span class="key-point">왼쪽 절반(커널이 받아 소켓버퍼에 쌓기)은 어느 모델이든 똑같고</span>, ★핀 고정 지점(⑥)만 IOCP는 매번·RIO는 생략이야.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">     인터넷 ─① 전기신호로 패킷 도착
+        ▼
+ [랜카드 NIC] ─② DMA로 커널 메모리에 직접 씀 (CPU 안 거침)
+        │ ─③ "패킷 왔어!" 인터럽트로 CPU 어깨 툭툭
+        ▼
+ ══════ 커널 영역 ══════
+  ④ TCP/IP 검사·조립·분류
+  ⑤ [소켓 수신 버퍼]에 쌓임  ← 아직 커널 창고
+ ══════ 유저/커널 문턱 ══════
+  ⑥ ★주소 변환 + 핀 고정 (IOCP=매번 / RIO=미리 등록해 생략)
+        ▼
+ [유저 영역=게임서버]
+  ⑦ 내 버퍼(7번 상자)로 복사 → 직렬화 해제
+  ⑧ 로직 스레드가 "A유저가 공격했구나" 처리</div>
+
+            <div class="niow" id="w-journey"><h6>🚚 패킷 한 개의 종단 여행 (NIC → 커널 → 유저)</h6><p class="sub">▶ 패킷 보내기를 누르면 패킷 한 개가 랜카드에서 네 게임로직까지 8개 레이어를 타고 내려가. 각 단계에서 무슨 일이 일어나는지, ★핀 고정이 어디서 발생하는지 따라와봐.</p><div class="nio-ctrl"><button class="nio-btn" data-jn="send">▶ 패킷 보내기</button><label>모델 <select id="jn-model" style="background:#172033;color:#cfe0ff;border:1px solid #2a3650;border-radius:8px;padding:6px 8px"><option value="iocp">IOCP (매번 핀고정)</option><option value="rio">RIO (미리 등록)</option></select></label></div><canvas class="nio-canvas" id="jn-canvas" height="430"></canvas><div class="nio-cap" id="jn-cap">랜카드에 전기신호로 패킷이 도착하는 순간부터, 운영체제(커널)가 항상 먼저 받아. 유저 프로그램은 절대 랜카드를 직접 만지지 않아.</div></div>
+
+
+            <div class="chat">
+                <div class="q">⑦에서 왜 커널→유저로 '복사'를 또 해? 커널 버퍼 바로 쓰면 안 돼?</div>
+                <div class="a">
+                    <p>좋은 꼬리질문이야. 안전·격리 때문에 기본은 복사해. 근데 이 복사도 초당 수십만이면 아까워서, <span class="highlight">제로카피(zero-copy)</span>라는 또 다른 최적화가 나와 — 커널 버퍼를 유저가 직접 참조하게 해서 복사를 생략하지.</p>
+                    <p>Q. 그럼 왜 다들 제로카피 안 써?</p>
+                    <p>A. 커널 버퍼 수명·소유권 관리가 까다롭고, 유저가 잘못 만지면 커널 메모리가 오염될 위험이 있어. <span class="key-point">공짜 최적화는 없어 — 성능을 얻으면 복잡도·안전마진을 내줘.</span> RIO의 등록 버퍼도 사실 이 제로카피 철학의 사촌이야.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리 — 한 줄씩</h3>
+            <ul>
+                <li>동기/비동기 = '기다리냐/안 기다리냐' + '누구 입장에서?'. 게임서버→DB는 비동기, DB서버→DB는 동기.</li>
+                <li>C10K: 손님당 알바 1명은 컨텍스트 스위칭으로 CPU가 교대만 하다 끝남.</li>
+                <li>select: 알바 1명이 다 담당하지만 매번 전체를 훑는 '폴링'이 낭비.</li>
+                <li>IOCP: '묻지 말고 완료되면 접수함에 통보' + 알바는 코어 수만큼. ← 우리 서버.</li>
+                <li>RIO: 버퍼·큐를 미리 등록해 커널 문턱·핀고정 잔손질을 제거. 극한 트래픽용.</li>
+                <li>운영체제는 0단계부터 항상 개입. 진화한 건 '문턱을 몇 번 넘고, 준비를 폴링/통보로 아느냐'.</li>
+                <li>가상메모리 때문에 프로그램은 가짜 주소만 알고, 물리 페이지는 스와핑으로 움직임.</li>
+                <li>그래서 DMA/커널이 버퍼에 쓰기 전 '주소 변환 + 핀 고정'이 필요 — IOCP는 매번, RIO는 한 번.</li>
+                <li>패킷 여행 8단계: NIC→DMA→인터럽트→커널스택→소켓버퍼→(핀고정)→유저버퍼→로직.</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <h4>🔗 더 깊이 (이 문서로 통합된 조각들)</h4>
+            <p>소켓 I/O 모델 콘솔 데모(sync/select/overlapped/iocp .cpp 실행): socket-models</p>
+            <p>IOCP 내부 3개 리스트 구조·API 상세: iocp-internals</p>
+            <p>인터럽트 vs 폴링(③ 단계 원리): interrupt-polling</p>
+            <p>DMA & 더블버퍼링(② 단계 원리): dma-buffering</p>
+            <p>시스템 콜이 왜 75배 느린가(문턱 비용): syscall</p>
+            <p>한 스레드로 수천 요청 — 코루틴/async: coroutine-async</p>
+            <p>가상메모리·페이지폴트·TLB: virtual-address-space / page-fault / tlb</p>
+            <p>IOCP→큐→싱글 로직(액터 모델): actor-model / mmo-multithread-gameloop</p>
+        </div>
+
+        <div class="info-box">
+            <h4>🤔 생각해볼 거리</h4>
+            <p>우리 서버가 동접 50만을 목표로 한다면, IOCP를 유지할까 RIO로 갈까? 병목이 CPU라면? 대역폭이라면?</p>
+            <p>게임로직이 싱글스레드인데 IO는 멀티스레드야. 그 경계 큐(ring buffer)에서 동시성 문제는 어떻게 막지? (→ lock-free)</p>
+        </div>
+
+
+        <div class="nav-links">
+            <a href="../interrupt-polling/">← 인터럽트 vs 폴링 (③단계 원리)</a>
+            <a href="../network/">네트워크 목록 →</a>
+        </div>
+    </div>
+</body>
+</html>
