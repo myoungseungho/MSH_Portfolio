@@ -1,0 +1,133 @@
+{
+  "slug": "redis",
+  "title": "메모리 DB? 그냥 내 코드 변수랑 뭐가 달라? — Redis",
+  "subtitle": "인메모리 DB가 '별도 서버'인 이유 — 공유·생존·원자성, 그리고 왜 MSSQL보다 빠른가",
+  "category": "DB / 캐시",
+  "category_path": "../category-db/",
+  "prev_link": "../category-db/",
+  "prev_text": "← DB / 캐시",
+  "next_link": "../db-buffer-pool/",
+  "next_text": "버퍼 풀 →",
+  "extra_head": "    <style>\n    .rdw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}\n    .rdw h6{font-size:.98rem;font-weight:800;color:#fff;margin:0 0 4px}\n    .rdw .sub{font-size:.8rem;color:#8ba0c4;margin:0 0 14px}\n    .rd-ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:.84rem;color:#b5c2db}\n    .rd-btn{padding:8px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:.15s}\n    .rd-btn:hover{border-color:#42a5f5;color:#e3eaf5}\n    .rd-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .rd-canvas{width:100%;border-radius:12px;background:#070b16;display:block;touch-action:none}\n    .rd-stat{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}\n    .rd-chip{flex:1;min-width:120px;background:#121a30;border:1px solid #223052;border-radius:10px;padding:10px 12px}\n    .rd-chip .k{font-size:.72rem;color:#8ba0c4;margin-bottom:3px}\n    .rd-chip .v{font-size:1.1rem;font-weight:800;color:#fff}\n    .rd-chip .v.warn{color:#ff8a80}\n    .rd-chip .v.good{color:#69f0ae}\n    .rd-cap{margin-top:12px;font-size:.86rem;line-height:1.7;color:#b5c2db;background:#121a30;border-radius:10px;padding:12px 14px;border-left:3px solid #42a5f5;min-height:1.7em}\n    </style>\n    <script src=\"redis.js\" defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "Redis는 '메모리에 있는 데이터'지만, 핵심은 그게 아니라 '내 프로세스 밖의 별도 서버'라는 것.",
+        "그래서 내 코드 변수와 달라: ① 여러 서버가 같은 데이터를 공유 ② 게임 서버가 죽어도 데이터 생존 ③ 동시 접근을 한 곳에서 원자적으로 조율.",
+        "인메모리 DB = 데이터 본진이 디스크가 아니라 RAM → 디스크 IO가 없어 MSSQL보다 수십~수백 배 빠름.",
+        "대신 RAM은 비싸고 유한·휘발성 → 역할 분담: 영구/복잡 = MSSQL, 뜨겁고 빠른 것(랭킹·캐시·세션·락) = Redis."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. \"메모리 DB? 그럼 그냥 내 코드 변수 아냐?\"",
+      "items": [
+        {
+          "type": "qa",
+          "q": "Redis가 인메모리 DB래. 근데 메모리에 있는 거면, 그냥 내 게임 서버 코드에서 변수(딕셔너리 같은)로 들고 있는 거랑 뭐가 달라?",
+          "a": "진짜 좋은 질문이고, 여기서 대부분 헷갈려. 결정적 차이는 하나야:\n\n<span class=\"key-point\">Redis는 '네 프로세스 안의 메모리'가 아니라, '네 프로세스 밖의 독립된 별도 서버(프로세스)'야.</span>\n\n네 게임 서버가 <span class=\"highlight\">네트워크로 접속해서</span> \"이 값 넣어줘/꺼내줘\" 하고 부탁하는, <span class=\"highlight\">따로 떠 있는 프로그램</span>이야. 마침 그 프로그램이 데이터를 RAM에 들고 있을 뿐이지."
+        },
+        {
+          "type": "qa",
+          "q": "에이, 그래봤자 메모리인데. 별도 프로세스인 게 그렇게 중요해?",
+          "a": "<span class=\"warning\">그게 전부를 바꿔.</span> 내 프로세스 안의 변수는 세 가지 치명적 한계가 있거든:\n\n1. <span class=\"highlight\">내 프로세스에만 존재</span> — 게임 서버가 여러 대면 서버마다 값이 따로 놀아(공유 불가).\n2. <span class=\"highlight\">프로세스와 운명 공동체</span> — 게임 서버 재시작/죽으면 그 변수는 통째로 증발.\n3. <span class=\"highlight\">동시성 조율이 내 몫</span> — 여러 서버가 같은 값을 건드리면 누가 맞춰줘?\n\n별도 서버(Redis)로 빼면 이 셋이 다 풀려. 하나씩 볼게 ↓"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 그래서 뭐가 다른데 — 공유·생존·원자성",
+      "items": [
+        {
+          "type": "qa",
+          "q": "첫째, '공유'가 왜 중요해?",
+          "a": "우리 게임은 <span class=\"highlight\">게임 서버가 여러 대</span>야(부하 분산). 유저 A는 서버1, 유저 B는 서버2에 붙어있을 수 있어.\n\n전체 랭킹 킬 수를 각 서버의 <span class=\"warning\">로컬 변수</span>에 두면? 서버1은 자기가 아는 킬만, 서버2는 자기 것만 알아 — <span class=\"warning\">'전체 1등'을 아무도 계산 못 해.</span> Redis라는 <span class=\"key-point\">공용 창고 하나</span>에 모으면 모든 서버가 같은 전체 값을 봐. 아래에서 직접 갈라지는 걸 봐 ↓"
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"rdw\" id=\"rd-w-shared\"><h6>🔗 로컬 변수 vs Redis — 결정적 차이는 '공유'</h6><p class=\"sub\">게임 서버가 3대야. 각 서버에서 킬 수를 +1 해봐. '로컬 변수'는 서버마다 따로 놀아 값이 갈라지고, 'Redis'는 별도 서버 하나를 같이 봐서 모두 같은 값이야.</p><div class=\"rd-ctrl\"><button class=\"rd-btn active\" data-sh=\"local\">로컬 변수(코드)</button><button class=\"rd-btn\" data-sh=\"redis\">Redis(공유)</button></div><div class=\"rd-ctrl\">킬 +1: <button class=\"rd-btn\" data-kill=\"0\">서버1</button><button class=\"rd-btn\" data-kill=\"1\">서버2</button><button class=\"rd-btn\" data-kill=\"2\">서버3</button><button class=\"rd-btn\" data-sh=\"reset\">↺</button></div><canvas class=\"rd-canvas\" id=\"sh-canvas\" height=\"230\"></canvas><div class=\"rd-cap\" id=\"sh-cap\">각 게임 서버가 자기 프로세스 메모리에 킬 수를 들고 있어. 서버1에서 3킬, 서버2에서 1킬 하면… 전체 랭킹은 누가 계산해?</div></div>"
+        },
+        {
+          "type": "qa",
+          "q": "둘째 '생존', 셋째 '원자성'은?",
+          "a": "<span class=\"highlight\">생존</span>: 게임 서버를 점검/재배포로 재시작해도, 별도 프로세스인 Redis의 데이터는 그대로 남아. 로컬 변수라면 재시작마다 랭킹이 0으로 리셋되겠지.\n\n<span class=\"highlight\">원자성</span>: 여러 서버가 동시에 '킬 +1'을 하면 앞에서 배운 레이스 컨디션이 터질 수 있잖아? Redis는 <span class=\"key-point\">단일 지점에서 INCR 같은 연산을 원자적으로</span> 처리해줘. 게다가 '분산 락'(여러 서버가 공유하는 자물쇠)도 Redis로 구현해 — 로컬 변수로는 불가능한 일이야."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 근데 그냥 MSSQL 쓰면? 왜 굳이 Redis",
+      "items": [
+        {
+          "type": "qa",
+          "q": "공유·생존·원자성이면 MSSQL도 다 되잖아. 이미 게임 DB 있는데 왜 Redis를 또 도입해?",
+          "a": "맞아, MSSQL도 그 셋은 다 돼. 이유는 <span class=\"key-point\">속도</span>야. 여기서 '디스크 DB vs 인메모리 DB' 차이가 나와.\n\n• <span class=\"highlight\">MSSQL = 디스크 DB</span>: 데이터 본진이 디스크의 페이지야. 버퍼 풀로 캐시하지만(앞 편), 미스 나면 디스크行, 게다가 락·트랜잭션·(샤딩이면 여러 DB 병합)까지 얽혀.\n• <span class=\"highlight\">Redis = 인메모리 DB</span>: 데이터 본진이 <span class=\"key-point\">아예 RAM</span>이야. 디스크行이라는 개념 자체가 없어. 그래서 단순 조회는 수십~수백 배 빨라."
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"rdw\" id=\"rd-w-speed\"><h6>⚡ 왜 MSSQL보다 빠른가 — 디스크 DB vs 인메모리 DB</h6><p class=\"sub\">'전체 랭킹 조회'를 눌러봐. MSSQL은 데이터 본진이 디스크(버퍼 풀 캐시·락·정렬), Redis는 본진이 RAM(디스크行 자체가 없음). 응답 시간을 비교해봐. (예시값)</p><div class=\"rd-ctrl\"><button class=\"rd-btn\" data-spd=\"go\">🏁 전체 랭킹 조회</button><label style=\"display:flex;align-items:center;gap:6px\">시나리오 <select id=\"spd-sc\" style=\"background:#172033;color:#cfe0ff;border:1px solid #2a3650;border-radius:8px;padding:5px 8px\"><option value=\"1\">단일 테이블</option><option value=\"21\">21개 샤딩 관문 DB</option></select></label></div><canvas class=\"rd-canvas\" id=\"spd-canvas\" height=\"160\"></canvas><div class=\"rd-stat\"><div class=\"rd-chip\"><div class=\"k\">MSSQL(디스크 DB)</div><div class=\"v warn\" id=\"spd-sql\">-</div></div><div class=\"rd-chip\"><div class=\"k\">Redis(인메모리)</div><div class=\"v good\" id=\"spd-redis\">-</div></div><div class=\"rd-chip\"><div class=\"k\">차이</div><div class=\"v\" id=\"spd-ratio\">-</div></div></div><div class=\"rd-cap\" id=\"spd-cap\">MSSQL도 버퍼 풀로 캐시하지만, 디스크 원본·락·(샤딩이면 여러 DB 병합)이 얽혀. Redis는 본진이 RAM이라 그런 게 아예 없어.</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 그럼 다 Redis 쓰면 되잖아?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "이렇게 빠른데 그냥 다 Redis에 넣으면 안 돼?",
+          "a": "<span class=\"warning\">안 돼.</span> 인메모리의 대가가 있어:\n\n1. <span class=\"highlight\">RAM은 비싸고 유한</span> — 게임 전체 데이터(수백 GB)를 다 RAM에 못 올려. 디스크는 싸고 크지.\n2. <span class=\"highlight\">휘발성</span> — 기본은 전원 나가면 날아가. (지속성 옵션 RDB 스냅샷·AOF 로그가 있지만 완벽한 durability는 MSSQL의 WAL만 못해)\n3. <span class=\"highlight\">복잡한 쿼리·조인 X</span> — Redis는 key-value + 몇 가지 자료구조뿐. JOIN, 트랜잭션 무결성, 복잡 집계는 RDBMS 몫."
+        },
+        {
+          "type": "qa",
+          "q": "그럼 어떻게 나눠 써?",
+          "a": "<span class=\"key-point\">역할 분담</span>이야:\n\n• <span class=\"highlight\">MSSQL(디스크 DB)</span>: 영구 보관 + 복잡 쿼리 — 캐릭터/아이템/재화 원장, 결제, 통계.\n• <span class=\"highlight\">Redis(인메모리)</span>: 뜨겁고 빠르고 임시여도 되는 것 — 실시간 랭킹, 세션, 캐시, 분산 락, TTL 만료(예: 쿨타임).\n\n'진실의 원본은 MSSQL, 빠른 사본/휘발 데이터는 Redis'로 생각하면 편해."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. 우리 게임 실전 — 랭킹은 왜 Redis가 답인가",
+      "items": [
+        {
+          "type": "qa",
+          "q": "실제로 어디에 제일 효과가 커?",
+          "a": "<span class=\"key-point\">실시간 전체 랭킹</span>이 교과서 사례야. 우리 구조를 보면 — 랭킹 데이터가 <span class=\"highlight\">관문 DB 21개(7서버 × 3채널)에 샤딩</span>돼 있어. 각 관문 1,000명이면 2만 명이 21곳에 흩어진 거지.\n\nMSSQL로 전체 랭킹을 뽑으려면? <span class=\"warning\">21개 DB를 각각 조회해 애플리케이션에서 합치고 다시 정렬</span>해야 해. 관문이 늘수록 무거워지고, 실시간으로 이걸 계속 하면 부하 폭발."
+        },
+        {
+          "type": "qa",
+          "q": "Redis는 이걸 어떻게 해결해?",
+          "a": "Redis의 <span class=\"highlight\">Sorted Set</span> 자료구조 하나면 끝나. 킬이 나올 때마다 <span class=\"highlight\">ZADD(점수 갱신)</span> 한 방, 전체 상위 N명은 <span class=\"highlight\">ZREVRANGE 0 N</span> 한 방에 <span class=\"key-point\">이미 정렬된 상태로</span> 즉시 나와(내부적으로 랭킹 유지). 21곳 병합·재정렬이 통째로 사라져.\n\n예전 실측 비교에서도 전체 랭킹 조회가 MSSQL 대비 Redis가 <span class=\"key-point\">수십 배</span> 빨랐어 — 데이터가 흩어질수록 격차가 더 벌어지지. 아래에서 두 방식을 비교해봐 ↓"
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"rdw\" id=\"rd-w-rank\"><h6>🏆 실전 — 21개 관문 DB 랭킹 vs Redis Sorted Set</h6><p class=\"sub\">우리 게임 랭킹은 관문 DB 21개에 흩어져 있어(샤딩). 전체 랭킹을 뽑으려면? MSSQL은 21곳을 다 긁어와 합쳐 정렬, Redis는 Sorted Set 하나로 즉시.</p><div class=\"rd-ctrl\"><button class=\"rd-btn\" data-rk=\"sql\">MSSQL 방식</button><button class=\"rd-btn\" data-rk=\"redis\">Redis 방식</button><button class=\"rd-btn\" data-rk=\"reset\">↺</button></div><canvas class=\"rd-canvas\" id=\"rk-canvas\" height=\"240\"></canvas><div class=\"rd-cap\" id=\"rk-cap\">MSSQL: 21개 관문 DB에서 각각 랭킹을 긁어와(21번 조회) 애플리케이션에서 합쳐 다시 정렬 — 관문이 늘수록 무거워져. Redis: ZADD로 한 곳에 모으고 ZREVRANGE로 상위 N개 즉시.</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "Redis가 '메모리'인 건 맞지만, 본질은 '내 프로세스 밖의 별도 서버'라는 것.",
+        "그래서 로컬 변수와 다름: 여러 서버 공유 / 게임 서버 죽어도 생존 / 동시 접근 원자적 조율.",
+        "인메모리 DB = 데이터 본진이 RAM(디스크 DB인 MSSQL과 반대) → 디스크 IO 없어 훨씬 빠름.",
+        "대가: RAM 비쌈·유한, 휘발성(지속성은 옵션), 복잡 쿼리/조인 불가.",
+        "역할 분담: 진실의 원본·복잡 쿼리 = MSSQL / 랭킹·캐시·세션·분산 락 = Redis.",
+        "실전: 21개 샤딩 관문 DB 랭킹 병합의 지옥을 Redis Sorted Set(ZADD/ZREVRANGE) 한 방으로."
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "이어서 보면",
+      "items": [
+        "버퍼 풀 — MSSQL도 RAM 캐시를 쓴다(그래도 본진은 디스크): db-buffer-pool",
+        "데이터가 디스크에 눕는 법 — MSSQL의 저장 원리: db-storage-internals",
+        "락 vs 락프리 — 분산 락이 왜 필요한가의 뿌리(동시성): lock-free",
+        "샤딩 — 데이터를 여러 DB로 쪼개는 법(21개 관문의 원리): sharding"
+      ]
+    }
+  ]
+}
