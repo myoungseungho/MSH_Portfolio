@@ -1137,22 +1137,30 @@
         const searchResults = document.getElementById('searchResults');
         const searchClear = document.getElementById('searchClear');
 
+        // 검색어 정규화(오탈자·띄어쓰기 보정) + 토큰화
+        function searchNorm(s){ return (s||'').toLowerCase().replace(/텍스쳐/g,'텍스처').replace(/\s+/g,' ').trim(); }
+        function searchTokens(q){ return searchNorm(q).split(' ').filter(Boolean); }
+
         // 검색어 하이라이팅
         function highlight(text, query) {
             if (!query) return text;
-            const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-            return text.replace(regex, '<mark>$1</mark>');
+            const toks = searchTokens(query);
+            if (!toks.length) return text;
+            const rx = new RegExp('(' + toks.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+            return text.replace(rx, '<mark>$1</mark>');
         }
 
         // 본문에서 검색어 주변 컨텍스트 추출
         function extractContext(content, query, maxLen = 80) {
             if (!content) return '';
             const lower = content.toLowerCase();
-            const idx = lower.indexOf(query.toLowerCase());
+            const toks = searchTokens(query);
+            let idx = -1, qlen = 0;
+            for (const t of toks) { const i = lower.indexOf(t); if (i !== -1) { idx = i; qlen = t.length; break; } }
             if (idx === -1) return content.slice(0, maxLen) + '...';
 
             const start = Math.max(0, idx - 30);
-            const end = Math.min(content.length, idx + query.length + 50);
+            const end = Math.min(content.length, idx + qlen + 50);
             let snippet = content.slice(start, end);
             if (start > 0) snippet = '...' + snippet;
             if (end < content.length) snippet = snippet + '...';
@@ -1178,19 +1186,32 @@
                 });
                 return;
             }
-            const q = query.toLowerCase();
-
-            const results = searchIndex.filter(item => {
-                return item.title.toLowerCase().includes(q) ||
-                       (item.content && item.content.toLowerCase().includes(q));
-            }).slice(0, 10); // 최대 10개 결과
+            const toks = searchTokens(query);
+            const nq = searchNorm(query);
+            // 모든 토큰 포함(AND) + 관련도 점수(제목 구절>제목 토큰>본문)
+            const scoreOf = (item) => {
+                const nt = searchNorm(item.title), nc = searchNorm(item.content || '');
+                if (!toks.every(t => (nt + ' ' + nc).includes(t))) return 0;
+                let sc = 1;
+                if (nt.includes(nq)) sc += 100;
+                else if (toks.every(t => nt.includes(t))) sc += 60;
+                if (nc.includes(nq)) sc += 20;
+                sc += toks.filter(t => nt.includes(t)).length * 5;
+                return sc;
+            };
+            const results = searchIndex
+                .map(item => ({ item, s: scoreOf(item) }))
+                .filter(x => x.s > 0)
+                .sort((a, b) => b.s - a.s)
+                .slice(0, 10)
+                .map(x => x.item); // 관련도순 최대 10개
 
             if (results.length === 0) {
                 searchResults.innerHTML = '<div class="search-no-result">검색 결과가 없습니다</div>';
             } else {
                 searchResults.innerHTML = results.map(item => {
                     // 제목 매칭이면 제목 하이라이트, 아니면 본문 컨텍스트 표시
-                    const titleMatch = item.title.toLowerCase().includes(q);
+                    const titleMatch = toks.every(t => searchNorm(item.title).includes(t));
                     const desc = titleMatch
                         ? (item.content ? item.content.slice(0, 80) + '...' : '')
                         : extractContext(item.content, query);

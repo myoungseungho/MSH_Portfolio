@@ -98,6 +98,9 @@ def main():
         rel = path.relative_to(ROOT).as_posix()
         if any(re.search(p, "/" + rel) for p in EXCLUDE_PATTERNS):
             continue
+        if 'http-equiv="refresh"' in path.read_text(encoding="utf-8", errors="ignore").lower():
+            skipped.append((rel, "redirect"))
+            continue
         title, category, body = extract(path)
         url = page_url(path)
         if not title or len(body) < 80:
@@ -105,7 +108,7 @@ def main():
             continue
 
         old = curated.get(url)
-        if old:
+        if old and old.get("title") == title:  # 제목 동일=미변경만 수작업 보존, 바뀌면 리뉴얼로 보고 fresh 사용
             title = old.get("title") or title          # 수작업 제목 우선
             category = old.get("category") or category
             head = (old.get("content") or "")[:CURATED_MAX]

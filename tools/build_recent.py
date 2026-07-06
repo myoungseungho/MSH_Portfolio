@@ -77,7 +77,9 @@ def main():
         if slug in EXCLUDE_SLUGS or slug.startswith("category-"):
             continue
         path = url_to_path(url)
-        date = gdates.get(path) or mtime_date(path) or "1970-01-01"
+        # 최초 업로드일과 파일 최종수정일 중 더 최신 = "수정하면 최신순에 반영"
+        _cands = [x for x in (gdates.get(path), mtime_date(path)) if x]
+        date = max(_cands) if _cands else "1970-01-01"
         rows.append({
             "title": d.get("title", slug),
             "url": url,
