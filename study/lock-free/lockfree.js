@@ -197,4 +197,143 @@
     window.addEventListener('resize', () => { ctx = fitCanvas(cv); draw(); });
     nv.textContent = nS.value; draw();
   })();
+
+  /* ===== Widget 4: ABA 스택 pop 사고 ===== */
+  (function aba() {
+    const cv = $('#aba-canvas'); if (!cv) return;
+    let ctx = fitCanvas(cv);
+    const casOut = $('#aba-cas'), stateOut = $('#aba-state'), cap = $('#aba-cap');
+    const steps = [
+      { top: '0x100', chain: [['A', '0x100'], ['B', '0x200'], ['C', '0x300']], freed: [], t1: null, cas: null, corrupt: false,
+        msg: '스택: top → A(0x100) → B(0x200) → C(0x300). 스레드1이 A를 pop하려고 해.' },
+      { top: '0x100', chain: [['A', '0x100'], ['B', '0x200'], ['C', '0x300']], freed: [], t1: { exp: '0x100', nt: '0x200' }, cas: null, corrupt: false,
+        msg: '① 스레드1: top=A(0x100)을 읽음. "top을 A.next=B(0x200)로 바꿀 준비" → 여기서 선점당해 멈춤 ⏸' },
+      { top: '0x200', chain: [['B', '0x200'], ['C', '0x300']], freed: ['0x100'], t1: { exp: '0x100', nt: '0x200' }, cas: null, corrupt: false,
+        msg: '② 스레드2: A를 pop (top=B). A(0x100) free됨.' },
+      { top: '0x300', chain: [['C', '0x300']], freed: ['0x100', '0x200'], t1: { exp: '0x100', nt: '0x200' }, cas: null, corrupt: false,
+        msg: '③ 스레드2: B를 pop (top=C). B(0x200)도 free됨.' },
+      { top: '0x100', chain: [["A'", '0x100'], ['C', '0x300']], freed: ['0x200'], t1: { exp: '0x100', nt: '0x200' }, cas: null, corrupt: false, reused: true,
+        msg: "④ 스레드2: 새 노드 push. 할당기가 방금 free된 0x100 재사용 → A'(0x100), A'.next=C. top=A'." },
+      { top: '0x200', chain: [["A'", '0x100'], ['C', '0x300']], freed: ['0x200'], t1: { exp: '0x100', nt: '0x200' }, cas: 'ok', corrupt: true,
+        msg: '⑤ 스레드1 재개. CAS(top, 기대=0x100, 새=0x200): "top 아직 0x100? ✓" → 성공! top=0x200. 💥 그런데 0x200(B)는 이미 free! top이 죽은 메모리를 가리켜.' }
+    ];
+    let i = 0;
+    function draw() {
+      const w = cv._cw, h = cv._ch; ctx.clearRect(0, 0, w, h);
+      const s = steps[i];
+      // top pointer
+      ctx.textAlign = 'left'; ctx.font = '700 13px Pretendard';
+      ctx.fillStyle = s.corrupt ? '#ff8a80' : '#69f0ae';
+      ctx.fillText('top → ' + s.top + (s.corrupt ? '  (free된 메모리!)' : ''), 14, 24);
+      // chain boxes
+      const bw = 92, gap = 30, y = 44, bh = 52;
+      s.chain.forEach((nd, k) => {
+        const x = 14 + k * (bw + gap);
+        const isTop = nd[1] === s.top;
+        ctx.fillStyle = nd[0] === "A'" ? '#3a2f14' : '#16233c';
+        rr(ctx, x, y, bw, bh, 8); ctx.fill();
+        ctx.strokeStyle = isTop ? (s.corrupt ? '#ef5350' : '#69f0ae') : (nd[0] === "A'" ? '#ffca28' : '#2f4468');
+        ctx.lineWidth = isTop ? 2.4 : 1.2; ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = '800 16px Pretendard'; ctx.textAlign = 'center';
+        ctx.fillText(nd[0], x + bw / 2, y + 22);
+        ctx.fillStyle = '#8ba0c4'; ctx.font = '11px Pretendard'; ctx.fillText(nd[1], x + bw / 2, y + 40);
+        if (k < s.chain.length - 1) { ctx.strokeStyle = '#5a6b8a'; ctx.beginPath(); ctx.moveTo(x + bw, y + bh / 2); ctx.lineTo(x + bw + gap, y + bh / 2); ctx.stroke(); }
+      });
+      // freed 표시
+      ctx.textAlign = 'left'; ctx.fillStyle = '#ef9a9a'; ctx.font = '600 11px Pretendard';
+      if (s.freed.length) ctx.fillText('🗑 free된 주소: ' + s.freed.join(', '), 14, y + bh + 26);
+      // thread1 held
+      if (s.t1) {
+        const ty = y + bh + 46;
+        ctx.fillStyle = '#101827'; rr(ctx, 14, ty, w - 28, 40, 8); ctx.fill();
+        ctx.strokeStyle = s.cas ? (s.corrupt ? '#ef5350' : '#69f0ae') : '#42a5f5'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = '#cfe0ff'; ctx.font = '700 12px Pretendard'; ctx.textAlign = 'left';
+        ctx.fillText('🧵 스레드1 (멈춤 중): 기대 top=' + s.t1.exp + ' → 새 top=' + s.t1.nt, 26, ty + 25);
+      }
+      if (casOut) { casOut.textContent = s.cas === 'ok' ? '성공 ✓ (값만 같음)' : (i === 0 ? '대기' : '멈춤 중'); casOut.className = 'v' + (s.corrupt ? ' warn' : ''); }
+      if (stateOut) { stateOut.textContent = s.corrupt ? '파괴됨 💥' : '정상'; stateOut.className = 'v' + (s.corrupt ? ' warn' : ' good'); }
+      if (cap) cap.textContent = s.msg;
+    }
+    $$('[data-aba]', cv.closest('.lfw')).forEach(b => b.addEventListener('click', () => {
+      const a = b.getAttribute('data-aba');
+      if (a === 'step') { if (i < steps.length - 1) i++; }
+      else i = 0;
+      draw();
+    }));
+    window.addEventListener('resize', () => { ctx = fitCanvas(cv); draw(); });
+    draw();
+  })();
+
+  /* ===== Widget 5: 메모리 순서(재배치) ===== */
+  (function mord() {
+    const cv = $('#mord-canvas'); if (!cv) return;
+    let ctx = fitCanvas(cv);
+    const readOut = $('#mo-read'), resultOut = $('#mo-result'), cap = $('#mo-cap');
+    let mode = 'reorder';
+    let phase = 0; // 0 초기, 1 실행중, 2 결과
+    let observedData = null, observedReady = false;
+    function draw() {
+      const w = cv._cw, h = cv._ch; ctx.clearRect(0, 0, w, h);
+      const colW = (w - 36) / 2;
+      // 쓰는 쪽
+      ctx.textAlign = 'left'; ctx.font = '700 12px Pretendard'; ctx.fillStyle = '#42a5f5';
+      ctx.fillText('🧵 쓰는 스레드', 14, 18);
+      ctx.fillStyle = '#16233c'; rr(ctx, 14, 26, colW, 80, 8); ctx.fill();
+      ctx.strokeStyle = '#2f4468'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = '#cfe0ff'; ctx.font = '600 12px Pretendard';
+      ctx.fillText('① data = 42;', 26, 52);
+      ctx.fillText('② ready = true;', 26, 78);
+      ctx.fillStyle = '#8ba0c4'; ctx.font = '10px Pretendard';
+      ctx.fillText('(내가 쓴 순서: data 먼저)', 26, 98);
+      // 게이트
+      const gx = 14 + colW + 6;
+      ctx.textAlign = 'center'; ctx.font = '700 11px Pretendard';
+      ctx.fillStyle = mode === 'barrier' ? '#69f0ae' : '#ff8a80';
+      ctx.fillText(mode === 'barrier' ? '║ 배리어 ║' : '↯ 재배치 ↯', gx + 12, 70);
+      // 읽는 쪽
+      const rx = 14 + colW + 22;
+      ctx.textAlign = 'left'; ctx.fillStyle = '#ffca28'; ctx.font = '700 12px Pretendard';
+      ctx.fillText('🧵 읽는 스레드', rx, 18);
+      ctx.fillStyle = '#16233c'; rr(ctx, rx, 26, colW, 80, 8); ctx.fill();
+      ctx.strokeStyle = '#2f4468'; ctx.stroke();
+      ctx.fillStyle = '#cfe0ff'; ctx.font = '600 12px Pretendard';
+      ctx.fillText('if (ready)', rx + 12, 52);
+      ctx.fillText('   use(data);', rx + 12, 76);
+      // 관측 결과
+      if (phase >= 2) {
+        const gy = 122;
+        ctx.textAlign = 'left'; ctx.font = '700 12px Pretendard'; ctx.fillStyle = '#8ba0c4';
+        ctx.fillText('읽는 쪽이 관측한 것:', 14, gy);
+        const bad = mode === 'reorder';
+        ctx.fillStyle = '#101827'; rr(ctx, 14, gy + 8, w - 28, 66, 8); ctx.fill();
+        ctx.strokeStyle = bad ? '#6b2b2b' : '#2e5d3a'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = observedReady ? '#69f0ae' : '#8ba0c4'; ctx.font = '700 13px Pretendard';
+        ctx.fillText('ready = ' + (observedReady ? 'true (보임)' : 'false'), 26, gy + 32);
+        ctx.fillStyle = bad ? '#ff8a80' : '#69f0ae';
+        ctx.fillText('data = ' + observedData + (bad ? '  ← 아직 옛값(쓰레기)!' : '  ← 정상'), 26, gy + 56);
+      }
+      if (readOut) { readOut.textContent = phase >= 2 ? String(observedData) : '-'; readOut.className = 'v' + (phase >= 2 ? (mode === 'reorder' ? ' warn' : ' good') : ''); }
+      if (resultOut) { resultOut.textContent = phase >= 2 ? (mode === 'reorder' ? '❌ 쓰레기 읽음' : '✅ 정상') : '-'; resultOut.className = 'v' + (phase >= 2 ? (mode === 'reorder' ? ' warn' : ' good') : ''); }
+    }
+    function run() {
+      phase = 2;
+      if (mode === 'reorder') { observedReady = true; observedData = 0; }
+      else { observedReady = true; observedData = 42; }
+      draw();
+      if (cap) cap.textContent = mode === 'reorder'
+        ? 'CPU 재배치: 읽는 쪽이 ready=true를 data=42보다 먼저 봤어 → data는 아직 0(옛값). ready만 믿고 use(data)=0 쓰레기를 읽음. 원자적이어도 "보이는 순서"가 안 맞은 거야.'
+        : '메모리 배리어: "data 쓰기를 ready 쓰기보다 먼저 남에게 보이도록" 강제 → 읽는 쪽은 data=42를 정상적으로 읽어. 락은 이 배리어가 내장, 락프리는 직접 넣어야 함.';
+    }
+    $$('[data-mo]', cv.closest('.lfw')).forEach(b => b.addEventListener('click', () => {
+      const a = b.getAttribute('data-mo');
+      if (a === 'run') { run(); return; }
+      mode = a; phase = 0; observedData = null; observedReady = false;
+      $$('[data-mo]', cv.closest('.lfw')).forEach(x => { const v = x.getAttribute('data-mo'); if (v === 'reorder' || v === 'barrier') x.classList.toggle('active', x === b); });
+      if (cap) cap.textContent = '쓰는 쪽: data=42; 그다음 ready=true;  /  읽는 쪽: if(ready) use(data);  — ▶ 실행을 눌러봐.';
+      draw();
+    }));
+    window.addEventListener('resize', () => { ctx = fitCanvas(cv); draw(); });
+    draw();
+  })();
+
 })();

@@ -142,6 +142,56 @@
       ]
     },
     {
+      "type": "conversation",
+      "title": "Part 6. 원자적으로 검사하는데 왜 ABA가 문제야?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "CAS가 원자적으로 '아직 A야?'를 검사하잖아. 그 사이 변화를 놓쳐도 항상 검사하니 문제없는 거 아냐?",
+          "a": "여기가 딱 함정이야. <span class=\"key-point\">CAS는 '값'을 비교하지, '변화 여부'를 비교하지 않아.</span>\n\n\"값이 A랑 같다\"는 <span class=\"warning\">\"그동안 아무것도 안 바뀌었다\"가 아니야.</span> 값이 <span class=\"highlight\">A → B → A</span> 로 돌아왔으면, CAS는 \"어 A네, 그대로네\" 하고 <b>성공</b>해버려. 실제론 세상이 바뀌었다 돌아온 건데."
+        },
+        {
+          "type": "qa",
+          "q": "근데 카운터에서 5→6→5로 돌아와도 5에 CAS 성공하는 건 맞는 결과 아냐?",
+          "a": "맞아! <span class=\"good\">단순 숫자면 ABA는 대체로 무해</span>해. 결과값이 맞으니까.\n\n<span class=\"key-point\">문제는 '값'이 '포인터(메모리 주소)'일 때야.</span> 주소가 재사용되면 <span class=\"warning\">같은 주소가 완전히 다른 것을 가리켜</span>. '값(주소)은 같은데 의미는 딴판'인 상황이 생기는 거지. 아래 스택 예시로 직접 봐 ↓"
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"lfw\" id=\"lf-w-aba\"><h6>💥 ABA — 값이 같아도 '그 A'가 아닐 수 있다</h6><p class=\"sub\">▶ 단계 진행으로 락프리 스택 pop 사고를 따라와봐. 스레드1이 A를 읽고 멈춘 새, 스레드2가 A·B를 빼고 같은 주소에 새 노드를 넣어. 스레드1의 CAS는 '주소 그대로!'라 성공하지만 결과는 파괴돼.</p><div class=\"lf-ctrl\"><button class=\"lf-btn\" data-aba=\"step\">▶ 단계 진행</button><button class=\"lf-btn\" data-aba=\"reset\">↺ 리셋</button></div><canvas class=\"lf-canvas\" id=\"aba-canvas\" height=\"270\"></canvas><div class=\"lf-stat\"><div class=\"lf-chip\"><div class=\"k\">스레드1 CAS</div><div class=\"v\" id=\"aba-cas\">대기</div></div><div class=\"lf-chip\"><div class=\"k\">스택 무결성</div><div class=\"v\" id=\"aba-state\">정상</div></div></div><div class=\"lf-cap\" id=\"aba-cap\">스택: top → A(0x100) → B(0x200) → C(0x300). 스레드1이 A를 pop하려고 해.</div></div>"
+        },
+        {
+          "type": "qa",
+          "q": "그럼 어떻게 막아?",
+          "a": "값에 <span class=\"highlight\">버전 번호</span>를 붙여 — \"A(버전3)\" vs \"A(버전5)\". 주소가 같아도 버전이 달라 CAS가 <span class=\"key-point\">'그 사이 바뀌었다'를 감지</span>해(태그드 포인터/더블 CAS). 또는 <span class=\"highlight\">해저드 포인터·에폭 기반 회수</span>로 '아직 누가 보는 메모리는 재사용 안 함'을 보장해.\n\n요점: 락은 이런 걸 신경 쓸 필요가 없는데, <span class=\"warning\">락프리는 이걸 다 직접 처리</span>해야 해서 어려운 거야."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 7. 메모리 순서 — 원자적인데 순서가 안 맞는다?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "각 연산이 원자적이면, 순서 문제는 없는 거 아냐?",
+          "a": "이것도 함정이야. <span class=\"key-point\">원자성(한 연산이 안 쪼개짐) ≠ 가시성 순서(남이 내 연산들을 무슨 순서로 보느냐).</span>\n\nCPU와 컴파일러는 성능을 위해 <span class=\"highlight\">명령 순서를 제멋대로 재배치</span>해. 예를 들어:\n<span class=\"highlight\">쓰는 쪽</span>: data = 42; 그다음 ready = true;\n<span class=\"highlight\">읽는 쪽</span>: if (ready) use(data);\n\n의도는 'data 먼저 쓰고 ready 켜기'지만…"
+        },
+        {
+          "type": "qa",
+          "q": "ready가 켜졌으면 data는 당연히 42 아냐?",
+          "a": "<span class=\"warning\">아니야.</span> CPU가 두 쓰기의 순서를 뒤집거나, 읽는 쪽 CPU가 (캐시·스토어 버퍼 때문에) <span class=\"warning\">ready=true를 data=42보다 먼저 볼 수</span> 있어. 그럼 읽는 쪽은 <span class=\"warning\">ready는 true인데 data는 아직 옛값(0, 쓰레기)</span>을 읽어. 아래에서 직접 재현해봐 ↓"
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"lfw\" id=\"lf-w-mord\"><h6>🔀 메모리 순서 — 원자적이어도 '보이는 순서'는 다르다</h6><p class=\"sub\">쓰는 쪽은 data=42 → ready=true 순으로 쓰는데, 읽는 쪽이 그 순서대로 본다는 보장이 없어. 모드를 바꿔 ▶ 실행하고 읽는 쪽이 무엇을 보는지 확인해봐.</p><div class=\"lf-ctrl\"><button class=\"lf-btn active\" data-mo=\"reorder\">CPU 재배치(배리어 없음)</button><button class=\"lf-btn\" data-mo=\"barrier\">메모리 배리어</button><button class=\"lf-btn\" data-mo=\"run\">▶ 실행</button></div><canvas class=\"lf-canvas\" id=\"mord-canvas\" height=\"240\"></canvas><div class=\"lf-stat\"><div class=\"lf-chip\"><div class=\"k\">읽는 쪽이 본 data</div><div class=\"v\" id=\"mo-read\">-</div></div><div class=\"lf-chip\"><div class=\"k\">결과</div><div class=\"v\" id=\"mo-result\">-</div></div></div><div class=\"lf-cap\" id=\"mo-cap\">쓰는 쪽: data=42; 그다음 ready=true;  /  읽는 쪽: if(ready) use(data);</div></div>"
+        },
+        {
+          "type": "qa",
+          "q": "락은 왜 이 문제가 없어?",
+          "a": "<span class=\"highlight\">락</span>은 acquire(잠글 때)/release(풀 때)에 <span class=\"key-point\">메모리 배리어가 내장</span>돼 있어 — 임계영역 안 쓰기는 반드시 락 풀기 전에 남에게 보이도록 순서를 강제해. 그래서 우리가 신경 안 써도 됐어.\n\n<span class=\"highlight\">락프리</span>는 <span class=\"warning\">네가 직접</span> 메모리 배리어/오더링(acquire·release·seq_cst)을 정확히 심어야 해. 하나만 틀려도 어쩌다 한 번 터지는 '유령 버그'가 나. <span class=\"key-point\">ABA + 이 메모리 순서 — 이 둘 때문에 '락프리 짜봤다'가 동시성·CPU·메모리 모델을 깊이 안다는 뜻인 거야.</span>"
+        }
+      ]
+    },
+    {
       "type": "summary",
       "title": "핵심 정리",
       "items": [
