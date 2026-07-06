@@ -1,0 +1,143 @@
+{
+  "slug": "asset-direct-storage",
+  "title": "GPU에 텍스처 올릴 때 CPU는 왜 놀고 있을까? — DMA부터 DirectStorage까지",
+  "subtitle": "디스크 → RAM → GPU VRAM, 그 바이트는 누가 옮기나 — DMA·PCIe·스테이징, 그리고 CPU를 아예 건너뛰는 DirectStorage",
+  "category": "에셋 관리",
+  "category_path": "../asset-management/",
+  "prev_link": "../dma-buffering/",
+  "prev_text": "← DMA & 버퍼링",
+  "next_link": "../asset-ps5-ssd/",
+  "next_text": "PS5 SSD의 혁명 →",
+  "extra_head": "    <style>\n    .gpw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}\n    .gpw h6{font-size:.98rem;font-weight:800;color:#fff;margin:0 0 4px}\n    .gpw .sub{font-size:.8rem;color:#8ba0c4;margin:0 0 14px}\n    .gp-ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:.84rem;color:#b5c2db}\n    .gp-btn{padding:8px 13px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:.15s}\n    .gp-btn:hover{border-color:#42a5f5;color:#e3eaf5}\n    .gp-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .gp-canvas{width:100%;border-radius:12px;background:#070b16;display:block;touch-action:none}\n    .gp-stat{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}\n    .gp-chip{flex:1;min-width:120px;background:#121a30;border:1px solid #223052;border-radius:10px;padding:10px 12px}\n    .gp-chip .k{font-size:.72rem;color:#8ba0c4;margin-bottom:3px}\n    .gp-chip .v{font-size:1.1rem;font-weight:800;color:#fff}\n    .gp-chip .v.warn{color:#ff8a80}\n    .gp-chip .v.good{color:#69f0ae}\n    .gp-cap{margin-top:12px;font-size:.86rem;line-height:1.7;color:#b5c2db;background:#121a30;border-radius:10px;padding:12px 14px;border-left:3px solid #42a5f5;min-height:1.7em}\n    </style>\n    <script src=\"gpupload.js\" defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "텍스처의 최종 목적지는 GPU의 VRAM. 문제는 '디스크 → VRAM'까지 그 바이트를 누가 어떻게 옮기냐.",
+        "실제 바이트 이동은 CPU가 아니라 DMA 엔진(하드웨어)이 함. CPU는 '옮겨줘' 명령만 내리고 빠져 — 그래서 '텍스처 올릴 때 CPU가 논다'.",
+        "일반 경로는 그래도 CPU RAM을 경유하고 CPU가 압축 해제까지 해서 7GB/s SSD가 2~3GB/s로 병목.",
+        "DirectStorage/RTXIO/PS5 SSD = CPU를 아예 우회. SSD→GPU 직행 + GPU가 압축 해제 → SSD 대역폭을 그대로 뽑음."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 텍스처는 결국 어디로 가야 하나",
+      "items": [
+        {
+          "type": "qa",
+          "q": "텍스처를 '메모리에 올린다'는데, 정확히 어느 메모리야?",
+          "a": "GPU가 그림을 그리려면 텍스처가 <span class=\"key-point\">GPU 전용 메모리(VRAM)</span>에 있어야 해. CPU가 쓰는 시스템 RAM이 아니라, 그래픽카드에 붙은 별도 메모리야.\n\n그런데 파일(텍스처)은 <span class=\"highlight\">디스크</span>에 있지. 그래서 <span class=\"highlight\">디스크 → (RAM) → VRAM</span>으로 옮겨야 해. 이 여정에서 '누가 옮기고, CPU는 뭘 하냐'가 이 글의 핵심이야."
+        },
+        {
+          "type": "qa",
+          "q": "왜 굳이 CPU RAM을 거쳐? 디스크에서 VRAM으로 바로 주면 안 돼?",
+          "a": "전통적으로는 그럴 방법이 없었어. 디스크를 읽는 건 OS(CPU 쪽)의 일이고, 읽은 걸 <span class=\"highlight\">CPU RAM에 일단 담은 뒤</span> GPU로 넘겼거든. 게다가 텍스처는 보통 <span class=\"highlight\">압축</span>돼 있어서 중간에 풀어야 하는데, 그걸 CPU가 했어.\n\n그래서 경로가 '디스크 → OS → CPU RAM(압축 해제) → VRAM'이 된 거야. <span class=\"key-point\">'바로 주면 안 돼?'가 바로 DirectStorage의 발상</span>인데, 그건 뒤에서(Part 5). 먼저 'RAM→VRAM 그 복사는 누가 하냐'부터."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 그 바이트, 누가 옮겨? — DMA",
+      "items": [
+        {
+          "type": "qa",
+          "q": "RAM에서 VRAM으로 데이터를 옮길 때, CPU가 한 바이트씩 복사해?",
+          "a": "'그럴 것 같지'? <span class=\"warning\">아니야.</span> 만약 CPU가 직접 옮기면, 100MB 옮기는 내내 <span class=\"warning\">CPU가 그 단순 복사에 묶여</span> 게임 로직·물리·AI를 못 돌려. 프레임 뚝뚝 끊기겠지.\n\n그래서 실제 이동은 <span class=\"key-point\">DMA(Direct Memory Access) 엔진</span>이라는 <span class=\"highlight\">전용 하드웨어</span>가 해. <span class=\"highlight\">우리가 랜카드에서 본 그 DMA랑 똑같아</span> — 랜카드가 CPU 안 거치고 커널 메모리에 직접 썼잖아? GPU 업로드도 같은 원리야."
+        },
+        {
+          "type": "qa",
+          "q": "그럼 CPU는 아무것도 안 해?",
+          "a": "<span class=\"highlight\">시작과 끝만</span> 관여해. \"이 주소에서 저 주소로 100MB 옮겨\"라고 <span class=\"key-point\">DMA에게 명령(디스크립터)만 딱 던지고 빠져.</span> 그다음 실제 복사는 DMA 엔진이 백그라운드로 하고, 다 되면 인터럽트로 \"끝났어\" 알려줘.\n\n<span class=\"key-point\">그래서 '텍스처 올릴 때 CPU가 논다'는 거야</span> — 명령 던진 뒤엔 자유라 그 시간에 게임 로직을 돌릴 수 있어. 아래에서 CPU 직접 복사 vs DMA를 비교해봐 ↓"
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"gpw\" id=\"gp-w-dma\"><h6>🚚 그 바이트, 누가 옮겨? — CPU 직접 vs DMA</h6><p class=\"sub\">'100MB 텍스처 전송'을 눌러봐. CPU가 직접 복사하면 옮기는 내내 CPU가 묶여(게임 로직 정지). DMA는 CPU가 '옮겨줘' 명령만 내리고 빠져 — 전용 엔진이 옮기는 동안 CPU는 딴 일 해.</p><div class=\"gp-ctrl\"><button class=\"gp-btn active\" data-dma=\"cpu\">CPU가 직접 복사</button><button class=\"gp-btn\" data-dma=\"dma\">DMA 엔진</button><button class=\"gp-btn\" data-dma=\"go\">▶ 100MB 전송</button></div><canvas class=\"gp-canvas\" id=\"dma-canvas\" height=\"210\"></canvas><div class=\"gp-stat\"><div class=\"gp-chip\"><div class=\"k\">전송 중 CPU 점유율</div><div class=\"v\" id=\"dma-cpu\">-</div></div><div class=\"gp-chip\"><div class=\"k\">전송 주체</div><div class=\"v\" id=\"dma-by\">-</div></div><div class=\"gp-chip\"><div class=\"k\">그동안 게임 로직</div><div class=\"v\" id=\"dma-logic\">-</div></div></div><div class=\"gp-cap\" id=\"dma-cap\">우리가 랜카드에서 본 DMA랑 똑같아 — 실제 바이트 이동은 CPU가 아니라 DMA 엔진(하드웨어)이 해. CPU는 시작·완료만 관여하고 빠져.</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. RAM과 VRAM 사이 고속도로 — PCIe & 스테이징",
+      "items": [
+        {
+          "type": "qa",
+          "q": "DMA가 옮긴다 쳐도, RAM이랑 VRAM은 물리적으로 다른 칩이잖아. 뭘 타고 건너가?",
+          "a": "<span class=\"highlight\">PCIe(PCI Express)</span>라는 고속 버스를 타. CPU/RAM 쪽과 그래픽카드를 잇는 <span class=\"highlight\">고속도로</span>야. DMA 엔진이 이 PCIe를 통해 RAM↔VRAM 사이로 데이터를 실어 날라.\n\n대역폭도 이게 좌우해 — PCIe 4.0 x16이 약 32GB/s 정도. 이 고속도로가 좁으면 VRAM이 아무리 빨라도 업로드가 막혀."
+        },
+        {
+          "type": "qa",
+          "q": "그럼 GPU가 아무 RAM 주소나 DMA로 당길 수 있어?",
+          "a": "아니, 여기 함정이 있어. DMA가 안전하게 당기려면 그 메모리가 <span class=\"highlight\">고정(pinned)</span>돼 있어야 해 — <span class=\"key-point\">우리가 제로카피에서 본 그 '핀 고정'</span>이야! 안 그러면 옮기는 도중 OS가 페이지를 옮겨버려 사고 나거든.\n\n그래서 <span class=\"highlight\">스테이징(업로드) 버퍼</span>를 둬: CPU가 접근 가능한 <b>고정된</b> 중간 버퍼에 데이터를 채우면, GPU가 거기서 DMA로 VRAM에 당겨가. '디스크 → 스테이징 RAM(고정) → PCIe/DMA → VRAM' 이 경로야."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 근데 아직 CPU가 일한다 — 병목의 정체",
+      "items": [
+        {
+          "type": "qa",
+          "q": "DMA가 옮겨주면 다 해결 아냐? 왜 로딩이 여전히 느려?",
+          "a": "바이트 이동(DMA)은 공짜여도, <span class=\"warning\">CPU가 여전히 해야 하는 일이 남아</span> 있어서야. NVMe SSD가 <span class=\"highlight\">7GB/s</span>를 낼 수 있는데 실제론 2~3GB/s만 나오는 이유:\n\n• <span class=\"highlight\">OS 파일 시스템 오버헤드</span>: 작은 파일 수천 개를 열고 닫으면 수천 번의 시스템 콜(우리가 배운 그 커널 문턱 넘기).\n• <span class=\"highlight\">CPU 압축 해제</span>: 텍스처는 압축돼 있고, 그걸 CPU가 풀면 CPU가 2~3GB/s에서 병목.\n• <span class=\"highlight\">포맷 변환 + RAM→VRAM 추가 복사</span>."
+        },
+        {
+          "type": "diagram",
+          "content": "일반 I/O 파이프라인의 병목\n\n  NVMe SSD (7GB/s 가능)\n        │\n        ▼\n  [OS 파일시스템]  ← 파일 수천 개 = 수천 번 syscall\n        │  ~3GB/s로 제한\n        ▼\n  [CPU RAM]  ← 압축 해제(CPU 2~3GB/s 병목) + 포맷 변환\n        │  ★여기서 CPU가 진짜 병목\n        ▼\n  [PCIe/DMA → VRAM]  ← RAM→VRAM 복사(추가 시간)\n\n  결과: 7GB/s SSD인데 실제 2~3GB/s 😩"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. CPU를 아예 건너뛴다 — DirectStorage / RTXIO",
+      "items": [
+        {
+          "type": "qa",
+          "q": "그럼 CPU가 하던 일(파일시스템·압축 해제)을 없애면?",
+          "a": "그게 <span class=\"key-point\">DirectStorage(PC) / RTXIO(NVIDIA) / PS5의 SSD I/O</span>의 발상이야. <span class=\"highlight\">CPU를 우회</span>해:\n\n• 여러 파일을 <span class=\"highlight\">한 번에 배치로 요청</span> → 수천 번 syscall이 몇 번으로.\n• SSD에서 읽은 <span class=\"highlight\">압축 데이터를 GPU로 직행</span>시키고, <span class=\"key-point\">압축 해제를 GPU가</span> 함(GDeflate 등). CPU의 압축 해제 병목이 사라져.\n• 결과: <span class=\"good\">SSD의 7GB/s를 거의 그대로</span> VRAM까지."
+        },
+        {
+          "type": "diagram",
+          "content": "DirectStorage: CPU 우회, GPU 직접 처리\n\n  NVMe SSD (7GB/s)\n        │  압축된 데이터를 배치로\n        ▼\n  [PCIe/DMA]  ── CPU RAM·CPU 압축해제 건너뜀 ──▶  [GPU VRAM]\n                                                    │\n                                          [GPU가 압축 해제(GDeflate)]\n\n  CPU는 \"이 파일들 GPU로 줘\" 명령만. 나머진 DMA+GPU.\n  결과: 실효 ~7GB/s (SSD 대역폭 그대로)"
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"gpw\" id=\"gp-w-path\"><h6>🛣️ 업로드 경로 — 일반 vs DirectStorage</h6><p class=\"sub\">텍스처가 SSD에서 GPU VRAM까지 가는 길이야. 일반 경로는 CPU RAM을 경유하며 CPU가 압축 해제까지 하고, DirectStorage는 SSD→GPU로 직행하고 GPU가 압축을 풀어. ▶로 흘려보내 비교해봐.</p><div class=\"gp-ctrl\"><button class=\"gp-btn active\" data-pt=\"normal\">일반 경로</button><button class=\"gp-btn\" data-pt=\"ds\">DirectStorage</button><button class=\"gp-btn\" data-pt=\"go\">▶ 텍스처 흘려보내기</button></div><canvas class=\"gp-canvas\" id=\"path-canvas\" height=\"320\"></canvas><div class=\"gp-stat\"><div class=\"gp-chip\"><div class=\"k\">실효 처리량</div><div class=\"v\" id=\"path-bw\">-</div></div><div class=\"gp-chip\"><div class=\"k\">CPU 경유</div><div class=\"v\" id=\"path-cpu\">-</div></div><div class=\"gp-chip\"><div class=\"k\">복사 횟수</div><div class=\"v\" id=\"path-copy\">-</div></div></div><div class=\"gp-cap\" id=\"path-cap\">NVMe SSD는 7GB/s가 가능한데, 일반 경로는 CPU 압축 해제·파일시스템 오버헤드에 막혀 실제 2~3GB/s만 나와. DirectStorage는 CPU를 우회해 그 천장을 뚫어.</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 6. 스트리밍·제로카피와 무슨 관계?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "이게 '월드 스트리밍'이랑 '제로카피'랑 어떻게 엮여?",
+          "a": "세 개를 축으로 나누면 딱 정리돼:\n\n• <span class=\"highlight\">스트리밍</span> = <b>무엇을/언제</b> 올리나 (근처만 로드, 멀면 언로드 — 메모리 예산). 버퍼 풀·AOI의 사촌.\n• <span class=\"highlight\">DMA/DirectStorage</span> = 올릴 때 <b>어떻게</b> 옮기나 (CPU 우회, 저·제로 카피).\n• <span class=\"highlight\">제로카피</span> = 경계마다 새로 복사 안 하기.\n\n<span class=\"key-point\">DirectStorage는 '스트리밍의 로드 경로'를 저카피로 구현한 것</span>이야. 즉 스트리밍이 \"근처 텍스처 올려!\"라고 <b>무엇을</b> 정하면, DirectStorage/DMA가 그걸 <b>CPU 안 거치고</b> 옮기는 거지. 축이 다르니 '스트리밍=제로카피'가 아니라 '스트리밍이 그 로드를 저카피로 할 수 있다'가 맞아."
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "텍스처의 목적지는 GPU VRAM. 디스크→(RAM)→VRAM으로 옮겨야 한다.",
+        "실제 바이트 이동은 CPU가 아니라 DMA 엔진(하드웨어) — CPU는 명령만 던지고 빠져(그래서 '논다').",
+        "RAM↔VRAM은 PCIe 고속도로를 타고, DMA 대상 메모리는 핀 고정(제로카피에서 본 그것)이 필요.",
+        "그래도 CPU가 파일시스템·압축 해제를 하면 7GB/s SSD가 2~3GB/s로 병목.",
+        "DirectStorage/RTXIO/PS5 SSD = CPU 우회 + GPU 압축 해제 → SSD 대역폭을 그대로 뽑음.",
+        "축 정리: 스트리밍(무엇/언제) ≠ 제로카피(어떻게). DirectStorage는 스트리밍 로드를 저카피로 구현한 것."
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "이어서 보면",
+      "items": [
+        "DMA & 버퍼링 — DMA의 원리(랜카드 예시): dma-buffering",
+        "제로카피 — 복사를 없애는 최적화(핀 고정): zero-copy",
+        "PS5 SSD의 혁명 — 콘솔의 CPU 우회 로딩: asset-ps5-ssd",
+        "텍스처 스트리밍 / Virtual Texture — 무엇을 언제 올리나: asset-texture-streaming, asset-virtual-texture"
+      ]
+    }
+  ]
+}

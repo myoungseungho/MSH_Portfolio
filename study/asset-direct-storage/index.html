@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RTXIO / DirectStorage - 에셋 관리 - MSH Portfolio</title>
+    <title>GPU에 텍스처 올릴 때 CPU는 왜 놀고 있을까? — DMA부터 DirectStorage까지 - MSH Portfolio</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
@@ -13,451 +13,259 @@
         .header { margin-bottom: 48px; }
         .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
         .header p { color: #666; font-size: 1.1rem; }
+
         .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
-        .conversation h2 { font-size: 1.3rem; color: #0891B2; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #CFFAFE; }
-        .q { background: #ECFEFF; border-left: 4px solid #0891B2; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
-        .q::before { content: "Q. "; color: #0E7490; font-weight: 700; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
         .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
         .a p { margin-bottom: 12px; }
         .a p:last-child { margin-bottom: 0; }
-        .highlight { background: #CFFAFE; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #0E7490; }
-        .key-point { background: #D1FAE5; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #065F46; }
-        .warning { background: #FEE2E2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #B91C1C; }
-        .code-block { background: #1E293B; border-radius: 8px; padding: 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.85rem; color: #E2E8F0; overflow-x: auto; line-height: 1.7; white-space: pre; }
-        .summary-box { background: linear-gradient(135deg, #0891B2 0%, #0E7490 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
         .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
         .summary-box ul { list-style: none; }
         .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
-        .summary-box li::before { content: "→"; position: absolute; left: 0; opacity: 0.7; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
         .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
-        .nav-links a { color: #0891B2; text-decoration: none; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
         .nav-links a:hover { text-decoration: underline; }
-        .diagram { background: #F8FAFC; border: 2px solid #E2E8F0; border-radius: 12px; padding: 24px; margin: 20px 0; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.4; overflow-x: auto; white-space: pre; color: #334155; }
     </style>
+    <style>
+    .gpw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}
+    .gpw h6{font-size:.98rem;font-weight:800;color:#fff;margin:0 0 4px}
+    .gpw .sub{font-size:.8rem;color:#8ba0c4;margin:0 0 14px}
+    .gp-ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:.84rem;color:#b5c2db}
+    .gp-btn{padding:8px 13px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:.15s}
+    .gp-btn:hover{border-color:#42a5f5;color:#e3eaf5}
+    .gp-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    .gp-canvas{width:100%;border-radius:12px;background:#070b16;display:block;touch-action:none}
+    .gp-stat{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .gp-chip{flex:1;min-width:120px;background:#121a30;border:1px solid #223052;border-radius:10px;padding:10px 12px}
+    .gp-chip .k{font-size:.72rem;color:#8ba0c4;margin-bottom:3px}
+    .gp-chip .v{font-size:1.1rem;font-weight:800;color:#fff}
+    .gp-chip .v.warn{color:#ff8a80}
+    .gp-chip .v.good{color:#69f0ae}
+    .gp-cap{margin-top:12px;font-size:.86rem;line-height:1.7;color:#b5c2db;background:#121a30;border-radius:10px;padding:12px 14px;border-left:3px solid #42a5f5;min-height:1.7em}
+    </style>
+    <script src="gpupload.js" defer></script>
 </head>
 <body>
     <div class="container">
-        <a href="../asset-management/" class="back-link">&larr; 에셋 관리</a>
+        <a href="../asset-management/" class="back-link">← 에셋 관리</a>
 
-        <div class="header">
-            <h1>DirectStorage / RTXIO</h1>
-            <p>GPU 직접 로딩으로 로딩 시간 혁신</p>
+        <header class="header">
+            <h1>GPU에 텍스처 올릴 때 CPU는 왜 놀고 있을까? — DMA부터 DirectStorage까지</h1>
+            <p>디스크 → RAM → GPU VRAM, 그 바이트는 누가 옮기나 — DMA·PCIe·스테이징, 그리고 CPU를 아예 건너뛰는 DirectStorage</p>
+        </header>
+
+        <div class="info-box">
+            <h4>30초 요약</h4>
+            <p>텍스처의 최종 목적지는 GPU의 VRAM. 문제는 '디스크 → VRAM'까지 그 바이트를 누가 어떻게 옮기냐.</p>
+            <p>실제 바이트 이동은 CPU가 아니라 DMA 엔진(하드웨어)이 함. CPU는 '옮겨줘' 명령만 내리고 빠져 — 그래서 '텍스처 올릴 때 CPU가 논다'.</p>
+            <p>일반 경로는 그래도 CPU RAM을 경유하고 CPU가 압축 해제까지 해서 7GB/s SSD가 2~3GB/s로 병목.</p>
+            <p>DirectStorage/RTXIO/PS5 SSD = CPU를 아예 우회. SSD→GPU 직행 + GPU가 압축 해제 → SSD 대역폭을 그대로 뽑음.</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 기존 I/O의 병목</h2>
-            <div class="q">SSD가 빠른데 왜 로딩이 느려?</div>
-            <div class="a">
-                <p>NVMe SSD는 7GB/s를 낼 수 있지만, <span class="warning">기존 I/O 경로가 병목</span>입니다:</p>
-                <div class="diagram">
-기존 I/O 파이프라인의 문제:
-┌────────────────────────────────────────────────────────────┐
-│                                                            │
-│  NVMe SSD (7GB/s 가능)                                     │
-│      │                                                     │
-│      ▼                                                     │
-│  ┌────────────────────────────────────────────────┐       │
-│  │ OS 파일 시스템 (NTFS)                           │       │
-│  │ - 파일 열기/닫기 오버헤드                       │       │
-│  │ - 작은 파일 수천 개 = 수천 번 시스템 콜         │       │
-│  └────────────────────────────────────────────────┘       │
-│      │ <span class="warning">~3GB/s로 제한</span>                                     │
-│      ▼                                                     │
-│  ┌────────────────────────────────────────────────┐       │
-│  │ CPU 메인 메모리 (RAM)                           │       │
-│  │ - 압축 해제 (CPU 부하, 최대 2-3GB/s)            │       │
-│  │ - 포맷 변환                                     │       │
-│  └────────────────────────────────────────────────┘       │
-│      │ <span class="warning">CPU가 병목</span>                                        │
-│      ▼                                                     │
-│  ┌────────────────────────────────────────────────┐       │
-│  │ PCIe 버스 → GPU VRAM                            │       │
-│  │ - RAM→VRAM 복사 (추가 시간)                    │       │
-│  └────────────────────────────────────────────────┘       │
-│                                                            │
-│  결과: 7GB/s SSD인데 <span class="warning">실제 2-3GB/s</span> 밖에 안 나옴           │
-│                                                            │
-└────────────────────────────────────────────────────────────┘</div>
+            <h2>Part 1. 텍스처는 결국 어디로 가야 하나</h2>
+
+            <div class="chat">
+                <div class="q">텍스처를 '메모리에 올린다'는데, 정확히 어느 메모리야?</div>
+                <div class="a">
+                    <p>GPU가 그림을 그리려면 텍스처가 <span class="key-point">GPU 전용 메모리(VRAM)</span>에 있어야 해. CPU가 쓰는 시스템 RAM이 아니라, 그래픽카드에 붙은 별도 메모리야.</p>
+                    <p>그런데 파일(텍스처)은 <span class="highlight">디스크</span>에 있지. 그래서 <span class="highlight">디스크 → (RAM) → VRAM</span>으로 옮겨야 해. 이 여정에서 '누가 옮기고, CPU는 뭘 하냐'가 이 글의 핵심이야.</p>
+                </div>
             </div>
+
+
+            <div class="chat">
+                <div class="q">왜 굳이 CPU RAM을 거쳐? 디스크에서 VRAM으로 바로 주면 안 돼?</div>
+                <div class="a">
+                    <p>전통적으로는 그럴 방법이 없었어. 디스크를 읽는 건 OS(CPU 쪽)의 일이고, 읽은 걸 <span class="highlight">CPU RAM에 일단 담은 뒤</span> GPU로 넘겼거든. 게다가 텍스처는 보통 <span class="highlight">압축</span>돼 있어서 중간에 풀어야 하는데, 그걸 CPU가 했어.</p>
+                    <p>그래서 경로가 '디스크 → OS → CPU RAM(압축 해제) → VRAM'이 된 거야. <span class="key-point">'바로 주면 안 돼?'가 바로 DirectStorage의 발상</span>인데, 그건 뒤에서(Part 5). 먼저 'RAM→VRAM 그 복사는 누가 하냐'부터.</p>
+                </div>
+            </div>
+
         </div>
 
         <div class="conversation">
-            <h2>Part 2. DirectStorage의 혁신</h2>
-            <div class="q">DirectStorage는 어떻게 해결해?</div>
-            <div class="a">
-                <p><span class="highlight">GPU가 SSD에서 직접 읽고 압축 해제</span>합니다:</p>
-                <div class="diagram">
-DirectStorage 파이프라인:
-┌────────────────────────────────────────────────────────────┐
-│                                                            │
-│  <span class="key-point">핵심: CPU 우회, GPU 직접 처리</span>                            │
-│                                                            │
-│  기존:                                                     │
-│  SSD → CPU → RAM → CPU(압축해제) → RAM → GPU              │
-│        ↑       ↑         ↑                                │
-│       병목    병목       병목                              │
-│                                                            │
-│  DirectStorage:                                            │
-│  ┌─────────────────────────────────────────────────┐      │
-│  │                                                 │      │
-│  │  SSD ──────────────────────────────────▶ GPU   │      │
-│  │       NVMe 직접 접근     GPU 압축 해제          │      │
-│  │                                                 │      │
-│  └─────────────────────────────────────────────────┘      │
-│                                                            │
-│  CPU는 "명령"만 내리고, 실제 데이터 이동은 GPU+DMA        │
-│                                                            │
-│  속도 비교:                                                │
-│  ┌──────────────────┬────────────────┬────────────┐      │
-│  │ 구분              │ 기존           │ DirectStorage │    │
-│  ├──────────────────┼────────────────┼────────────┤      │
-│  │ 처리량            │ ~3GB/s         │ <span class="key-point">~7GB/s+</span>     │      │
-│  │ CPU 사용률        │ 높음 (100%)    │ <span class="key-point">낮음 (5%)</span>   │      │
-│  │ 압축해제 속도     │ 2GB/s (CPU)    │ <span class="key-point">24GB/s (GPU)</span>│      │
-│  └──────────────────┴────────────────┴────────────┘      │
-│                                                            │
-└────────────────────────────────────────────────────────────┘</div>
+            <h2>Part 2. 그 바이트, 누가 옮겨? — DMA</h2>
+
+            <div class="chat">
+                <div class="q">RAM에서 VRAM으로 데이터를 옮길 때, CPU가 한 바이트씩 복사해?</div>
+                <div class="a">
+                    <p>'그럴 것 같지'? <span class="warning">아니야.</span> 만약 CPU가 직접 옮기면, 100MB 옮기는 내내 <span class="warning">CPU가 그 단순 복사에 묶여</span> 게임 로직·물리·AI를 못 돌려. 프레임 뚝뚝 끊기겠지.</p>
+                    <p>그래서 실제 이동은 <span class="key-point">DMA(Direct Memory Access) 엔진</span>이라는 <span class="highlight">전용 하드웨어</span>가 해. <span class="highlight">우리가 랜카드에서 본 그 DMA랑 똑같아</span> — 랜카드가 CPU 안 거치고 커널 메모리에 직접 썼잖아? GPU 업로드도 같은 원리야.</p>
+                </div>
             </div>
 
-            <div class="q">GPU가 압축 푸는 게 왜 빨라?</div>
-            <div class="a">
-                <p>GPU는 <span class="highlight">수천 개 코어로 병렬 처리</span>합니다:</p>
-                <div class="diagram">
-CPU vs GPU 압축 해제:
-┌────────────────────────────────────────────────────────────┐
-│                                                            │
-│  CPU (8코어 가정):                                         │
-│  ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐ ┌─┐                        │
-│  │1│ │2│ │3│ │4│ │5│ │6│ │7│ │8│   8개 블록 동시 처리    │
-│  └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘ └─┘                        │
-│                                                            │
-│  → 100MB 압축 해제 = 약 50ms                              │
-│                                                            │
-│  GPU (10,000+ 코어):                                       │
-│  ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─┬─...            │
-│  │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │ │              │
-│  └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─...            │
-│  10,000+ 블록 동시 처리                                    │
-│                                                            │
-│  → 100MB 압축 해제 = 약 <span class="key-point">4ms</span>                            │
-│                                                            │
-│  <span class="key-point">GDeflate</span>: GPU 최적화 압축 포맷 (DirectStorage 1.2+)     │
-│  - 기존 zlib/gzip과 호환                                   │
-│  - GPU에서 24GB/s 이상 디코딩 가능                         │
-│                                                            │
-└────────────────────────────────────────────────────────────┘</div>
+
+            <div class="chat">
+                <div class="q">그럼 CPU는 아무것도 안 해?</div>
+                <div class="a">
+                    <p><span class="highlight">시작과 끝만</span> 관여해. "이 주소에서 저 주소로 100MB 옮겨"라고 <span class="key-point">DMA에게 명령(디스크립터)만 딱 던지고 빠져.</span> 그다음 실제 복사는 DMA 엔진이 백그라운드로 하고, 다 되면 인터럽트로 "끝났어" 알려줘.</p>
+                    <p><span class="key-point">그래서 '텍스처 올릴 때 CPU가 논다'는 거야</span> — 명령 던진 뒤엔 자유라 그 시간에 게임 로직을 돌릴 수 있어. 아래에서 CPU 직접 복사 vs DMA를 비교해봐 ↓</p>
+                </div>
             </div>
+
+            <div class="gpw" id="gp-w-dma"><h6>🚚 그 바이트, 누가 옮겨? — CPU 직접 vs DMA</h6><p class="sub">'100MB 텍스처 전송'을 눌러봐. CPU가 직접 복사하면 옮기는 내내 CPU가 묶여(게임 로직 정지). DMA는 CPU가 '옮겨줘' 명령만 내리고 빠져 — 전용 엔진이 옮기는 동안 CPU는 딴 일 해.</p><div class="gp-ctrl"><button class="gp-btn active" data-dma="cpu">CPU가 직접 복사</button><button class="gp-btn" data-dma="dma">DMA 엔진</button><button class="gp-btn" data-dma="go">▶ 100MB 전송</button></div><canvas class="gp-canvas" id="dma-canvas" height="210"></canvas><div class="gp-stat"><div class="gp-chip"><div class="k">전송 중 CPU 점유율</div><div class="v" id="dma-cpu">-</div></div><div class="gp-chip"><div class="k">전송 주체</div><div class="v" id="dma-by">-</div></div><div class="gp-chip"><div class="k">그동안 게임 로직</div><div class="v" id="dma-logic">-</div></div></div><div class="gp-cap" id="dma-cap">우리가 랜카드에서 본 DMA랑 똑같아 — 실제 바이트 이동은 CPU가 아니라 DMA 엔진(하드웨어)이 해. CPU는 시작·완료만 관여하고 빠져.</div></div>
+
         </div>
 
         <div class="conversation">
-            <h2>Part 3. DirectStorage API 구조</h2>
-            <div class="q">코드에서 어떻게 사용해?</div>
-            <div class="a">
-                <p>DirectStorage는 <span class="highlight">비동기 요청 큐</span> 기반입니다:</p>
-                <div class="code-block">
-// DirectStorage 기본 사용 패턴
+            <h2>Part 3. RAM과 VRAM 사이 고속도로 — PCIe & 스테이징</h2>
 
-// 1. 초기화
-IDStorageFactory* factory;
-DStorageGetFactory(IID_PPV_ARGS(&factory));
-
-IDStorageQueue* queue;
-DSTORAGE_QUEUE_DESC queueDesc = {};
-queueDesc.Capacity = DSTORAGE_MAX_QUEUE_CAPACITY;
-queueDesc.Priority = DSTORAGE_PRIORITY_NORMAL;
-queueDesc.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
-queueDesc.Device = d3d12Device;  // GPU 디바이스
-factory->CreateQueue(&queueDesc, IID_PPV_ARGS(&queue));
-
-// 2. 파일 열기
-IDStorageFile* file;
-factory->OpenFile(L"textures.pak", IID_PPV_ARGS(&file));
-
-// 3. 읽기 요청 생성
-DSTORAGE_REQUEST request = {};
-request.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
-request.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_TEXTURE_REGION;
-request.Source.File.Source = file;
-request.Source.File.Offset = textureOffset;
-request.Source.File.Size = compressedSize;
-
-// GPU 텍스처로 직접 전송!
-request.Destination.Texture.Resource = gpuTexture;
-request.Destination.Texture.SubresourceIndex = 0;
-request.Destination.Texture.Region = { 0, 0, 0, width, height, 1 };
-
-// GPU 압축 해제 설정
-request.Options.CompressionFormat = DSTORAGE_COMPRESSION_FORMAT_GDEFLATE;
-request.UncompressedSize = uncompressedSize;
-
-// 4. 큐에 요청 추가
-queue->EnqueueRequest(&request);
-
-// 5. 제출 (비동기 실행)
-queue->Submit();
-
-// 6. 완료 대기 (선택적)
-IDStorageStatusArray* status;
-factory->CreateStatusArray(1, &status);
-queue->EnqueueStatus(status, 0);
-queue->Submit();
-status->GetHResult(0);  // 완료 확인</div>
+            <div class="chat">
+                <div class="q">DMA가 옮긴다 쳐도, RAM이랑 VRAM은 물리적으로 다른 칩이잖아. 뭘 타고 건너가?</div>
+                <div class="a">
+                    <p><span class="highlight">PCIe(PCI Express)</span>라는 고속 버스를 타. CPU/RAM 쪽과 그래픽카드를 잇는 <span class="highlight">고속도로</span>야. DMA 엔진이 이 PCIe를 통해 RAM↔VRAM 사이로 데이터를 실어 날라.</p>
+                    <p>대역폭도 이게 좌우해 — PCIe 4.0 x16이 약 32GB/s 정도. 이 고속도로가 좁으면 VRAM이 아무리 빨라도 업로드가 막혀.</p>
+                </div>
             </div>
+
+
+            <div class="chat">
+                <div class="q">그럼 GPU가 아무 RAM 주소나 DMA로 당길 수 있어?</div>
+                <div class="a">
+                    <p>아니, 여기 함정이 있어. DMA가 안전하게 당기려면 그 메모리가 <span class="highlight">고정(pinned)</span>돼 있어야 해 — <span class="key-point">우리가 제로카피에서 본 그 '핀 고정'</span>이야! 안 그러면 옮기는 도중 OS가 페이지를 옮겨버려 사고 나거든.</p>
+                    <p>그래서 <span class="highlight">스테이징(업로드) 버퍼</span>를 둬: CPU가 접근 가능한 <b>고정된</b> 중간 버퍼에 데이터를 채우면, GPU가 거기서 DMA로 VRAM에 당겨가. '디스크 → 스테이징 RAM(고정) → PCIe/DMA → VRAM' 이 경로야.</p>
+                </div>
+            </div>
+
         </div>
 
         <div class="conversation">
-            <h2>Part 4. 배칭과 최적화</h2>
-            <div class="q">요청을 어떻게 효율적으로 처리해?</div>
-            <div class="a">
-                <p><span class="highlight">배칭</span>이 핵심입니다. 수백 개 요청을 한 번에 제출합니다:</p>
-                <div class="diagram">
-DirectStorage 배칭 전략:
-┌────────────────────────────────────────────────────────────┐
-│                                                            │
-│  나쁜 패턴 (매 요청마다 Submit):                            │
-│  ┌────────────────────────────────────────────────┐       │
-│  │ Enqueue → Submit → Wait                        │       │
-│  │ Enqueue → Submit → Wait                        │       │
-│  │ Enqueue → Submit → Wait                        │ <span class="warning">느림</span>  │
-│  │ ...                                            │       │
-│  └────────────────────────────────────────────────┘       │
-│                                                            │
-│  좋은 패턴 (배칭):                                          │
-│  ┌────────────────────────────────────────────────┐       │
-│  │ Enqueue(텍스처1)                               │       │
-│  │ Enqueue(텍스처2)                               │       │
-│  │ Enqueue(텍스처3)                               │       │
-│  │ ...                                            │       │
-│  │ Enqueue(텍스처100)                             │       │
-│  │ Submit()  ← 한 번에 제출!                      │ <span class="key-point">빠름</span>  │
-│  │ (다른 작업 수행...)                            │       │
-│  │ Wait()    ← 나중에 완료 확인                   │       │
-│  └────────────────────────────────────────────────┘       │
-│                                                            │
-│  <span class="key-point">권장</span>: 프레임당 1-2회 Submit, 수백 개 요청 배칭           │
-│                                                            │
-└────────────────────────────────────────────────────────────┘</div>
-                <div class="code-block">
-// 게임 루프에서의 DirectStorage 배칭 패턴
+            <h2>Part 4. 근데 아직 CPU가 일한다 — 병목의 정체</h2>
 
-class StreamingManager {
-    std::vector<DSTORAGE_REQUEST> pendingRequests;
-
-    void RequestTexture(const TextureInfo& info) {
-        DSTORAGE_REQUEST request = {};
-        // ... 요청 설정
-        pendingRequests.push_back(request);
-    }
-
-    void FlushRequests() {
-        if (pendingRequests.empty()) return;
-
-        // 모든 요청을 한 번에 큐에 추가
-        for (auto& req : pendingRequests) {
-            queue->EnqueueRequest(&req);
-        }
-
-        // 한 번에 제출
-        queue->EnqueueStatus(statusArray, frameIndex);
-        queue->Submit();
-
-        pendingRequests.clear();
-    }
-
-    void OnFrameEnd() {
-        // 프레임 끝에 배치된 요청 제출
-        FlushRequests();
-    }
-};</div>
+            <div class="chat">
+                <div class="q">DMA가 옮겨주면 다 해결 아냐? 왜 로딩이 여전히 느려?</div>
+                <div class="a">
+                    <p>바이트 이동(DMA)은 공짜여도, <span class="warning">CPU가 여전히 해야 하는 일이 남아</span> 있어서야. NVMe SSD가 <span class="highlight">7GB/s</span>를 낼 수 있는데 실제론 2~3GB/s만 나오는 이유:</p>
+                    <p>• <span class="highlight">OS 파일 시스템 오버헤드</span>: 작은 파일 수천 개를 열고 닫으면 수천 번의 시스템 콜(우리가 배운 그 커널 문턱 넘기).</p>
+                    <p>• <span class="highlight">CPU 압축 해제</span>: 텍스처는 압축돼 있고, 그걸 CPU가 풀면 CPU가 2~3GB/s에서 병목.</p>
+                    <p>• <span class="highlight">포맷 변환 + RAM→VRAM 추가 복사</span>.</p>
+                </div>
             </div>
+
+            <div class="diagram-box">일반 I/O 파이프라인의 병목
+
+  NVMe SSD (7GB/s 가능)
+        │
+        ▼
+  [OS 파일시스템]  ← 파일 수천 개 = 수천 번 syscall
+        │  ~3GB/s로 제한
+        ▼
+  [CPU RAM]  ← 압축 해제(CPU 2~3GB/s 병목) + 포맷 변환
+        │  ★여기서 CPU가 진짜 병목
+        ▼
+  [PCIe/DMA → VRAM]  ← RAM→VRAM 복사(추가 시간)
+
+  결과: 7GB/s SSD인데 실제 2~3GB/s 😩</div>
+
         </div>
 
         <div class="conversation">
-            <h2>Part 5. 플랫폼별 구현</h2>
-            <div class="q">PS5나 Xbox는 어떻게 구현해?</div>
-            <div class="a">
-                <p>각 플랫폼마다 유사한 기술이 있습니다:</p>
-                <div class="diagram">
-플랫폼별 GPU 직접 로딩 기술:
-┌────────────────────────────────────────────────────────────┐
-│                                                            │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │ PC (Windows)                                        │  │
-│  │ ─────────────────────────────────────────────────── │  │
-│  │ DirectStorage 1.0: GPU 직접 로딩                    │  │
-│  │ DirectStorage 1.1: GPU 압축 해제 (GDeflate)         │  │
-│  │ DirectStorage 1.2: 메타데이터 스테이징 개선         │  │
-│  │                                                     │  │
-│  │ 요구사항: Windows 10/11, NVMe SSD, DX12 GPU        │  │
-│  └─────────────────────────────────────────────────────┘  │
-│                                                            │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │ PlayStation 5                                       │  │
-│  │ ─────────────────────────────────────────────────── │  │
-│  │ 전용 I/O 컴플렉스:                                   │  │
-│  │ - 커스텀 SSD 컨트롤러 (5.5GB/s raw, 9GB/s 압축)     │  │
-│  │ - 전용 압축 해제 하드웨어 (Kraken)                  │  │
-│  │ - <span class="key-point">제로 CPU 오버헤드</span>                               │  │
-│  │                                                     │  │
-│  │ "PS5의 SSD는 PC의 5년 후 기술" - Mark Cerny         │  │
-│  └─────────────────────────────────────────────────────┘  │
-│                                                            │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │ Xbox Series X/S                                     │  │
-│  │ ─────────────────────────────────────────────────── │  │
-│  │ Xbox Velocity Architecture:                         │  │
-│  │ - DirectStorage (PC와 동일 API)                     │  │
-│  │ - Sampler Feedback Streaming                        │  │
-│  │ - Hardware Decompression Block                      │  │
-│  │                                                     │  │
-│  │ 2.4GB/s raw, 4.8GB/s 압축                          │  │
-│  └─────────────────────────────────────────────────────┘  │
-│                                                            │
-│  ┌─────────────────────────────────────────────────────┐  │
-│  │ NVIDIA RTX IO                                       │  │
-│  │ ─────────────────────────────────────────────────── │  │
-│  │ DirectStorage 위에 추가 최적화:                      │  │
-│  │ - RTX GPU 전용 경로                                 │  │
-│  │ - GDeflate 가속                                     │  │
-│  │ - 14GB/s 이상 달성 가능                             │  │
-│  └─────────────────────────────────────────────────────┘  │
-│                                                            │
-└────────────────────────────────────────────────────────────┘</div>
+            <h2>Part 5. CPU를 아예 건너뛴다 — DirectStorage / RTXIO</h2>
+
+            <div class="chat">
+                <div class="q">그럼 CPU가 하던 일(파일시스템·압축 해제)을 없애면?</div>
+                <div class="a">
+                    <p>그게 <span class="key-point">DirectStorage(PC) / RTXIO(NVIDIA) / PS5의 SSD I/O</span>의 발상이야. <span class="highlight">CPU를 우회</span>해:</p>
+                    <p>• 여러 파일을 <span class="highlight">한 번에 배치로 요청</span> → 수천 번 syscall이 몇 번으로.</p>
+                    <p>• SSD에서 읽은 <span class="highlight">압축 데이터를 GPU로 직행</span>시키고, <span class="key-point">압축 해제를 GPU가</span> 함(GDeflate 등). CPU의 압축 해제 병목이 사라져.</p>
+                    <p>• 결과: <span class="good">SSD의 7GB/s를 거의 그대로</span> VRAM까지.</p>
+                </div>
             </div>
+
+            <div class="diagram-box">DirectStorage: CPU 우회, GPU 직접 처리
+
+  NVMe SSD (7GB/s)
+        │  압축된 데이터를 배치로
+        ▼
+  [PCIe/DMA]  ── CPU RAM·CPU 압축해제 건너뜀 ──▶  [GPU VRAM]
+                                                    │
+                                          [GPU가 압축 해제(GDeflate)]
+
+  CPU는 "이 파일들 GPU로 줘" 명령만. 나머진 DMA+GPU.
+  결과: 실효 ~7GB/s (SSD 대역폭 그대로)</div>
+
+            <div class="gpw" id="gp-w-path"><h6>🛣️ 업로드 경로 — 일반 vs DirectStorage</h6><p class="sub">텍스처가 SSD에서 GPU VRAM까지 가는 길이야. 일반 경로는 CPU RAM을 경유하며 CPU가 압축 해제까지 하고, DirectStorage는 SSD→GPU로 직행하고 GPU가 압축을 풀어. ▶로 흘려보내 비교해봐.</p><div class="gp-ctrl"><button class="gp-btn active" data-pt="normal">일반 경로</button><button class="gp-btn" data-pt="ds">DirectStorage</button><button class="gp-btn" data-pt="go">▶ 텍스처 흘려보내기</button></div><canvas class="gp-canvas" id="path-canvas" height="320"></canvas><div class="gp-stat"><div class="gp-chip"><div class="k">실효 처리량</div><div class="v" id="path-bw">-</div></div><div class="gp-chip"><div class="k">CPU 경유</div><div class="v" id="path-cpu">-</div></div><div class="gp-chip"><div class="k">복사 횟수</div><div class="v" id="path-copy">-</div></div></div><div class="gp-cap" id="path-cap">NVMe SSD는 7GB/s가 가능한데, 일반 경로는 CPU 압축 해제·파일시스템 오버헤드에 막혀 실제 2~3GB/s만 나와. DirectStorage는 CPU를 우회해 그 천장을 뚫어.</div></div>
+
         </div>
 
         <div class="conversation">
-            <h2>Part 6. 게임 엔진 통합</h2>
-            <div class="q">Unreal이나 Unity에서는 어떻게 써?</div>
-            <div class="a">
-                <div class="code-block">
-// Unreal Engine 5 DirectStorage 설정
+            <h2>Part 6. 스트리밍·제로카피와 무슨 관계?</h2>
 
-// 1. 프로젝트 설정에서 활성화
-// Project Settings > Platforms > Windows > Use DirectStorage
-
-// Config/DefaultEngine.ini
-[/Script/Engine.StreamingSettings]
-s.UseDirectStorage=True
-s.DirectStorageQueueDepth=512
-s.DirectStorageBatchSize=64
-
-// 2. 패키징 시 압축 설정
-// GDeflate 압축 사용
-[/Script/UnrealEd.ProjectPackagingSettings]
-bCompressedDirectStorage=True
-
-// 3. 런타임 확인
-if (FPlatformMisc::SupportsDirectStorage())
-{
-    UE_LOG(LogStreaming, Log, TEXT("DirectStorage available"));
-}
-
-// Unity (2023.1+)
-// 1. Player Settings > DirectStorage 활성화
-// 2. Addressables에서 자동 지원
-// 3. 또는 직접 API 사용:
-
-#if UNITY_STANDALONE_WIN
-using Unity.IO.DirectStorage;
-
-var request = DirectStorage.CreateReadRequest(
-    filePath,
-    offset,
-    size,
-    destinationBuffer,
-    CompressionFormat.GDeflate
-);
-
-request.Submit();
-await request.WaitAsync();
-#endif</div>
+            <div class="chat">
+                <div class="q">이게 '월드 스트리밍'이랑 '제로카피'랑 어떻게 엮여?</div>
+                <div class="a">
+                    <p>세 개를 축으로 나누면 딱 정리돼:</p>
+                    <p>• <span class="highlight">스트리밍</span> = <b>무엇을/언제</b> 올리나 (근처만 로드, 멀면 언로드 — 메모리 예산). 버퍼 풀·AOI의 사촌.</p>
+                    <p>• <span class="highlight">DMA/DirectStorage</span> = 올릴 때 <b>어떻게</b> 옮기나 (CPU 우회, 저·제로 카피).</p>
+                    <p>• <span class="highlight">제로카피</span> = 경계마다 새로 복사 안 하기.</p>
+                    <p><span class="key-point">DirectStorage는 '스트리밍의 로드 경로'를 저카피로 구현한 것</span>이야. 즉 스트리밍이 "근처 텍스처 올려!"라고 <b>무엇을</b> 정하면, DirectStorage/DMA가 그걸 <b>CPU 안 거치고</b> 옮기는 거지. 축이 다르니 '스트리밍=제로카피'가 아니라 '스트리밍이 그 로드를 저카피로 할 수 있다'가 맞아.</p>
+                </div>
             </div>
-        </div>
 
-        <div class="conversation">
-            <h2>Part 7. 설계 고려사항</h2>
-            <div class="q">DirectStorage 사용 시 주의점은?</div>
-            <div class="a">
-                <div class="diagram">
-DirectStorage 설계 체크리스트:
-┌────────────────────────────────────────────────────────────┐
-│                                                            │
-│  <span class="key-point">✅ DO (권장)</span>                                            │
-│  ────────────────────────────────────────────────────────  │
-│  • 대용량 에셋을 PAK/번들로 통합 (파일 수 줄이기)          │
-│  • GDeflate 압축 사용 (GPU 디코딩 최적)                    │
-│  • 요청 배칭 (수백 개씩 한 번에 Submit)                    │
-│  • 읽기 크기 정렬 (4KB/64KB 배수)                         │
-│  • 비동기 패턴 사용 (Submit 후 다른 작업)                  │
-│                                                            │
-│  <span class="warning">❌ DON'T (피해야 할 것)</span>                                    │
-│  ────────────────────────────────────────────────────────  │
-│  • 작은 파일 수천 개 (오버헤드 증가)                       │
-│  • 매 요청마다 Wait (동기 패턴)                            │
-│  • HDD에서 DirectStorage 사용 (효과 없음)                  │
-│  • CPU 압축 포맷 (zlib 등) 사용                            │
-│                                                            │
-│  <span class="warning">Fallback 필수</span>                                             │
-│  ────────────────────────────────────────────────────────  │
-│  • DirectStorage 미지원 시스템 대비                        │
-│  • HDD 사용자를 위한 기존 I/O 경로 유지                    │
-│  • 런타임 감지: IsDirectStorageSupported()                 │
-│                                                            │
-└────────────────────────────────────────────────────────────┘</div>
-                <div class="code-block">
-// 런타임 DirectStorage 지원 확인 및 Fallback
-
-class AdaptiveAssetLoader {
-    enum class LoaderType { DirectStorage, Legacy };
-    LoaderType activeLoader;
-
-    void Initialize() {
-        // DirectStorage 지원 확인
-        DSTORAGE_CONFIGURATION config = {};
-        DStorageGetFactory(IID_PPV_ARGS(&factory));
-
-        bool dsSupported =
-            factory != nullptr &&
-            IsNVMeSSD() &&  // SSD 타입 확인
-            IsGPUCapable(); // GPU 기능 확인
-
-        activeLoader = dsSupported
-            ? LoaderType::DirectStorage
-            : LoaderType::Legacy;
-
-        if (activeLoader == LoaderType::Legacy) {
-            Log("DirectStorage unavailable, using legacy I/O");
-        }
-    }
-
-    void LoadAsset(const char* path, void* dest) {
-        if (activeLoader == LoaderType::DirectStorage) {
-            LoadWithDirectStorage(path, dest);
-        } else {
-            LoadWithLegacyIO(path, dest);  // 기존 방식 fallback
-        }
-    }
-};</div>
-            </div>
         </div>
 
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>DirectStorage</strong>는 GPU가 SSD에서 직접 읽고 압축 해제</li>
-                <li>기존 3GB/s → <strong>7GB/s+</strong> 달성, CPU 부하 제거</li>
-                <li><strong>GDeflate</strong>: GPU 최적화 압축 포맷 (24GB/s 디코딩)</li>
-                <li><strong>배칭</strong>이 핵심 - 수백 개 요청을 한 번에 Submit</li>
-                <li>PS5 I/O 컴플렉스, Xbox Velocity Architecture도 동일 개념</li>
-                <li>Unreal/Unity에서 <strong>설정으로 활성화</strong> 가능</li>
-                <li><strong>Fallback</strong> 필수 - HDD/구형 시스템 대비</li>
+                <li>텍스처의 목적지는 GPU VRAM. 디스크→(RAM)→VRAM으로 옮겨야 한다.</li>
+                <li>실제 바이트 이동은 CPU가 아니라 DMA 엔진(하드웨어) — CPU는 명령만 던지고 빠져(그래서 '논다').</li>
+                <li>RAM↔VRAM은 PCIe 고속도로를 타고, DMA 대상 메모리는 핀 고정(제로카피에서 본 그것)이 필요.</li>
+                <li>그래도 CPU가 파일시스템·압축 해제를 하면 7GB/s SSD가 2~3GB/s로 병목.</li>
+                <li>DirectStorage/RTXIO/PS5 SSD = CPU 우회 + GPU 압축 해제 → SSD 대역폭을 그대로 뽑음.</li>
+                <li>축 정리: 스트리밍(무엇/언제) ≠ 제로카피(어떻게). DirectStorage는 스트리밍 로드를 저카피로 구현한 것.</li>
             </ul>
         </div>
 
+        <div class="info-box">
+            <h4>이어서 보면</h4>
+            <p>DMA & 버퍼링 — DMA의 원리(랜카드 예시): dma-buffering</p>
+            <p>제로카피 — 복사를 없애는 최적화(핀 고정): zero-copy</p>
+            <p>PS5 SSD의 혁명 — 콘솔의 CPU 우회 로딩: asset-ps5-ssd</p>
+            <p>텍스처 스트리밍 / Virtual Texture — 무엇을 언제 올리나: asset-texture-streaming, asset-virtual-texture</p>
+        </div>
+
+
         <div class="nav-links">
-            <a href="../asset-sparse-texture/">&larr; Sparse Texture / Tiled Resource</a>
-            <a href="../asset-cloud-streaming/">클라우드 스트리밍 &rarr;</a>
+            <a href="../dma-buffering/">← DMA & 버퍼링</a>
+            <a href="../asset-ps5-ssd/">PS5 SSD의 혁명 →</a>
         </div>
     </div>
 </body>
