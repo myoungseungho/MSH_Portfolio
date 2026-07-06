@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>한 스레드로 어떻게 수천 요청을? — 코루틴과 async - MSH Portfolio</title>
+    <title>콜백 지옥은 어떻게 푸나? — 상태머신과 코루틴/async-await - MSH Portfolio</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
@@ -64,107 +64,178 @@
         .nav-links a:hover { text-decoration: underline; }
     </style>
     <style>
-    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}
-    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-    .wtab{flex:1;min-width:120px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}
-    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}
-    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
-    .sim canvas{width:100%;display:block;border-radius:12px}
-    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
-    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}
-    .sim-stats{display:flex;gap:10px;margin-top:16px}
-    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}
-    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}
-    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}
-    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}
-    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}
+    .cow{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}
+    .cow h6{font-size:.98rem;font-weight:800;color:#fff;margin:0 0 4px}
+    .cow .sub{font-size:.8rem;color:#8ba0c4;margin:0 0 14px}
+    .co-ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:.84rem;color:#b5c2db}
+    .co-btn{padding:8px 13px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:.15s}
+    .co-btn:hover{border-color:#42a5f5;color:#e3eaf5}
+    .co-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    .co-canvas{width:100%;border-radius:12px;background:#070b16;display:block;touch-action:none}
+    .co-stat{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .co-chip{flex:1;min-width:120px;background:#121a30;border:1px solid #223052;border-radius:10px;padding:10px 12px}
+    .co-chip .k{font-size:.72rem;color:#8ba0c4;margin-bottom:3px}
+    .co-chip .v{font-size:1.1rem;font-weight:800;color:#fff}
+    .co-chip .v.warn{color:#ff8a80}
+    .co-chip .v.good{color:#69f0ae}
+    .co-cap{margin-top:12px;font-size:.86rem;line-height:1.7;color:#b5c2db;background:#121a30;border-radius:10px;padding:12px 14px;border-left:3px solid #42a5f5;min-height:1.7em}
     </style>
-    <script src='coasync.js' defer></script>
+    <script src="coroutine.js" defer></script>
 </head>
 <body>
     <div class="container">
         <a href="../category-thread/" class="back-link">← 멀티스레드</a>
 
         <header class="header">
-            <h1>한 스레드로 어떻게 수천 요청을? — 코루틴과 async</h1>
-            <p>I/O를 기다리며 노는 대신, 그 시간에 다른 일을 한다</p>
+            <h1>콜백 지옥은 어떻게 푸나? — 상태머신과 코루틴/async-await</h1>
+            <p>중첩 콜백 → 상태머신 → 그걸 자동 생성하는 코루틴. 그리고 한 스레드로 수천 요청까지</p>
         </header>
 
         <div class="info-box">
             <h4>30초 요약</h4>
-            <p>대부분의 시간은 CPU가 아니라 I/O(DB·네트워크) 응답을 '기다리는' 데 쓰여.</p>
-            <p>블로킹: 기다리는 동안 워커가 묶여 아무 일도 못 함(유휴 낭비).</p>
-            <p>코루틴/async: I/O 중엔 yield하고 다른 일을 함 → 한 스레드로도 유휴 없이 꽉 채움.</p>
+            <p>비동기는 보통 '콜백'으로 짜는데, 단계를 이어붙이면 중첩 피라미드 + 흩어진 상태 + 에러처리 지옥(콜백 지옥).</p>
+            <p>첫 해결 = 상태머신: '지금 몇 단계(state)'와 '모은 데이터(필드)'를 명시적으로 들고, 이벤트마다 switch로 전이 → 중첩이 평탄해짐.</p>
+            <p>코루틴/async-await = 그 상태머신을 컴파일러가 자동 생성. 코드는 위→아래 동기처럼 읽히고, 실행은 비동기(스레드 안 막음).</p>
+            <p>덤으로: await는 I/O 대기 중 스레드를 안 막고 다른 요청을 처리 → 한 스레드로 수천 요청.</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 기다리는 시간이 아깝다</h2>
+            <h2>Part 1. 콜백 지옥 — 왜 누더기가 되나</h2>
 
             <div class="chat">
-                <div class="q">작업 하나에 CPU 0.3초 + I/O 0.9초면, 워커는 뭘 해?</div>
+                <div class="q">비동기를 콜백으로 짜면 뭐가 문제야?</div>
                 <div class="a">
-                    <p>블로킹이면 CPU 0.3초 일하고, I/O 0.9초는 응답 올 때까지 '그냥 기다려'. 그 0.9초 동안 워커는 놀고 있어 — 75%가 낭비야.</p>
-                    <p>근데 그 시간에 다른 작업의 CPU를 처리하면? 한 스레드로도 훨씬 많이 처리할 수 있어.</p>
+                    <p>비동기는 "이거 해줘, 다 되면 이 함수 불러줘(콜백)"로 짜. 한 단계면 괜찮은데, <span class="warning">여러 단계를 이어붙이면</span> 콜백 안에 콜백이 겹겹이 쌓여:</p>
                 </div>
             </div>
 
+            <div class="code-block">// ❌ 콜백 지옥: 단계마다 중첩 + 상태가 콜백에 흩어짐
+loadUser(id, (user) => {
+  loadInventory(user, (inv) => {
+    loadPrices(inv, (prices) => {
+      render(user, inv, prices, (html) => {
+        send(html);
+      });
+    });
+  });
+});
+// + 각 단계 에러처리까지 넣으면 피라미드가 더 깊어짐(파멸의 피라미드)</div>
+
 
             <div class="chat">
-                <div class="q">코루틴/async가 그거야?</div>
+                <div class="q">뭐가 그렇게 나빠? 돌아가긴 하잖아.</div>
                 <div class="a">
-                    <p>응. 'I/O를 기다려야 하는 지점'에서 함수를 잠시 멈추고(yield/await) 제어를 양보해. 워커는 다른 작업으로 가서 일하고, I/O가 끝나면 멈췄던 곳부터 재개해.</p>
-                    <p>스레드를 늘리는 게 아니라, 한 스레드를 '쪼개 쓰는' 거야 — 협력적 멀티태스킹.</p>
+                    <p>세 가지가 아파:</p>
+                    <p>1. <span class="highlight">중첩</span>: 오른쪽으로 계속 밀려 읽기 힘들어(피라미드).</p>
+                    <p>2. <span class="warning">상태가 흩어짐</span>: 'user, inv, prices'가 각 콜백의 클로저에 갇혀 — 전체 진행 상황을 한눈에 못 봐.</p>
+                    <p>3. <span class="warning">에러·흐름제어 지옥</span>: 각 단계마다 try/에러 콜백을 또 달아야 하고, 반복문·조건문과 섞이면 답이 없어져.</p>
                 </div>
             </div>
-
-        </div>
-
-        <div class="conversation">
-            <h2>Part 2. 활용도를 봐</h2>
-
-            <div class="chat">
-                <div class="q">타임라인으로 비교해봐.</div>
-                <div class="a">
-                    <p>탭으로 ① 블로킹 ② async 를 바꿔봐. 아래 타임라인이 초록(CPU 일함)/회색(유휴)이야.</p>
-                    <p>블로킹은 I/O 대기마다 회색이 깔리고, async는 그 틈을 다른 작업으로 메워 거의 초록이야. 활용도 숫자를 비교해.</p>
-                </div>
-            </div>
-
-            <div class='sim'>
-  <div class='sim-tabs'>
-    <button class='wtab catab' type='button' data-m='block'>① 블로킹</button>
-    <button class='wtab catab active' type='button' data-m='async'>② 코루틴/async</button>
-  </div>
-  <canvas id='ca-canvas' role='img' aria-label='코루틴 async 시뮬레이터. 한 워커 스레드가 블로킹 모드에서는 I/O 대기 동안 유휴 상태가 되고, async 모드에서는 I/O 중 다른 작업의 CPU를 처리해 활용도가 높다.'></canvas>
-  <div class='sim-controls'>
-    <button id='ca-play' type='button'>⏸ 일시정지</button>
-  </div>
-  <div class='sim-stats'>
-    <div class='sim-stat'><span class='sim-stat-num' id='ca-done'>0</span><span class='sim-stat-lbl'>완료 작업</span></div>
-    <div class='sim-stat'><span class='sim-stat-num' id='ca-util'>0%</span><span class='sim-stat-lbl'>워커 활용도</span></div>
-  </div>
-  <p class='sim-caption' id='ca-caption'></p>
-</div>
 
         </div>
 
         <div class="conversation">
-            <h2>Part 3. 스레드 vs 코루틴</h2>
+            <h2>Part 2. 첫 해결 — 상태머신이 정확히 뭔데?</h2>
 
             <div class="chat">
-                <div class="q">그냥 스레드 많이 만들면 되잖아?</div>
+                <div class="q">상태머신이 뭐야? 이름만 들으면 어려워 보여.</div>
                 <div class="a">
-                    <p>스레드는 무거워(스택 MB 단위 + 문맥전환 비용). 1만 동시 요청에 1만 스레드는 낭비야.</p>
-                    <p>코루틴은 가벼워(수 KB) — 한 스레드 위에 수천 코루틴을 얹어 I/O 기다릴 때만 교대해. 'C10K 문제'(동시 1만 연결)를 적은 스레드로 푸는 핵심 기법이야. (IOCP·epoll도 같은 목적)</p>
+                    <p>별거 아냐. <span class="key-point">'지금 몇 단계인지(state)'와 '지금까지 모은 데이터(필드)'를 명시적으로 들고 다니는 것</span>이야.</p>
+                    <p>콜백 지옥에선 이 정보가 중첩 클로저에 숨어있었지? 상태머신은 그걸 <span class="highlight">밖으로 꺼내</span> — state 변수 하나 + 데이터 필드들 + "이벤트 오면 지금 state 보고 다음으로 넘기는 switch". 아래에서 단계가 전이되는 걸 직접 봐 ↓</p>
                 </div>
             </div>
 
+            <div class="cow" id="co-w-sm"><h6>🔀 상태머신이 뭔데 — 단계와 데이터를 '명시적으로'</h6><p class="sub">▶ 결과 도착을 누를 때마다 '지금 몇 단계인지(state)'가 전이되고, 모은 데이터가 필드에 쌓여. 중첩 콜백을 평탄한 switch로 펴는 게 상태머신이야.</p><div class="co-ctrl"><button class="co-btn" data-sm="step">▶ 결과 도착</button><button class="co-btn" data-sm="reset">↺ 리셋</button></div><canvas class="co-canvas" id="sm-canvas" height="250"></canvas><div class="co-cap" id="sm-cap">유저 → 인벤 → 가격 → 완료. 각 단계는 이전 결과가 있어야 다음으로 가. 지금은 시작 전.</div></div>
+
+            <div class="code-block">// 콜백 지옥을 '평탄한 상태머신'으로 편 것
+enum State { LOAD_USER, LOAD_INV, LOAD_PRICE, DONE };
+struct Session {
+    State state = LOAD_USER;
+    User user; Inventory inv; Prices prices;   // 진행 중 데이터를 '필드'에 저장
+    void onResult(Result r) {
+        switch (state) {                        // 지금 단계 보고 다음으로
+        case LOAD_USER:  user = r;   state = LOAD_INV;   loadInventory(user); break;
+        case LOAD_INV:   inv = r;    state = LOAD_PRICE; loadPrices(inv);     break;
+        case LOAD_PRICE: prices = r; state = DONE;       send(render(user,inv,prices)); break;
+        }
+    }
+};</div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 왜 상태머신이 콜백지옥을 푸나</h2>
 
             <div class="chat">
-                <div class="q">함정은?</div>
+                <div class="q">이게 왜 더 나아?</div>
                 <div class="a">
-                    <p>I/O 지점에서 양보하니, 그 사이 다른 작업이 끼어들어 '순서'가 섞일 수 있어. 같은 자원을 다루면 await 전후로 상태가 바뀌어 있을 수 있고.</p>
-                    <p>그래서 순서·정합성이 중요하면 await 지점을 신중히 두거나, 액터처럼 한 단위 안에선 직렬 처리하게 설계해 (우리 서버가 싱글스레드 동기를 택한 이유와 닿아 있어).</p>
+                    <p>콜백 지옥의 세 가지 아픔이 다 풀려:</p>
+                    <p>1. <span class="key-point">중첩 → 평탄</span>: 피라미드가 한 층짜리 switch로 펴져. 오른쪽으로 안 밀려.</p>
+                    <p>2. <span class="key-point">흩어진 상태 → 한곳</span>: user·inv·prices가 <span class="highlight">구조체 필드 한 곳</span>에 모여 — 진행 상황이 명시적.</p>
+                    <p>3. <span class="key-point">단계가 데이터로</span>: '지금 어디까지 했나'가 state 변수 하나라, 저장·복구·디버깅이 쉬워.</p>
+                    <p><span class="warning">단점</span>: 손으로 짜면 지루하고 실수 나기 쉬워(단계 하나 빠뜨리면 버그). 그래서 다음이 나와 ↓</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 코루틴 / async-await — 상태머신을 자동으로</h2>
+
+            <div class="chat">
+                <div class="q">그럼 코루틴/async-await가 정확히 뭘 해주는 거야?</div>
+                <div class="a">
+                    <p><span class="key-point">위의 상태머신을 컴파일러가 자동으로 생성해줘.</span> 너는 <span class="highlight">동기 코드처럼 위→아래로 선형으로</span> 쓰면 돼:</p>
+                </div>
+            </div>
+
+            <div class="code-block">// ✅ 코루틴: 컴파일러가 상태머신을 자동 생성. 코드는 선형(동기처럼 읽힘)
+task<void> handle(int id) {
+    User      user   = co_await loadUser(id);        // 여기서 suspend, 응답 오면 resume
+    Inventory inv    = co_await loadInventory(user);
+    Prices    prices = co_await loadPrices(inv);
+    co_await send(render(user, inv, prices));
+}
+// 중첩 0, 상태는 그냥 지역변수, 에러는 평범한 try/catch.
+// 읽기는 동기처럼, 실행은 비동기(스레드 안 막음).</div>
+
+
+            <div class="chat">
+                <div class="q">근데 await 지점에서 어떻게 '멈췄다 이어서'가 돼?</div>
+                <div class="a">
+                    <p>바로 <span class="key-point">그게 상태머신으로 변환됐기 때문</span>이야. 컴파일러가:</p>
+                    <p>• <span class="highlight">각 co_await 지점 = state 하나</span></p>
+                    <p>• <span class="highlight">지역변수(user, inv…) = 상태머신의 필드</span>(그래서 suspend돼도 값이 살아남아)</p>
+                    <p>• resume되면 <span class="highlight">switch(state)로 멈춘 지점으로 점프</span></p>
+                    <p>즉 <span class="key-point">async-await는 Part 2의 손코딩 상태머신을 '자동으로 써주는' 것.</span> 그래서 둘은 같은 해법이고, async-await가 읽기 좋은 버전인 거야.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 5. 덤 — await는 스레드를 안 막는다(처리량)</h2>
+
+            <div class="chat">
+                <div class="q">await로 '멈춘다'며. 그럼 스레드도 멈춰서 노는 거 아냐?</div>
+                <div class="a">
+                    <p><span class="warning">아니 — 여기가 핵심 이득이야.</span> await는 <span class="key-point">'코루틴'은 멈추지만 '스레드'는 안 멈춰.</span> I/O 응답을 기다리는 동안 스레드는 <span class="highlight">다른 요청의 코루틴을 이어서 실행</span>해.</p>
+                    <p>블로킹이었다면 그 0.9초 I/O 대기 동안 스레드가 <span class="warning">그냥 놀아(유휴 낭비)</span>. 코루틴은 그 시간에 다른 일을 채워 → <span class="key-point">한 스레드로도 수천 요청을 유휴 없이</span> 처리해. 아래에서 총 시간을 비교해봐 ↓</p>
+                </div>
+            </div>
+
+            <div class="cow" id="co-w-await"><h6>🧵 await는 스레드를 안 막는다 — 한 스레드로 저글링</h6><p class="sub">블로킹은 I/O 기다리는 동안 스레드가 놀아(유휴). 코루틴은 await에서 다른 요청으로 갈아타 유휴를 채워. ▶ 실행해 총 시간을 비교해봐. (예시값)</p><div class="co-ctrl"><button class="co-btn active" data-aw="block">블로킹</button><button class="co-btn" data-aw="coro">코루틴(await)</button><button class="co-btn" data-aw="run">▶ 실행</button></div><canvas class="co-canvas" id="await-canvas" height="210"></canvas><div class="co-stat"><div class="co-chip"><div class="k">3요청 총 시간</div><div class="v" id="aw-total">-</div></div><div class="co-chip"><div class="k">스레드 유휴</div><div class="v" id="aw-idle">-</div></div><div class="co-chip"><div class="k">상대 처리량</div><div class="v" id="aw-rel">-</div></div></div><div class="co-cap" id="aw-cap">요청 하나 = CPU 0.3초 + I/O 대기 0.9초. 스레드 1개로 3요청을 처리해.</div></div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 6. 우리 서버는?</h2>
+
+            <div class="chat">
+                <div class="q">우리 서버는 이걸 어떻게 해?</div>
+                <div class="a">
+                    <p>우리 서버는 <span class="highlight">싱글스레드 로직 + IOCP</span>야. DB에 요청(DCM_)을 던지고 응답을 기다리는 동안 <span class="key-point">스레드를 안 막고 다른 유저 패킷을 처리</span>해 — 그리고 DB 응답이 오면 <span class="highlight">'그 유저가 어느 단계였는지' 세션 상태를 보고 이어서</span> 처리하지.</p>
+                    <p>눈치챘어? <span class="key-point">이게 바로 손으로 짠 상태머신이야.</span> '세션에 진행 상태를 저장 → 응답 이벤트에 이어서'가 Part 2 그거거든. C++20 코루틴을 쓰면 이 수동 상태머신을 <span class="highlight">async-await처럼 자동화</span>할 수 있어 — 콜백/세션 상태 관리를 선형 코드로.</p>
                 </div>
             </div>
 
@@ -173,18 +244,26 @@
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li><strong>I/O 대기</strong>가 시간의 대부분 — 블로킹은 그동안 워커가 묶여 유휴</li>
-                <li><strong>코루틴/async</strong> = I/O에서 yield/await → 다른 일 하고, 끝나면 재개</li>
-                <li>스레드를 늘리는 게 아니라 <strong>한 스레드를 쪼개 씀</strong>(협력적 멀티태스킹)</li>
-                <li>코루틴은 가벼움(수 KB) → C10K(동시 1만)를 적은 스레드로 (IOCP·epoll과 같은 목적)</li>
-                <li><strong>함정</strong>: await 전후로 순서·상태가 바뀔 수 있음 → 정합성 설계 필요</li>
+                <li>콜백 지옥 = 비동기 단계를 콜백으로 이어붙여 생기는 중첩 피라미드 + 흩어진 상태 + 에러 지옥.</li>
+                <li>상태머신 = '몇 단계(state) + 모은 데이터(필드)'를 명시적으로 들고 이벤트마다 switch로 전이 → 중첩을 평탄화.</li>
+                <li>코루틴/async-await = 그 상태머신을 컴파일러가 자동 생성. 선형 코드로 쓰면 알아서 suspend/resume.</li>
+                <li>await 지점 = state, 지역변수 = 상태머신 필드. 그래서 멈췄다 이어서가 가능.</li>
+                <li>await는 코루틴만 멈추고 스레드는 안 막아 → 그 시간에 다른 요청 처리(한 스레드 수천 요청).</li>
+                <li>우리 서버는 IOCP+싱글스레드로 '세션 상태=수동 상태머신'. C++20 코루틴으로 자동화 가능.</li>
             </ul>
+        </div>
+
+        <div class="info-box">
+            <h4>이어서 보면</h4>
+            <p>네트워크 I/O 통합 가이드 — IOCP·비동기의 밑바닥: network-io-evolution</p>
+            <p>동기 vs 비동기 — 기다리냐 마냐의 정의: network-io-evolution</p>
+            <p>락 vs 락프리 — 싱글스레드가 동시성을 피하는 이유: lock-free</p>
         </div>
 
 
         <div class="nav-links">
             <a href="../category-thread/">← 멀티스레드</a>
-            <a href="../uenet-05-netdriver/">UE NetDriver →</a>
+            <a href="../network-io-evolution/">네트워크 I/O 통합 가이드 →</a>
         </div>
     </div>
 </body>
