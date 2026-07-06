@@ -182,4 +182,59 @@
     window.addEventListener('resize', () => { ctx = fitCanvas(cv); draw(); });
     draw();
   })();
+
+  /* ===== Widget 3: 메모리 비용 계산기 ===== */
+  (function cost() {
+    const cv = $('#cost-canvas'); if (!cv) return;
+    let ctx = fitCanvas(cv);
+    const noOut = $('#cost-no'), padOut = $('#cost-pad'), verOut = $('#cost-verdict'), cap = $('#cost-cap');
+    let N = 8;
+    function human(bytes) {
+      // 십진 단위(사용자 계산 4*8=32식과 일치)
+      if (bytes < 1000) return bytes + ' B';
+      if (bytes < 1000000) return (bytes / 1000).toFixed(bytes < 10000 ? 1 : 0).replace(/\.0$/, '') + ' KB';
+      return (bytes / 1000000).toFixed(1).replace(/\.0$/, '') + ' MB';
+    }
+    function draw() {
+      const w = cv._cw, h = cv._ch; ctx.clearRect(0, 0, w, h);
+      const no = N * 4, pad = N * 64;
+      const rows = [{ k: '패딩 없음 (4B)', v: no, col: '#66bb6a' }, { k: '패딩 (64B)', v: pad, col: '#ef5350' }];
+      const maxV = pad;
+      const padL = 110, padR = 90, barH = 30, gap = 24, y0 = 30;
+      ctx.font = '600 12px Pretendard';
+      rows.forEach((r, i) => {
+        const y = y0 + i * (barH + gap);
+        ctx.fillStyle = '#9fb0cc'; ctx.textAlign = 'right'; ctx.fillText(r.k, padL - 10, y + barH / 2 + 4);
+        ctx.textAlign = 'left'; const full = w - padL - padR;
+        ctx.fillStyle = '#141d33'; rr(ctx, padL, y, full, barH, 6); ctx.fill();
+        ctx.fillStyle = r.col; rr(ctx, padL, y, Math.max(6, full * (r.v / maxV)), barH, 6); ctx.fill();
+        ctx.fillStyle = '#e3eaf5'; ctx.font = '700 12px Pretendard';
+        ctx.fillText(human(r.v), padL + Math.max(6, full * (r.v / maxV)) + 8, y + barH / 2 + 4);
+        ctx.font = '600 12px Pretendard';
+      });
+      // 16배 라벨
+      ctx.fillStyle = '#8ba0c4'; ctx.font = '11px Pretendard'; ctx.textAlign = 'center';
+      ctx.fillText('항목 ' + N.toLocaleString('en-US') + '개  ·  16배 증가', w / 2, h - 12);
+      ctx.textAlign = 'left';
+      const ok = N <= 64;
+      if (noOut) noOut.textContent = human(no);
+      if (padOut) padOut.textContent = human(pad);
+      if (verOut) { verOut.textContent = ok ? '패딩 OK ✓' : '패딩 ❌'; verOut.className = 'v' + (ok ? ' good' : ' warn'); }
+      if (cap) {
+        cap.textContent = N <= 64
+          ? '스레드/코어 수급(' + N + '개): ' + human(no) + ' → ' + human(pad) + '. 16배지만 절대량이 껌값이라 패딩 OK.'
+          : (N >= 100000
+            ? '항목 ' + N.toLocaleString('en-US') + '개: ' + human(no) + ' → ' + human(pad) + '. 메모리 폭발! 패딩 말고 스레드로컬+합산으로 공유 쓰기를 없애.'
+            : '항목 ' + N.toLocaleString('en-US') + '개: ' + human(no) + ' → ' + human(pad) + '. 이 정도면 애매 — 정말 핫한지 프로파일로 확인하고 결정.');
+      }
+    }
+    $$('[data-cost]', cv.closest('.fsw')).forEach(b => b.addEventListener('click', () => {
+      N = +b.getAttribute('data-cost');
+      $$('[data-cost]', cv.closest('.fsw')).forEach(x => x.classList.toggle('active', x === b));
+      draw();
+    }));
+    window.addEventListener('resize', () => { ctx = fitCanvas(cv); draw(); });
+    draw();
+  })();
+
 })();
