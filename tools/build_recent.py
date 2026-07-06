@@ -31,17 +31,18 @@ def url_to_path(url):
     return u + "/index.html"
 
 
-def git_add_dates():
-    """study/**/index.html 의 최초 add 날짜(YYYY-MM-DD, KST)를 한 번의 git log 로 수집."""
-    dates = {}
+def git_last_dates():
+    """study/**/index.html 의 '최종 커밋' 날짜+타임스탬프(KST).
+    파일 mtime 은 git checkout/pull 이 건드리므로, 실제 내용 변경(커밋)만 반영하려면 이 값을 쓴다."""
+    res = {}
     try:
         out = subprocess.run(
-            ["git", "log", "--diff-filter=A", "--name-only", "--format=@%aI"],
+            ["git", "log", "--name-only", "--format=@%aI"],
             cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
         ).stdout
     except Exception as e:
         sys.stderr.write("git log 실패: %s\n" % e)
-        return dates
+        return res
     cur = None
     for line in out.splitlines():
         line = line.strip()
@@ -51,13 +52,34 @@ def git_add_dates():
             cur = line[1:]
             continue
         if line.endswith("/index.html") and line.startswith("study/") and cur:
-            # 최신->과거 순회: 매번 덮어쓰면 최종값 = 가장 오래된 add = 업로드 시점
+            path = line.replace("\\", "/")
+            if path in res:  # 최신->과거 순회: 처음 본 것 = 가장 최근 커밋
+                continue
             try:
                 dt = datetime.fromisoformat(cur).astimezone(KST)
-                dates[line.replace("\\", "/")] = dt.strftime("%Y-%m-%d")
+                res[path] = (dt.strftime("%Y-%m-%d"), dt.timestamp())
             except ValueError:
                 pass
-    return dates
+    return res
+
+
+def dirty_paths():
+    """작업 트리에서 아직 커밋되지 않은(수정/추가/신규) study index.html 집합. = "지금 편집 중"."""
+    s = set()
+    try:
+        out = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        ).stdout
+    except Exception:
+        return s
+    for line in out.splitlines():
+        pth = line[3:].strip().replace("\\", "/")
+        if " -> " in pth:  # rename "old -> new"
+            pth = pth.split(" -> ", 1)[1]
+        if pth.endswith("/index.html") and pth.startswith("study/"):
+            s.add(pth)
+    return s
 
 
 def mtime_date(path):
@@ -69,7 +91,11 @@ def mtime_date(path):
 
 def main():
     docs = json.load(open(INDEX, encoding="utf-8"))
-    gdates = git_add_dates()
+    lasts = git_last_dates()
+    dirty = dirty_paths()
+    now = datetime.now(KST)
+    today_str = now.strftime("%Y-%m-%d")
+    now_ts = now.timestamp()
     rows = []
     for d in docs:
         url = d.get("url", "")
@@ -77,11 +103,16 @@ def main():
         if slug in EXCLUDE_SLUGS or slug.startswith("category-"):
             continue
         path = url_to_path(url)
-        # 최초 업로드일과 파일 최종수정일 중 더 최신 = "수정하면 최신순에 반영"
-        _cands = [x for x in (gdates.get(path), mtime_date(path)) if x]
-        date = max(_cands) if _cands else "1970-01-01"
-        _full = os.path.join(ROOT, path)
-        _ts = os.path.getmtime(_full) if os.path.exists(_full) else 0.0
+        # 날짜 = git 최종 커밋일(실제 내용 변경 시점). 아직 커밋 전(작업트리 변경)이면 오늘.
+        # mtime 은 git checkout/pull 이 리셋하므로 단독 사용 금지(안 바꾼 문서가 가짜 NEW 로 뜸).
+        if path in dirty:
+            date, _ts = today_str, now_ts
+        elif path in lasts:
+            date, _ts = lasts[path]
+        else:
+            date = mtime_date(path) or "1970-01-01"
+            _full = os.path.join(ROOT, path)
+            _ts = os.path.getmtime(_full) if os.path.exists(_full) else 0.0
         rows.append({
             "title": d.get("title", slug),
             "url": url,
