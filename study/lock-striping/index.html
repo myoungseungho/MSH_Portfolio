@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>자물쇠 하나에 다 몰리면? — 락을 쪼개는 샤딩(스트라이핑) - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 800px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 48px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .code-block { background: #263238; border-radius: 8px; padding: 16px 20px; margin: 16px 0; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; color: #eceff1; overflow-x: auto; line-height: 1.6; white-space: pre-wrap; }
+        .code-block .comment { color: #78909c; }
+        .code-block .keyword { color: #82b1ff; }
+        .code-block .string { color: #c3e88d; }
+        .code-block .number { color: #f78c6c; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .warning-box { background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .warning-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .warning-box p { opacity: 0.95; margin-bottom: 8px; }
+        .warning-box p:last-child { margin-bottom: 0; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
+        .nav-links { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e0e0e0; }
+        .nav-links a { color: #1a237e; text-decoration: none; }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+    <style>
+    .skw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}
+    .skw h6{font-size:.98rem;font-weight:800;color:#fff;margin:0 0 4px}
+    .skw .sub{font-size:.8rem;color:#8ba0c4;margin:0 0 14px}
+    .sk-ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:.84rem;color:#b5c2db}
+    .sk-btn{padding:8px 13px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:.15s}
+    .sk-btn:hover{border-color:#42a5f5;color:#e3eaf5}
+    .sk-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}
+    .sk-canvas{width:100%;border-radius:12px;background:#070b16;display:block;touch-action:none}
+    .sk-stat{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .sk-chip{flex:1;min-width:120px;background:#121a30;border:1px solid #223052;border-radius:10px;padding:10px 12px}
+    .sk-chip .k{font-size:.72rem;color:#8ba0c4;margin-bottom:3px}
+    .sk-chip .v{font-size:1.1rem;font-weight:800;color:#fff}
+    .sk-chip .v.warn{color:#ff8a80}
+    .sk-chip .v.good{color:#69f0ae}
+    .sk-cap{margin-top:12px;font-size:.86rem;line-height:1.7;color:#b5c2db;background:#121a30;border-radius:10px;padding:12px 14px;border-left:3px solid #42a5f5;min-height:1.7em}
+    </style>
+    <script src="sharding.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <a href="../category-thread/" class="back-link">← 멀티스레드</a>
+
+        <header class="header">
+            <h1>자물쇠 하나에 다 몰리면? — 락을 쪼개는 샤딩(스트라이핑)</h1>
+            <p>락 경합을 없애는 법 — 큰 자물쇠 하나를 여러 개로 쪼개 경합을 1/N로. '쪼개서 분산'이 DB·공간까지 관통하는 이유</p>
+        </header>
+
+        <div class="info-box">
+            <h4>30초 요약</h4>
+            <p>락 경합 = 여러 스레드가 자물쇠 '하나'에 줄 서서, 코어를 늘려도 안 빨라지는 병목.</p>
+            <p>샤딩(락 스트라이핑) = 큰 자물쇠 하나를 여러 개로 쪼개고, 키(예: id)로 어느 자물쇠 담당인지 정함.</p>
+            <p>서로 다른 그룹은 다른 자물쇠라 안 부딪힘 → 경합이 1/N로 흩어져 처리량 ↑.</p>
+            <p>단, 균등 분배가 전제(핫샤드 주의) + 여러 샤드 걸친 작업은 복잡. 이 '쪼개서 분산'은 DB·공간까지 관통하는 만능 패턴.</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 문제 복습 — 자물쇠 하나에 다 몰린다</h2>
+
+            <div class="chat">
+                <div class="q">락 경합이 왜 문제였지?</div>
+                <div class="a">
+                    <p>여러 스레드가 공유 자료(예: 유저 테이블)를 안전하게 건드리려면 <span class="highlight">자물쇠(락)</span>가 필요해. 근데 자물쇠가 <span class="warning">하나뿐</span>이면, 아무리 관계없는 유저를 건드려도 <span class="warning">전부 그 하나에 줄 서야</span> 해.</p>
+                    <p>비유하면 <span class="highlight">공용 화장실이 딱 하나</span>인 거야 — 100명이 와도 한 명씩. 코어(일꾼)를 늘려도 화장실이 하나라 <span class="key-point">줄만 길어지고 안 빨라져.</span> 이게 락 경합이야.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">자물쇠 범위를 좁히는 걸론 부족해?</div>
+                <div class="a">
+                    <p>도움은 되는데 한계가 있어. 결국 <span class="warning">'하나의 자물쇠'가 남아있는 한</span> 거기로 다 몰려. 그래서 발상을 바꿔 — <span class="key-point">자물쇠 자체를 여러 개로 쪼개면?</span> 그게 샤딩이야.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 아이디어 — 자물쇠를 여러 개로 쪼갠다(샤딩)</h2>
+
+            <div class="chat">
+                <div class="q">어떻게 쪼개? 아무렇게나 나누면 안 되잖아.</div>
+                <div class="a">
+                    <p>규칙이 필요해. <span class="key-point">키(예: 유저 id)로 '어느 자물쇠 담당인지' 정해.</span> 흔한 방법이 <span class="highlight">id % N</span>(나머지 연산):</p>
+                    <p>• 자물쇠 4개면, id를 4로 나눈 나머지로 담당 결정.</p>
+                    <p>• id 3, 7, 11 → 나머지 3 → 3번 자물쇠</p>
+                    <p>• id 4, 8, 12 → 나머지 0 → 0번 자물쇠</p>
+                    <p><span class="key-point">핵심: 같은 유저는 항상 같은 자물쇠, 다른 유저는 흩어져.</span> 그래서 서로 다른 그룹을 건드리는 스레드는 <span class="highlight">다른 자물쇠라 안 부딪혀</span> — 화장실을 여러 개 지어 '끝자리별로' 배정한 거지.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">이게 왜 빨라져?</div>
+                <div class="a">
+                    <p>경합이 <span class="key-point">1/N로 흩어지니까.</span> 자물쇠 4개면 한 자물쇠에 몰리는 양이 대략 1/4로 줄어 — 줄이 4갈래로 갈라지는 거야. 그럼 4개 코어가 각자 다른 자물쇠에서 동시에 일할 수 있어(경합이 겹치지 않는 한). 아래에서 직접 비교해봐 ↓</p>
+                </div>
+            </div>
+
+            <div class="skw" id="sh-w-lock"><h6>🚪 자물쇠 1개 vs 여러 개 — 경합을 쪼갠다</h6><p class="sub">▶ 요청 쏟기를 눌러봐. 단일 락은 모든 요청이 자물쇠 하나에 줄 서서(대기 폭발) 느리고, 샤딩(4개)은 id로 자물쇠를 나눠 서로 다른 그룹은 안 부딪혀 처리량이 확 올라가.</p><div class="sk-ctrl"><button class="sk-btn active" data-sk="single">자물쇠 1개(단일 락)</button><button class="sk-btn" data-sk="shard">샤딩(4개)</button><button class="sk-btn" data-sk="run">▶ 요청 쏟기</button></div><canvas class="sk-canvas" id="lock-canvas" height="230"></canvas><div class="sk-stat"><div class="sk-chip"><div class="k">처리량</div><div class="v" id="lock-tput">-</div></div><div class="sk-chip"><div class="k">최대 대기 줄</div><div class="v" id="lock-wait">-</div></div><div class="sk-chip"><div class="k">상대 속도</div><div class="v" id="lock-rel">-</div></div></div><div class="sk-cap" id="lock-cap">여러 스레드가 공유 자료(예: 유저 테이블)를 건드리려면 자물쇠가 필요해. 자물쇠가 하나뿐이면?</div></div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 트레이드오프 — 공짜는 아니다</h2>
+
+            <div class="chat">
+                <div class="q">그럼 자물쇠를 무한정 늘리면 되나?</div>
+                <div class="a">
+                    <p>아니, 세 가지 함정이 있어:</p>
+                    <p>1. <span class="highlight">균등해야 이득</span>: 한 키(예: 인기 아이템, 보스 몹)에 요청이 몰리면 그 자물쇠 하나만 과부하 = <span class="warning">핫샤드</span>. 쪼개도 소용없어. (아래 위젯)</p>
+                    <p>2. <span class="highlight">여러 샤드에 걸친 작업</span>: '전체 순회'나 '두 유저를 동시에 잠금'(거래) 하려면 여러 자물쇠를 잡아야 해 → 복잡해지고 <span class="warning">락 순서 안 지키면 데드락</span>.</p>
+                    <p>3. <span class="highlight">자물쇠도 메모리·관리 비용</span>: 너무 많으면 오히려 낭비. 보통 코어 수의 몇 배 정도.</p>
+                </div>
+            </div>
+
+            <div class="skw" id="sh-w-dist"><h6>⚖️ 균등해야 이득 — 핫샤드 함정</h6><p class="sub">샤딩은 '골고루 나뉜다'가 전제야. 한 키(예: 인기 아이템)에 요청이 몰리면 그 샤드만 과부하돼(핫샤드). 균등 vs 핫스팟을 바꿔봐.</p><div class="sk-ctrl"><button class="sk-btn active" data-ds="even">균등 분배</button><button class="sk-btn" data-ds="hot">핫스팟(한 키 몰림)</button></div><canvas class="sk-canvas" id="dist-canvas" height="190"></canvas><div class="sk-cap" id="dist-cap">해시로 키를 4개 샤드에 나눠. 골고루면 각 샤드가 1/4씩 — 이상적이야.</div></div>
+
+        </div>
+
+        <div class="conversation">
+            <h2>Part 4. 같은 아이디어의 사촌들 — '쪼개서 분산'</h2>
+
+            <div class="chat">
+                <div class="q">이 '쪼개기'가 다른 데서도 나와?</div>
+                <div class="a">
+                    <p><span class="key-point">샤딩은 스케일만 다를 뿐 어디서나 나오는 만능 패턴이야.</span> '하나에 몰리는 경합/부하를, 쪼개서 분산한다'는 같은 아이디어:</p>
+                    <p>• <span class="highlight">락 샤딩(이 글)</span>: 자물쇠 1개 → N개 (스레드 경합 분산)</p>
+                    <p>• <span class="highlight">DB 샤딩</span>: DB 서버 1대 → N대, 유저 id로 분산 (서버 부하 분산 — 우리 관문 21개가 이거)</p>
+                    <p>• <span class="highlight">파티셔닝</span>: 큰 테이블 → 조각 (한 서버 안에서)</p>
+                    <p>• <span class="highlight">AOI(관심영역)</span>: 온 맵 → 구역별로 (공간 부하 분산)</p>
+                    <p>전부 <span class="key-point">'하나의 뜨거운 지점을 여러 개로 갈라 분산'</span>이야. 락에서 이걸 이해하면 나머지가 다 같은 원리로 보여.</p>
+                </div>
+            </div>
+
+
+            <div class="chat">
+                <div class="q">우리 서버는?</div>
+                <div class="a">
+                    <p>우리 <span class="key-point">게임 로직은 싱글스레드라 락 경합 자체가 없어</span>(자물쇠를 안 쓰니 쪼갤 것도 없음 — 액터 모델의 이점). 락 샤딩은 멀티스레드 로직을 쓰는 서버의 이야기야.</p>
+                    <p>대신 우리도 <span class="highlight">DB 샤딩</span>(관문 21개)과 <span class="highlight">서버 분산</span>으로 '쪼개서 분산'을 크게 쓰고 있어 — 같은 원리, 다른 스케일.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>락 경합 = 자물쇠 하나에 다 줄 서는 병목(코어 늘려도 안 빨라짐).</li>
+                <li>락 샤딩(스트라이핑) = 큰 자물쇠 1개를 N개로 쪼개고 키(id%N)로 담당 배정.</li>
+                <li>같은 키는 같은 자물쇠, 다른 키는 흩어짐 → 경합이 1/N로 분산 → 처리량 ↑.</li>
+                <li>트레이드오프: 핫샤드(불균등)/여러 샤드 걸친 작업 복잡·데드락/자물쇠 관리비.</li>
+                <li>'쪼개서 분산'은 락→DB→공간(AOI)까지 관통하는 만능 패턴.</li>
+                <li>우리 서버는 싱글스레드라 락 경합 무관, 대신 DB 샤딩(관문 21개)으로 같은 원리 사용.</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <h4>이어서 보면</h4>
+            <p>락 vs 락프리 — 락 경합의 다른 해법(자물쇠 없애기): lock-free</p>
+            <p>false sharing — 락 없이도 캐시라인 경합이 생기는 경우: false-sharing</p>
+            <p>파티셔닝 vs 샤딩 — DB 스케일에서의 샤딩: sharding</p>
+            <p>일관된 해싱 — 샤드를 늘/줄일 때 재분배 최소화: consistent-hashing</p>
+        </div>
+
+
+        <div class="nav-links">
+            <a href="../lock-free/">← 락 vs 락프리</a>
+            <a href="../category-thread/">멀티스레드 →</a>
+        </div>
+    </div>
+</body>
+</html>

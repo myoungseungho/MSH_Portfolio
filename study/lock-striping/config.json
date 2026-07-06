@@ -1,0 +1,113 @@
+{
+  "slug": "lock-striping",
+  "title": "자물쇠 하나에 다 몰리면? — 락을 쪼개는 샤딩(스트라이핑)",
+  "subtitle": "락 경합을 없애는 법 — 큰 자물쇠 하나를 여러 개로 쪼개 경합을 1/N로. '쪼개서 분산'이 DB·공간까지 관통하는 이유",
+  "category": "멀티스레드",
+  "category_path": "../category-thread/",
+  "prev_link": "../lock-free/",
+  "prev_text": "← 락 vs 락프리",
+  "next_link": "../category-thread/",
+  "next_text": "멀티스레드 →",
+  "extra_head": "    <style>\n    .skw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}\n    .skw h6{font-size:.98rem;font-weight:800;color:#fff;margin:0 0 4px}\n    .skw .sub{font-size:.8rem;color:#8ba0c4;margin:0 0 14px}\n    .sk-ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:.84rem;color:#b5c2db}\n    .sk-btn{padding:8px 13px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:.15s}\n    .sk-btn:hover{border-color:#42a5f5;color:#e3eaf5}\n    .sk-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sk-canvas{width:100%;border-radius:12px;background:#070b16;display:block;touch-action:none}\n    .sk-stat{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}\n    .sk-chip{flex:1;min-width:120px;background:#121a30;border:1px solid #223052;border-radius:10px;padding:10px 12px}\n    .sk-chip .k{font-size:.72rem;color:#8ba0c4;margin-bottom:3px}\n    .sk-chip .v{font-size:1.1rem;font-weight:800;color:#fff}\n    .sk-chip .v.warn{color:#ff8a80}\n    .sk-chip .v.good{color:#69f0ae}\n    .sk-cap{margin-top:12px;font-size:.86rem;line-height:1.7;color:#b5c2db;background:#121a30;border-radius:10px;padding:12px 14px;border-left:3px solid #42a5f5;min-height:1.7em}\n    </style>\n    <script src=\"sharding.js\" defer></script>",
+  "parts": [
+    {
+      "type": "info_box",
+      "title": "30초 요약",
+      "items": [
+        "락 경합 = 여러 스레드가 자물쇠 '하나'에 줄 서서, 코어를 늘려도 안 빨라지는 병목.",
+        "샤딩(락 스트라이핑) = 큰 자물쇠 하나를 여러 개로 쪼개고, 키(예: id)로 어느 자물쇠 담당인지 정함.",
+        "서로 다른 그룹은 다른 자물쇠라 안 부딪힘 → 경합이 1/N로 흩어져 처리량 ↑.",
+        "단, 균등 분배가 전제(핫샤드 주의) + 여러 샤드 걸친 작업은 복잡. 이 '쪼개서 분산'은 DB·공간까지 관통하는 만능 패턴."
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 1. 문제 복습 — 자물쇠 하나에 다 몰린다",
+      "items": [
+        {
+          "type": "qa",
+          "q": "락 경합이 왜 문제였지?",
+          "a": "여러 스레드가 공유 자료(예: 유저 테이블)를 안전하게 건드리려면 <span class=\"highlight\">자물쇠(락)</span>가 필요해. 근데 자물쇠가 <span class=\"warning\">하나뿐</span>이면, 아무리 관계없는 유저를 건드려도 <span class=\"warning\">전부 그 하나에 줄 서야</span> 해.\n\n비유하면 <span class=\"highlight\">공용 화장실이 딱 하나</span>인 거야 — 100명이 와도 한 명씩. 코어(일꾼)를 늘려도 화장실이 하나라 <span class=\"key-point\">줄만 길어지고 안 빨라져.</span> 이게 락 경합이야."
+        },
+        {
+          "type": "qa",
+          "q": "자물쇠 범위를 좁히는 걸론 부족해?",
+          "a": "도움은 되는데 한계가 있어. 결국 <span class=\"warning\">'하나의 자물쇠'가 남아있는 한</span> 거기로 다 몰려. 그래서 발상을 바꿔 — <span class=\"key-point\">자물쇠 자체를 여러 개로 쪼개면?</span> 그게 샤딩이야."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. 아이디어 — 자물쇠를 여러 개로 쪼갠다(샤딩)",
+      "items": [
+        {
+          "type": "qa",
+          "q": "어떻게 쪼개? 아무렇게나 나누면 안 되잖아.",
+          "a": "규칙이 필요해. <span class=\"key-point\">키(예: 유저 id)로 '어느 자물쇠 담당인지' 정해.</span> 흔한 방법이 <span class=\"highlight\">id % N</span>(나머지 연산):\n\n• 자물쇠 4개면, id를 4로 나눈 나머지로 담당 결정.\n• id 3, 7, 11 → 나머지 3 → 3번 자물쇠\n• id 4, 8, 12 → 나머지 0 → 0번 자물쇠\n\n<span class=\"key-point\">핵심: 같은 유저는 항상 같은 자물쇠, 다른 유저는 흩어져.</span> 그래서 서로 다른 그룹을 건드리는 스레드는 <span class=\"highlight\">다른 자물쇠라 안 부딪혀</span> — 화장실을 여러 개 지어 '끝자리별로' 배정한 거지."
+        },
+        {
+          "type": "qa",
+          "q": "이게 왜 빨라져?",
+          "a": "경합이 <span class=\"key-point\">1/N로 흩어지니까.</span> 자물쇠 4개면 한 자물쇠에 몰리는 양이 대략 1/4로 줄어 — 줄이 4갈래로 갈라지는 거야. 그럼 4개 코어가 각자 다른 자물쇠에서 동시에 일할 수 있어(경합이 겹치지 않는 한). 아래에서 직접 비교해봐 ↓"
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"skw\" id=\"sh-w-lock\"><h6>🚪 자물쇠 1개 vs 여러 개 — 경합을 쪼갠다</h6><p class=\"sub\">▶ 요청 쏟기를 눌러봐. 단일 락은 모든 요청이 자물쇠 하나에 줄 서서(대기 폭발) 느리고, 샤딩(4개)은 id로 자물쇠를 나눠 서로 다른 그룹은 안 부딪혀 처리량이 확 올라가.</p><div class=\"sk-ctrl\"><button class=\"sk-btn active\" data-sk=\"single\">자물쇠 1개(단일 락)</button><button class=\"sk-btn\" data-sk=\"shard\">샤딩(4개)</button><button class=\"sk-btn\" data-sk=\"run\">▶ 요청 쏟기</button></div><canvas class=\"sk-canvas\" id=\"lock-canvas\" height=\"230\"></canvas><div class=\"sk-stat\"><div class=\"sk-chip\"><div class=\"k\">처리량</div><div class=\"v\" id=\"lock-tput\">-</div></div><div class=\"sk-chip\"><div class=\"k\">최대 대기 줄</div><div class=\"v\" id=\"lock-wait\">-</div></div><div class=\"sk-chip\"><div class=\"k\">상대 속도</div><div class=\"v\" id=\"lock-rel\">-</div></div></div><div class=\"sk-cap\" id=\"lock-cap\">여러 스레드가 공유 자료(예: 유저 테이블)를 건드리려면 자물쇠가 필요해. 자물쇠가 하나뿐이면?</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 트레이드오프 — 공짜는 아니다",
+      "items": [
+        {
+          "type": "qa",
+          "q": "그럼 자물쇠를 무한정 늘리면 되나?",
+          "a": "아니, 세 가지 함정이 있어:\n1. <span class=\"highlight\">균등해야 이득</span>: 한 키(예: 인기 아이템, 보스 몹)에 요청이 몰리면 그 자물쇠 하나만 과부하 = <span class=\"warning\">핫샤드</span>. 쪼개도 소용없어. (아래 위젯)\n2. <span class=\"highlight\">여러 샤드에 걸친 작업</span>: '전체 순회'나 '두 유저를 동시에 잠금'(거래) 하려면 여러 자물쇠를 잡아야 해 → 복잡해지고 <span class=\"warning\">락 순서 안 지키면 데드락</span>.\n3. <span class=\"highlight\">자물쇠도 메모리·관리 비용</span>: 너무 많으면 오히려 낭비. 보통 코어 수의 몇 배 정도."
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"skw\" id=\"sh-w-dist\"><h6>⚖️ 균등해야 이득 — 핫샤드 함정</h6><p class=\"sub\">샤딩은 '골고루 나뉜다'가 전제야. 한 키(예: 인기 아이템)에 요청이 몰리면 그 샤드만 과부하돼(핫샤드). 균등 vs 핫스팟을 바꿔봐.</p><div class=\"sk-ctrl\"><button class=\"sk-btn active\" data-ds=\"even\">균등 분배</button><button class=\"sk-btn\" data-ds=\"hot\">핫스팟(한 키 몰림)</button></div><canvas class=\"sk-canvas\" id=\"dist-canvas\" height=\"190\"></canvas><div class=\"sk-cap\" id=\"dist-cap\">해시로 키를 4개 샤드에 나눠. 골고루면 각 샤드가 1/4씩 — 이상적이야.</div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 같은 아이디어의 사촌들 — '쪼개서 분산'",
+      "items": [
+        {
+          "type": "qa",
+          "q": "이 '쪼개기'가 다른 데서도 나와?",
+          "a": "<span class=\"key-point\">샤딩은 스케일만 다를 뿐 어디서나 나오는 만능 패턴이야.</span> '하나에 몰리는 경합/부하를, 쪼개서 분산한다'는 같은 아이디어:\n\n• <span class=\"highlight\">락 샤딩(이 글)</span>: 자물쇠 1개 → N개 (스레드 경합 분산)\n• <span class=\"highlight\">DB 샤딩</span>: DB 서버 1대 → N대, 유저 id로 분산 (서버 부하 분산 — 우리 관문 21개가 이거)\n• <span class=\"highlight\">파티셔닝</span>: 큰 테이블 → 조각 (한 서버 안에서)\n• <span class=\"highlight\">AOI(관심영역)</span>: 온 맵 → 구역별로 (공간 부하 분산)\n\n전부 <span class=\"key-point\">'하나의 뜨거운 지점을 여러 개로 갈라 분산'</span>이야. 락에서 이걸 이해하면 나머지가 다 같은 원리로 보여."
+        },
+        {
+          "type": "qa",
+          "q": "우리 서버는?",
+          "a": "우리 <span class=\"key-point\">게임 로직은 싱글스레드라 락 경합 자체가 없어</span>(자물쇠를 안 쓰니 쪼갤 것도 없음 — 액터 모델의 이점). 락 샤딩은 멀티스레드 로직을 쓰는 서버의 이야기야.\n\n대신 우리도 <span class=\"highlight\">DB 샤딩</span>(관문 21개)과 <span class=\"highlight\">서버 분산</span>으로 '쪼개서 분산'을 크게 쓰고 있어 — 같은 원리, 다른 스케일."
+        }
+      ]
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리",
+      "items": [
+        "락 경합 = 자물쇠 하나에 다 줄 서는 병목(코어 늘려도 안 빨라짐).",
+        "락 샤딩(스트라이핑) = 큰 자물쇠 1개를 N개로 쪼개고 키(id%N)로 담당 배정.",
+        "같은 키는 같은 자물쇠, 다른 키는 흩어짐 → 경합이 1/N로 분산 → 처리량 ↑.",
+        "트레이드오프: 핫샤드(불균등)/여러 샤드 걸친 작업 복잡·데드락/자물쇠 관리비.",
+        "'쪼개서 분산'은 락→DB→공간(AOI)까지 관통하는 만능 패턴.",
+        "우리 서버는 싱글스레드라 락 경합 무관, 대신 DB 샤딩(관문 21개)으로 같은 원리 사용."
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "이어서 보면",
+      "items": [
+        "락 vs 락프리 — 락 경합의 다른 해법(자물쇠 없애기): lock-free",
+        "false sharing — 락 없이도 캐시라인 경합이 생기는 경우: false-sharing",
+        "파티셔닝 vs 샤딩 — DB 스케일에서의 샤딩: sharding",
+        "일관된 해싱 — 샤드를 늘/줄일 때 재분배 최소화: consistent-hashing"
+      ]
+    }
+  ]
+}
