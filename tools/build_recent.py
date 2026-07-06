@@ -80,14 +80,19 @@ def main():
         # 최초 업로드일과 파일 최종수정일 중 더 최신 = "수정하면 최신순에 반영"
         _cands = [x for x in (gdates.get(path), mtime_date(path)) if x]
         date = max(_cands) if _cands else "1970-01-01"
+        _full = os.path.join(ROOT, path)
+        _ts = os.path.getmtime(_full) if os.path.exists(_full) else 0.0
         rows.append({
             "title": d.get("title", slug),
             "url": url,
             "category": d.get("category", ""),
             "date": date,
+            "_ts": _ts,
         })
-    # 날짜 내림차순(최신 먼저), 동일 날짜는 제목 가나다
-    rows.sort(key=lambda r: (r["date"], r["title"]), reverse=True)
+    # 날짜 내림차순(최신 먼저), 같은 날짜는 실제 수정시각(mtime) 최신 먼저
+    rows.sort(key=lambda r: (r["date"], r["_ts"]), reverse=True)
+    for r in rows:
+        r.pop("_ts", None)
     json.dump(rows, open(OUT, "w", encoding="utf-8"), ensure_ascii=False, indent=0)
     sys.stdout.reconfigure(encoding="utf-8")
     print("recent.json 생성: %d건, 최신 = %s (%s)" % (
