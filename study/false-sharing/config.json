@@ -1,57 +1,126 @@
 {
   "slug": "false-sharing",
   "title": "변수를 나눠 썼는데 왜 느려? — false sharing",
-  "subtitle": "논리적으론 안 겹치는데 하드웨어가 겹친다고 우기는 캐시 함정",
+  "subtitle": "논리적으론 안 겹치는데 하드웨어가 '같은 칠판'이라 겹친다고 우기는 캐시 함정",
   "category": "멀티스레드",
   "category_path": "../category-thread/",
   "prev_link": "../category-thread/",
   "prev_text": "← 멀티스레드",
-  "next_link": "../category-thread/",
-  "next_text": "멀티스레드 →",
-  "extra_head": "    <style>\n    .sim{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5}\n    .sim-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}\n    .wtab{flex:1;min-width:130px;padding:11px 12px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;transition:.15s}\n    .wtab:hover{border-color:#42a5f5;color:#e3eaf5}\n    .wtab.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .sim canvas{width:100%;display:block;border-radius:12px}\n    .sim-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}\n    .sim-controls button{padding:9px 14px;border:none;border-radius:9px;font-weight:600;cursor:pointer;font-size:.9rem;background:#37474f;color:#e3eaf5}\n    .sim-stats{display:flex;gap:10px;margin-top:16px}\n    .sim-stat{flex:1;background:#172033;border-radius:10px;padding:12px;text-align:center}\n    .sim-stat-num{display:block;font-size:1.6rem;font-weight:800;color:#e3eaf5}\n    .sim-stat-lbl{font-size:.78rem;color:#90a4c4}\n    .sim-caption{margin-top:14px;font-size:.9rem;line-height:1.7;color:#b5c2db}\n    @media(max-width:520px){.sim-stat-num{font-size:1.2rem}}\n    </style>\n    <script src='fs.js' defer></script>",
+  "next_link": "../lock-free/",
+  "next_text": "락 vs 락프리 →",
+  "extra_head": "    <style>\n    .fsw{background:#0e1426;border-radius:16px;padding:20px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}\n    .fsw h6{font-size:.98rem;font-weight:800;color:#fff;margin:0 0 4px}\n    .fsw .sub{font-size:.8rem;color:#8ba0c4;margin:0 0 14px}\n    .fs-ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0;font-size:.84rem;color:#b5c2db}\n    .fs-btn{padding:8px 13px;border:1px solid #2a3650;background:#172033;color:#90a4c4;border-radius:9px;font-size:.84rem;font-weight:700;cursor:pointer;transition:.15s}\n    .fs-btn:hover{border-color:#42a5f5;color:#e3eaf5}\n    .fs-btn.active{background:linear-gradient(135deg,#1e88e5,#5e35b1);color:#fff;border-color:transparent}\n    .fs-canvas{width:100%;border-radius:12px;background:#070b16;display:block;touch-action:none}\n    .fs-stat{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}\n    .fs-chip{flex:1;min-width:120px;background:#121a30;border:1px solid #223052;border-radius:10px;padding:10px 12px}\n    .fs-chip .k{font-size:.72rem;color:#8ba0c4;margin-bottom:3px}\n    .fs-chip .v{font-size:1.1rem;font-weight:800;color:#fff}\n    .fs-chip .v.warn{color:#ff8a80}\n    .fs-chip .v.good{color:#69f0ae}\n    .fs-cap{margin-top:12px;font-size:.86rem;line-height:1.7;color:#b5c2db;background:#121a30;border-radius:10px;padding:12px 14px;border-left:3px solid #42a5f5;min-height:1.7em}\n    </style>\n    <script src=\"fs.js\" defer></script>",
   "parts": [
     {
       "type": "info_box",
       "title": "30초 요약",
       "items": [
-        "CPU는 메모리를 '캐시라인'(보통 64바이트) 단위로 캐시해.",
-        "서로 다른 변수라도 같은 캐시라인에 있으면, 한 코어가 쓸 때 그 라인 전체가 무효화돼 다른 코어가 다시 읽어야 함.",
-        "→ 라인이 코어 사이를 핑퐁하며 느려짐(false sharing). 패딩으로 다른 라인에 분리하면 해결."
+        "CPU는 메모리를 한 바이트씩이 아니라 '캐시라인'(보통 64바이트) 덩어리로 가져와.",
+        "서로 다른 변수라도 우연히 같은 라인에 있으면, 한 코어가 쓸 때 그 라인 전체가 무효화돼 다른 코어가 다시 읽어야 함.",
+        "→ 라인이 코어 사이를 핑퐁하며 느려짐 = false sharing(거짓 공유). 논리적으론 공유가 없는데 하드웨어가 공유 취급.",
+        "해결: 패딩/64바이트 정렬(alignas(64))로 변수를 서로 다른 라인에 떼어놓기."
       ]
     },
     {
       "type": "conversation",
-      "title": "Part 1. 안 겹치는데 왜 느려",
+      "title": "Part 1. 먼저 — CPU는 왜 한 바이트가 아니라 64바이트를 통째로 가져올까?",
       "items": [
-        { "type": "qa", "q": "두 스레드가 '각자 다른 변수'를 늘리는데 락도 없어. 왜 느리지?", "a": "코드만 보면 공유가 없어 보여. 근데 CPU는 변수 하나가 아니라 64바이트 '캐시라인' 통째로 다뤄.\n변수 A와 B가 우연히 같은 라인에 있으면, 코어1이 A를 쓰는 순간 그 라인이 '변경됨'으로 표시돼 코어2의 캐시가 무효화돼. 코어2는 B를 읽으려고 라인을 다시 가져와야 해 — 이 왕복이 반복돼." },
-        { "type": "qa", "q": "그래서 '거짓' 공유?", "a": "맞아. 논리적으론 A·B를 공유 안 하는데, 하드웨어가 '같은 라인'이라 공유처럼 취급해서 생기는 거라 false sharing이야. 코드가 멀쩡해 보여서 찾기 어려운 성능 버그지." }
+        {
+          "type": "qa",
+          "q": "CPU가 변수 하나 읽으면 그 변수만 딱 가져오는 거 아냐?",
+          "a": "아니야. CPU는 <span class=\"highlight\">'캐시라인'(보통 64바이트) 덩어리 통째로</span> 가져와.\n\n왜? 메모리는 느리니까(디스크만큼은 아니어도 CPU 기준 느려). 한 바이트 필요할 때마다 왕복하면 손해라, <span class=\"key-point\">주변 64바이트를 한꺼번에 퍼와서 캐시에 둬</span>. \"어차피 근처 데이터도 곧 쓸 거야\"라는 도박(지역성)인데, 대부분 맞아서 빨라져."
+        },
+        {
+          "type": "qa",
+          "q": "비유로 이해하고 싶어.",
+          "a": "<span class=\"highlight\">캐시라인 = 64바이트짜리 공용 칠판 한 장</span>이라고 생각해. CPU는 낱장 메모(변수)를 하나씩 안 떼오고, <span class=\"key-point\">그 변수가 적힌 '칠판 한 장'을 통째로 자기 책상(코어 캐시)에 복사</span>해와.\n\n그래서 '변수 A를 가져왔다'는 사실 <span class=\"highlight\">'A가 적힌 칠판 전체를 가져왔다'</span>는 뜻이야. 여기서 함정이 시작돼 ↓"
+        }
       ]
     },
     {
       "type": "conversation",
-      "title": "Part 2. 핑퐁 vs 패딩",
+      "title": "Part 2. 그래서 뭐가 문제 — 안 겹치는 변수인데 같은 칠판이면",
       "items": [
-        { "type": "qa", "q": "직접 봐.", "a": "탭으로 ① false sharing ② 패딩 적용 을 바꿔봐. false는 캐시라인이 코어 사이를 빨갛게 핑퐁하며 처리량이 낮고, 패딩은 각 변수가 다른 라인이라 간섭 없이 처리량이 확 높아." },
-        { "type": "raw_html", "content": "<div class='sim'>\n  <div class='sim-tabs'>\n    <button class='wtab fstab active' type='button' data-m='false'>① false sharing</button>\n    <button class='wtab fstab' type='button' data-m='padded'>② 패딩 적용</button>\n  </div>\n  <canvas id='fs-canvas' role='img' aria-label='false sharing 시뮬레이터. 두 코어가 다른 변수를 같은 캐시라인에서 갱신하면 라인이 코어 사이를 핑퐁하며 느려지고, 패딩으로 다른 라인에 분리하면 빨라진다.'></canvas>\n  <div class='sim-controls'>\n    <button id='fs-play' type='button'>⏸ 일시정지</button>\n  </div>\n  <div class='sim-stats'>\n    <div class='sim-stat'><span class='sim-stat-num' id='fs-ops'>0</span><span class='sim-stat-lbl'>처리량(ops)</span></div>\n    <div class='sim-stat'><span class='sim-stat-num' id='fs-bounce'>0</span><span class='sim-stat-lbl'>캐시라인 핑퐁</span></div>\n  </div>\n  <p class='sim-caption' id='fs-caption'></p>\n</div>" }
+        {
+          "type": "qa",
+          "q": "두 스레드가 '각자 다른 변수'를 늘리는데(락도 없어) 왜 느리지?",
+          "a": "코드만 보면 공유가 <b>전혀</b> 없어 보이지. 근데 변수 A(코어1이 씀)와 B(코어2가 씀)가 <span class=\"warning\">우연히 같은 칠판(캐시라인)에 적혀</span> 있으면?\n\n코어1이 A를 고치려고 <span class=\"key-point\">그 칠판을 '내가 지금 수정 중'으로 독점</span>하는 순간, 코어2가 갖고 있던 <span class=\"warning\">같은 칠판 사본은 '낡음(무효)' 처리</span>돼. 코어2는 B를 건드리려면 칠판을 다시 받아와야 해. 아래에서 배치를 바꿔가며 직접 눌러봐 ↓"
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"fsw\" id=\"fs-w-line\"><h6>🧩 캐시라인 배치 — 같은 칸에 있으면 서로 방해</h6><p class=\"sub\">변수 A(코어1용)와 B(코어2용)를 '같은 라인'과 '패딩(다른 라인)'으로 놓고, 각 코어가 자기 변수에 써봐. 같은 라인이면 한쪽 쓰기가 상대 캐시를 통째로 무효화해.</p><div class=\"fs-ctrl\"><button class=\"fs-btn active\" data-ly=\"same\">붙여 배치(같은 라인)</button><button class=\"fs-btn\" data-ly=\"pad\">패딩(다른 라인)</button></div><div class=\"fs-ctrl\">쓰기: <button class=\"fs-btn\" data-wr=\"A\">🔵 코어1 → A</button><button class=\"fs-btn\" data-wr=\"B\">🔴 코어2 → B</button><button class=\"fs-btn\" data-wr=\"reset\">↺</button></div><canvas class=\"fs-canvas\" id=\"line-canvas\" height=\"250\"></canvas><div class=\"fs-stat\"><div class=\"fs-chip\"><div class=\"k\">엉뚱한 캐시 무효화</div><div class=\"v warn\" id=\"ln-inval\">0</div></div><div class=\"fs-chip\"><div class=\"k\">배치</div><div class=\"v\" id=\"ln-mode\">같은 라인</div></div></div><div class=\"fs-cap\" id=\"ln-cap\">A와 B는 서로 상관없는 변수야(락도 없음). 그런데 같은 64바이트 라인에 있으면…</div></div>"
+        },
+        {
+          "type": "qa",
+          "q": "그래서 '거짓' 공유(false sharing)?",
+          "a": "맞아. <span class=\"key-point\">논리적으론 A·B를 공유한 적이 없어</span> — 서로 다른 변수, 다른 스레드니까. 그런데 <span class=\"warning\">하드웨어가 '같은 칸(라인)'이라는 이유로 공유처럼 취급</span>해서 생기는 거라 '거짓' 공유야. 코드가 멀쩡해 보여서 <span class=\"warning\">눈으로 찾기 제일 어려운 성능 버그</span> 중 하나지."
+        }
       ]
     },
     {
       "type": "conversation",
-      "title": "Part 3. 어디서 터지나",
+      "title": "Part 3. 왜 느려지나 — 캐시 무효화와 핑퐁",
       "items": [
-        { "type": "qa", "q": "실제로 자주 생겨?", "a": "스레드별 카운터를 배열에 다닥다닥 둘 때 단골이야. int counters[8]을 8스레드가 각자 하나씩 늘리면, 여러 개가 같은 라인에 묶여 false sharing이 터져.\n그래서 스레드별 데이터는 캐시라인 단위로 정렬·패딩해(예: alignas(64), 더미 패딩 추가)." },
-        { "type": "qa", "q": "우리 서버는?", "a": "우리 게임 로직은 싱글스레드라 이 문제에서 자유로워(코어 간 공유 자체가 없으니까). 단, IOCP 워커 등 멀티스레드 영역에서 스레드별 통계를 다룰 땐 조심해야 해.\n'멀티스레드인데 이상하게 안 빨라진다'면 false sharing을 의심해봐." }
+        {
+          "type": "qa",
+          "q": "사본이 '낡음' 처리되는 게 왜 그렇게 느려?",
+          "a": "규칙이 있어: <span class=\"key-point\">한 칠판을 여러 코어가 사본으로 가질 수 있지만, 누군가 '수정'하려면 그 코어만 독점해야 하고 나머지 사본은 다 버려야 해</span>(캐시 일관성 규칙).\n\n그래서 코어1이 A 쓰고 → 코어2가 B 쓰고 → 코어1이 또 A 쓰고… 할 때마다 <span class=\"warning\">칠판을 서로 뺏고 뺏기는 '핑퐁'</span>이 벌어져. 이 왕복은 코어 캐시 사이 통신이라 <span class=\"warning\">일반 캐시 접근의 수십 배</span> 느려. 실제 계산은 +1 한 번인데 통신비가 폭발하는 거지."
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"fsw\" id=\"fs-w-perf\"><h6>🏓 핑퐁 vs 패딩 — 처리량 차이</h6><p class=\"sub\">두 코어가 각자 변수를 미친듯이 증가시켜. 같은 라인(false sharing)이면 라인이 코어 사이를 핑퐁하며 느리고, 패딩하면 간섭 없이 확 빨라져. ▶ 실행해 비교해봐. (예시값)</p><div class=\"fs-ctrl\"><button class=\"fs-btn active\" data-pf=\"false\">false sharing</button><button class=\"fs-btn\" data-pf=\"pad\">패딩 적용</button><button class=\"fs-btn\" data-pf=\"run\">▶ 실행</button></div><canvas class=\"fs-canvas\" id=\"perf-canvas\" height=\"170\"></canvas><div class=\"fs-stat\"><div class=\"fs-chip\"><div class=\"k\">처리량(ops)</div><div class=\"v\" id=\"pf-ops\">0</div></div><div class=\"fs-chip\"><div class=\"k\">캐시라인 핑퐁</div><div class=\"v warn\" id=\"pf-bounce\">0</div></div><div class=\"fs-chip\"><div class=\"k\">상대 속도</div><div class=\"v\" id=\"pf-rel\">-</div></div></div><div class=\"fs-cap\" id=\"pf-cap\">같은 코드, 같은 스레드 수인데 변수 배치만 다를 뿐이야.</div></div>"
+        },
+        {
+          "type": "qa",
+          "q": "핵심이 뭐야?",
+          "a": "<span class=\"key-point\">계산이 느린 게 아니라 '칠판을 서로 뺏느라' 느린 거야.</span> 두 코어가 각자 딴 일을 하는데도, 우연히 같은 칠판을 공유해서 서로의 발목을 잡는 것 — 그게 false sharing의 본질이야."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 어디서 터지고 어떻게 고치나",
+      "items": [
+        {
+          "type": "qa",
+          "q": "실제로 자주 생겨? 언제 조심해?",
+          "a": "<span class=\"highlight\">스레드별 카운터/통계를 배열에 다닥다닥 둘 때</span>가 단골이야. 예: <span class=\"highlight\">int counter[8]</span>을 8개 스레드가 각자 하나씩 늘리면 — 코드는 완벽히 독립인데, 여러 개가 같은 64바이트 라인에 묶여 <span class=\"warning\">false sharing 폭발</span>. '멀티스레드로 바꿨는데 왜 안 빨라지지?'의 흔한 범인."
+        },
+        {
+          "type": "qa",
+          "q": "어떻게 고쳐?",
+          "a": "<span class=\"key-point\">변수를 서로 다른 캐시라인으로 떼어놓기(패딩).</span>\n\n각 스레드 데이터를 <span class=\"highlight\">64바이트 경계에 정렬</span>하거나 사이에 더미 패딩을 넣어. C++이면 <span class=\"highlight\">alignas(64)</span>, 또는 구조체에 padding[64] 추가."
+        },
+        {
+          "type": "code",
+          "language": "cpp",
+          "content": "// ❌ false sharing: 8개가 한 라인(64B)에 몰림\nstruct Bad { int counter[8]; };\n\n// ✅ 패딩: 각 카운터를 64바이트 라인에 독점\nstruct alignas(64) PaddedCounter {\n    int value;\n    char pad[64 - sizeof(int)]; // 라인 채워 이웃과 분리\n};\nPaddedCounter counters[8]; // 이제 서로 다른 라인 → 간섭 0"
+        },
+        {
+          "type": "qa",
+          "q": "우리 서버는?",
+          "a": "우리 <span class=\"key-point\">게임 로직은 싱글스레드라 이 문제에서 자유로워</span> — 코어 간 공유 자체가 없으니까. 다만 <span class=\"highlight\">IOCP 워커 등 멀티스레드 영역에서 스레드별 통계·카운터</span>를 다룰 땐 조심해야 해.\n\n증상 기억법: <span class=\"warning\">'멀티스레드로 바꿨는데 이상하게 안 빨라진다(오히려 느려진다)'면 false sharing부터 의심.</span>"
+        }
       ]
     },
     {
       "type": "summary",
       "title": "핵심 정리",
       "items": [
-        "CPU는 메모리를 <strong>캐시라인(64B)</strong> 단위로 캐시",
-        "<strong>false sharing</strong> = 다른 변수라도 같은 라인이면 한쪽 쓰기가 상대 캐시를 무효화 → 라인 핑퐁",
-        "논리적 공유 없는데 하드웨어가 공유 취급 → 코드 멀쩡해 보이는 성능 버그",
-        "<strong>해결</strong>: 패딩/64B 정렬로 변수를 다른 라인에 분리(alignas(64))",
-        "스레드별 카운터 배열이 단골 — 우리 서버 로직은 싱글스레드라 무관, IOCP 영역은 주의"
+        "CPU는 메모리를 캐시라인(보통 64바이트) 덩어리로 가져온다 = '변수'가 아니라 '칠판 한 장' 단위.",
+        "false sharing = 서로 다른 변수라도 같은 라인이면, 한쪽 쓰기가 상대 코어의 캐시를 통째로 무효화.",
+        "캐시 일관성 규칙상 수정하려면 라인을 독점 → 코어끼리 라인을 뺏고 뺏는 '핑퐁' → 통신비 폭발.",
+        "논리적 공유가 없는데 하드웨어가 공유 취급 → 코드 멀쩡해 보이는 성능 버그(찾기 어려움).",
+        "해결: 패딩/64바이트 정렬(alignas(64))로 변수를 서로 다른 라인에 분리.",
+        "스레드별 카운터 배열이 단골. 우리 서버 로직은 싱글스레드라 무관, IOCP 멀티스레드 영역은 주의."
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "이어서 보면",
+      "items": [
+        "메모리 순서 & 배리어 — 같은 캐시·코어 통신의 순서 문제: memory-order",
+        "락 vs 락프리 — 동시성의 뿌리(락 경합도 이 사촌): lock-free",
+        "CPU 아키텍처 기초 — 캐시 계층이 왜 있나: cpu-architecture"
       ]
     }
   ]
