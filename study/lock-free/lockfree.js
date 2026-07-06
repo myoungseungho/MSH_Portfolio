@@ -336,4 +336,88 @@
     draw();
   })();
 
+
+  /* ===== Widget 6: 스토어 버퍼 & 배리어 ===== */
+  (function barrier() {
+    const cv = $('#bar-canvas'); if (!cv) return;
+    let ctx = fitCanvas(cv);
+    const bufOut = $('#bar-buf'), readOut = $('#bar-read'), cap = $('#bar-cap');
+    let mode = 'none';
+    let buf = [];              // 스토어 버퍼에 남은 쓰기
+    let mem = { data: 0, ready: false };
+    let observed = null;       // 코어2 관측
+    function draw() {
+      const w = cv._cw, h = cv._ch; ctx.clearRect(0, 0, w, h);
+      // 코어1
+      ctx.textAlign = 'left'; ctx.font = '700 12px Pretendard'; ctx.fillStyle = '#42a5f5';
+      ctx.fillText('🧠 코어1: data=42;  ready=true;  쓰기', 14, 18);
+      // 스토어 버퍼 (좌) / 메모리 (우)
+      const colW = (w - 36) / 2;
+      // store buffer
+      ctx.fillStyle = '#8ba0c4'; ctx.font = '700 11px Pretendard'; ctx.fillText('📥 스토어 버퍼 (아직 메모리 아님)', 14, 40);
+      ctx.fillStyle = '#101827'; rr(ctx, 14, 48, colW, 96, 8); ctx.fill();
+      ctx.strokeStyle = buf.length ? '#ffca28' : '#223052'; ctx.lineWidth = 1.4; ctx.stroke();
+      if (buf.length === 0) { ctx.fillStyle = '#4a5670'; ctx.font = '12px Pretendard'; ctx.textAlign = 'center'; ctx.fillText('(비어있음)', 14 + colW / 2, 100); ctx.textAlign = 'left'; }
+      buf.forEach((e, i) => {
+        const y = 58 + i * 34;
+        ctx.fillStyle = '#3a2f14'; rr(ctx, 24, y, colW - 20, 26, 5); ctx.fill();
+        ctx.strokeStyle = '#ffca28'; ctx.stroke();
+        ctx.fillStyle = '#ffd54f'; ctx.font = '700 12px Pretendard'; ctx.textAlign = 'left';
+        ctx.fillText(e + '  (대기 중)', 32, y + 17);
+      });
+      // memory
+      const mx = 22 + colW;
+      ctx.fillStyle = '#8ba0c4'; ctx.font = '700 11px Pretendard'; ctx.fillText('💾 메모리 (다른 코어가 봄)', mx, 40);
+      ctx.fillStyle = '#101827'; rr(ctx, mx, 48, colW, 96, 8); ctx.fill();
+      ctx.strokeStyle = '#223052'; ctx.lineWidth = 1.4; ctx.stroke();
+      const cell = (label, val, ok, y) => {
+        ctx.fillStyle = ok ? '#123024' : '#16233c'; rr(ctx, mx + 12, y, colW - 24, 30, 6); ctx.fill();
+        ctx.strokeStyle = ok ? '#66bb6a' : '#2f4468'; ctx.stroke();
+        ctx.fillStyle = '#cfe0ff'; ctx.font = '700 13px Pretendard'; ctx.textAlign = 'left';
+        ctx.fillText(label + ' = ' + val, mx + 22, y + 20);
+      };
+      cell('data', mem.data, mem.data === 42, 58);
+      cell('ready', mem.ready, mem.ready === true, 100);
+      // 코어2 관측
+      if (observed) {
+        const gy = 160;
+        const bad = observed.data !== 42;
+        ctx.fillStyle = bad ? '#2a1a1a' : '#123024'; rr(ctx, 14, gy, w - 28, 62, 8); ctx.fill();
+        ctx.strokeStyle = bad ? '#6b2b2b' : '#2e5d3a'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = '#ffca28'; ctx.font = '700 12px Pretendard'; ctx.textAlign = 'left';
+        ctx.fillText('🧵 코어2: if(ready) → data 읽기', 26, gy + 24);
+        ctx.fillStyle = bad ? '#ff8a80' : '#69f0ae'; ctx.font = '700 13px Pretendard';
+        ctx.fillText('본 값: ready=' + observed.ready + ', data=' + observed.data + (bad ? '  ← 쓰레기!' : '  ← 정상'), 26, gy + 48);
+      }
+      if (bufOut) bufOut.textContent = buf.length ? buf.join(', ') : '비어있음';
+      if (readOut) { readOut.textContent = observed ? String(observed.data) : '-'; readOut.className = 'v' + (observed ? (observed.data === 42 ? ' good' : ' warn') : ''); }
+    }
+    function run() {
+      if (mode === 'barrier') {
+        // 배리어: 버퍼를 순서대로 flush → 메모리 갱신 후 진행
+        buf = [];
+        mem = { data: 42, ready: true };
+        observed = { data: 42, ready: true };
+        if (cap) cap.textContent = '배리어(flush): 코어1의 쓰기를 순서대로 메모리에 밀어낸 뒤 ready를 공개 → 코어2는 data=42를 정상적으로 봐. 배리어가 "이전 쓰기를 먼저 보이게" 강제한 거야.';
+      } else {
+        // 배리어 없음: ready 는 메모리 도달, data 는 스토어 버퍼에 정체 → 스큐
+        buf = ['data = 42'];
+        mem = { data: 0, ready: true };
+        observed = { data: 0, ready: true };
+        if (cap) cap.textContent = '배리어 없음: data=42 쓰기가 아직 스토어 버퍼에 정체(메모리 미반영)인데 ready=true는 먼저 메모리에 도달 → 코어2는 ready만 보고 data=0(쓰레기)을 읽음. 재배치가 바로 이렇게 생겨.';
+      }
+      draw();
+    }
+    $$('[data-bar]', cv.closest('.lfw')).forEach(b => b.addEventListener('click', () => {
+      const a = b.getAttribute('data-bar');
+      if (a === 'run') { run(); return; }
+      mode = a; buf = []; mem = { data: 0, ready: false }; observed = null;
+      $$('[data-bar]', cv.closest('.lfw')).forEach(x => { const v = x.getAttribute('data-bar'); if (v === 'none' || v === 'barrier') x.classList.toggle('active', x === b); });
+      if (cap) cap.textContent = '코어1: data=42; ready=true; 쓰기 → 스토어 버퍼로. 코어2는 메모리를 읽어. ▶ 실행을 눌러봐.';
+      draw();
+    }));
+    window.addEventListener('resize', () => { ctx = fitCanvas(cv); draw(); });
+    draw();
+  })();
+
 })();
