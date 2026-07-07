@@ -79,6 +79,7 @@ a.xref:hover { background:#bbdefb; }
              └─ 포화 체크: !IsNetReady() ? 여기서 중단   NetDriver.cpp:5675</div>
 <p>한 줄 요약: <strong>[1] 시간으로 거르고 → [2] 점수로 줄 세우고 → [3] 대역폭 찰 때까지 위에서부터 보낸다.</strong></p>
 <p>이제 각 단계를 뜯어보자.</p>
+<p>지금부터 엔진 코드가 연달아 나와. <strong>겁먹지 마</strong> — 여기서 볼 건 계산식의 뜻이지, 줄마다 외우는 게 아니야. 낯선 <code>-&gt;</code>, <code>? :</code>, <code>*</code>, <code>&amp;</code> 같은 기호는 코드 바로 아래 🔤 상자에서 풀어줄게.</p>
 <hr>
 </div>
 <div class="conversation"><h2>[1] 시간 축 — 갱신빈도 게이트</h2>
@@ -87,6 +88,8 @@ a.xref:hover { background:#bbdefb; }
 <div class="code-block">		if ( !ActorInfo-&gt;bPendingNetUpdate &amp;&amp; World-&gt;TimeSeconds &lt;= ActorInfo-&gt;NextUpdateTime )
 		{
 			UE_LOG(LogNetTraffic, VeryVerbose, TEXT("Skipping actor: %s. bPendingNetUpdate: %s | NextUpdateTime: %f (currently %f)"), *GetNameSafe(ActorInfo-&gt;Actor), ActorInfo-&gt;bPendingNetUpdate?TEXT("true"):TEXT("false"),ActorInfo-&gt;NextUpdateTime, World-&gt;TimeSeconds);</div>
+<div class="note gloss">🔤 <strong>갱신빈도 게이트 기호 사전</strong> — <code>if ( !ActorInfo-&gt;bPendingNetUpdate &amp;&amp; World-&gt;TimeSeconds &lt;= ActorInfo-&gt;NextUpdateTime )</code><br>&bull;&nbsp;<strong><code>if (...)</code></strong> = 괄호 안 조건이 맞으면 바로 아래 <code>{ ... }</code> 안을 실행해.<br>&bull;&nbsp;<strong><code>!</code></strong> = "아니면". <code>!ActorInfo-&gt;bPendingNetUpdate</code>는 "강제 갱신 대기 상태가 아니면"이라고 읽어.<br>&bull;&nbsp;<strong><code>-&gt;</code></strong> = 포인터가 가리키는 물건 안의 값을 꺼내는 화살표. <code>ActorInfo-&gt;NextUpdateTime</code> = <code>ActorInfo</code> 안의 다음 갱신시각.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = "그리고". 왼쪽 조건도 맞고 오른쪽 조건도 맞아야 전체가 참이야.<br>&bull;&nbsp;<strong><code>&lt;=</code></strong> = "작거나 같으면". 지금 시간이 다음 갱신시각보다 아직 이르면 참.<br>&bull;&nbsp;<strong><code>UE_LOG(...)</code></strong> = 엔진 로그에 기록 남기기. 여기선 왜 스킵했는지 아주 자세히 찍는 줄이야.<br>&bull;&nbsp;<strong><code>TEXT("...")</code></strong> = UE가 문자열을 엔진용 문자 타입으로 감싸는 매크로.<br>&bull;&nbsp;<strong><code>? :</code></strong> = 조건에 따라 둘 중 하나를 고르는 짧은 if. <code>bPendingNetUpdate ? "true" : "false"</code> 느낌.<br>&bull;&nbsp;<strong><code>*GetNameSafe(...)</code></strong> = 이름 문자열 상자를 로그가 읽을 수 있는 형태로 꺼내는 표시라고 보면 돼.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>!bPendingNetUpdate</code>(강제 대기 아님) + <code>TimeSeconds &lt;= NextUpdateTime</code>(아직 예약 시간이 안 옴) 둘 다 맞으면, 이 액터는 이번 틱 후보에서 빠진다. 즉 이 <code>if</code> 한 줄은 <strong>"아직 네 차례 아니면 줄 서지 마"</strong> 라는 시간 문지기야.</div>
 <p>읽어보면 — "아직 <code>NextUpdateTime</code> 안 됐으면 skip". 즉 <strong>다음 갱신시각이 도래하기 전엔 아예 후보에서 뺀다.</strong> 이게 "초당 N회 상한"을 만드는 장본인이야.</p>
 <p>그럼 <code>NextUpdateTime</code>은 어떻게 정해질까? 이번 틱에 고려된 액터는 끝에서 다음 시각을 다시 예약해.</p>
 <p><code>Runtime/Engine/Private/NetDriver.cpp:5228</code></p>
@@ -96,6 +99,8 @@ a.xref:hover { background:#bbdefb; }
 
 			// then set the next update time
 			ActorInfo-&gt;NextUpdateTime = World-&gt;TimeSeconds + RandDelay + NextUpdateDelta;</div>
+<div class="note gloss">🔤 <strong>다음 갱신시각 기호 사전</strong> — <code>NextUpdateDelta = bUseAdapativeNetFrequency ? ... : ...</code><br>&bull;&nbsp;<strong><code>const float</code></strong> = 소수점 값을 담되, 한 번 정하면 이 변수는 다시 안 바꾸겠다는 뜻.<br>&bull;&nbsp;<strong><code>? :</code></strong> = 조건이 참이면 왼쪽 값, 아니면 오른쪽 값을 고르는 짧은 if.<br>&bull;&nbsp;<strong><code>1.0f</code></strong> = C++에서 "소수 1.0"을 <code>float</code>로 쓰겠다는 표시. 뒤의 <code>f</code>는 float 꼬리표야.<br>&bull;&nbsp;<strong><code>/</code></strong> = 나누기. 여기선 "초당 몇 번"이라는 빈도를 "몇 초마다 한 번"이라는 간격으로 뒤집는 데 써.<br>&bull;&nbsp;<strong><code>Actor-&gt;GetNetUpdateFrequency()</code></strong> = 이 액터가 들고 있는 갱신빈도 값을 물어보는 함수 호출.<br>&bull;&nbsp;<strong><code>GNetDisableRandomNetUpdateDelay</code></strong> = 랜덤 지연을 끌지 말지 정하는 전역 스위치.<br>&bull;&nbsp;<strong><code>FRand()</code></strong> = 0에서 1 사이 랜덤 소수 하나 뽑기.<br>&bull;&nbsp;<strong><code>World-&gt;TimeSeconds + RandDelay + NextUpdateDelta</code></strong> = 현재 시간에 랜덤 흔들기와 다음 대기시간을 더해서 새 예약 시각을 만드는 식.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>1.0f / GetNetUpdateFrequency()</code>가 "초당 N번"을 "N분의 1초 뒤"로 바꾸고, 거기에 <code>RandDelay</code>를 살짝 섞어 <code>NextUpdateTime</code>을 다시 예약한다. 그래서 빈도는 숫자가 클수록 자주, 숫자가 작을수록 뜸하게 줄에 서는 거야.</div>
 <p>여기서 눈여겨볼 건 <code>1.0f / GetNetUpdateFrequency()</code>. 빈도는 <strong>항상 역수로 뒤집혀</strong> 쓰인다.</p>
 <ul><li><code>NetUpdateFrequency = 100</code> → 델타 <code>0.01</code>초 → 초당 100번</li><li><code>NetUpdateFrequency = 10</code> → 델타 <code>0.1</code>초 → 초당 10번</li></ul>
 <p><strong>예측해봐.</strong> 안 움직이는 문짝 액터를 <code>NetUpdateFrequency = 2</code>로 깔면 서버 부하가 얼마나 줄까? "절반쯤?" 이라고 찍었으면 반전이야 — 기본 100에서 2로 내리면 갱신 시도가 <strong>1/50로</strong> 준다. 이 액터가 후보 리스트에 오르는 횟수 자체가 50배 뜸해지니까, 뒤따르는 점수계산·정렬·전송 비용이 통째로 절약돼. 갱신빈도는 파이프라인 맨 앞의 수도꼭지라 여기서 잠그면 하류 전체가 마른다.</p>
@@ -110,6 +115,8 @@ a.xref:hover { background:#bbdefb; }
 			// Interpolate between MinOptimalDelta/MaxOptimalDelta based on how long it's been since this actor actually sent anything
 			const float Alpha = FMath::Clamp( ( LastReplicateDelta - ScaleDownStartTime ) / ScaleDownTimeRange, 0.0f, 1.0f );
 			ActorInfo-&gt;OptimalNetUpdateDelta = FMath::Lerp( MinOptimalDelta, MaxOptimalDelta, Alpha );</div>
+<div class="note gloss">🔤 <strong>적응형 빈도 기호 사전</strong> — <code>FMath::Clamp(...)</code> / <code>FMath::Lerp(...)</code><br>&bull;&nbsp;<strong><code>FMath::Max(A, B)</code></strong> = A와 B 중 더 큰 값을 고르기. <code>::</code>는 <code>FMath</code> 상자 안의 함수라는 소속 표시야.<br>&bull;&nbsp;<strong><code>/</code></strong> = 나누기. 여기서도 빈도를 시간 간격으로 바꾸는 데 쓴다.<br>&bull;&nbsp;<strong><code>Alpha</code></strong> = 0에서 1 사이 손잡이. 0이면 앞값 쪽, 1이면 뒷값 쪽으로 간다고 보면 돼.<br>&bull;&nbsp;<strong><code>FMath::Clamp(X, 0.0f, 1.0f)</code></strong> = X가 0보다 작으면 0, 1보다 크면 1로 눌러서 범위 안에 가두기.<br>&bull;&nbsp;<strong><code>FMath::Lerp(A, B, Alpha)</code></strong> = A와 B 사이를 <code>Alpha</code>만큼 섞어 중간값 만들기.<br>&bull;&nbsp;<strong><code>ActorInfo-&gt;OptimalNetUpdateDelta</code></strong> = 이 액터에게 이번에 계산된 "적당한 다음 대기시간" 칸.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>LastReplicateDelta</code>가 길어질수록 <code>Alpha</code>가 커지고, <code>Lerp</code> 결과가 <code>MaxOptimalDelta</code> 쪽으로 간다. 말로 풀면 <strong>"오래 실제 전송이 없던 액터는 다음 후보 등록 간격을 더 느리게 잡는다"</strong> 야.</div>
 <p><code>NetUpdateFrequency</code>(가장 빠름)와 <code>MinNetUpdateFrequency</code>(가장 느림) 사이를, "얼마나 오래 실제 전송이 없었나"를 Alpha로 잡아 Lerp한다. <code>MinNetUpdateFrequency</code>라는 이름이 함정인데 — <strong>"Min빈도 = 가장 느린 갱신 = 대역폭 절약 하한선"</strong>이야. 낮은 숫자일수록 뜸하다.</p>
 <hr>
 </div>
@@ -128,6 +135,8 @@ a.xref:hover { background:#bbdefb; }
 		Priority = FMath::Max&lt;int32&gt;(Priority, FMath::RoundToInt(65536.0f * ActorInfo-&gt;Actor-&gt;GetNetPriority(Viewers[i].ViewLocation, Viewers[i].ViewDir, Viewers[i].InViewer, Viewers[i].ViewTarget, InChannel, Time, bLowBandwidth)));
 	}
 }</div>
+<div class="note gloss">🔤 <strong>점수 생성자 기호 사전</strong> — <code>FActorPriority::FActorPriority(...)</code><br>&bull;&nbsp;<strong><code>FActorPriority::FActorPriority</code></strong> = <code>FActorPriority</code>라는 점수표 상자를 만들 때 자동으로 도는 생성자. <code>::</code>는 소속 표시야.<br>&bull;&nbsp;<strong><code>UNetConnection*</code> / <code>UActorChannel*</code></strong> = 연결/채널을 직접 가리키는 포인터. 복사본이 아니라 원래 객체를 손가락으로 짚는 느낌.<br>&bull;&nbsp;<strong><code>: ActorInfo(...), Channel(...)</code></strong> = 함수 몸통에 들어가기 전에 멤버 칸을 먼저 채우는 초기화 목록.<br>&bull;&nbsp;<strong><code>NULL</code></strong> = 아직 아무것도 안 가리킨다는 빈 표시. 요즘 코드의 <code>nullptr</code> 같은 역할로 보면 돼.<br>&bull;&nbsp;<strong><code>Channel ? A : B</code></strong> = <code>Channel</code>이 있으면 A, 없으면 B를 쓰는 짧은 if.<br>&bull;&nbsp;<strong><code>-&gt;</code></strong> = 포인터가 가리키는 객체 안으로 들어가는 화살표.<br>&bull;&nbsp;<strong><code>for (int32 i = 0; i &lt; Viewers.Num(); i++)</code></strong> = <code>i</code>를 0부터 하나씩 올리며 Viewer 목록 끝까지 반복.<br>&bull;&nbsp;<strong><code>Viewers[i]</code></strong> = Viewer 목록의 <code>i</code>번째 칸.<br>&bull;&nbsp;<strong><code>FMath::Max&lt;int32&gt;(A, B)</code></strong> = 두 점수 중 더 큰 <code>int32</code> 값을 고르기.<br>&bull;&nbsp;<strong><code>FMath::RoundToInt(...)</code></strong> = 소수 계산 결과를 정수 점수로 반올림하기.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 먼저 <code>Time</code>에 "마지막 전송 뒤 얼마나 굶었나"를 담고, <code>for</code>로 모든 Viewer를 돌며 <code>GetNetPriority(...)</code> 점수를 계산한다. Viewer가 여러 명이면 <code>Max</code>로 제일 큰 점수만 남겨서, 이 연결에서 그 액터의 최종 순번 재료를 만드는 코드야.</div>
 <p>세 가지만 보면 돼.</p>
 <ol><li><strong><code>Time = ElapsedTime - Channel-&gt;LastUpdateTime</code></strong> — 이 액터를 마지막으로 보낸 뒤 흐른 시간. 오래 못 보냈을수록 커진다.</li><li><strong>점수 = <code>65536 * GetNetPriority(...)</code></strong> — 65536은 그냥 정수 스케일링(float를 int 점수로). 본질은 <code>GetNetPriority</code>.</li><li><strong>Viewer 여럿이면 <code>Max</code></strong> — 한 연결에 시점이 여러 개면(분할화면 등) 그중 가장 높은 점수 채택.</li></ol>
 <p>그럼 <code>GetNetPriority</code>의 정체는? 이게 이 챕터의 심장이야.</p>
@@ -145,9 +154,12 @@ a.xref:hover { background:#bbdefb; }
 		// If we're the view target or owned by the view target, use a high priority
 		Time *= 4.f;
 	}</div>
+<div class="note gloss">🔤 <strong>GetNetPriority 기호 사전</strong> — <code>float AActor::GetNetPriority(...)</code><br>&bull;&nbsp;<strong><code>float</code></strong> = 이 함수가 소수점 점수를 돌려준다는 뜻.<br>&bull;&nbsp;<strong><code>AActor::</code></strong> = <code>AActor</code>에게 딸린 함수라는 소속 표시.<br>&bull;&nbsp;<strong><code>const FVector&amp;</code></strong> = 위치/방향 값을 복사하지 않고 빌려 읽되, 그 값을 바꾸지는 않겠다는 뜻.<br>&bull;&nbsp;<strong><code>AActor* Viewer</code></strong> = <code>Viewer</code>라는 액터를 가리키는 포인터.<br>&bull;&nbsp;<strong><code>bool bLowBandwidth</code></strong> = 참/거짓 스위치. 앞의 <code>b</code>는 보통 bool이라는 신호야.<br>&bull;&nbsp;<strong><code>if (bNetUseOwnerRelevancy &amp;&amp; Owner)</code></strong> = "주인의 relevancy를 쓰기로 했고, 실제 주인도 있으면"이라고 읽어.<br>&bull;&nbsp;<strong><code>return Owner-&gt;GetNetPriority(...)</code></strong> = 내 계산을 멈추고 Owner의 점수를 그대로 돌려주기.<br>&bull;&nbsp;<strong><code>this == ViewTarget</code></strong> = 지금 이 액터 자신이 플레이어가 보고 있는 대상인지 비교.<br>&bull;&nbsp;<strong><code>||</code></strong> = "또는". 둘 중 하나만 맞아도 참이야.<br>&bull;&nbsp;<strong><code>Time *= 4.f</code></strong> = <code>Time</code>에 4를 곱해서 다시 <code>Time</code>에 넣기. 점수를 확 키우는 줄이야.</div>
 <p>그리고 같은 함수 맨 끝:</p>
 <p><code>Runtime/Engine/Private/ActorReplication.cpp:88</code></p>
 <div class="code-block">	return NetPriority * Time;</div>
+<div class="note gloss">🔤 <strong>최종식 기호 사전</strong> — <code>return NetPriority * Time;</code><br>&bull;&nbsp;<strong><code>return</code></strong> = 이 함수의 답을 여기서 돌려주고 끝낸다는 뜻.<br>&bull;&nbsp;<strong><code>*</code></strong> = 여기서는 포인터 표시가 아니라 <strong>곱하기</strong>야.<br>&bull;&nbsp;<strong><code>;</code></strong> = C++ 한 문장 끝 표시.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 앞에서 거리·시야·주인 여부로 <code>Time</code>을 키우거나 줄였고, 마지막엔 <code>NetPriority * Time</code>을 답으로 돌려준다. 즉 최종 점수는 <strong>액터 기본 중요도 × 얼마나 오래 굶었는지(보정 포함)</strong> 로 읽으면 돼.</div>
 <p><strong>최종식: <code>NetPriority * Time</code>.</strong></p>
 <p>여기서 두 재료의 성격이 확 갈려.</p>
 <ul><li><strong><code>NetPriority</code></strong> — 액터가 들고 있는 고정 가중치. 기본 <code>1.0</code>. 캐릭터는 높게, 배경 장식은 낮게 세팅. <strong>절대 순번이 아니라 배수</strong>야. 2.0이면 같은 조건에서 점수 2배.</li><li><strong><code>Time</code></strong> — 상수가 아니라 <strong>"마지막 전송 후 흐른 시간"</strong>. 그리고 함수 중간에서 거리/시야로 배수 조정돼:</li><li>내가 보는 대상(ViewTarget)이거나 그 소유물 → <code>Time *= 4.f</code> (코드 :56)</li><li>정면으로 똑바로 쳐다보는 중 → <code>Time *= 2.f</code> (:80)</li><li>등 뒤 + 멀다 → <code>Time *= 0.2f</code> (:69)</li></ul>
@@ -157,6 +169,7 @@ a.xref:hover { background:#bbdefb; }
 <p><code>Runtime/Engine/Private/NetDriver.cpp:5476</code></p>
 <div class="code-block">		// Sort by priority
 		Algo::SortBy(MakeArrayView(OutPriorityActors, FinalSortedCount), &amp;FActorPriority::Priority, TGreater&lt;&gt;());</div>
+<div class="note gloss">🔤 <strong>정렬 기호 사전</strong> — <code>Algo::SortBy(...)</code><br>&bull;&nbsp;<strong><code>Algo::SortBy</code></strong> = <code>Algo</code> 상자 안의 "정렬해줘" 함수. <code>::</code>는 소속 표시야.<br>&bull;&nbsp;<strong><code>MakeArrayView(...)</code></strong> = 배열 전체가 아니라 앞쪽 <code>FinalSortedCount</code>개만 보게 하는 창을 만든다.<br>&bull;&nbsp;<strong><code>&amp;FActorPriority::Priority</code></strong> = <code>FActorPriority</code> 안의 <code>Priority</code> 칸을 정렬 기준으로 삼겠다는 표시. 여기서 <code>&amp;</code>는 그 멤버를 가리키는 표시야.<br>&bull;&nbsp;<strong><code>TGreater&lt;&gt;</code></strong> = 큰 값이 먼저 오게 하는 비교 규칙.<br>&bull;&nbsp;<strong><code>&lt;&gt;</code></strong> = 템플릿 자리. 타입을 넣는 꺾쇠칸인데, 여기선 기본 모양으로 둔 거야.</div>
 <p><code>TGreater&lt;&gt;</code> — <strong>내림차순</strong>. 점수 높은 놈이 배열 앞에 온다. 이제 앞에서부터 보내기만 하면 돼.</p>
 <hr>
 </div>
@@ -170,6 +183,8 @@ a.xref:hover { background:#bbdefb; }
 						GNumSaturatedConnections++;
 						return j;
 					}</div>
+<div class="note gloss">🔤 <strong>포화 체크 기호 사전</strong> — <code>if (!Connection-&gt;IsNetReady() &amp;&amp; !bIgnoreSaturation)</code><br>&bull;&nbsp;<strong><code>Connection-&gt;IsNetReady()</code></strong> = 이 연결이 지금 더 보낼 준비가 됐는지 물어보는 함수.<br>&bull;&nbsp;<strong><code>!Connection-&gt;IsNetReady()</code></strong> = 보낼 준비가 안 됐으면. 즉 송신 쪽이 꽉 찼으면.<br>&bull;&nbsp;<strong><code>&amp;&amp; !bIgnoreSaturation</code></strong> = "그리고 포화를 무시하라는 옵션도 꺼져 있으면".<br>&bull;&nbsp;<strong><code>GNumSaturatedConnections++</code></strong> = 포화된 연결 수 카운터를 하나 올리기. <code>++</code>는 1 증가야.<br>&bull;&nbsp;<strong><code>return j</code></strong> = 여기서 함수를 멈추고, <code>j</code>번째까지 처리했다는 값을 돌려준다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>IsNetReady()</code>가 거짓이고 포화를 무시하지도 않으면, 이 연결은 이번 틱 예산을 다 쓴 거야. 그래서 <code>GNumSaturatedConnections++</code>로 표시만 남기고 <code>return j</code>로 즉시 빠져나간다. 아래쪽 액터들은 이번 틱 컷라인 밑으로 떨어진다.</div>
 <p><code>IsNetReady()</code>가 <code>false</code>면 — 이 연결 송신 버퍼가 이번 틱 예산을 다 썼다는 뜻. 그럼 <strong>남은 저우선순위 액터들은 미련 없이 버리고 <code>return</code></strong>. <code>return j</code>로 "여기까지 보냈다"를 넘겨줘서 다음 처리에 쓴다.</p>
 <p>이제 [2]의 정렬이 왜 중요했는지 보이지. <strong>컷라인은 대역폭이 긋고, 그 컷라인 위에 누가 서 있을지를 [2]의 점수가 정한다.</strong> 포화가 오면 위에서부터 잘린 뒤 아래는 통째로 이번 틱 탈락.</p>
 <p>그럼 탈락한 relevant 액터는 영영 못 보내나? 아니야. 포화로 못 보낸 놈은 <code>ForceNetUpdate()</code>류로 <code>bPendingNetUpdate</code> 플래그가 붙어서, <strong>다음 틱엔 [1]의 시간 게이트(:5127)를 우회</strong>해 무조건 재고려된다. 스니펫 [1]의 <code>!ActorInfo-&gt;bPendingNetUpdate</code> 조건 기억나지? 이 플래그가 true면 "아직 시각 안 됐어도 skip 안 함". 시간 게이트와 기아 방지가 여기서 맞물린다.</p>

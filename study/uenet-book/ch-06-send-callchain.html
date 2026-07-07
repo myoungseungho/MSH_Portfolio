@@ -61,6 +61,7 @@ a.xref:hover { background:#bbdefb; }
 <p>이걸 실제로 구현한 함수들을 하나씩 밟아보자.</p>
 <div class="note">용어 두 개만 미리 깔고 갈게. 자세한 건 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a><br>&bull;&nbsp;<strong>패킷(Packet)</strong>: UDP 한 방으로 나가는 바이트 덩어리 = "봉투".<br>&bull;&nbsp;<strong>번치(Bunch)</strong>: 그 봉투 안에 담기는 논리적 데이터 조각 = "편지". 봉투 하나에 편지 여러 통.</div>
 <hr>
+<p>지금부터 진짜 엔진 경로와 코드가 나온다. <strong>겁먹지 마</strong> — 박스는 길어 보여도 "쌓기 → 기다리기 → Flush" 세 단어만 붙잡고 보면 된다.</p>
 </div>
 <div class="conversation"><h2>1. 전체 콜체인 한 장으로</h2>
 <p>상위 게임 코드가 RPC/프로퍼티를 채널에 실으면, 아래 순서로 <strong>누적 → 전송</strong>된다.</p>
@@ -136,6 +137,8 @@ a.xref:hover { background:#bbdefb; }
 
 	// Write the bits to the buffer and remember the packet id used
 	Bunch.PacketId = WriteBitsToSendBufferInternal(SendBunchHeader.GetData(), BunchHeaderBits, Bunch.GetData(), BunchBits, EWriteBitsDataType::Bunch);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>PrepareWriteBitsToSendBuffer(...)</code> → <code>TimeSensitive = 1</code> → <code>WriteBitsToSendBufferInternal(...)</code><br>&bull;&nbsp;<strong><code>PrepareWriteBitsToSendBuffer(...)</code></strong> = "쓰기 전에 우체통 자리부터 확인해" 하는 준비 함수. 실제 데이터를 아직 넣는 단계가 아니야.<br>&bull;&nbsp;<strong><code>//</code></strong> = 코드가 아니라 사람에게 남기는 설명 메모. 컴파일러는 이 줄을 실행하지 않아.<br>&bull;&nbsp;<strong><code>TimeSensitive = 1</code></strong> = "이번 프레임에 보낼 게 생겼다"는 깃발을 켬. <code>1</code>은 참/켜짐으로 보면 돼.<br>&bull;&nbsp;<strong><code>Bunch.PacketId</code></strong> = <code>Bunch</code>라는 편지에 붙은 <code>PacketId</code> 칸. 점(<code>.</code>)은 "그 상자 안의 칸"을 꺼내는 표시야.<br>&bull;&nbsp;<strong><code>GetData()</code></strong> = 안에 든 진짜 바이트/비트 시작 주소를 꺼내오는 함수.<br>&bull;&nbsp;<strong><code>EWriteBitsDataType::Bunch</code></strong> = "이번에 쓰는 데이터 종류는 Bunch야"라는 이름표. <code>::</code>는 "~안에 있는 이름"이라고 읽어.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>PrepareWriteBitsToSendBuffer(...)</code>(자리 확인) → <code>TimeSensitive = 1</code>(이번 프레임 보낼 것 있음 표시) → <code>WriteBitsToSendBufferInternal(...)</code>(헤더와 Bunch 본문을 SendBuffer에 기록). 이어 읽으면 <strong>"먼저 들어갈 자리를 확인하고, 보낼 깃발을 세운 뒤, 실제 비트를 우체통에 쌓는다."</strong></div>
 <p><code>Prepare...</code>(자리 확보) → <code>...Internal</code>(실제 기록) 순서지? <strong>쓰기 전에 자리 확보.</strong> 왜냐면 반쯤 쓰다가 "넘쳤네" 하고 되돌리는 건 비트 스트림에선 지옥이거든. 이게 반전 하나.</p>
 <p>그리고 여기서 <strong>이 챕터 최고 중요 한 줄</strong>을 만나. 가운데 <code>TimeSensitive = 1;</code>. "이번 프레임에 보낼 게 생겼다"는 깃발이야. 주석도 친절하게 설명해 — *Prepare가 패킷을 flush해버릴 수 있으니, 그 전에 이 깃발부터 세운다*고. 이 깃발이 §3의 <strong>주 경로(C)</strong>를 여는 열쇠야. 지금은 "Bunch 하나 썼으면 이 깃발이 선다"만 기억해.</p>
 <hr>
@@ -153,6 +156,8 @@ a.xref:hover { background:#bbdefb; }
 	{
 		FlushNet();
 	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>if (GetFreeSendBufferBits() == 0 ... ) { FlushNet(); }</code><br>&bull;&nbsp;<strong><code>if</code></strong> = "만약 ~라면". 괄호 안 조건이 맞을 때만 중괄호 안을 실행해.<br>&bull;&nbsp;<strong><code>GetFreeSendBufferBits()</code></strong> = SendBuffer에 아직 남은 빈 자리(비트 수)를 물어보는 함수.<br>&bull;&nbsp;<strong><code>== 0</code></strong> = "0과 같다"는 비교. 남은 자리가 딱 하나도 없다는 뜻이야.<br>&bull;&nbsp;<strong><code>#if !UE_BUILD_SHIPPING ... #endif</code></strong> = 특정 빌드에서만 끼워 넣는 컴파일 조건문. <code>!</code>는 "아님"이라서 여기선 Shipping 빌드가 아닐 때만 디버그 조건을 본다는 뜻.<br>&bull;&nbsp;<strong><code>||</code></strong> = "또는". 앞 조건이 맞거나 뒤 조건이 맞으면 전체가 맞아.<br>&bull;&nbsp;<strong><code>!= 0</code></strong> = "0이 아니다". 스위치가 꺼져 있지 않으면 켜진 걸로 보는 식이야.<br>&bull;&nbsp;<strong><code>FlushNet();</code></strong> = 지금까지 쌓은 SendBuffer를 패킷으로 봉해서 내보내는 함수 호출.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>if</code>(만약) → <code>GetFreeSendBufferBits() == 0</code>(남은 공간이 0이면) → <code>|| CVarForceNetFlush... != 0</code>(또는 디버그 강제 flush가 켜졌으면) → <code>FlushNet()</code>(바로 내보냄). 한 줄로 <strong>"우체통이 꽉 찼거나 강제 스위치가 켜졌으면 즉시 비운다."</strong></div>
 <p><code>SerializeBits</code>로 비트를 다 쌓고 났더니 <strong>남은 공간이 정확히 0이면 그 자리에서 바로</strong> 보내버린다. 우체통이 꽉 차서 더 못 넣으니까. (<code>CVarForceNetFlush</code>는 디버그용 강제 flush 스위치 — "무조건 지금 보내" 하고 싶을 때 켜는 거. 실무 흐름엔 신경 안 써도 돼.)</p>
 <h3>트리거 (B) — "이거 지금 버퍼에 안 들어가" → 먼저 비우고 새 패킷 연다</h3>
 <p><strong>[스니펫 3] 다음 데이터가 현재 패킷에 안 들어가면 flush — <code>NetConnection.cpp:4256-4262</code></strong></p>
@@ -163,6 +168,8 @@ a.xref:hover { background:#bbdefb; }
 	{
 		FlushNet();
 	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>const int32 TotalSizeInBits = SizeInBits + ExtraSizeInBits;</code><br>&bull;&nbsp;<strong><code>const</code></strong> = 한 번 정하면 이 줄 아래에서 바꾸지 않겠다는 약속.<br>&bull;&nbsp;<strong><code>int32</code></strong> = 정수를 담는 칸. 32비트 크기의 숫자라고 보면 돼.<br>&bull;&nbsp;<strong><code>TotalSizeInBits</code></strong> = 이번에 넣으려는 전체 크기. 데이터 본문 크기와 추가 헤더 크기를 더한 값이야.<br>&bull;&nbsp;<strong><code>SizeInBits + ExtraSizeInBits</code></strong> = "본문 비트 수 + 덤으로 필요한 비트 수".<br>&bull;&nbsp;<strong><code>&gt;</code></strong> = 왼쪽이 오른쪽보다 크면 참.<br>&bull;&nbsp;<strong><code>GetFreeSendBufferBits()</code></strong> = 지금 우체통에 남은 빈자리.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>TotalSizeInBits</code>(이번에 넣을 총 크기)가 <code>GetFreeSendBufferBits()</code>(남은 자리)보다 크면 → <code>FlushNet()</code>으로 먼저 비운다. 즉 <strong>"새 편지가 지금 우체통에 안 들어가면, 기존 편지부터 보내고 새 우체통을 연다."</strong></div>
 <p>새 편지가 지금 우체통에 안 들어갈 만큼 크면? 지금 있는 걸 먼저 트럭에 실어 보내고(Flush), <strong>빈 우체통에 새 패킷 헤더를 열어</strong> 담는다. <code>PrepareWriteBitsToSendBuffer</code> 안이라, 아까 스니펫 1에서 <code>TimeSensitive=1</code>을 *먼저* 세운 이유가 이거야 — 여기서 flush가 튀어도 깃발은 안전하게 서 있게.</p>
 <h3>트리거 (C) — 프레임당 1회 · <strong>주 경로</strong> ★</h3>
 <p>여기가 실전에서 편지 대부분이 나가는 길이야. <code>UNetConnection::Tick</code> 끝에서 매 프레임 돈다.</p>
@@ -178,6 +185,8 @@ a.xref:hover { background:#bbdefb; }
 			FlushNet();
 		}
 	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>if ( TimeSensitive || ... )</code><br>&bull;&nbsp;<strong><code>TimeSensitive</code></strong> = "이번 프레임에 보낼 게 있다"는 깃발. 참이면 flush 후보가 돼.<br>&bull;&nbsp;<strong><code>Driver-&gt;GetElapsedTime()</code></strong> = 드라이버한테 지금까지 흐른 시간을 물어봄. <code>-&gt;</code>는 "가리키는 객체한테 시킨다"는 화살표야.<br>&bull;&nbsp;<strong><code>LastSendTime</code></strong> = 마지막으로 보낸 시각.<br>&bull;&nbsp;<strong><code>&gt;</code></strong> = 왼쪽 시간이 오른쪽 기준보다 커졌는지 비교.<br>&bull;&nbsp;<strong><code>Driver-&gt;KeepAliveTime</code></strong> = 아무 데이터가 없어도 연결 확인용 패킷을 보내야 하는 최대 대기 시간.<br>&bull;&nbsp;<strong><code>bool</code></strong> = 참/거짓만 담는 스위치 칸.<br>&bull;&nbsp;<strong><code>!Handler.IsValid()</code></strong> = Handler가 없으면. <code>!</code>는 "아님"이야.<br>&bull;&nbsp;<strong><code>||</code></strong> = 또는, <strong><code>&amp;&amp;</code></strong> = 그리고. <code>&amp;&amp;</code>는 양쪽이 다 참이어야 지나가.<br>&bull;&nbsp;<strong><code>HasReceivedClientPacket()</code></strong> = 클라이언트한테서 패킷을 받은 적이 있는지 확인하는 함수.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>TimeSensitive</code>(보낼 것 있음) <strong>또는</strong> keepalive 시간이 지났고 → 핸드셰이크가 끝났고 → 클라이언트 패킷도 받은 상태면 → <code>FlushNet()</code>. 그래서 이 코드는 <strong>"보낼 준비와 연결 준비가 둘 다 됐을 때, 프레임 끝에서 우체통을 비운다."</strong></div>
 <p><code>TimeSensitive</code>가 참이면 flush. 그런데 §2에서 봤듯 <strong>Bunch를 하나라도 쓰면 <code>SendRawBunch</code>에서 <code>TimeSensitive=1</code>이 된다.</strong> 그러니 보통은 이렇게 흘러:</p>
 <ul><li>한 프레임 동안 게임 로직이 Bunch 여러 개를 우체통에 <strong>쌓기만</strong> 함 (트리거 A/B에 안 걸리면 소켓 안 감).</li><li>프레임 끝 <code>Tick</code>에서 <code>TimeSensitive</code>가 서 있으니 → <strong>한 방에</strong> flush.</li></ul>
 <p>즉 <strong>"매 프레임 틱 끝에 모아서 한 번에 나간다"</strong>가 정상 경로야. §0 우체통 비유의 "정해진 시간에 우체부가 옴"이 바로 이 Tick이야. 그리고 보낼 게 하나도 없어도 <code>KeepAliveTime</code>이 지나면 keepalive 패킷을 한 번 flush해서 연결이 살아있음을 알린다. (틱 자체의 큰 그림은 → <a class="xref" href="ch-11-netdriver-tick.html">netdriver-tick</a>)</p>
@@ -196,12 +205,16 @@ a.xref:hover { background:#bbdefb; }
 			{
 				LowLevelSend(SendBuffer.GetData(), SendBuffer.GetNumBits(), Traits);
 			}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>LowLevelSend(SendBuffer.GetData(), SendBuffer.GetNumBits(), Traits);</code><br>&bull;&nbsp;<strong><code>Driver-&gt;IsNetResourceValid()</code></strong> = 네트워크 자원이 아직 유효한지 확인. 소켓/드라이버가 죽은 상태면 보내면 안 되니까 먼저 본다.<br>&bull;&nbsp;<strong><code>SendBuffer.GetData()</code></strong> = SendBuffer 안에 쌓인 실제 데이터 시작점을 꺼냄.<br>&bull;&nbsp;<strong><code>SendBuffer.GetNumBits()</code></strong> = SendBuffer에 몇 비트가 쌓였는지 꺼냄.<br>&bull;&nbsp;<strong><code>Traits</code></strong> = 이 패킷에 붙는 부가 정보 상자. 어떤 성격의 전송인지 같이 넘겨준다.<br>&bull;&nbsp;<strong><code>LowLevelSend(...)</code></strong> = 이제 진짜 아래 계층으로 "이 바이트들을 내보내" 하고 넘기는 호출.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>IsNetResourceValid()</code>로 보낼 수 있는 상태인지 확인하고 → <code>SendBuffer.GetData()</code>와 <code>GetNumBits()</code>로 "무엇을, 얼마나" 보낼지 꺼내 → <code>LowLevelSend(...)</code>에 넘긴다. 즉 <strong>"봉투가 준비됐고 도로도 살아 있으면, 트럭에게 짐을 넘긴다."</strong></div>
 <p>읽는 순서대로 뼈대만:</p>
 <ol><li><strong>보낼 게 있냐 판단</strong> — 쌓인 비트가 있거나(<code>GetNumBits</code>), 보낼 ack가 있거나, keepalive 시간이 됐으면 진행. 아무것도 없으면 헛트럭 안 부른다.</li><li><strong>봉투 봉하기</strong> — 패킷 끝이라는 <strong>종료 비트</strong>를 마지막에 박아. 받는 쪽이 "여기까지가 이 패킷"이라고 알게. → <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a>에서 이 마지막 1비트를 되읽어 길이를 역산해(수신 §2의 그 트릭이 여기서 심어지는 거야). 송신·수신이 거울처럼 맞물리지.</li><li><strong><code>LowLevelSend(...)</code></strong> — 트럭 출발. 실제 소켓 write.</li></ol>
 <p>그리고 3번 — 아까 말했듯 여기 <code>UNetConnection::LowLevelSend</code>엔 본문이 없어(순수 가상).</p>
 <p><strong>[스니펫 6] LowLevelSend는 순수 가상 — <code>NetConnection.h:1045-1046</code></strong></p>
 <div class="code-block">	virtual void LowLevelSend(void* Data, int32 CountBits, FOutPacketTraits&amp; Traits)
 		PURE_VIRTUAL(UNetConnection::LowLevelSend,);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>virtual void LowLevelSend(void* Data, int32 CountBits, FOutPacketTraits&amp; Traits)</code><br>&bull;&nbsp;<strong><code>virtual</code></strong> = 자식 클래스가 자기 방식으로 갈아끼울 수 있는 함수라는 표시.<br>&bull;&nbsp;<strong><code>void</code></strong> = 이 함수는 호출한 쪽에 결과값을 돌려주지 않아.<br>&bull;&nbsp;<strong><code>void* Data</code></strong> = 타입을 아직 정하지 않은 원시 데이터 주소. "바이트 덩어리 시작점"으로 보면 돼.<br>&bull;&nbsp;<strong><code>int32 CountBits</code></strong> = 보낼 데이터 길이. 바이트가 아니라 <strong>비트 수</strong>로 센다.<br>&bull;&nbsp;<strong><code>FOutPacketTraits&amp; Traits</code></strong> = 패킷 성격표를 원본으로 넘김. <code>&amp;</code>라서 복사본이 아니라 같은 상자를 같이 보는 거야.<br>&bull;&nbsp;<strong><code>PURE_VIRTUAL(...)</code></strong> = 부모에는 본문이 없고, 자식이 반드시 실제 일을 채워야 한다는 UE식 표시.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>virtual</code>(자식이 구현) → <code>void</code>(돌려줄 값 없음) → <code>LowLevelSend(void* Data, int32 CountBits, FOutPacketTraits&amp; Traits)</code>(데이터 시작점, 비트 길이, 패킷 성격표를 받음) → <code>PURE_VIRTUAL</code>(부모 본문 없음). 이어 읽으면 <strong>"UNetConnection은 입구만 정하고, 진짜 소켓 전송은 자식 연결 클래스가 맡는다."</strong></div>
 <p><code>UIpConnection</code> 같은 자식이 진짜 <code>sendto</code>를 해. 스니펫 5의 주석도 *"각 자식 클래스가 매번 구현 안 해도 되게 FlushNet에서 체크한다"*고 되어 있지 — 소켓 유효성 검사 같은 공통 처리는 부모가 한 번에 하고, 진짜 write만 자식에게 맡기는 구조야.</p>
 <p>flush가 끝나면 시퀀스 번호를 올리고 통계를 갱신한 뒤, 우체통을 비워서 다음 편지 받을 준비를 해 → <code>InitSendBuffer</code>. <strong>malloc 새로 안 하고 Reset만</strong> 한다(커넥션당 우체통은 딱 1개니까 재사용). 매 패킷마다 할당 안 생기는 이유야 — 게임 서버에서 alloc 신경 쓰는 너라면 이 디테일 좋아할 거다.</p>
 <hr>

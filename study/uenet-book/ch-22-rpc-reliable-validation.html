@@ -58,6 +58,7 @@ a.xref:hover { background:#bbdefb; }
 <p>이 추상 개념을 <strong>실제로 구현하는 게</strong> 아래 세 파일이야.</p>
 <ul><li><code>NetDriver.cpp</code> — 보낼 때 reliable/unreliable가 갈리는 곳</li><li><code>DataChannel.cpp</code> — 받을 때 순서를 붙잡아두는 곳</li><li><code>DataReplication.cpp</code> + <code>Character.cpp</code> — 받아서 검증하고 실행하는 곳</li></ul>
 <p>하나씩 코드로 보자. 낮은 계단부터.</p>
+<p>지금부터 진짜 C++ 코드가 나오는데, 겁먹지 마. 여기서는 코드를 외우는 게 아니라 "어디에 도장을 찍고, 어디서 막는지"만 눈에 잡으면 돼.</p>
 <hr>
 </div>
 <div class="conversation"><h2>1단계 — reliable이냐 아니냐는 어디서 정해지나</h2>
@@ -70,6 +71,8 @@ a.xref:hover { background:#bbdefb; }
 	{
 		Bunch.bReliable = 1;
 	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>Function-&gt;FunctionFlags &amp; FUNC_NetReliable</code><br>&bull;&nbsp;<strong><code>//</code></strong> = 컴퓨터가 읽는 명령이 아니라 사람이 읽는 메모. "여기부터 신뢰성 처리야"라고 붙여둔 쪽지야.<br>&bull;&nbsp;<strong><code>Function-&gt;FunctionFlags</code></strong> = 이 RPC 함수에 붙은 표시표들을 꺼내 보는 것. <code>Reliable</code>, <code>Server</code> 같은 딱지가 여기 들어 있어.<br>&bull;&nbsp;<strong><code>-&gt;</code></strong> = "그 물건 안에 있는 것을 꺼내 봐"라는 화살표. <code>Function</code> 안의 <code>FunctionFlags</code>를 보는 거야.<br>&bull;&nbsp;<strong><code>&amp; FUNC_NetReliable</code></strong> = 여러 딱지 중에서 <code>Reliable</code> 딱지만 콕 집어 확인하는 비트 검사.<br>&bull;&nbsp;<strong><code>if (...)</code></strong> = 괄호 안 말이 맞으면 아래 중괄호 안을 실행해.<br>&bull;&nbsp;<strong><code>Bunch.bReliable = 1</code></strong> = 이 번치에 "reliable 맞음" 도장을 찍는 줄. <code>1</code>은 켜짐이야.<br>&bull;&nbsp;<strong><code>;</code></strong> = 한 문장이 끝났다는 마침표.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Function-&gt;FunctionFlags</code>에서 함수의 딱지들을 꺼내고, <code>&amp; FUNC_NetReliable</code>로 Reliable 딱지가 있는지 본다. 있으면 <code>Bunch.bReliable = 1</code>로 번치에 등기우편 도장을 찍는다. 이 한 줄 때문에 뒤에서 순서 보장과 재전송 규칙이 따라붙어.</div>
 <p>이게 전부야. <code>UFUNCTION</code>에 <code>Reliable</code>을 붙이면 UHT(언리얼 헤더툴)가 그 함수에 <code>FUNC_NetReliable</code> 플래그를 심어놓고, 보낼 때 이 <code>if</code> 하나가 <code>Bunch.bReliable = 1</code>로 도장을 찍어. 안 붙였으면 이 도장이 안 찍히고, 그냥 unreliable 번치가 돼.</p>
 <p><strong>여기서 하나 맞춰봐.</strong> unreliable RPC를 보내려는데 마침 연결이 꽉 막혀서(회선 포화) 지금 못 보낼 상황이야. UE는 어떻게 할까? (a) 큐에 쌓아뒀다가 나중에 보낸다 (b) 그냥 버린다</p>
 <p>...정답은 <strong>(b) 버린다</strong>야. <code>NetDriver.cpp:2929</code>를 보면 <code>!(FUNC_NetReliable) &amp;&amp; !(FUNC_NetMulticast) &amp;&amp; !Connection-&gt;IsNetReady()</code>일 때 이번 unreliable RPC를 드롭해버려. "신뢰 안 하기로 한 놈"이니까 미련 없이 버리는 거지. 이게 unreliable의 정체성이야. 반대로 reliable이면 절대 안 버려. 무슨 수를 써서라도 보내려고 해.</p>
@@ -88,6 +91,8 @@ a.xref:hover { background:#bbdefb; }
 		{
 			// The connection has overflowed the reliable buffer. We cannot recover from this. Disconnect this user.
 			UE_LOG(LogNet, Warning, TEXT("Closing connection. Can't send function '%s' on '%s': Reliable buffer overflow. FieldCache-&gt;FieldNetIndex: %d Max %d. Ch MaxPacket: %d."), *GetNameSafe(Function), *GetFullNameSafe(TargetObj), FieldCache-&gt;FieldNetIndex, ClassCache-&gt;GetMaxIndex(), Ch-&gt;Connection-&gt;MaxPacket );</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — reliable 버퍼가 넘쳤을 때<br>&bull;&nbsp;<strong><code>!Bunch.bReliable</code></strong> = <code>Bunch.bReliable</code>이 꺼져 있으면. 앞의 <code>!</code>는 "아니면"이라는 뜻이야.<br>&bull;&nbsp;<strong><code>else</code></strong> = 위 <code>if</code>가 아니면 이쪽. 여기서는 "unreliable이 아니면" = reliable이면.<br>&bull;&nbsp;<strong><code>UE_LOG(...)</code></strong> = 언리얼 로그 창에 메시지를 찍는 함수.<br>&bull;&nbsp;<strong><code>LogNet</code></strong> = 네트워크 쪽 로그 칸.<br>&bull;&nbsp;<strong><code>Warning</code></strong> = 치명적 종료는 아니지만 위험하다고 알려주는 등급.<br>&bull;&nbsp;<strong><code>TEXT("...")</code></strong> = 문자열을 언리얼 방식으로 감싸는 포장지.<br>&bull;&nbsp;<strong><code>%s</code>, <code>%d</code></strong> = 나중에 실제 이름이나 숫자가 들어갈 빈칸. <code>%s</code>는 글자, <code>%d</code>는 숫자야.<br>&bull;&nbsp;<strong><code>*GetNameSafe(Function)</code></strong> = 안전하게 이름을 구한 다음, 로그가 먹을 수 있는 글자 포인터로 꺼내 주는 모양.<br>&bull;&nbsp;<strong><code>Ch-&gt;Connection-&gt;MaxPacket</code></strong> = <code>Ch</code> 안의 <code>Connection</code>, 그 안의 <code>MaxPacket</code>까지 화살표를 타고 들어가 보는 것.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>if (!Bunch.bReliable)</code>이면 unreliable이라서 <code>UE_LOG(... Warning ...)</code>만 남기고 넘어갈 수 있다. 하지만 <code>else</code> 쪽은 reliable이니까, 주석 그대로 <code>We cannot recover from this</code> 상황이 된다. 그래서 같은 버퍼 넘침이라도 unreliable은 경고, reliable은 연결 종료로 이어지는 거야.</div>
 <p>주석이 다 말해줘. unreliable이면 <code>Not reliable, so not fatal</code> — 경고만 찍고 넘어가. 근데 reliable이면 <code>We cannot recover from this. Disconnect this user.</code> — <strong>연결을 끊어버려.</strong></p>
 <p>왜? reliable은 "순서대로 다 전달"이 약속인데, 봉투 하나가 증발하면 그 뒤 순서가 전부 무너져. 이건 복구가 안 돼. 그래서 차라리 유저를 끊는 거야. 이게 등기우편의 대가고, "모든 걸 reliable로 쓰면 안 되는" 이유야. 초당 수십 번 나가는 이동 정보 같은 건 unreliable로 보내야 하는 거지(잃어버려도 다음 프레임에 새 좌표가 오니까).</p>
 <div class="note">재전송/ACK가 실제로 어떻게 도는지 → <a class="xref" href="ch-07-reliability-ack.html">reliability-ack</a></div>
@@ -103,6 +108,8 @@ a.xref:hover { background:#bbdefb; }
 		check( !Connection-&gt;IsInternalAck() );
 		// If this bunch has a dependency on a previous unreceived bunch, buffer it.
 		checkSlow(!Bunch.bOpen);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>Bunch.ChSequence != Connection-&gt;InReliable[ChIndex] + 1</code><br>&bull;&nbsp;<strong><code>Bunch.bReliable &amp;&amp; ...</code></strong> = "이 번치가 reliable이고, 그리고 뒤 조건도 맞으면". <code>&amp;&amp;</code>는 둘 다 맞아야 통과하는 문이야.<br>&bull;&nbsp;<strong><code>ChSequence</code></strong> = 이 채널에서 번치가 몇 번째인지 적은 순번표.<br>&bull;&nbsp;<strong><code>!=</code></strong> = 같지 않다. "기대한 번호가 아니네?"를 보는 기호야.<br>&bull;&nbsp;<strong><code>Connection-&gt;InReliable[ChIndex]</code></strong> = 이 연결에서, 이 채널(<code>ChIndex</code>)이 마지막으로 제대로 받은 reliable 순번.<br>&bull;&nbsp;<strong><code>[ChIndex]</code></strong> = 여러 칸짜리 서랍에서 <code>ChIndex</code>번 칸을 꺼내는 표시.<br>&bull;&nbsp;<strong><code>+ 1</code></strong> = 마지막으로 받은 번호 바로 다음 번호. 5까지 받았으면 다음은 6.<br>&bull;&nbsp;<strong><code>check(...)</code></strong> = 개발 중에 "이 조건은 꼭 맞아야 해"라고 확인하는 안전핀.<br>&bull;&nbsp;<strong><code>checkSlow(...)</code></strong> = 느릴 수 있어서 더 무거운 검사에 붙는 안전핀.<br>&bull;&nbsp;<strong><code>!Bunch.bOpen</code></strong> = 이 번치가 채널을 새로 여는 번치가 아니어야 한다는 뜻.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Bunch.bReliable</code>인 번치만 순번 검사를 받는다. <code>Bunch.ChSequence</code>가 <code>InReliable[ChIndex] + 1</code>과 다르면 "다음 차례가 아닌 번치"라서 이 <code>if</code> 안으로 들어온다. 코드는 여기서 바로 뜯지 말고, 앞 순번이 올 때까지 붙잡아둘 준비를 하는 거야.</div>
 <p><code>Connection-&gt;InReliable[ChIndex] + 1</code> — 이게 "다음에 와야 할 순번"이야. 5번까지 처리했으면 다음은 6번이어야 해. 근데 7번이 먼저 도착하면? <code>ChSequence(7) != InReliable(5)+1(6)</code> 이니까 이 <code>if</code>에 걸려서 <strong>버퍼링</strong>돼. 주석 그대로 <code>buffer it</code>. 6번이 도착할 때까지 7번을 대기시켜.</p>
 <p>이게 "순서 보장"의 진짜 모습이야. 마법이 아니라, 순번 비교 한 줄 + 안 맞으면 대기열에 넣기. 6번이 오는 순간 6번, 7번 순서대로 풀려나가는 거지.</p>
 <div class="note">번치가 어떻게 다음 것과 이어지는지 자세히 → <a class="xref" href="ch-04-datachannel-nextbunch.html">datachannel-nextbunch</a></div>
@@ -125,6 +132,8 @@ a.xref:hover { background:#bbdefb; }
 		UE_LOG(LogRep, Error, TEXT("Rejected client RPC function due to access rights. Object: %s, Function: %s"), *Object-&gt;GetFullName(), *FunctionName.ToString());
 		HANDLE_INCOMPATIBLE_RPC
 	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — RPC 방향 검사<br>&bull;&nbsp;<strong><code>Function-&gt;FunctionFlags</code></strong> = 이 RPC 함수에 붙은 방향 딱지들. 서버용인지, 클라용인지, 멀티캐스트인지가 들어 있어.<br>&bull;&nbsp;<strong><code>FUNC_NetServer</code></strong> = "서버 RPC" 딱지. 클라가 서버에게 부탁하는 함수라는 표시야.<br>&bull;&nbsp;<strong><code>FUNC_NetClient</code></strong> = "클라이언트 RPC" 딱지. 서버가 특정 클라에게 시키는 함수라는 표시야.<br>&bull;&nbsp;<strong><code>FUNC_NetMulticast</code></strong> = 여러 클라에게 퍼지는 RPC 딱지.<br>&bull;&nbsp;<strong><code>&amp;</code></strong> = 여러 딱지 중 원하는 딱지가 붙었는지 콕 집어 보는 검사.<br>&bull;&nbsp;<strong><code>|</code></strong> = 여러 딱지를 한 묶음으로 합쳐서 "이 중 하나라도" 보려는 기호.<br>&bull;&nbsp;<strong><code>&amp;&amp; !bIsServer</code></strong> = 앞 조건도 맞고, 지금 실행하는 쪽이 서버가 아니면. <code>bIsServer</code> 앞의 <code>!</code>는 "서버가 아님"이야.<br>&bull;&nbsp;<strong><code>UE_LOG(LogRep, Error, ...)</code></strong> = 복제/RPC 쪽 로그에 에러를 찍는다.<br>&bull;&nbsp;<strong><code>HANDLE_INCOMPATIBLE_RPC</code></strong> = 방향이 틀린 RPC를 처리하는 매크로. 여기서 컷하는 절차를 대신 펼쳐 주는 이름표야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 첫 번째 <code>if</code>는 <code>FUNC_NetServer</code> 함수인데 지금 서버가 아니면 거절한다. 두 번째 <code>if</code>는 <code>FUNC_NetClient | FUNC_NetMulticast</code> 함수인데 지금 서버 쪽에서 받으면 거절한다. 핵심은 <code>FunctionFlags</code> 딱지와 <code>bIsServer</code> 실제 위치를 비교해서, 방향이 틀린 RPC를 실행 전에 잘라내는 거야.</div>
 <p><code>FUNC_NetServer</code>인데 나는 서버가 아니다(<code>!bIsServer</code>) → 거절. <code>FUNC_NetClient</code>인데 나는 서버다(<code>bIsServer</code>) → 거절. 방향이 어긋나면 <code>Rejected ... due to access rights</code> 로그 찍고 컷.</p>
 <h3>관문 2 — 값 검증 (WithValidation)</h3>
 <p>방향은 맞아. 근데 내용물이 정상 범위냐? 이게 WithValidation이 하는 일. 코드는 이렇게 흘러가.</p>
@@ -139,6 +148,8 @@ a.xref:hover { background:#bbdefb; }
 					CallProcessEventForReceivedRPC(Object, Function, Parms);
 				}
 			}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 검증 사유 슬롯을 비우고 실행하기<br>&bull;&nbsp;<strong><code>RPC_ResetLastFailedReason()</code></strong> = "방금 RPC 실패 이유 적어둔 칸"을 먼저 비우는 함수. 이전 실패 이유가 남아 있으면 헷갈리니까 지워.<br>&bull;&nbsp;<strong><code>{ ... }</code></strong> = 코드를 작은 방 하나로 묶는 중괄호. 여기서는 실행 호출 부분을 감싸고 있어.<br>&bull;&nbsp;<strong><code>Connection-&gt;Driver-&gt;IsExecuteRPCFunctionsEnabled()</code></strong> = 연결의 드라이버에게 "지금 RPC 함수 실행해도 돼?"라고 묻는 줄.<br>&bull;&nbsp;<strong><code>CallProcessEventForReceivedRPC(Object, Function, Parms)</code></strong> = 받은 RPC를 실제 언리얼 이벤트 실행 통로로 넘기는 함수.<br>&bull;&nbsp;<strong><code>Object</code></strong> = RPC를 받을 실제 객체.<br>&bull;&nbsp;<strong><code>Function</code></strong> = 실행할 함수 정보.<br>&bull;&nbsp;<strong><code>Parms</code></strong> = RPC가 들고 온 인자 꾸러미. 좌표, 시간, 플래그 같은 값들이 여기 들어 있어.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 먼저 <code>RPC_ResetLastFailedReason()</code>으로 실패 메모장을 깨끗이 비운다. 그다음 <code>IsExecuteRPCFunctionsEnabled()</code>가 허락하면 <code>CallProcessEventForReceivedRPC(Object, Function, Parms)</code>로 실제 실행 통로에 태운다. 이 통로 안에서 <code>_Validate</code>가 먼저 불릴 수 있다는 게 다음 포인트야.</div>
 <p><code>CallProcessEventForReceivedRPC</code> 안에서 <code>Object-&gt;ProcessEvent(...)</code>가 불려. 그리고 여기 함정이 하나 있어 — <code>WithValidation</code>을 붙이면 UHT가 만든 exec 스텁이 이 <code>ProcessEvent</code> 안에서 <strong>네가 짠 <code>함수명_Validate()</code>를 먼저 부른다.</strong> false가 나오면 "부정 클라"라고 판단하고 실패 사유를 슬롯에 세팅해. (스텁 생성 코드 자체는 <code>.gen.cpp</code>라 이 소스 트리엔 없어. 하지만 그 결과를 소비하는 코드는 바로 아래에 있어.)</p>
 <p><strong><code>Runtime/Engine/Private/DataReplication.cpp:1461-1465</code></strong> — 실행 후 슬롯을 확인:</p>
 <div class="code-block">		if (RPC_GetLastFailedReason() != nullptr)
@@ -146,6 +157,8 @@ a.xref:hover { background:#bbdefb; }
 			UE_LOG(LogRep, Error, TEXT("ReceivedRPC: RPC_GetLastFailedReason: %s"), RPC_GetLastFailedReason());
 			return false;
 		}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 실패 사유 확인<br>&bull;&nbsp;<strong><code>RPC_GetLastFailedReason()</code></strong> = 방금 RPC 처리 중 실패 이유가 적혔는지 꺼내 보는 함수.<br>&bull;&nbsp;<strong><code>nullptr</code></strong> = 아무것도 없음. 빈 주소, 빈 칸이라고 생각하면 돼.<br>&bull;&nbsp;<strong><code>!= nullptr</code></strong> = 빈 칸이 아니다. 즉 실패 이유가 뭔가 적혀 있다는 뜻.<br>&bull;&nbsp;<strong><code>UE_LOG(LogRep, Error, ...)</code></strong> = 복제/RPC 로그에 에러로 남긴다.<br>&bull;&nbsp;<strong><code>%s</code></strong> = 실패 이유 글자가 들어갈 자리.<br>&bull;&nbsp;<strong><code>return false</code></strong> = "이 RPC 처리 실패"라고 위로 돌려보내며 여기서 끝낸다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>RPC_GetLastFailedReason() != nullptr</code>이면 실패 이유 칸이 비어 있지 않다는 뜻이다. 그러면 <code>UE_LOG</code>로 이유를 찍고 <code>return false</code>로 실패를 돌려준다. <code>_Validate</code>가 false를 냈든, 언팩이 거부됐든, 여기서 "실행 성공 아님"으로 확정되는 거야.</div>
 <p><code>RPC_GetLastFailedReason()</code>이 null이 아니다 = 아까 <code>_Validate</code>가 false를 뱉었거나 언팩 거부됐다 = 검증 실패. 그러면 로그 찍고 <code>return false</code>. 이 <code>false</code>가 상위로 올라가면 결국 그 연결을 정리하는 쪽으로 이어져. "검증 실패"가 런타임에서 실제로 소비되는 지점이 바로 여기야.</p>
 <h3>그럼 <code>_Validate</code>는 실제로 어떻게 생겼나</h3>
 <p>말로만 하면 안 믿기지. 실물 보자. 캐릭터 이동 RPC의 검증 함수야.</p>
@@ -154,6 +167,8 @@ a.xref:hover { background:#bbdefb; }
 {
 	return GetCharacterMovement()-&gt;ServerMove_Validate(TimeStamp, InAccel, ClientLoc, CompressedMoveFlags, ClientRoll, View, ClientMovementBase, ClientBaseBoneName, ClientMovementMode);
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>ServerMove_Validate</code><br>&bull;&nbsp;<strong><code>bool</code></strong> = 참/거짓을 돌려주는 함수. 여기서는 "이 이동 요청을 믿어도 돼?"의 답이야.<br>&bull;&nbsp;<strong><code>ACharacter::</code></strong> = <code>ACharacter</code> 클래스에 속한 함수라는 표시. <code>::</code>는 "~소속"이라고 읽으면 돼.<br>&bull;&nbsp;<strong><code>ServerMove_Validate</code></strong> = <code>ServerMove</code> RPC의 검증 담당 함수. <code>_Validate</code>가 붙으면 문지기 역할이야.<br>&bull;&nbsp;<strong><code>float TimeStamp</code></strong> = 소수점 시간이 들어오는 인자. 클라가 "이때 움직였어"라고 보낸 시간표야.<br>&bull;&nbsp;<strong><code>FVector_NetQuantize10 InAccel</code></strong> = 네트워크용으로 줄여 담은 가속도 벡터.<br>&bull;&nbsp;<strong><code>uint8</code> / <code>uint32</code></strong> = 정수 크기 표시. <code>uint8</code>은 작은 숫자 칸, <code>uint32</code>는 더 큰 숫자 칸이야.<br>&bull;&nbsp;<strong><code>UPrimitiveComponent* ClientMovementBase</code></strong> = 이동 기준이 되는 컴포넌트를 가리키는 포인터. <code>*</code>는 "실물 위치를 가리키는 표식" 정도로 보면 돼.<br>&bull;&nbsp;<strong><code>return ...</code></strong> = 아래 함수에게 물어본 결과를 그대로 돌려준다.<br>&bull;&nbsp;<strong><code>GetCharacterMovement()-&gt;ServerMove_Validate(...)</code></strong> = 캐릭터 이동 담당 객체에게 진짜 검사를 맡기는 줄.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 함수는 <code>bool</code>이라서 통과/실패만 대답한다. <code>ACharacter::ServerMove_Validate(...)</code>가 클라의 이동 값들을 받고, <code>GetCharacterMovement()-&gt;ServerMove_Validate(...)</code>에게 "이 이동 괜찮아?"라고 넘긴다. 돌아온 답이 false면 <code>_Implementation</code>까지 못 간다.</div>
 <p>클라가 보낸 이동 파라미터(가속, 위치 등)를 받아서 <code>CharacterMovement</code>한테 "이 값 정상이야?"라고 물어봐. <code>bool</code>을 반환하고, false면 실행 안 돼.</p>
 <p>바로 위에 짝꿍인 <code>_Implementation</code>도 있어 — <strong><code>Character.cpp:1868-1872</code></strong>:</p>
 <div class="code-block">// ServerMove
@@ -161,6 +176,8 @@ void ACharacter::ServerMove_Implementation(float TimeStamp, FVector_NetQuantize1
 {
 	GetCharacterMovement()-&gt;ServerMove_Implementation(TimeStamp, InAccel, ClientLoc, CompressedMoveFlags, ClientRoll, View, ClientMovementBase, ClientBaseBoneName, ClientMovementMode);
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>ServerMove_Implementation</code><br>&bull;&nbsp;<strong><code>void</code></strong> = 값을 돌려주지 않는 함수. 여기서는 "검사 결과"가 아니라 실제 일을 하는 몸통이야.<br>&bull;&nbsp;<strong><code>ServerMove_Implementation</code></strong> = <code>ServerMove</code> RPC의 실제 실행 담당 함수. <code>_Implementation</code>은 "진짜 처리"라고 읽으면 돼.<br>&bull;&nbsp;<strong><code>GetCharacterMovement()</code></strong> = 캐릭터 이동을 관리하는 부품을 가져오는 함수.<br>&bull;&nbsp;<strong><code>-&gt;ServerMove_Implementation(...)</code></strong> = 그 이동 부품 안의 실제 이동 처리 함수를 호출하는 화살표.<br>&bull;&nbsp;<strong><code>TimeStamp, InAccel, ClientLoc, ...</code></strong> = <code>_Validate</code>에서 본 것과 같은 이동 요청 값들. 검사와 실행이 같은 재료를 본다는 뜻이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>_Validate</code>는 <code>bool</code>로 "해도 돼?"를 묻는 문지기였고, <code>_Implementation</code>은 <code>void</code>로 실제 이동 처리를 맡기는 몸통이다. 이 코드는 <code>GetCharacterMovement()</code>에게 같은 인자 꾸러미를 넘겨서 진짜 이동 로직을 실행하게 한다.</div>
 <p>구조가 딱 보이지? 같은 이름에 접미사만 달라.</p>
 <ul><li><code>_Validate</code> → "이 값 써도 돼?" (bool 반환, 문지기)</li><li><code>_Implementation</code> → "실제로 이 값으로 이동시켜" (진짜 몸통)</li></ul>
 <p>네가 <code>UFUNCTION(Server, Reliable, WithValidation)</code>이라고 선언하면, 원본 함수명(<code>ServerMove</code>)은 UHT가 자동 배선용으로 가져가고, 너는 <code>ServerMove_Validate</code>(문지기)랑 <code>ServerMove_Implementation</code>(로직) 두 개를 직접 짜는 거야. <strong><code>_Validate</code>가 통과해야만 <code>_Implementation</code>이 실행돼.</strong></p>
@@ -170,6 +187,8 @@ void ACharacter::ServerMove_Implementation(float TimeStamp, FVector_NetQuantize1
 	// Can't really validate the bit stream without unpacking, and that is done in ServerMovePacked_ServerReceive() and can be rejected after unpacking.
 	return true;
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — packed 이동 검증<br>&bull;&nbsp;<strong><code>const</code></strong> = 이 함수 안에서 <code>PackedBits</code> 내용을 바꾸지 않겠다는 약속.<br>&bull;&nbsp;<strong><code>FCharacterServerMovePackedBits&amp; PackedBits</code></strong> = 캐릭터 이동 정보를 비트로 꽉 눌러 담은 꾸러미를 원본 그대로 받는다는 뜻. <code>&amp;</code>는 복사본 말고 원본을 받는 표시야.<br>&bull;&nbsp;<strong><code>// Can't really validate...</code></strong> = "풀기 전에는 제대로 검증하기 어렵다"는 사람용 주석.<br>&bull;&nbsp;<strong><code>return true</code></strong> = 이 단계에서는 일단 통과시킨다는 뜻. "항상 믿는다"가 아니라 "검사는 나중 단계에서 한다"에 가까워.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>ServerMovePacked_Validate</code>는 <code>PackedBits</code>라는 압축 비트 꾸러미를 받는다. 주석 말대로 아직 풀기 전이라 여기서 세밀 검증을 못 하니 <code>return true</code>로 통과시킨다. 대신 실제 거절은 <code>ServerMovePacked_ServerReceive()</code>처럼 비트를 푼 뒤 단계에서 할 수 있다는 이야기야.</div>
 <p>"비트스트림은 풀기 전엔 검증 못 해. 언팩은 <code>ServerMovePacked_ServerReceive()</code>에서 하고 거기서 거절 가능"이라고 주석이 직접 알려줘. 검증 시점이 항상 <code>_Validate</code>인 건 아니고, 못 하는 경우는 뒤로 미룬다는 것도 알아두면 좋아.</p>
 <hr>
 </div>

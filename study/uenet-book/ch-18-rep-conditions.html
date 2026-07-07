@@ -82,6 +82,7 @@ a.xref:hover { background:#bbdefb; }
  Parent에 저장     (bool 테이블)        (TBitArray)             (이 커넥션엔 안 감)</div>
 <p>한 문장 요약: <strong>등록해서 딱지를 붙여두고 → 커넥션 상황(RepFlags)으로 통과표를 만들고 → 통과 못 한 애들을 명단에 올리고 → 최종 전송 목록에서 빼버린다.</strong></p>
 <p>이제 각 단계를 실제 코드로 보자.</p>
+<p>지금부터 진짜 언리얼 코드가 나와. <strong>겁먹지 마</strong> — 낯선 기호는 코드 바로 아래 🔤 상자에서 풀고, 바로 이어서 "이제 다시 보자"로 한 번 더 읽어줄게. 여기서는 "딱지를 어디에 저장하고, 어떻게 표로 바꾸는가"만 따라가면 돼.</p>
 <hr>
 </div>
 <div class="conversation"><h2>4. [A단계] 등록 — 딱지를 Parent에 영구 저장</h2>
@@ -97,6 +98,8 @@ a.xref:hover { background:#bbdefb; }
 		// Store the condition on the parent in case we need it
 		RepParentCmd.Condition = LifetimeProp.Condition;
 		RepParentCmd.RepNotifyCondition = LifetimeProp.RepNotifyCondition;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>if (COND_Never == LifetimeProp.Condition) ... RepParentCmd.Condition = LifetimeProp.Condition;</code><br>&bull;&nbsp;<strong><code>//</code></strong> = 컴퓨터가 읽는 명령이 아니라, 사람이 보라고 적어둔 메모야.<br>&bull;&nbsp;<strong><code>if (...)</code></strong> = "괄호 안 조건이 맞으면 안쪽 일을 해라"는 문지기.<br>&bull;&nbsp;<strong><code>COND_Never</code></strong> = "절대 보내지 마" 딱지. 복제 조건 중 가장 강한 차단표야.<br>&bull;&nbsp;<strong><code>==</code></strong> = "왼쪽과 오른쪽이 같은가?"를 물어보는 비교.<br>&bull;&nbsp;<strong><code>.</code></strong> = 상자 안의 칸을 꺼내는 표시. <code>LifetimeProp.Condition</code>은 <code>LifetimeProp</code> 안의 <code>Condition</code> 칸.<br>&bull;&nbsp;<strong><code>continue</code></strong> = 지금 반복의 나머지는 건너뛰고, 다음 항목으로 넘어가라는 뜻.<br>&bull;&nbsp;<strong><code>=</code></strong> = 오른쪽 값을 왼쪽 칸에 넣기. <code>RepParentCmd.Condition</code> 칸에 조건 딱지를 저장해.<br>&bull;&nbsp;<strong><code>RepNotifyCondition</code></strong> = 값이 바뀌었을 때 알림 콜백을 부를 조건. 지금은 "복제 조건 옆에 같이 저장되는 알림 딱지" 정도로 보면 돼.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>if (COND_Never == LifetimeProp.Condition)</code>은 "절대 안 보낼 애면"이고, 안쪽 <code>continue</code>는 "셋업하지 말고 다음으로"야. 그 아래 <code>RepParentCmd.Condition = LifetimeProp.Condition</code>은 "나머지 애들은 Parent 칸에 조건 딱지를 박아둔다"로 읽으면 돼. 즉 이 블록은 <strong>안 보낼 애는 처음부터 빼고, 보낼 가능성이 있는 애만 조건표에 저장하는 입구</strong>야.</div>
 <p>읽는 법:</p>
 <ul><li><code>COND_Never</code>면 아예 <code>continue</code> — 절대 복제 안 될 애라 셋업조차 안 함. <strong>가장 싼 조건은 처음부터 배제.</strong></li><li>나머지는 <code>RepParentCmd.Condition</code>에 딱지를 저장. 이게 이후 <strong>모든 필터 판정의 원천</strong>이 돼. 한 번 심어두면 커넥션마다 계속 참조해.</li></ul>
 <p>즉 여기까지가 "정적" 단계야. 조건은 이 시점에 확정돼 Parent에 박힌다.</p>
@@ -111,6 +114,8 @@ a.xref:hover { background:#bbdefb; }
 		const bool bIsSimulated = RepFlags.bNetSimulated ? true : false;
 		const bool bIsPhysics = RepFlags.bRepPhysics ? true : false;
 		const bool bIsReplay = RepFlags.bReplay ? true : false;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>const bool bIsOwner = RepFlags.bNetOwner ? true : false;</code><br>&bull;&nbsp;<strong><code>const</code></strong> = 이 줄에서 정한 뒤에는 값을 바꾸지 않겠다는 약속.<br>&bull;&nbsp;<strong><code>bool</code></strong> = 참/거짓만 담는 작은 스위치. 켜짐(<code>true</code>) 또는 꺼짐(<code>false</code>).<br>&bull;&nbsp;<strong><code>bIsOwner</code></strong> = <code>b</code>로 시작하니까 보통 bool 변수야. "주인인가?"라는 예/아니오 칸.<br>&bull;&nbsp;<strong><code>RepFlags.bNetOwner</code></strong> = <code>RepFlags</code>라는 상황표 안의 <code>bNetOwner</code> 칸. "이 커넥션이 주인인가?"를 들고 있어.<br>&bull;&nbsp;<strong><code>? true : false</code></strong> = 삼항 연산자. 앞 조건이 참이면 <code>true</code>, 아니면 <code>false</code>를 고르라는 짧은 if문.<br>&bull;&nbsp;<strong><code>;</code></strong> = 이 한 줄 명령은 여기서 끝났다는 마침표.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>const bool bIsOwner = RepFlags.bNetOwner ? true : false;</code>는 "RepFlags에서 주인 여부를 꺼내서, 앞으로 안 바꿀 참/거짓 값 <code>bIsOwner</code>로 정리한다"야. 위 다섯 줄은 전부 같은 방식으로 <strong>커넥션 상황표를 읽기 쉬운 스위치 5개로 풀어놓는 준비 단계</strong>라고 보면 돼.</div>
 <p>이 5개 불리언(주인이냐 / 첫전송이냐 / 시뮬레이트냐 / 물리냐 / 리플레이냐)만으로 <strong>모든 COND_의 통과 여부</strong>를 계산해.</p>
 <p><strong><code>RepLayout.h:146-167</code> (verbatim)</strong></p>
 <div class="code-block">		ConditionMap[COND_None] = true;
@@ -134,6 +139,8 @@ a.xref:hover { background:#bbdefb; }
 		ConditionMap[COND_Custom] = true;
 		ConditionMap[COND_Dynamic] = true;
 		ConditionMap[COND_Never] = false;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>ConditionMap[COND_SkipOwner] = !bIsOwner;</code><br>&bull;&nbsp;<strong><code>ConditionMap[...]</code></strong> = 통과표에서 특정 칸 하나를 고르는 것. 대괄호 안의 <code>COND_</code>가 칸 번호야.<br>&bull;&nbsp;<strong><code>COND_None</code></strong> = 조건 없음. 누구에게나 통과.<br>&bull;&nbsp;<strong><code>!bIsOwner</code></strong> = <code>bIsOwner</code>를 뒤집기. 주인이면 false, 주인이 아니면 true.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = "그리고". 양쪽이 둘 다 true일 때만 true.<br>&bull;&nbsp;<strong><code>||</code></strong> = "또는". 양쪽 중 하나라도 true면 true.<br>&bull;&nbsp;<strong><code>( ... )</code></strong> = 먼저 묶어서 계산하라는 괄호. 산수에서 괄호 먼저 하는 것과 같아.<br>&bull;&nbsp;<strong><code>COND_Custom</code> / <code>COND_Dynamic</code></strong> = 여기선 일단 true로 통과시키고, 나중에 다른 추적기가 한 번 더 거르는 특별 딱지.<br>&bull;&nbsp;<strong><code>COND_Never</code></strong> = 여기서는 false. 통과표에서도 "절대 통과 못 함"으로 찍혀.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>ConditionMap[COND_OwnerOnly] = bIsOwner</code>는 "주인이면 OwnerOnly 통과", <code>ConditionMap[COND_SkipOwner] = !bIsOwner</code>는 "주인이 아니면 SkipOwner 통과"야. <code>&amp;&amp;</code>, <code>||</code>가 붙은 줄들은 조건을 두세 개 섞는 것뿐이고, 마지막 <code>COND_Never = false</code>는 "이 딱지는 무조건 막힘"이야. 결국 이 블록은 <strong>각 COND_ 딱지마다 오늘 이 커넥션에서 통과인지 아닌지를 미리 표에 적는 코드</strong>야.</div>
 <p>이거 딱 두 줄만 눈으로 따라가 봐. 나머지는 전부 같은 패턴이야.</p>
 <div class="code-block">		ConditionMap[COND_OwnerOnly] = bIsOwner;
 		ConditionMap[COND_SkipOwner] = !bIsOwner;</div>
@@ -168,6 +175,8 @@ a.xref:hover { background:#bbdefb; }
 			It.GetValue() = !ConditionMap[Parents[It.GetIndex()].Condition];
 		}
 	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>It.GetValue() = !ConditionMap[Parents[It.GetIndex()].Condition];</code><br>&bull;&nbsp;<strong><code>TStaticBitArray&lt;COND_Max&gt;</code></strong> = 크기가 정해진 bool 표. <code>COND_Max</code>만큼 칸을 만들어서 각 <code>COND_</code>의 통과 여부를 담아.<br>&bull;&nbsp;<strong><code>UE::Net::BuildConditionMapFromRepFlags(...)</code></strong> = <code>UE</code> 안의 <code>Net</code> 영역에 있는 함수 호출. <code>::</code>는 "~안에 있는"이라고 읽으면 돼.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = 둘 다 참이어야 통과. "동적 조건이 있고, 트래커도 유효하면"이라는 두 문을 모두 통과해야 해.<br>&bull;&nbsp;<strong><code>RepState-&gt;...</code></strong> = <code>RepState</code>가 가리키는 상자 안으로 들어가서 값을 꺼내는 화살표.<br>&bull;&nbsp;<strong><code>auto It = ...</code></strong> = 타입 이름이 길 때 컴파일러한테 "네가 알아서 타입 맞춰"라고 맡기는 선언.<br>&bull;&nbsp;<strong><code>++It</code></strong> = 반복자를 다음 칸으로 한 칸 이동.<br>&bull;&nbsp;<strong><code>It.GetIndex()</code></strong> = 지금 반복자가 가리키는 Parent 번호를 꺼내기.<br>&bull;&nbsp;<strong><code>Condition == COND_Dynamic</code></strong> = 조건 딱지가 동적인지 비교.<br>&bull;&nbsp;<strong><code>It.GetValue() = ...</code></strong> = 지금 칸의 값을 새로 써넣기. 여기서는 InactiveParents의 현재 비트를 바꿔.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 첫 줄은 RepFlags로 <code>ConditionMap</code> 통과표를 만들고, <code>for</code> 루프는 Parent 칸을 하나씩 돈다. 일반 조건이면 <code>Parents[It.GetIndex()].Condition</code>을 그대로 보고, Dynamic이면 <code>GetDynamicCondition()</code>으로 지금 조건을 다시 물어봐. 마지막 <code>It.GetValue() = !ConditionMap[Condition]</code>은 "통과표에서 false면 못 나감 명단에는 true로 적는다"야. 즉 이 코드는 <strong>통과표를 뒤집어서 InactiveParents 명단을 채우는 작업</strong>이야.</div>
 <p><code>else</code> 블록(일반 경로)만 보면 핵심 한 줄이야.</p>
 <div class="code-block">			It.GetValue() = !ConditionMap[Parents[It.GetIndex()].Condition];</div>
 <ul><li><code>Parents[...].Condition</code> — A단계에서 심어둔 그 딱지.</li><li><code>ConditionMap[딱지]</code> — 이 커넥션에서 통과냐? (true면 보냄)</li><li>앞에 <code>!</code> — <strong>뒤집어서</strong> InactiveParents 비트에 넣어.</li></ul>
@@ -184,6 +193,8 @@ a.xref:hover { background:#bbdefb; }
 		if (!InactiveParents[Cmd.ParentIndex])
 		{
 			OutProperties.Add(HandleIterator.Handle);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>if (!InactiveParents[Cmd.ParentIndex]) { OutProperties.Add(...) }</code><br>&bull;&nbsp;<strong><code>while (HandleIterator.NextHandle())</code></strong> = 다음 핸들이 있는 동안 계속 반복. 핸들이 떨어지면 멈춰.<br>&bull;&nbsp;<strong><code>const FRepLayoutCmd&amp; Cmd</code></strong> = <code>Cmd</code>를 읽기 전용으로, 복사하지 말고 원본 참조로 잡아두겠다는 뜻.<br>&bull;&nbsp;<strong><code>Cmds[HandleIterator.CmdIndex]</code></strong> = <code>Cmds</code> 배열에서 현재 핸들이 가리키는 명령 칸을 꺼내기.<br>&bull;&nbsp;<strong><code>!InactiveParents[...]</code></strong> = "못 나갈 명단에 없으면"이라는 뜻. <code>!</code>가 inactive를 active로 뒤집어 읽게 해줘.<br>&bull;&nbsp;<strong><code>Cmd.ParentIndex</code></strong> = 이 Cmd가 어느 Parent에 속하는지 알려주는 번호.<br>&bull;&nbsp;<strong><code>OutProperties.Add(...)</code></strong> = 최종으로 보낼 목록에 핸들을 하나 추가.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>while</code>은 바뀐 핸들을 하나씩 훑고, <code>Cmd</code>는 그 핸들의 Parent 번호를 알려줘. <code>if (!InactiveParents[Cmd.ParentIndex])</code>는 "그 Parent가 못 나갈 명단에 없으면"이고, 그때만 <code>OutProperties.Add(...)</code>로 보낼 목록에 넣어. 그래서 이 블록은 <strong>값을 지우는 코드가 아니라, 보낼 핸들 목록에서 조건 탈락자를 빼는 코드</strong>야.</div>
 <p><code>if (!InactiveParents[Cmd.ParentIndex])</code> — 명단에 <strong>없을 때만</strong>(<code>!inactive = active</code>) <code>OutProperties</code>에 추가. 명단에 오른 애는 이 조건에서 걸러져서 최종 전송 목록에 <strong>안 담겨.</strong> 그럼 그 프로퍼티는 이 커넥션엔 안 나가. 그게 조건부 복제의 실제 "차단" 동작이야.</p>
 <p>(값을 활성/비활성 두 버킷으로 나누는 앞단은 <code>RepLayout.cpp:2635</code> — <code>InactiveParents[Cmd.ParentIndex] ? OutInactiveProperties : OutActiveProperties</code>. 같은 비트배열을 삼항으로 분기할 뿐, 원리는 위와 똑같아.)</p>
 <p>여기서 꼭 짚을 것: <strong>필터링은 "값"이 아니라 "핸들 목록"에서 일어나.</strong> 값 자체를 지우거나 0으로 만드는 게 아니라, "이번에 보낼 핸들 리스트"에서 그 핸들을 골라 빼는 방식이야. 값은 그대로 있고, 그냥 이 커넥션 앞에선 목록에서 생략되는 것뿐.</p>
@@ -202,6 +213,8 @@ a.xref:hover { background:#bbdefb; }
 		TArray&lt;uint16&gt; NewInactiveChangeList;
 
 		FilterChangeList(InactiveChangelist, RepState-&gt;InactiveParents, NewInactiveChangeList, NewlyActiveChangelist);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>if (RepState-&gt;RepFlags.Value != RepFlags.Value) { RebuildConditionalProperties(...) }</code><br>&bull;&nbsp;<strong><code>//</code></strong> = 사람용 메모. 여기선 "필요하면 조건 상태를 다시 만든다"는 안내문.<br>&bull;&nbsp;<strong><code>RepState-&gt;RepFlags.Value</code></strong> = 저장해둔 예전 RepFlags 값을 꺼낸 것.<br>&bull;&nbsp;<strong><code>!=</code></strong> = 같지 않다. 예전 값과 지금 값이 다르면 true.<br>&bull;&nbsp;<strong><code>RebuildConditionalProperties(...)</code></strong> = 조건표와 못 나갈 명단을 다시 만드는 함수.<br>&bull;&nbsp;<strong><code>TArray&lt;uint16&gt;</code></strong> = <code>uint16</code> 숫자를 담는 UE식 리스트. 여기서는 핸들 번호 목록으로 보면 돼.<br>&bull;&nbsp;<strong><code>MoveTemp(...)</code></strong> = 통째로 옮겨 담기. 복사본을 만드는 게 아니라 기존 목록을 새 변수로 넘겨서 재사용해.<br>&bull;&nbsp;<strong><code>FilterChangeList(...)</code></strong> = changelist를 다시 걸러서 여전히 inactive인 것과 새로 active가 된 것을 나누는 함수.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>if (RepState-&gt;RepFlags.Value != RepFlags.Value)</code>는 "커넥션 상황표가 지난번과 달라졌나?"야. 달라졌을 때만 <code>RebuildConditionalProperties</code>로 통과표/못 나갈 명단을 다시 만들고, 기존 inactive changelist도 <code>FilterChangeList</code>로 다시 분류해. 즉 이 블록은 <strong>매번 새로 계산하지 않고, 상황이 바뀐 순간에만 조건 상태를 갈아끼우는 트리거</strong>야.</div>
 <p><code>if (RepState-&gt;RepFlags.Value != RepFlags.Value)</code> — 저장해둔 이전 RepFlags랑 지금 RepFlags를 통째로(<code>.Value</code>) 비교. <strong>다를 때만</strong> 통과표를 재구성(<code>RebuildConditionalProperties</code>)해. 커넥션 상황이 안 바뀌면 지난번 명단을 그대로 재활용. 앞에서 말한 "계산 몰아치기"가 이 가드로 완성되는 거야.</p>
 <hr>
 </div>

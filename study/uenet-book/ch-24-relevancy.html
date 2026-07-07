@@ -92,6 +92,7 @@ AActor::IsNetRelevantFor(...)                    ActorReplication.cpp:382
              기본 225,000,000 = (15000cm)² = 150m</div>
 <p>한 줄 요약: <strong><code>IsNetRelevantFor</code> = 예외로 먼저 답 내고, 안 나면 거리로 자른다.</strong></p>
 <hr>
+<p>지금부터 진짜 언리얼 C++가 나와. <strong>겁먹지 마</strong> — 낯선 기호는 코드 바로 아래 🔤 상자에서 하나씩 풀고, 우리는 <code>true</code>가 되는 길과 <code>false</code>가 되는 길만 보면 돼.</p>
 </div>
 <div class="conversation"><h2>2) 거리 컷의 심장 — DistSquared 한 줄</h2>
 <p>먼저 제일 밑바닥, 실제로 "가깝냐 머냐"를 재는 함수부터 봐. 놀랄 만큼 짧아.</p>
@@ -100,6 +101,8 @@ AActor::IsNetRelevantFor(...)                    ActorReplication.cpp:382
 {
 	return FVector::DistSquared(SrcLocation, GetActorLocation()) &lt; GetNetCullDistanceSquared();
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>bool AActor::IsWithinNetRelevancyDistance(const FVector&amp; SrcLocation) const</code><br>&bull;&nbsp;<strong><code>bool</code></strong> = 답이 <code>true</code>/<code>false</code> 둘 중 하나라는 뜻. 여기선 "관련 거리 안이야?"에 대한 예/아니오.<br>&bull;&nbsp;<strong><code>AActor::</code></strong> = <code>AActor</code>에 딸린 함수라는 소속 표시. <code>::</code>는 "~의 것"이라고 읽으면 돼.<br>&bull;&nbsp;<strong><code>const FVector&amp; SrcLocation</code></strong> = <code>SrcLocation</code>이라는 좌표 상자를 <strong>복사하지 않고 원본으로 빌려 보되</strong>, 안 바꾸겠다는 뜻. <code>FVector</code>는 3D 위치(x,y,z) 상자야.<br>&bull;&nbsp;<strong><code>return</code></strong> = 이 줄의 계산 결과를 함수의 답으로 돌려준다.<br>&bull;&nbsp;<strong><code>FVector::DistSquared(...)</code></strong> = 두 좌표 사이의 <strong>제곱 거리</strong>를 재는 도구. 진짜 거리 대신 제곱값으로 비교해서 빠르게 보려는 거야.<br>&bull;&nbsp;<strong><code>&lt;</code></strong> = 왼쪽 값이 오른쪽 값보다 작냐는 비교. 제곱 거리가 컷 기준보다 작으면 "가깝다".<br>&bull;&nbsp;<strong><code>const</code></strong> = 이 함수가 액터 자신을 고치지 않는다는 약속.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>bool</code>(예/아니오 답) → <code>AActor::IsWithinNetRelevancyDistance</code>(액터가 관련 거리 안인지 묻는 함수) → <code>DistSquared(SrcLocation, GetActorLocation())</code>(뷰어와 액터 사이 제곱 거리) → <code>&lt; GetNetCullDistanceSquared()</code>(컷 기준보다 작은가). 이어 읽으면 <strong>"뷰어와 액터가 컷 거리 안이면 true를 돌려주는 함수"</strong>야.</div>
 <p>읽는 법:</p>
 <ul><li><code>SrcLocation</code> = 뷰어(보는 사람)의 월드 좌표.</li><li><code>GetActorLocation()</code> = 이 액터의 월드 좌표.</li><li>둘 사이 <strong>제곱 거리</strong>가 컷 기준값보다 <strong>작으면</strong> → <code>true</code>(=AOI 안, 관련 있음).</li></ul>
 <p>여기서 초보가 딱 걸리는 게 하나 있어. <strong>왜 <code>DistSquared</code>(제곱 거리)냐?</strong> 그냥 거리 재서 비교하면 되잖아.</p>
@@ -114,6 +117,8 @@ AActor::IsNetRelevantFor(...)                    ActorReplication.cpp:382
 <p>그 비교 대상인 <code>GetNetCullDistanceSquared()</code>가 돌려주는 값이 어디서 세팅되는지 보자.</p>
 <p><strong>[E] 기본값 세팅 + 접근자</strong> — <code>Runtime/Engine/Private/Actor.cpp:310</code> 그리고 <code>6948-6959</code></p>
 <div class="code-block">	SetNetCullDistanceSquared(225000000.0f);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>SetNetCullDistanceSquared(225000000.0f);</code><br>&bull;&nbsp;<strong><code>SetNetCullDistanceSquared(...)</code></strong> = 네트워크 컬링 거리 기준값을 세팅하는 함수. 이름 끝의 <code>Squared</code>가 "제곱값을 넣어라"는 힌트야.<br>&bull;&nbsp;<strong><code>225000000.0f</code></strong> = 소수점 있는 <code>float</code> 숫자. 끝의 <code>f</code>는 "이 숫자는 float로 써"라는 표시야.<br>&bull;&nbsp;<strong><code>;</code></strong> = C++에서 한 문장 끝에 찍는 마침표.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 한 줄은 <strong>"이 액터의 기본 관련 거리 컷을 225,000,000이라는 제곱값으로 맞춰둔다"</strong>야. 뒤에서 이 숫자를 √로 풀면 15,000cm, 즉 150m가 되는 거고.</div>
 <div class="code-block">void AActor::SetNetCullDistanceSquared(float DistanceSq)
 {
 PRAGMA_DISABLE_DEPRECATION_WARNINGS 
@@ -127,6 +132,8 @@ PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	return NetCullDistanceSquared;
 PRAGMA_ENABLE_DEPRECATION_WARNINGS
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>SetNetCullDistanceSquared</code> / <code>GetNetCullDistanceSquared</code><br>&bull;&nbsp;<strong><code>void</code></strong> = 이 함수는 답을 돌려주지 않는다. 안에서 값만 바꿔놓고 끝.<br>&bull;&nbsp;<strong><code>float DistanceSq</code></strong> = 소수점 숫자 하나를 <code>DistanceSq</code>라는 이름으로 받는다. 여기선 "거리의 제곱값"이야.<br>&bull;&nbsp;<strong><code>NetCullDistanceSquared = DistanceSq</code></strong> = 오른쪽 값을 왼쪽 저장칸에 넣는다. 컷 기준 숫자를 실제 멤버 변수에 보관하는 줄.<br>&bull;&nbsp;<strong><code>float AActor::GetNetCullDistanceSquared() const</code></strong> = <code>AActor</code>의 컷 기준 제곱값을 <code>float</code>로 돌려주는 함수. <code>const</code>라서 읽기만 하고 액터는 안 바꿔.<br>&bull;&nbsp;<strong><code>return NetCullDistanceSquared</code></strong> = 저장해둔 컷 기준값을 그대로 답으로 내보낸다.<br>&bull;&nbsp;<strong><code>PRAGMA_DISABLE_DEPRECATION_WARNINGS</code></strong> = "이 구간에서는 낡은 방식 경고를 잠깐 꺼줘"라는 컴파일러 지시문. 게임 로직이 아니라 경고 스위치야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 위쪽 <code>Set...</code>은 <strong>컷 기준값을 저장</strong>하고, 아래쪽 <code>Get...</code>은 <strong>저장된 컷 기준값을 꺼내 돌려준다</strong>. 그래서 거리 비교 줄은 매번 숫자를 새로 만들지 않고 <code>GetNetCullDistanceSquared()</code>로 이 저장값을 읽어 쓰는 거야.</div>
 <p>기본값이 <code>225000000.0f</code>야. 이게 제곱값이라고 했지? 그럼 실제 거리로 되돌리면:</p>
 <div class="code-block">√225,000,000 = 15,000</div>
 <p>언리얼에서 길이 1단위(uu)는 <strong>1cm</strong>야. 그러니까 15,000cm = <strong>150m</strong>. 즉 <strong>"기본적으로 나한테서 150m 안쪽에 있는 액터만 나한테 보낸다"</strong> 는 뜻이야. 150m 밖 액터는 존재는 하지만 내 클라엔 안 와.</p>
@@ -152,6 +159,8 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	{
 		return false;
 	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>bool AActor::IsNetRelevantFor(...)</code><br>&bull;&nbsp;<strong><code>const AActor*</code></strong> = <code>AActor</code>를 가리키는 포인터인데, 그 액터를 여기서 고치지 않겠다는 뜻. <code>*</code>는 "실물 전체를 복사하지 말고 위치표만 들고 있다"에 가까워.<br>&bull;&nbsp;<strong><code>||</code></strong> = OR. 조건들 중 <strong>하나라도</strong> 참이면 전체가 참이야.<br>&bull;&nbsp;<strong><code>this == ViewTarget</code></strong> = "지금 이 액터가 카메라가 보고 있는 바로 그 대상이냐?"를 묻는 비교.<br>&bull;&nbsp;<strong><code>return true</code></strong> = "관련 있음. 이 커넥션에 보내도 됨"이라고 즉시 답하고 함수 종료.<br>&bull;&nbsp;<strong><code>else if</code></strong> = 앞 조건이 실패했을 때만 다음 조건을 이어서 검사한다.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = AND. 왼쪽도 참이고 오른쪽도 참이어야 통과. 여기선 플래그도 켜져 있고 <code>Owner</code>도 있어야 해.<br>&bull;&nbsp;<strong><code>Owner-&gt;IsNetRelevantFor(...)</code></strong> = 주인 액터한테 같은 질문을 넘긴다. <code>-&gt;</code>는 "그 포인터가 가리키는 것에게 시킨다"는 화살표야.<br>&bull;&nbsp;<strong><code>return false</code></strong> = "관련 없음. 보내지 마"라고 즉시 답하고 함수 종료.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 첫 <code>if</code>는 <code>bAlwaysRelevant || IsOwnedBy(...) || this == ViewTarget ...</code>라서 <strong>하나라도 특별한 이유가 있으면 바로 true</strong>야. 그게 아니고 <code>bNetUseOwnerRelevancy &amp;&amp; Owner</code>면 <strong>주인한테 판단을 맡기고</strong>, 그래도 아니면서 <code>bOnlyRelevantToOwner</code>면 <strong>주인이 아닌 사람에게는 false</strong>가 된다. 거리는 아직 한 번도 안 쟀지?</div>
 <p>첫 <code>if</code> 하나에 "무조건 보낸다" 케이스가 다섯 개 OR로 묶여 있어. 하나만 참이면 바로 <code>return true</code> — 거리는 쳐다도 안 봐.</p>
 <ul><li><code>bAlwaysRelevant</code> — "난 항상 관련 있어" 플래그. 게임모드, 매치 상태 같은 전역 액터가 이걸 켜. 지도 어디 있든 전원한테 감.</li><li><code>IsOwnedBy(ViewTarget)</code> / <code>IsOwnedBy(RealViewer)</code> — 이 액터의 주인이 지금 보는 사람이면. 예: 내 총알, 내 인벤토리 액터. 멀어도 주인한텐 보내야지.</li><li><code>this == ViewTarget</code> — 이 액터가 바로 "지금 카메라가 보고 있는 대상"이면. 내가 조종하는 폰이 화면 밖으로 잘리면 안 되잖아.</li><li><code>ViewTarget == GetInstigator()</code> — 이 액터를 유발한 주체가 곧 시야 대상이면(예: 내가 쏜 발사체의 instigator가 나).</li></ul>
 <p>그 다음 두 갈래:</p>
@@ -169,6 +178,8 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	return !GetDefault&lt;AGameNetworkManager&gt;()-&gt;bUseDistanceBasedRelevancy ||
 			IsWithinNetRelevancyDistance(SrcLocation);
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>if (!RootComponent)</code> / 마지막 <code>return</code><br>&bull;&nbsp;<strong><code>!RootComponent</code></strong> = <code>RootComponent</code>가 없다는 뜻. <code>!</code>는 "아님/없음/실패"를 뒤집어 묻는 표시야.<br>&bull;&nbsp;<strong><code>UE_LOG(LogNet, Warning, TEXT(...))</code></strong> = 네트워크 로그에 경고를 남긴다. <code>Warning</code>은 게임을 죽이는 <code>Fatal</code>이 아니라 "이상하니 알려줌"에 가까워.<br>&bull;&nbsp;<strong><code>*GetClass()-&gt;GetName()</code></strong> = 클래스 이름 문자열을 로그의 <code>%s</code> 자리에 넣기 위해 꺼내는 모양. 여기서 <code>-&gt;</code>는 "그 객체의 함수 호출", 앞의 <code>*</code>는 UE 문자열을 로그가 먹을 형태로 꺼내는 표시야.<br>&bull;&nbsp;<strong><code>GetDefault&lt;AGameNetworkManager&gt;()</code></strong> = <code>AGameNetworkManager</code>의 기본 설정 상자를 가져온다. 꺾쇠 <code>&lt;...&gt;</code> 안은 "어떤 종류의 기본값?"을 알려줘.<br>&bull;&nbsp;<strong><code>-&gt;bUseDistanceBasedRelevancy</code></strong> = 그 기본 설정 안의 거리 기반 관련성 스위치를 읽는다.<br>&bull;&nbsp;<strong><code>||</code></strong> = OR. 왼쪽이 참이면 오른쪽은 볼 필요도 없이 참이야.<br>&bull;&nbsp;<strong><code>IsWithinNetRelevancyDistance(SrcLocation)</code></strong> = 앞에서 본 거리 컷 함수. 컷 안이면 <code>true</code>, 밖이면 <code>false</code>.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 먼저 <code>if (!RootComponent)</code>로 <strong>위치 기준이 없으면 경고 찍고 false</strong>. 그 다음 마지막 줄은 <code>!bUseDistanceBasedRelevancy || IsWithinNetRelevancyDistance(...)</code>라서 <strong>거리 컬링을 꺼놨으면 그냥 true</strong>, 켜놨으면 <strong>거리 안에 들어올 때만 true</strong>야. 예외를 다 지나온 액터의 최종 문이 여기야.</div>
 <p>마지막 <code>return</code> 한 줄이 이 챕터의 결론이야. 풀어보면:</p>
 <div class="code-block">관련있음 = (거리기반컬링을 안 쓰거나) OR (거리 안에 들어왔거나)</div>
 <ul><li>왼쪽 <code>!...bUseDistanceBasedRelevancy</code> — 프로젝트가 거리 컬링 스위치를 <strong>꺼놨으면</strong> 이게 <code>true</code>라, OR 단락으로 <strong>거리 안 재고 그냥 관련 있음.</strong> "거리로는 안 자르겠다"는 설정.</li><li>오른쪽 <code>IsWithinNetRelevancyDistance</code> — 스위치가 켜져 있으면 그제야 §2의 그 <code>DistSquared</code> 비교를 실행. 가까우면 <code>true</code>, 멀면 <code>false</code>.</li></ul>
@@ -190,6 +201,8 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 
 	return false;
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>static FORCEINLINE_DEBUGGABLE bool IsActorRelevantToConnection(...)</code><br>&bull;&nbsp;<strong><code>static</code></strong> = 이 파일 안에서 쓰는 도우미 함수처럼 보면 돼. 액터 하나에 딸린 멤버 함수가 아니라 바깥 보조 함수야.<br>&bull;&nbsp;<strong><code>FORCEINLINE_DEBUGGABLE</code></strong> = 컴파일러에게 "짧게 펼쳐 넣어도 좋고, 디버그도 가능하게 해줘"라고 힌트 주는 UE 매크로.<br>&bull;&nbsp;<strong><code>const AActor* Actor</code></strong> = 검사할 액터를 가리키는 포인터. 여기서 액터를 고치지 않겠다는 <code>const</code>가 붙어 있어.<br>&bull;&nbsp;<strong><code>const TArray&lt;FNetViewer&gt;&amp; ConnectionViewers</code></strong> = 이 커넥션의 뷰어 목록을 원본으로 빌려 본다. <code>TArray&lt;X&gt;</code>는 X들이 줄 서 있는 리스트야.<br>&bull;&nbsp;<strong><code>for (...)</code></strong> = 목록을 처음부터 끝까지 하나씩 훑는 반복문.<br>&bull;&nbsp;<strong><code>viewerIdx++</code></strong> = 검사한 뒤 번호를 1 올린다. 다음 뷰어 칸으로 넘어가는 발걸음.<br>&bull;&nbsp;<strong><code>ConnectionViewers[viewerIdx]</code></strong> = 뷰어 목록에서 <code>viewerIdx</code>번째 칸을 꺼낸다. <code>[]</code>는 "몇 번째 칸"이야.<br>&bull;&nbsp;<strong><code>Actor-&gt;IsNetRelevantFor(...)</code></strong> = 액터에게 "이 뷰어에게 너 관련 있니?"라고 묻는다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>for</code>가 <code>ConnectionViewers</code>를 하나씩 돌고, 각 칸마다 <code>Actor-&gt;IsNetRelevantFor(...)</code>를 묻는다. 하나라도 <code>true</code>면 바로 <code>return true</code>; 끝까지 아무도 관심 없으면 마지막 <code>return false</code>. <strong>한 커넥션 안에 시야가 여러 개 있어도 하나라도 보면 보낸다</strong>는 코드야.</div>
 <p><code>ConnectionViewers</code> 가 여럿인 이유는 <strong>화면분할(split-screen)</strong> 때문이야. 한 커넥션(한 콘솔)에 두 명이 같이 붙어 플레이하면 시야가 둘. 그중 <strong>하나한테라도 관련 있으면 즉시 <code>true</code></strong> — "누구 하나라도 봐야 하면 보낸다." 아무한테도 관련 없어야 비로소 <code>false</code>.</p>
 <p>바로 위 함수 이름 붙은 주석도 정확히 그 말이야: *"Returns true if this actor should replicate to \*any\* of the passed in connections."*</p>
 <p>그리고 흥미로운 곳이 하나 더 있어. <strong>멀티캐스트 RPC</strong>를 쏘기 직전에도 (<code>NetDriver.cpp:8034</code> 근처) 똑같은 <code>IsNetRelevantFor</code>로 커넥션별 관련성을 <strong>다시</strong> 확인해. "전체에 방송(멀티캐스트)"이라고 해도 <strong>관련 없는 클라엔 안 쏴.</strong> 방송이 곧 전원 강제가 아니라, 관련성 필터를 한 번 더 거친다는 거지. RPC 종류가 헷갈리면 → <a class="xref" href="ch-21-rpc-types.html">rpc-types</a>.</p>
@@ -198,6 +211,8 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 <p><strong>[F] Pawn 오버라이드도 같은 거리컷으로 수렴</strong> — <code>Runtime/Engine/Private/Pawn.cpp:1273-1274</code></p>
 <div class="code-block">	return !GetDefault&lt;AGameNetworkManager&gt;()-&gt;bUseDistanceBasedRelevancy ||
 			IsWithinNetRelevancyDistance(SrcLocation);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>return !GetDefault&lt;AGameNetworkManager&gt;()-&gt;bUseDistanceBasedRelevancy || IsWithinNetRelevancyDistance(SrcLocation);</code><br>&bull;&nbsp;<strong><code>return</code></strong> = 이 계산 결과를 Pawn 관련성 판정의 최종 답으로 돌려준다.<br>&bull;&nbsp;<strong><code>!GetDefault&lt;AGameNetworkManager&gt;()-&gt;bUseDistanceBasedRelevancy</code></strong> = 전역 설정에서 거리 기반 관련성 스위치가 <strong>꺼져 있냐</strong>를 묻는 부분.<br>&bull;&nbsp;<strong><code>||</code></strong> = OR. 앞이 참이면 뒤를 안 봐도 참이고, 앞이 거짓이면 뒤 거리 검사를 본다.<br>&bull;&nbsp;<strong><code>IsWithinNetRelevancyDistance(SrcLocation)</code></strong> = Pawn도 결국 같은 거리 컷 함수로 들어간다는 뜻.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> Pawn만의 예외 규칙을 앞에서 처리했더라도, 마지막 문은 <strong>거리 컬링이 꺼져 있거나 OR 거리 안에 있으면 true</strong>야. Actor 기본판과 같은 문으로 빠져나온다는 말이 코드 한 줄에 그대로 보이지?</div>
 <p>[C]의 마지막 줄이랑 글자 하나 안 틀리고 똑같지? "예외 규칙은 클래스마다 다르게 추가하되, <strong>거리 컷이라는 최종 관문은 하나로 공유</strong>한다" — 이 설계가 예쁜 부분이야.</p>
 <hr>
 </div>

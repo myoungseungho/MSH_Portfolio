@@ -61,6 +61,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note"><strong>이 학습 트리에는 초점 대상인 <code>UIpNetDriver</code> / <code>UIpConnection</code>의 실제 소켓 코드가 미포함이야.</strong><br>&bull;&nbsp;왜? 언리얼에서 실제 소켓 구현체는 엔진 코어(<code>Runtime/Engine</code>)가 아니라 <strong><code>OnlineSubsystemUtils</code> 플러그인</strong>에 살아. 클래스 경로가 <code>[/Script/OnlineSubsystemUtils.IpNetDriver]</code>로 박혀 있는 게 그 증거야 (<code>ReplicationDriver.h:13</code>).<br>&bull;&nbsp;확인함: 이 트리에서 <code>find -iname "*IpNetDriver*"</code>, <code>grep -rln "UIpNetDriver"</code> 둘 다 실제 클래스 정의는 0건. 헤더 주석/경로 문자열에만 이름이 스쳐 지나가.<br>&bull;&nbsp;<strong>그래서 이 챕터는</strong>: 경계선 <strong>위쪽(계약, 여기 실재)</strong> 은 verbatim 코드로 못 박고, 경계선 <strong>아래쪽(소켓 몸통, 여기 없음)</strong> 은 "이런 게 저 아래 있다"고 개념으로만 가리킬 거야. <code>recvfrom</code>/<code>SendTo</code>를 실제로 부르는 줄은 이 클론에서 못 보여줘 — <strong>실제 대조가 필요하면 <code>OnlineSubsystemUtils</code> 소스를 따로 봐야 해.</strong></div>
 <p>재밌는 건, "여기 없다"는 사실 자체가 이 챕터의 핵심 교훈이라는 거야. 엔진 코어를 아무리 뒤져도 소켓이 안 나오는 이유 — 그게 바로 "코어는 소켓을 직접 안 만진다"는 UE의 설계 철학이거든. 없는 게 정상이야.</p>
 <hr>
+<p>지금부터 코드 조각이 나오지만 <strong>겁먹지 마</strong>. 여기서 볼 건 "소켓을 직접 보내는 코드"가 아니라, 왜 어떤 함수에는 몸통이 없고 어떤 함수는 다음 칸으로 넘기는지만 읽으면 돼.</p>
 </div>
 <div class="conversation"><h2>1) 왜 몸통을 비워둘까? — PURE_VIRTUAL 계약</h2>
 <p>먼저 딱 하나의 개념. <strong><code>PURE_VIRTUAL</code></strong>.</p>
@@ -70,16 +71,22 @@ a.xref:hover { background:#bbdefb; }
 class INetSender {
     virtual void SendRaw(void* data, int len) = 0;  // 선언만. IOCP send는 파생이 채움
 };</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>virtual void SendRaw(void* data, int len) = 0</code><br>&bull;&nbsp;<strong><code>class</code></strong> = 비슷한 기능을 한 묶음으로 담는 <strong>설계도</strong>. 여기선 "보내는 일을 할 물건"의 설계도야.<br>&bull;&nbsp;<strong><code>virtual</code></strong> = "자식 클래스가 이 함수를 <strong>자기 방식으로 갈아끼울 수 있다</strong>"는 표시.<br>&bull;&nbsp;<strong><code>void</code></strong> = 이 함수는 호출한 쪽에 <strong>답을 돌려주지 않는다</strong>는 뜻.<br>&bull;&nbsp;<strong><code>void*</code></strong> = "무슨 모양인지 아직 정하지 않은 주소표". 그냥 바이트 덩어리의 시작 위치라고 보면 돼.<br>&bull;&nbsp;<strong><code>int len</code></strong> = <code>len</code>이라는 정수 칸. 보낼 바이트가 몇 개인지 담는 숫자야.<br>&bull;&nbsp;<strong><code>= 0</code></strong> = "여기선 몸통을 안 만든다. 자식이 반드시 채워라"라는 순수 가상 함수 표시.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>class INetSender</code>는 "보내기 담당 설계도"이고, <code>virtual void SendRaw(...) = 0</code>은 "보내는 함수 이름만 정해둘 테니 실제 전송은 자식이 채워라"야. 즉 이 예시는 <strong>계약만 있고 트럭 운전은 없는 코드</strong>로 읽으면 돼.</div>
 <p>인터페이스에 선언만 있고, 실제 IOCP <code>WSASend</code>는 파생 클래스가 구현하는 그 구조 — UE도 완전히 똑같아.</p>
 <p>자, 이제 <strong>송신 계약</strong>의 실물을 봐. 이게 그 유명한 "가장 낮은 층", 채널·번들·PacketHandler 다 끝나고 최종 바이트가 도착하는 지점이야:</p>
 <p><strong><code>NetConnection.h:1044-1046</code></strong> — verbatim</p>
 <div class="code-block">	// @todo: Traits should be passed within bit readers/writers, eventually
 	virtual void LowLevelSend(void* Data, int32 CountBits, FOutPacketTraits&amp; Traits)
 		PURE_VIRTUAL(UNetConnection::LowLevelSend,);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>virtual void LowLevelSend(void* Data, int32 CountBits, FOutPacketTraits&amp; Traits)</code><br>&bull;&nbsp;<strong><code>virtual</code></strong> = "진짜 동작은 자식 클래스가 바꿔 끼울 수 있다"는 표시.<br>&bull;&nbsp;<strong><code>void</code></strong> = 답을 돌려주는 함수가 아니라, 그냥 <strong>보내는 행동만 하는 함수</strong>라는 뜻.<br>&bull;&nbsp;<strong><code>void* Data</code></strong> = 실제로 내보낼 바이트 덩어리의 <strong>시작 주소</strong>. 내용물 모양은 여기서 모른다.<br>&bull;&nbsp;<strong><code>int32 CountBits</code></strong> = 32비트 정수로 적은 <strong>비트 개수</strong>. 바이트가 아니라 비트 단위 길이라는 게 포인트야.<br>&bull;&nbsp;<strong><code>FOutPacketTraits&amp; Traits</code></strong> = 패킷의 부가 정보 봉투를 <strong>원본으로</strong> 넘겨받는다. <code>&amp;</code>는 복사본 말고 진짜 것을 만진다는 뜻.<br>&bull;&nbsp;<strong><code>PURE_VIRTUAL(...)</code></strong> = "이 함수는 코어에 몸통이 없다. 하위 클래스가 반드시 채워라"라는 UE식 계약 매크로.<br>&bull;&nbsp;<strong><code>UNetConnection::LowLevelSend</code></strong> = <code>UNetConnection</code>에 딸린 <code>LowLevelSend</code>라는 소속 표시. <code>::</code>는 "~의"라고 읽으면 돼.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 줄은 "커넥션은 <code>Data</code>를 <code>CountBits</code>만큼 낮은 층으로 보내야 한다고 약속하지만, 실제 소켓 전송 몸통은 여기 없다"야. <code>PURE_VIRTUAL</code>이 보이면 <strong>회사 규칙만 있고 기사는 아직 안 나온다</strong>고 읽으면 돼.</div>
 <p>봤지? <code>LowLevelSend</code>인데 <code>{ ... }</code>가 없어. <code>PURE_VIRTUAL(...)</code> 하나로 끝. <strong>몸통이 없다.</strong> 이게 "택배 회사는 규칙만 정한다"의 코드 버전이야. 실제로 이 <code>Data</code>를 소켓에 밀어넣는 건 <code>UIpConnection</code>(=이 트리에 없는 기사)이 채워.</p>
 <p>같은 패턴이 드라이버 레벨에도 있어. 소켓 서브시스템 자체를 뭘 쓸지 고르는 것도 코어는 안 정해:</p>
 <p><strong><code>NetDriver.h:1841</code></strong> — verbatim</p>
 <div class="code-block">	virtual class ISocketSubsystem* GetSocketSubsystem() PURE_VIRTUAL(UNetDriver::GetSocketSubsystem, return NULL;);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>virtual class ISocketSubsystem* GetSocketSubsystem() PURE_VIRTUAL(... return NULL;)</code><br>&bull;&nbsp;<strong><code>virtual</code></strong> = 드라이버 자식 클래스가 이 함수를 <strong>자기 플랫폼용으로 채운다</strong>는 뜻.<br>&bull;&nbsp;<strong><code>class ISocketSubsystem*</code></strong> = 소켓 서브시스템을 가리키는 <strong>주소표</strong>를 돌려준다는 뜻. <code>*</code>는 "실물 말고 그 실물이 있는 곳"을 가리켜.<br>&bull;&nbsp;<strong><code>GetSocketSubsystem()</code></strong> = "어떤 소켓 시스템을 쓸지 가져와"라는 함수 이름.<br>&bull;&nbsp;<strong><code>PURE_VIRTUAL</code></strong> = 여기서도 몸통 없음. 코어는 어떤 소켓을 쓸지 직접 모른다.<br>&bull;&nbsp;<strong><code>return NULL</code></strong> = 만약 잘못 불리면 "가리키는 게 아무것도 없음"을 돌려주라는 기본 대답.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>GetSocketSubsystem</code>은 "소켓 라이브러리 주소를 줘"라는 함수인데, 코어는 <code>PURE_VIRTUAL</code>로 비워둬. 이어 읽으면 <strong>"소켓 종류는 플랫폼별 기사 클래스가 정해라"</strong>가 된다.</div>
 <p>"어떤 소켓 라이브러리를 쓸지는 서브클래스가 정해라. 코어는 모른다." — 이 한 줄이 코어를 OS/플랫폼으로부터 완전히 떼어놓는 장치야. Windows든, PS5든, 스팀 소켓이든, 코어 코드는 하나도 안 바뀌어. 기사만 갈아끼우면 돼.</p>
 <hr>
 </div>
@@ -94,6 +101,8 @@ class INetSender {
  * If a packet is not from a connection that's already established, we treat is as "connectionless" and begin the handshaking process.
  *
  * See StatelessConnectionHandlerComponent.cpp for details on how this handshaking works.</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>UNetDriver::TickDispatch</code>, <code>FInternetAddr</code>, <code>UNetConnection::ReceivedRawPacket</code><br>&bull;&nbsp;<strong><code>UNetDriver::TickDispatch</code></strong> = <code>UNetDriver</code>에 딸린 <code>TickDispatch</code>. <code>::</code>는 "~소속"이고, 이 함수는 매 틱 네트워크 수신 쪽을 맡는 이름이야.<br>&bull;&nbsp;<strong><code>FInternetAddr</code></strong> = IP와 포트를 UE식으로 감싼 <strong>주소표 상자</strong>.<br>&bull;&nbsp;<strong><code>UNetConnection</code></strong> = "이미 알고 있는 상대와의 연결"을 나타내는 객체.<br>&bull;&nbsp;<strong><code>map from FInternetAddr to UNetConnection</code></strong> = 주소표를 넣으면 커넥션이 나오는 <strong>주소록</strong>. "이 주소 아는 손님이야?"를 여기서 찾는다.<br>&bull;&nbsp;<strong><code>UNetConnection::ReceivedRawPacket</code></strong> = 아는 커넥션이면 그 커넥션 소속의 <code>ReceivedRawPacket</code>으로 날바이트를 넘긴다는 뜻.<br>&bull;&nbsp;<strong><code>connectionless</code></strong> = 아직 커넥션이 없는 상태. "주소는 보이는데 회원 등록은 안 된 손님" 정도로 보면 돼.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 주석은 "패킷을 받으면 주소를 보고, 주소록에 있으면 그 커넥션의 <code>ReceivedRawPacket</code>으로 보내고, 없으면 connectionless 핸드셰이크로 간다"야. 소켓에서 <strong>어떻게</strong> 받는지는 말하지 않고, 받은 뒤 <strong>어디로</strong> 보낼지만 정한다.</div>
 <p>한 문장씩 풀면:</p>
 <ol><li><strong><code>TickDispatch</code>가 수신 담당이다.</strong> 매 프레임 불려서 소켓에 도착한 패킷을 꺼내와. (앞 챕터 <a class="xref" href="ch-11-netdriver-tick.html">netdriver-tick</a>에서 본 그 앞단 진입점 맞아.)</li><li>패킷을 받으면 <strong>송신자 주소(<code>FInternetAddr</code>)를 본다.</strong> 이게 IP+포트를 감싼 UE 추상 주소 타입이야.</li><li>드라이버는 <strong><code>FInternetAddr → UNetConnection</code> 맵</strong>을 유지해. 이 주소에서 온 패킷이 "이미 아는 커넥션"인지 판별하는 방법이 그냥 이 맵 조회야.</li><li><strong>이미 아는 커넥션이면</strong> → 그 커넥션의 <code>ReceivedRawPacket</code>으로 넘겨. (여기서부터가 앞 챕터들에서 배운 채널/번치 처리 흐름이야.)</li><li><strong>모르는 주소면</strong> → "connectionless"로 취급하고 핸드셰이크 시작. (자세한 건 <a class="xref" href="ch-09-handshake.html">handshake</a> 챕터로.)</li></ol>
 <p>여기서 잠깐, <strong>예측해봐</strong>: 그럼 저 주석에서 "소켓에서 실제로 바이트를 꺼내오는 <code>recvfrom</code> 호출"은 몇 번째 문장에 있을까?</p>
@@ -110,6 +119,8 @@ class INetSender {
 	 * also handles network simulation settings (simulated lag, packet loss, etc) unless bIgnoreSimulation is true
 	 */
 	ENGINE_API virtual void FlushNet(bool bIgnoreSimulation = false);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>ENGINE_API virtual void FlushNet(bool bIgnoreSimulation = false)</code><br>&bull;&nbsp;<strong><code>ENGINE_API</code></strong> = 이 함수가 엔진 모듈 밖에서도 보이게 하는 UE 표시. "다른 모듈도 이 문을 써도 됨" 정도야.<br>&bull;&nbsp;<strong><code>virtual</code></strong> = 필요하면 자식 클래스가 동작을 바꿔 끼울 수 있다는 표시.<br>&bull;&nbsp;<strong><code>void</code></strong> = 답을 돌려주는 함수가 아니라, 쌓인 데이터를 <strong>처리하고 끝나는 함수</strong>라는 뜻.<br>&bull;&nbsp;<strong><code>bool</code></strong> = 참/거짓만 담는 스위치.<br>&bull;&nbsp;<strong><code>bIgnoreSimulation</code></strong> = <code>b</code>로 시작하니까 보통 bool 스위치. "네트워크 시뮬레이션을 무시할까?"라는 값이야.<br>&bull;&nbsp;<strong><code>= false</code></strong> = 아무 말 안 하고 부르면 기본값은 <code>false</code>, 즉 시뮬레이션을 무시하지 않는 쪽.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>FlushNet(false)</code>는 "쌓인 데이터를 패킷으로 묶어 보내되, 기본적으로 네트워크 시뮬레이션 규칙도 적용한다"로 읽으면 돼. 여기엔 몸통이 있으니 <strong>포장 작업은 코어가 직접 한다</strong>는 뜻이야.</div>
 <p><code>FlushNet</code>은 쌓여 있던 데이터를 <strong>패킷 하나로 묶어서(bundling)</strong> <code>LowLevelSend()</code>로 보내. 덤으로 네트워크 시뮬레이션(일부러 랙/패킷로스 흉내내기 — 테스트용)도 여기서 처리해. 이건 <code>ENGINE_API virtual</code>에 몸통이 실제로 있는 함수야(계약이 아니라 구현). "봉투에 담는 일"은 코어가 직접 해.</p>
 <p>근데 그 봉투를 트럭에 싣는 마지막 한 걸음, <code>LowLevelSend</code>는? 위에서 봤듯이 <strong>PURE_VIRTUAL, 몸통 없음.</strong> 딱 여기가 경계선이야:</p>
 <div class="code-block">FlushNet (몸통 있음, 코어가 봉투 포장)
@@ -131,6 +142,8 @@ LowLevelSend (몸통 없음 ← 경계선 ← UIpConnection이 소켓 SendTo로 
 	 */
 	virtual void LowLevelSend(TSharedPtr&lt;const FInternetAddr&gt; Address, void* Data, int32 CountBits, FOutPacketTraits&amp; Traits)
 		PURE_VIRTUAL(UNetDriver::LowLevelSend,);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>virtual void LowLevelSend(TSharedPtr&lt;const FInternetAddr&gt; Address, void* Data, int32 CountBits, FOutPacketTraits&amp; Traits)</code><br>&bull;&nbsp;<strong><code>TSharedPtr&lt;...&gt;</code></strong> = 여러 곳이 같이 들고 있을 수 있는 <strong>주소표 손잡이</strong>. 아무도 안 쓰면 정리되는 UE 스마트 포인터야.<br>&bull;&nbsp;<strong><code>const FInternetAddr</code></strong> = 주소 내용은 <strong>읽기만 하고 바꾸지 않겠다</strong>는 약속.<br>&bull;&nbsp;<strong><code>Address</code></strong> = 아직 커넥션이 없으니 "누구한테 보낼지"를 주소로 직접 받는 칸.<br>&bull;&nbsp;<strong><code>void* Data</code></strong> = 보낼 바이트 덩어리의 시작 주소.<br>&bull;&nbsp;<strong><code>int32 CountBits</code></strong> = 보낼 데이터 길이. 여기서도 바이트가 아니라 <strong>비트 수</strong>야.<br>&bull;&nbsp;<strong><code>FOutPacketTraits&amp; Traits</code></strong> = 패킷 부가 정보를 원본으로 넘겨받는 칸. <code>&amp;</code>라서 복사본이 아니야.<br>&bull;&nbsp;<strong><code>PURE_VIRTUAL(UNetDriver::LowLevelSend,)</code></strong> = 드라이버도 "주소로 직접 보내는 계약"만 있고, 진짜 소켓 송신은 하위 클래스 몫.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 커넥션 버전은 "이미 아는 상대에게 보내기"였고, 이 드라이버 버전은 <code>Address</code>를 직접 받아 <strong>아직 커넥션 없는 상대에게도 쏠 수 있는 계약</strong>이야. 그래서 핸드셰이크 첫 응답 같은 길이 여기로 간다.</div>
 <p>왜 커넥션 버전이랑 드라이버 버전이 따로 필요할까? 답은 <strong>닭이 먼저냐 달걀이 먼저냐</strong>야. 최초 핸드셰이크 시점엔 아직 <code>UNetConnection</code> 객체가 <strong>없어</strong>. 아직 "이 상대가 누군지" 성립 전이니까. 근데 뭔가는 보내야 핸드셰이크가 시작되잖아. 그래서 커넥션 없이 <strong>주소만 보고 직접 쏘는</strong> 통로가 드라이버에 별도로 있는 거야. 시그니처 차이를 봐 — 이쪽은 첫 인자가 <code>TShared Ptr&lt;const FInternetAddr&gt; Address</code>야. "누구한테"를 주소로 직접 지정하지. (이것도 PURE_VIRTUAL이라 실제 몸통은 역시 기사 몫.)</p>
 <h3>소켓 직전에 끼어드는 훅</h3>
 <p>마지막으로, 이 최하단 송신 바로 앞에 가로채기 델리게이트가 하나 걸려 있어. 알아두면 좋아:</p>
@@ -142,6 +155,8 @@ LowLevelSend (몸통 없음 ← 경계선 ← UIpConnection이 소켓 SendTo로 
  * @param bBlockSend	Whether or not to block the send (defaults to false)
 */
 DECLARE_DELEGATE_ThreeParams(FOnLowLevelSend, void* /*Data*/, int32 /*Count*/, bool&amp; /*bBlockSend*/);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>DECLARE_DELEGATE_ThreeParams(FOnLowLevelSend, void* /*Data*/, int32 /*Count*/, bool&amp; /*bBlockSend*/);</code><br>&bull;&nbsp;<strong><code>DECLARE_DELEGATE_ThreeParams</code></strong> = "인자 3개짜리 델리게이트 타입을 만든다"는 UE 매크로. 델리게이트는 나중에 끼워 넣을 수 있는 <strong>콜백 자리</strong>야.<br>&bull;&nbsp;<strong><code>FOnLowLevelSend</code></strong> = 새로 만드는 델리게이트 이름. "LowLevelSend 직전에 부를 훅"이라고 보면 돼.<br>&bull;&nbsp;<strong><code>void* /*Data*/</code></strong> = 보낼 데이터 시작 주소. <code>/*Data*/</code>는 사람에게 보여주는 이름표 주석이야.<br>&bull;&nbsp;<strong><code>int32 /*Count*/</code></strong> = 보낼 바이트 수를 담는 정수 칸.<br>&bull;&nbsp;<strong><code>bool&amp; /*bBlockSend*/</code></strong> = "보내기를 막을까?" 스위치를 원본으로 넘긴다. <code>&amp;</code>라서 콜백이 값을 바꾸면 바깥에도 반영돼.<br>&bull;&nbsp;<strong><code>;</code></strong> = 선언 한 줄이 여기서 끝난다는 마침표.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 줄은 "소켓으로 나가기 직전, <code>Data</code>와 <code>Count</code>를 보여주고 <code>bBlockSend</code>를 바꿀 기회를 주는 콜백 자리를 만든다"야. 그래서 <code>bBlockSend</code>가 켜지면 마지막 문 앞에서 전송을 멈출 수 있어.</div>
 <p>"소켓 레벨에서, PacketHandler 파싱까지 다 끝난 뒤" 나가기 직전 데이터를 훔쳐볼 수 있는 훅이야. <code>bBlockSend</code>를 <code>true</code>로 만들면 아예 안 나가게 막을 수도 있어. 디버깅/보안/패킷 검열 같은 데 쓰여. "정말 마지막 문 앞"이 어디인지 감이 오지?</p>
 <hr>
 </div>
