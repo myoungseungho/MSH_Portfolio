@@ -102,6 +102,9 @@ def main():
         slug = url.strip("/").split("/")[-1]
         if slug in EXCLUDE_SLUGS or slug.startswith("category-"):
             continue
+        # UE 네트워크 책: 개별 챕터(ch-NN-*)는 타임라인 제외 — 허브(uenet-book/) 1개만 노출(검색엔 남음)
+        if "uenet-book/ch-" in ("/" + url):
+            continue
         path = url_to_path(url)
         # 날짜 = git 최종 커밋일(실제 내용 변경 시점). 아직 커밋 전(작업트리 변경)이면 오늘.
         # mtime 은 git checkout/pull 이 리셋하므로 단독 사용 금지(안 바꾼 문서가 가짜 NEW 로 뜸).
