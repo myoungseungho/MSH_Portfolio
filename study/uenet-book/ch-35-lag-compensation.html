@@ -74,12 +74,15 @@ a.xref:hover { background:#bbdefb; }
 <div class="conversation"><h2>1. 되감기의 재료: "히트박스 히스토리" 버퍼</h2>
 <p>되감으려면 <strong>과거를 저장해둬야</strong> 돼. 없는 과거로는 못 돌아가.</p>
 <p>그래서 되감기 시스템의 1번 부품은 <strong>히트박스 히스토리(hitbox history)</strong> — 서버가 매 틱마다 모든 액터의 위치·충돌 바운드를 시계열로 쌓아두는 링버퍼야.</p>
+<p>아래 박스는 겁먹을 코드가 아니라 시간표야. <code>T-5</code> 같은 기호는 "현재보다 몇 틱 전"이라는 표식이고, <code>[pos]</code>는 그때 저장해 둔 위치 쪽지라고 보면 돼.</p>
 <div class="code-block">액터 A의 히스토리 (서버가 매 틱 push, 오래된 건 밀려남)
 
   틱 T-5   T-4   T-3   T-2   T-1   T(현재)
   [pos]  [pos] [pos] [pos] [pos] [pos]
    ↑                              ↑
   가장 오래된(곧 버려짐)         방금 저장</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 히스토리 박스 안에서 쓰인 기호<br>&bull;&nbsp;<strong><code>T</code></strong> = 지금 서버가 세고 있는 틱 번호. 한 프레임짜리 시계 눈금이라고 보면 돼.<br>&bull;&nbsp;<strong><code>T-5</code></strong> = 지금보다 5틱 전. <code>-</code>는 "거슬러 올라간다"는 뜻.<br>&bull;&nbsp;<strong><code>[pos]</code></strong> = 그 틱에 찍어 둔 위치/충돌 바운드 메모. 대괄호는 "저장칸"처럼 읽으면 돼.<br>&bull;&nbsp;<strong><code>push</code></strong> = 새 기록을 맨 뒤에 밀어 넣는 동작. 새 사진 한 장을 앨범 끝에 끼우는 느낌.<br>&bull;&nbsp;<strong><code>↑</code></strong> = 여기 보라는 표시. 왼쪽은 곧 버릴 옛 기록, 오른쪽은 방금 저장한 기록이야.<br>&bull;&nbsp;<strong><code>링버퍼</code></strong> = 칸 수가 정해진 저장 상자. 새 기록이 계속 들어오면 제일 오래된 칸부터 밀려나.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>T(현재)</code> 칸에는 방금 찍은 위치가 들어가고, <code>T-5</code>처럼 왼쪽으로 갈수록 더 오래된 위치야. 매 틱 <code>push</code>로 새 <code>[pos]</code>를 넣다가 버퍼가 꽉 차면 가장 오래된 기록을 버려. 그래서 서버는 "100ms 전 위치"를 물어볼 때 이 줄에서 그 시점 근처의 <code>[pos]</code>를 꺼낼 수 있어.</div>
 <p>여기서 우리 서버 개발자가 바로 떠올릴 질문. <strong>"모든 액터 × 매 틱 × N프레임을 다 저장? 메모리 안 터져?"</strong></p>
 <p>맞아, 그게 트레이드오프 1번이야:</p>
 <ul><li><strong>버퍼 깊이(N)</strong> = 되감을 수 있는 최대 과거. 보통 <strong>200~250ms 어치</strong>만 유지해(그 이상 지연은 어차피 보상 안 해줌 — §3의 창 상한).</li><li><strong>저장 해상도(틱 간격)</strong> = 되감기 정밀도. 촘촘하면 정확한데 메모리·CPU 비용↑. 성기면 싸지만 되감은 위치가 실제와 살짝 어긋나서 두 틱 사이는 <strong>보간(interpolate)</strong> 으로 메워.</li></ul>
@@ -91,6 +94,8 @@ a.xref:hover { background:#bbdefb; }
 <p>핵심 공식은 개념적으로 이래:</p>
 <div class="code-block">되감을_시점 = 서버_현재시각 − (그 유저가 본 지연)
             ≈ 서버_현재시각 − (RTT/2 + 클라 보간 지연)</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 되감기 공식에서 쓰인 기호<br>&bull;&nbsp;<strong><code>되감을_시점</code></strong> = 서버가 판정에 쓸 과거 시각. "그 유저가 실제로 보고 쐈던 때"를 찾는 값.<br>&bull;&nbsp;<strong><code>=</code></strong> = 오른쪽 계산 결과를 왼쪽 이름으로 부르겠다는 뜻.<br>&bull;&nbsp;<strong><code>서버_현재시각</code></strong> = 서버가 지금이라고 믿는 시간. 밑줄 <code>_</code>은 단어를 붙여 한 덩어리 이름으로 만든 표시야.<br>&bull;&nbsp;<strong><code>−</code></strong> = 빼기. 현재에서 지연 시간을 빼서 과거로 가는 거야.<br>&bull;&nbsp;<strong><code>≈</code></strong> = 완전히 딱 같진 않지만 "대충 이렇게 계산한다"는 근사 표시.<br>&bull;&nbsp;<strong><code>RTT/2</code></strong> = 왕복 지연을 반으로 나눈 값. 클라에서 서버까지 한쪽으로 오는 데 걸린 시간으로 보는 거야.<br>&bull;&nbsp;<strong><code>+</code></strong> = 두 지연을 더한다는 뜻. 네트워크 지연에 화면 보간 지연까지 합쳐.<br>&bull;&nbsp;<strong><code>( ... )</code></strong> = 괄호 안을 먼저 한 묶음으로 계산하라는 표시.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 공식은 <code>서버_현재시각</code>에서 <code>RTT/2</code>와 <code>클라 보간 지연</code>을 뺀다는 말이야. 즉 "서버가 지금 보는 장면"이 아니라 "클라가 방아쇠를 당길 때 보고 있던 장면"으로 시간을 뒤로 민다. <code>≈</code>가 붙은 이유는 RTT가 흔들리고 보간 지연도 게임 설정에 따라 달라서, 정확한 과거라기보다 서버가 검증 가능한 범위 안에서 맞추는 과거이기 때문이야.</div>
 <ul><li><strong>RTT/2</strong> — 클라가 서버 상태를 받는 데 걸린 편도 지연. 클라가 보던 화면이 이만큼 과거야.</li><li><strong>클라 보간 지연</strong> — 클라는 받은 상태를 그대로 안 쓰고, 부드럽게 그리려고 조금 더 과거를 봐(→ <a class="xref" href="ch-32-simulated-proxy-smoothing.html">simulated-proxy-smoothing</a>). 이것도 더해줘야 유저가 <strong>진짜 본 시점</strong>이 나와.</li></ul>
 <p>그 시점이 나오면, §1 버퍼에서 그 틱(또는 앞뒤 두 틱 보간)을 꺼내 모든 표적을 그 위치로 되돌려 놔. 그리고 그 스냅샷에 대고 광선(레이캐스트)을 쏴 판정해.</p>
 <p>여기서 <strong>왜 서버가 클라 지연을 정확히 알아야 하는지</strong> 감이 오지? RTT를 잘못 알면 엉뚱한 틱으로 되감아 판정이 다 틀어져. 그래서 되감기 시스템은 <strong>서버-클라 시각 동기화(→ <a class="xref" href="ch-34-server-time-sync.html">server-time-sync</a>)와 한 몸</strong>이야. CH34에서 본 "서버 시각 추정"이 여기서 되감을 양을 계산하는 원료로 쓰여. 두 챕터가 짝꿍인 이유가 이거야.</p>
@@ -111,6 +116,7 @@ a.xref:hover { background:#bbdefb; }
 </div>
 <div class="conversation"><h2>4. 헷갈리지 마: 리플레이 되감기 ≠ 히트 되감기</h2>
 <p>앞서 예고한 구분. 이 서브셋에 <strong>딱 하나</strong> 존재하는 "과거로 되감기" 코드는 이거야. 근데 <strong>주제가 완전히 달라</strong> — 되감는 목적도 대상도 다르니 반드시 구분해서 알아둬.</p>
+<p>여기서 처음 진짜 C++가 나와. 겁먹지 마. 이 코드는 "리플레이를 몇 초 지점으로 보내 달라"는 요청을 큐에 넣는 입구만 보여주는 짧은 조각이야.</p>
 <p>verbatim (<code>Runtime/Engine/Private/DemoNetDriver.cpp:2659-2671</code>):</p>
 <div class="code-block">void UDemoNetDriver::GotoTimeInSeconds(const float TimeInSeconds, const FOnGotoTimeDelegate&amp; InOnGotoTimeDelegate)
 {
@@ -126,6 +132,8 @@ a.xref:hover { background:#bbdefb; }
 
 	AddReplayTask(new FGotoTimeInSecondsTask(this, TimeInSeconds));
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 C++ 코드 안에서 쓰인 기호<br>&bull;&nbsp;<strong><code>void</code></strong> = 이 함수가 값을 돌려주지 않는다는 뜻. 일을 시키고 끝나는 버튼 같은 함수야.<br>&bull;&nbsp;<strong><code>UDemoNetDriver::GotoTimeInSeconds</code></strong> = <code>UDemoNetDriver</code>라는 클래스에 붙어 있는 <code>GotoTimeInSeconds</code> 함수. <code>::</code>는 "~소속"이라고 읽으면 돼.<br>&bull;&nbsp;<strong><code>const float TimeInSeconds</code></strong> = 초 단위 숫자(<code>float</code>)를 받는데, 함수 안에서 그 값을 바꾸지 않겠다는 약속(<code>const</code>).<br>&bull;&nbsp;<strong><code>FOnGotoTimeDelegate&amp;</code></strong> = 끝났을 때 불러줄 콜백 약속을 받는 자리. <code>&amp;</code>는 복사본 말고 원본을 직접 가리킨다는 뜻이야.<br>&bull;&nbsp;<strong><code>=</code></strong> = 오른쪽 값을 왼쪽 칸에 넣기. 여기서는 받은 콜백을 임시 보관칸에 저장해.<br>&bull;&nbsp;<strong><code>if (...)</code></strong> = 괄호 안 조건이 맞으면 아래 중괄호 <code>{ ... }</code> 안만 실행해.<br>&bull;&nbsp;<strong><code>||</code></strong> = "또는". 왼쪽이나 오른쪽 둘 중 하나만 참이어도 참이야.<br>&bull;&nbsp;<strong><code>bIsFastForwarding</code></strong> = <code>b</code>로 시작하는 참/거짓 깃발. 지금 빨리감기 중인지 표시해.<br>&bull;&nbsp;<strong><code>false</code></strong> = "실패" 또는 "아니오" 신호. 여기서는 이동 요청이 끝났지만 성공은 아니라고 알려줘.<br>&bull;&nbsp;<strong><code>return</code></strong> = 여기서 함수 실행을 바로 끝내고 빠져나가라는 말.<br>&bull;&nbsp;<strong><code>UE_LOG</code></strong> = 언리얼 로그를 남기는 매크로. 화면 뒤 콘솔에 "이런 일이 있었다"를 적어.<br>&bull;&nbsp;<strong><code>TEXT("...")</code></strong> = 문자열을 언리얼 문자 방식에 맞게 감싸는 매크로.<br>&bull;&nbsp;<strong><code>%2.2f</code></strong> = 실수 숫자를 소수 둘째 자리까지 찍을 자리표시자.<br>&bull;&nbsp;<strong><code>new FGotoTimeInSecondsTask(...)</code></strong> = 새 리플레이 이동 작업 객체를 하나 만드는 코드.<br>&bull;&nbsp;<strong><code>this</code></strong> = 지금 이 함수를 실행 중인 <code>UDemoNetDriver</code> 자기 자신.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 첫 줄은 "<code>UDemoNetDriver</code>의 <code>GotoTimeInSeconds</code> 함수가 초 단위 시간과 콜백을 받는다"는 뜻이야. <code>OnGotoTimeDelegate_Transient = ...</code>는 끝났을 때 부를 콜백을 저장하고, <code>if (... || bIsFastForwarding)</code>은 이미 같은 작업이 있거나 빨리감기 중이면 <code>NotifyGotoTimeFinished(false)</code>로 실패 통보 후 <code>return</code>해. 바쁘지 않으면 <code>UE_LOG</code>로 기록을 남기고 <code>AddReplayTask(new FGotoTimeInSecondsTask(...))</code>로 "그 시간으로 이동하는 리플레이 작업"을 큐에 넣어.</div>
 <p>이건 <strong>리플레이(데모) 타임 스크러빙</strong>이야. 녹화된 경기 영상을 특정 과거 시각으로 점프하는 것 — 유튜브 영상 재생바 드래그랑 같아. 콜체인 요지: <code>GotoTimeInSeconds()</code> → <code>FGotoTimeInSecondsTask</code>(:480) → <code>GetReplayStreamer()-&gt;GotoTimeInMS()</code>(:506) → 체크포인트 로드 후 재생 위치 이동.</p>
 <p><strong>히트 되감기랑 뭐가 다른가:</strong></p>
 <table class="compare-table"><thead><tr><th></th><th>리플레이 되감기 (실제 존재)</th><th>히트 되감기 랙 보상 (이 서브셋에 없음)</th></tr></thead><tbody><tr><td>되감는 대상</td><td><strong>월드 전체</strong>(녹화본 재생)</td><td><strong>표적 히트박스만</strong></td></tr><tr><td>목적</td><td>관전·다시보기</td><td>실시간 명중 판정</td></tr><tr><td>시점</td><td>임의 과거로 점프</td><td>딱 "쏜 유저가 본 시점"만</td></tr><tr><td>판정</td><td>안 함(그냥 재생)</td><td>그 스냅샷에 레이캐스트</td></tr><tr><td>라이브 게임 영향</td><td>없음(오프라인 재생)</td><td>현재 게임 결과를 직접 좌우</td></tr></tbody></table>
@@ -162,6 +170,8 @@ a.xref:hover { background:#bbdefb; }
 │                                                                │
 │ ⑤ hit 이면 데미지 적용 (서버 권위 확정)                       │
 └──────────────────────────────────────────────────────────────┘</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 흐름도에서 쓰인 기호<br>&bull;&nbsp;<strong><code>[상시 백그라운드]</code></strong> = 특정 총알을 처리할 때가 아니라, 서버가 계속 반복해서 하는 준비 작업이라는 표시.<br>&bull;&nbsp;<strong><code>History[actor].Push(...)</code></strong> = <code>actor</code>별 히스토리 상자에 현재 위치와 시간을 새로 넣는다는 뜻. <code>[actor]</code>는 "이 액터용 칸"이라고 보면 돼.<br>&bull;&nbsp;<strong><code>←</code></strong> = 오른쪽 설명을 왼쪽 줄에 붙인 메모. 코드가 아니라 "이 줄이 §1 내용"이라는 안내야.<br>&bull;&nbsp;<strong><code>~~~~</code></strong> = 중간에 시간이 지나간다는 표시. 클라가 보고 쏘고, 패킷이 서버까지 오는 구간이야.<br>&bull;&nbsp;<strong><code>▼</code></strong> = 다음 단계로 내려간다는 화살표.<br>&bull;&nbsp;<strong><code>① ② ③</code></strong> = 발사 처리 안에서 해야 하는 순서. 순서를 바꾸면 의미가 깨져.<br>&bull;&nbsp;<strong><code>T_rewind</code></strong> = 되감아서 판정할 목표 시각. <code>T</code>는 시간, <code>rewind</code>는 되감기라고 읽으면 돼.<br>&bull;&nbsp;<strong><code>RTT/2 + 클라보간지연</code></strong> = 유저가 실제로 보던 장면이 현재보다 얼마나 과거인지 합산한 값.<br>&bull;&nbsp;<strong><code>for each 표적</code></strong> = 표적을 하나씩 전부 돌면서 같은 일을 반복하라는 뜻.<br>&bull;&nbsp;<strong><code>SampleAt(...)</code></strong> = 히스토리에서 그 시각의 위치를 꺼내는 동작. 딱 맞는 틱이 없으면 두 틱 사이를 보간해.<br>&bull;&nbsp;<strong><code>LineTrace(...)</code></strong> = 발사 원점에서 방향으로 선을 쏴서 무엇을 맞혔는지 검사하는 레이캐스트.<br>&bull;&nbsp;<strong><code>★필수</code></strong> = 빼먹으면 안 되는 단계. 여기서는 과거로 옮긴 히트박스를 현재 위치로 되돌리는 일.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 위 박스는 두 덩어리야. 위쪽은 매 틱 <code>History[actor].Push(...)</code>로 과거 위치를 계속 쌓는 준비 단계고, 아래쪽은 발사 RPC가 왔을 때만 실행돼. 아래쪽 핵심은 <code>T_rewind</code> 계산 → <code>SampleAt(...)</code>으로 표적 위치 꺼내기 → <code>LineTrace(...)</code>로 판정 → <code>★필수</code> 원상복구야. 즉 되감기는 월드를 오래 과거에 두는 게 아니라, 판정 한 번 할 동안만 히트박스를 빌려 옮겼다가 바로 돌려놓는 절차야.</div>
 <p>②~④가 세트라는 게 핵심. <strong>잠깐 되돌려 → 판정 → 반드시 원위치.</strong> ④를 빼먹으면 표적이 과거에 박제돼서 다음 프레임 물리가 다 깨져. 되감기는 "판정 순간만 몰래 과거로 다녀오는" 찰나의 시간여행이야.</p>
 <hr>
 </div>

@@ -79,6 +79,7 @@ a.xref:hover { background:#bbdefb; }
 </div>
 <div class="conversation"><h2>2. 개념 흐름도 — 스킬 한 번의 일생</h2>
 <p>소스가 없어 실제 <code>file:line</code>은 못 박지만, GAS 예측의 표준 흐름은 개념적으로 이렇게 돌아가. (아래 함수명은 실제 엔진의 통상 명칭이지만, <strong>이 트리에서 라인 대조는 불가</strong> — 개념 흐름도로 읽어.)</p>
+<p>지금부터 처음으로 코드 모양의 흐름도가 나와. <strong>겁먹지 마</strong> — 이건 컴파일되는 코드가 아니라 "스킬 한 번이 오가는 길"을 박스로 그린 지도야. 함수 이름과 괄호가 낯설면 바로 아래에서 뜻만 잡고 넘어가면 돼.</p>
 <div class="code-block">[ 클라(AutonomousProxy) ]                        [ 서버(Authority) ]
         │
    버튼 입력
@@ -114,6 +115,8 @@ a.xref:hover { background:#bbdefb; }
    표 #47 예측분을 걷어내고                                  표 #47 예측분을
    서버 버전으로 교체                                        전부 롤백(취소)
    → 유저는 깜빡임 없이 이어짐                               → 미리 본 효과가 되돌아감</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>TryActivateAbility() → ServerTryActivateAbility(표 #47)</code><br>&bull;&nbsp;<strong><code>[ 클라(AutonomousProxy) ]</code> / <code>[ 서버(Authority) ]</code></strong> = 왼쪽은 내 화면에서 먼저 움직이는 쪽, 오른쪽은 최종 판정을 내리는 서버 쪽. 대괄호는 "등장인물 칸"이라고 보면 돼.<br>&bull;&nbsp;<strong><code>TryActivateAbility()</code></strong> = 클라가 "스킬 써볼게" 하고 처음 누르는 시작 버튼. 괄호 <code>()</code>는 "이 일을 실행한다"는 표시야.<br>&bull;&nbsp;<strong><code>PredictionKey</code></strong> = 이번 예측을 구분하는 번호표. 나중에 서버 결과가 왔을 때 "아, 이 효과가 그때 미리 한 거였구나" 하고 찾게 해줘.<br>&bull;&nbsp;<strong><code>#47</code></strong> = 실제 고정 숫자가 아니라 "이번 주문 번호" 같은 예시. 같은 번호가 붙은 예측분만 골라 걷어낸다.<br>&bull;&nbsp;<strong><code>ScopedPredictionWindow</code></strong> = 예측 딱지가 붙는 짧은 작업 구간. 창 안에서 생긴 변화는 "예측분"으로 묶인다.<br>&bull;&nbsp;<strong><code>ServerTryActivateAbility(표 #47)</code></strong> = 같은 요청을 서버한테 보내 "진짜 써도 되나?" 물어보는 호출. 괄호 안의 표 번호도 같이 들고 간다.<br>&bull;&nbsp;<strong><code>→</code> / <code>►</code></strong> = 일이 어느 방향으로 넘어가는지 보여주는 화살표. 클라에서 서버로 가거나, 서버 결과가 다시 클라 쪽으로 내려오는 길이야.<br>&bull;&nbsp;<strong><code>authoritative</code></strong> = "서버가 정한 진짜 답"이라는 뜻. 클라가 미리 본 화면보다 이게 최종 우선이다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>TryActivateAbility()</code>에서 스킬을 눌러 → <code>PredictionKey</code>(<code>표 #47</code>)를 뽑고 → <code>ScopedPredictionWindow</code> 안에서 마나 차감/쿨다운을 미리 보여줘 → <code>ServerTryActivateAbility(표 #47)</code>로 서버에 확인받는다. 서버가 승인하면 그 번호표의 예측분을 서버 결과로 갈아끼우고, 거부하면 같은 번호표가 붙은 것만 롤백한다.</div>
 <p>세 박자만 기억해:</p>
 <ol><li><strong>발급 + 미리 실행</strong>: <code>TryActivateAbility</code>가 PredictionKey를 뽑고, ScopedPredictionWindow 안에서 로컬 효과를 딱지 붙여 적용.</li><li><strong>서버로 던짐</strong>: <code>ServerTryActivateAbility</code>가 같은 키를 들고 서버로 감. 서버는 진짜 판정.</li><li><strong>화해</strong>: 서버의 authoritative 결과가 그 키로 돌아오면 → 맞았으면 예측분 걷어내고 서버 걸로 교체, 틀렸으면 예측분 롤백.</li></ol>
 <p><a class="xref" href="ch-30-client-prediction.html">client-prediction</a>의 이동 예측이랑 뼈대가 똑같지? "먼저 하고(1) → 서버로 보내고(2) → 채점받아 화해(3)". 대상이 좌표냐 스킬효과냐만 다를 뿐이야. 되감는 쪽 원리 전체는 <a class="xref" href="ch-31-server-reconciliation.html">server-reconciliation</a>에 있으니 겹치는 얘긴 거기로.</p>
@@ -129,6 +132,7 @@ a.xref:hover { background:#bbdefb; }
 </div>
 <div class="conversation"><h2>4. Verbatim — 이 트리에 실재하는 유일한 GAS 흔적</h2>
 <p>실제 예측/롤백 코드(<code>AbilitySystemComponent.cpp</code>, <code>GameplayPrediction.h</code>)는 못 읽어. 트리에 남은 <strong>유일한 GAS 원문</strong>은 Iris 다형 직렬화기가 "GAS 핸들의 동작을 흉내 냈다"고 밝히는 주석 한 토막이야. 예측 코드 자체는 아니지만, <strong>"GAS 핸들은 복제 프로퍼티가 아니라 RPC 전송용으로 설계됐다"</strong>는 걸 정직하게 뒷받침하는 1차 근거라 그대로 싣는다. (예측 데이터가 왜 지속 상태 복제가 아니라 이벤트성 RPC로 오가는지 — 그 배경.)</p>
+<p>여기서부터는 이 챕터 안의 유일한 실제 원문 조각이야. <strong>겁먹지 마</strong> — 주석이라 실행 로직은 아니고, 낯선 타입 이름과 대문자 경고만 읽으면 된다.</p>
 <p><strong>Iris 직렬화기의 GAS 핸들 참조</strong> <code>Engine/Source/Runtime/Net/Iris/Public/Iris/Serialization/PolymorphicNetSerializerImpl.h:52-61</code></p>
 <div class="code-block">  * !BIG DISCLAIMER:!
   *
@@ -140,6 +144,8 @@ a.xref:hover { background:#bbdefb; }
   * 1. The sourcetype MUST provide a custom assignment operator performing a deep-copy/clone
   * 2. The sourcetype MUST define a comparison operator that compares the instance data of the stored ExternalSourceItemType
   * 3. TStructOpsTypeTraits::WithCopy and TStructOpsTypeTraits::WithIdenticalViaEquality must be specified</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>FGameplayAbilityTargetDataHandle ... TSharedPointer ... TStructOpsTypeTraits::WithCopy</code><br>&bull;&nbsp;<strong><code>!BIG DISCLAIMER:!</code></strong> = "크게 주의!" 표지판. 아래 내용은 함부로 일반화하면 안 된다는 경고야.<br>&bull;&nbsp;<strong><code>FGameplayAbilityTargetDataHandle</code></strong> = 스킬이 겨냥한 대상 정보를 담는 GAS 손잡이. 예를 들면 "누구를 맞췄나" 쪽에 가까워.<br>&bull;&nbsp;<strong><code>FGameplayEffectContextHandle</code></strong> = 효과가 어떤 상황에서 생겼는지 담는 GAS 손잡이. "이 효과의 배경 메모" 같은 것.<br>&bull;&nbsp;<strong><code>RPCs</code></strong> = 네트워크 너머의 함수를 한 번 호출시키는 통신. 지속 상태 복제와 달리 "이번 이벤트 보내기"에 가깝다.<br>&bull;&nbsp;<strong><code>replicated properties</code></strong> = 서버가 들고 있는 상태값을 클라에 계속 맞춰주는 복제 변수. 여기 주석은 "이 핸들은 원래 그 용도가 아니다"라고 말한다.<br>&bull;&nbsp;<strong><code>TSharedPointer</code></strong> = 여러 곳이 같이 들고 있을 수 있는 포인터 손잡이. 마지막 손이 놓이면 안의 물건을 치운다.<br>&bull;&nbsp;<strong><code>polymorphic struct</code></strong> = 실제 속 종류가 여러 모습으로 바뀔 수 있는 구조체. 겉은 손잡이 하나지만 안쪽 물건이 달라질 수 있다.<br>&bull;&nbsp;<strong><code>IF</code> / <code>MUST</code></strong> = 일부러 크게 쓴 조건과 의무. "만약 복제 프로퍼티로 쓴다면, 반드시 아래 조건을 지켜라"라는 강한 말투야.<br>&bull;&nbsp;<strong><code>SourceType</code> / <code>ExternalSourceItemType</code></strong> = 직렬화기가 다루는 원래 타입과, 그 안에 실제로 들어 있는 바깥 데이터 타입을 가리키는 이름표.<br>&bull;&nbsp;<strong><code>operator</code></strong> = <code>=</code>나 <code>==</code> 같은 동작 규칙. 아래 줄들은 복사할 때 깊게 복사하고, 비교할 때 안쪽 데이터까지 비교하라고 요구한다.<br>&bull;&nbsp;<strong><code>deep-copy/clone</code></strong> = 겉 손잡이만 복사하지 말고, 안에 든 실제 물건까지 새로 떠서 복사하라는 뜻.<br>&bull;&nbsp;<strong><code>TStructOpsTypeTraits::WithCopy</code> / <code>TStructOpsTypeTraits::WithIdenticalViaEquality</code></strong> = UE가 구조체를 어떻게 복사하고 비교할지 알려주는 설정 이름. <code>::</code>는 "~안에 있는"이라고 읽으면 돼.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 주석은 <code>FGameplayAbilityTargetDataHandle</code>과 <code>FGameplayEffectContextHandle</code>이 원래 <code>RPCs</code>용이고 <code>replicated properties</code>용이 아니라고 못 박는다. 그래도 복제 변수로 쓰려면 <code>MUST</code> 세 조건, 즉 깊은 복사와 정확한 비교 규칙까지 준비해야 한다는 경고야. 그래서 이 챕터의 결론도 "GAS 예측 데이터는 지속 복제 변수보다 이벤트성 RPC 흐름에 가깝다"로 읽으면 된다.</div>
 <p>읽는 포인트: <code>FGameplayAbilityTargetDataHandle</code>(타겟 정보)와 <code>FGameplayEffectContextHandle</code>(효과 문맥) 두 핸들이 <strong>"RPC용으로 쓰려고, 복제 프로퍼티용이 아니게" 설계됐다</strong>고 명시하지. 예측은 "한 번의 스킬 발동 이벤트"를 서버로 던지는 거라, 지속 상태 동기화(복제 프로퍼티)가 아니라 <strong>일회성 RPC</strong>에 실려. 이 주석이 그 설계 의도를 확인해줘.</p>
 <div class="note">나머지 예측/롤백 스니펫(ScopedPredictionWindow 본문 등)은 <strong>소스 미포함이라 인용 불가.</strong> 채우려면 GameplayAbilities 플러그인 소스가 필요.</div>
 <hr>

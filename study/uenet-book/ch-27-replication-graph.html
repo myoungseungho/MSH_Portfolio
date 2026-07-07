@@ -55,6 +55,7 @@ a.xref:hover { background:#bbdefb; }
 <p><strong>이 "타일 깔기"를 실제로 구현한 게 이 챕터의 주인공, <code>UReplicationGraphNode_GridSpatialization2D</code>야.</strong> 월드를 <code>CellSize</code> 간격 격자로 쪼개고, 플레이어는 자기가 선 셀만 조회하게 만들어. 파일은 특이하게 <code>Engine/Source</code>가 아니라 플러그인 쪽에 있어:</p>
 <div class="note">소스 위치: <code>Engine/Plugins/Runtime/ReplicationGraph/</code><br>이 클론엔 플러그인 소스가 <strong>전량 포함</strong>돼 있어서 아래 코드는 전부 원문 대조 완료야. (미포함 항목 없음)</div>
 <hr>
+<p>지금부터 진짜 언리얼 코드와 콜체인이 섞여 나와. <strong>겁먹지 마</strong> — 낯선 기호가 보이면 바로 아래 🔤 상자에서 하나씩 풀고, 다시 읽는 눈까지 만들어줄게.</p>
 </div>
 <div class="conversation"><h2>1) 큰 그림: N×M을 N+M으로 쪼개는 두 개의 축</h2>
 <p>핵심 리듬부터 한 문장으로 박아두자.</p>
@@ -89,6 +90,7 @@ a.xref:hover { background:#bbdefb; }
                      └─ 그 뷰어가 선 셀 노드에게만 위임            :6285
                           CellNode-&gt;GatherActorListsForConnection() :6287
                             └ 그 셀 안 액터 리스트만 결과에 추가</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>UReplicationGraph::ServerReplicateActors( DeltaSeconds )</code><br>&bull;&nbsp;<strong><code>::</code></strong> = "~소속" 표시. <code>UReplicationGraph::ServerReplicateActors</code>는 <code>UReplicationGraph</code> 안에 있는 함수라는 뜻.<br>&bull;&nbsp;<strong><code>DeltaSeconds</code></strong> = 지난 프레임에서 이번 프레임까지 흐른 시간. "얼마나 시간이 지났나" 숫자야.<br>&bull;&nbsp;<strong><code>for ( Node : ... )</code></strong> = 목록에서 <code>Node</code>를 하나씩 꺼내며 반복한다는 뜻.<br>&bull;&nbsp;<strong><code>Node-&gt;PrepareForReplication()</code></strong> = 그 노드에게 "복제 전에 준비해"라고 시키는 호출. <code>-&gt;</code>는 주소표를 따라가서 그 대상에게 명령하는 화살표야.<br>&bull;&nbsp;<strong><code>:1112</code></strong> = 코드 줄번호 표시. 함수 인자가 아니라 "책에서 찾아볼 위치표"야.<br>&bull;&nbsp;<strong><code>StartX..EndY</code></strong> = StartX부터 EndY까지의 범위라는 설명용 줄임표. 실제 C++ 문법은 아니고 "여기부터 저기까지"라는 뜻이야.<br>🔁 <strong>이제 다시 보자.</strong> <code>ServerReplicateActors</code>가 프레임 지휘자고, 먼저 <code>PrepareForReplication</code>을 노드마다 한 번 돌린 뒤, 커넥션마다 <code>GatherActorListsForConnection</code>을 부른다. 큰 흐름은 <strong>먼저 셀을 정리하고, 나중에 사람별로 꺼내기</strong>야.</div>
 <p>표로 다시:</p>
 <table class="compare-table"><thead><tr><th>축</th><th>함수 · file:line</th><th>한 줄 역할</th></tr></thead><tbody><tr><td>—</td><td><code>ServerReplicateActors</code> — :1112</td><td>프레임당 1회 진입. 아래를 지휘</td></tr><tr><td>① 쓰기</td><td><code>PrepareForReplication</code> 루프 — :1176</td><td>커넥션 루프 <strong>전에</strong> 준비 훅 1회 (N에만 비례)</td></tr><tr><td>① 쓰기</td><td><code>GridSpatialization2D::PrepareForReplication</code> — :5831</td><td>이동한 동적 액터를 셀에 재배치</td></tr><tr><td>—</td><td><code>GetCellInfoForActor</code> — :5686</td><td>위치+관심반경 → 셀 좌표 사각형</td></tr><tr><td>② 조건</td><td>Remove/AddDynamicActor — :5892</td><td>셀 경계 넘은 액터만 옮김</td></tr><tr><td>① 읽기</td><td><code>Gather...ForConnection</code> 루프 — :1290</td><td>커넥션마다 호출 (M에만 비례)</td></tr><tr><td>① 읽기</td><td><code>GridSpatialization2D::Gather...</code> — :6236</td><td>뷰어가 선 셀 노드에게만 위임</td></tr></tbody></table>
 <p>이 두 층 — <strong>①커넥션 밖에서 1회 준비 / ②커넥션마다 셀만 조회</strong> — 만 잡으면 이 챕터는 다 잡은 거야.</p>
@@ -106,6 +108,7 @@ class UReplicationGraphNode_GridSpatialization2D : public UReplicationGraphNode
 public:
 
 	UE_API UReplicationGraphNode_GridSpatialization2D();</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>class UReplicationGraphNode_GridSpatialization2D : public UReplicationGraphNode</code><br>&bull;&nbsp;<strong><code>UCLASS(MinimalAPI)</code></strong> = UE가 "이 C++ 클래스를 엔진이 알아보게 등록해" 하고 붙이는 도장.<br>&bull;&nbsp;<strong><code>MinimalAPI</code></strong> = 플러그인 밖에서는 꼭 필요한 최소한만 보이게 하라는 표시.<br>&bull;&nbsp;<strong><code>class</code></strong> = 새 설계도 상자, 즉 새 타입을 만든다는 뜻.<br>&bull;&nbsp;<strong><code>:</code></strong> = "~을 부모로 삼아"라고 읽어. 여기선 <code>UReplicationGraphNode</code>를 물려받아.<br>&bull;&nbsp;<strong><code>public</code></strong> = 부모에게 받은 기능을 바깥에서도 공개된 방식으로 쓰겠다는 뜻.<br>&bull;&nbsp;<strong><code>GENERATED_BODY()</code></strong> = UE 헤더툴이 자동으로 만든 숨은 코드를 이 자리에 넣는 매크로.<br>&bull;&nbsp;<strong><code>UE_API</code></strong> = 다른 모듈에서도 이 함수를 찾을 수 있게 붙이는 수출 스티커.<br>&bull;&nbsp;<strong><code>UReplicationGraphNode_GridSpatialization2D()</code></strong> = 클래스 이름과 똑같은 함수라서 <strong>생성자</strong>. 새 노드가 태어날 때 한 번 불려.</div>
 <p>이 노드가 자기 안에 셀들을 어떻게 들고 있냐면, <strong>2차원 TArray</strong>로 들고 있어. 그냥 <code>Grid[X][Y]</code> 배열이야. 미리 월드 전체 크기만큼 왕창 잡아두는 게 아니라, <strong>필요한 X 열이 나올 때 그때 늘려</strong>:</p>
 <p><strong>[S6] 격자의 지연 확장 (2D TArray로 셀 저장)</strong> — <code>ReplicationGraph.h:725-734</code></p>
 <div class="code-block">	TArray&lt; TArray&lt;UReplicationGraphNode_GridCell*&gt; &gt; Grid;
@@ -118,6 +121,7 @@ public:
 		}
 		return Grid[X];
 	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>TArray&lt; TArray&lt;UReplicationGraphNode_GridCell*&gt; &gt; Grid</code><br>&bull;&nbsp;<strong><code>TArray&lt;...&gt;</code></strong> = UE식 리스트. <code>&lt;...&gt;</code> 안에 "무엇을 담을지" 적는다.<br>&bull;&nbsp;<strong><code>TArray&lt; TArray&lt;...&gt; &gt;</code></strong> = 리스트 안에 또 리스트. X줄마다 Y칸 리스트가 들어 있는 2층 책장이라고 보면 돼.<br>&bull;&nbsp;<strong><code>UReplicationGraphNode_GridCell*</code></strong> = 셀 노드를 가리키는 주소표. <code>*</code>는 물건 자체가 아니라 "어디 있는지"를 들고 있다는 표시.<br>&bull;&nbsp;<strong><code>&amp;</code></strong> = 복사본 말고 원본 줄을 바로 빌려준다. 여기서 바꾸면 진짜 <code>Grid</code>가 바뀐다.<br>&bull;&nbsp;<strong><code>int32 X</code></strong> = 정수 하나를 <code>X</code>라는 이름으로 받는다. 여기선 몇 번째 X열인지야.<br>&bull;&nbsp;<strong><code>if (Grid.Num() &lt;= X)</code></strong> = 현재 줄 수가 X번째 칸까지 못 닿으면 안쪽을 실행한다.<br>&bull;&nbsp;<strong><code>Grid.SetNum(X+1)</code></strong> = 리스트 길이를 X번째 칸이 들어갈 만큼 늘린다.<br>&bull;&nbsp;<strong><code>return Grid[X]</code></strong> = X번째 줄을 돌려준다. <code>[..]</code>는 "몇 번째 칸"이라는 뜻.</div>
 <p><code>Grid.Num() &lt;= X</code>면 <code>SetNum(X+1)</code>로 그 자리까지 늘리고 반환. 맵 구석에 아무도 안 가면 그쪽 셀은 아예 안 만들어져. 메모리를 게으르게(lazy) 쓰는 거야.</p>
 <hr>
 </div>
@@ -131,6 +135,7 @@ public:
 	CellInfo.EndX = FMath::Max&lt;int32&gt;(0, UE::LWC::FloatToIntCastChecked&lt;int32&gt;(MaxX / CellSize));
 	CellInfo.EndY = FMath::Max&lt;int32&gt;(0, UE::LWC::FloatToIntCastChecked&lt;int32&gt;(MaxY / CellSize));
 	return CellInfo;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>CellInfo.StartX = FMath::Max&lt;int32&gt;(0, UE::LWC::FloatToIntCastChecked&lt;int32&gt;(MinX / CellSize));</code><br>&bull;&nbsp;<strong><code>.</code></strong> = 상자 안의 칸을 가리킨다. <code>CellInfo.StartX</code>는 <code>CellInfo</code> 상자의 <code>StartX</code>칸.<br>&bull;&nbsp;<strong><code>=</code></strong> = 오른쪽 계산 결과를 왼쪽 칸에 넣는다.<br>&bull;&nbsp;<strong><code>::</code></strong> = "~소속" 표시. <code>FMath::Max</code>는 <code>FMath</code> 상자 안의 <code>Max</code> 도구야.<br>&bull;&nbsp;<strong><code>Max&lt;int32&gt;(0, 값)</code></strong> = 둘 중 큰 값을 고르는데, 결과를 <code>int32</code> 정수로 다룬다. 값이 음수면 0이 이겨.<br>&bull;&nbsp;<strong><code>UE::LWC::FloatToIntCastChecked&lt;int32&gt;</code></strong> = UE의 큰 월드 좌표 도구로 실수를 정수로 바꾸되, 위험하면 체크하는 변환.<br>&bull;&nbsp;<strong><code>MinX / CellSize</code></strong> = 월드 X좌표를 셀 크기로 나눠 "몇 번째 셀인가" 계산한다.<br>&bull;&nbsp;<strong><code>return CellInfo</code></strong> = 다 채운 셀 정보 상자를 호출한 쪽에 돌려준다.<br>🔁 <strong>이제 다시 보자.</strong> <code>MinX / CellSize</code>(좌표를 셀 번호로 바꿈) → <code>FloatToIntCastChecked&lt;int32&gt;</code>(정수로 깎음) → <code>Max&lt;int32&gt;(0, ...)</code>(음수는 0으로 막음) → <code>CellInfo.StartX = ...</code>(상자에 저장). 네 줄이 같은 방식으로 StartX/StartY/EndX/EndY를 채워서 <strong>"액터가 걸치는 셀 사각형"</strong>을 만든다.</div>
 <p><code>MinX/MaxX</code>는 이미 "위치 − 컬거리 ~ 위치 + 컬거리"로 계산돼 넘어온 값이야. 그걸 <code>CellSize</code>로 나눠 정수로 깎으면(<code>FloatToIntCastChecked</code>) 걸치는 셀 범위가 나와. <code>Max&lt;int32&gt;(0, ...)</code>로 음수 셀은 0으로 막고. 이 <code>FActorCellInfo{StartX,StartY,EndX,EndY}</code> 하나가 "이 액터가 지금 어느 셀들에 속하나"의 전부야.</p>
 <hr>
 </div>
@@ -155,6 +160,7 @@ public:
 						{
 							Node-&gt;AddDynamicActor(ActorInfo);
 						}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>if (UNLIKELY(NewCellInfo.StartX &gt; PreviousCellInfo.EndX || ...))</code><br>&bull;&nbsp;<strong><code>if (...)</code></strong> = 괄호 안이 맞을 때만 안쪽 블록을 실행한다.<br>&bull;&nbsp;<strong><code>UNLIKELY(...)</code></strong> = "이 조건은 자주 안 맞을 거야"라고 컴파일러에게 주는 힌트.<br>&bull;&nbsp;<strong><code>.</code></strong> = 상자 안의 칸. <code>NewCellInfo.StartX</code>는 새 셀 사각형의 왼쪽 X야.<br>&bull;&nbsp;<strong><code>&gt;</code> / <code>&lt;</code></strong> = 오른쪽보다 큰가/작은가 비교한다.<br>&bull;&nbsp;<strong><code>||</code></strong> = 또는. 네 조건 중 하나라도 맞으면 "전혀 안 겹침"이 된다.<br>&bull;&nbsp;<strong><code>bDirty = true</code></strong> = "목록을 바꿨다" 표시를 켠다. <code>b</code>로 시작하면 보통 참/거짓 값이야.<br>&bull;&nbsp;<strong><code>for (... : GatheredNodes)</code></strong> = <code>GatheredNodes</code> 안의 항목을 하나씩 꺼내 반복한다.<br>&bull;&nbsp;<strong><code>UReplicationGraphNode_GridCell* Node</code></strong> = 셀 노드의 위치표를 <code>Node</code>라는 이름으로 하나 들고 있다.<br>&bull;&nbsp;<strong><code>Node-&gt;RemoveDynamicActor(...)</code></strong> = 그 셀 노드에게 "이 액터 빼"라고 시킨다. <code>-&gt;</code>는 주소표를 따라가서 명령하는 화살표야.<br>&bull;&nbsp;<strong><code>Node-&gt;AddDynamicActor(...)</code></strong> = 새 셀 노드에게 "이 액터 넣어"라고 시킨다.<br>🔁 <strong>이제 다시 보자.</strong> <code>NewCellInfo.StartX &gt; PreviousCellInfo.EndX || ...</code>는 "새 사각형이 옛 사각형 밖으로 완전히 나갔나?" 검사야. 맞으면 <code>RemoveDynamicActor</code>로 예전 셀에서 빼고, <code>AddDynamicActor</code>로 새 셀에 넣는다. 한 줄로: <strong>셀을 넘은 순간에만 명단을 갈아끼운다.</strong></div>
 <p>저 <code>if</code> 조건이 축②의 전부야. "새 사각형이 옛 사각형과 <strong>전혀 안 겹칠 때만</strong>"(완전히 왼쪽/오른쪽/위/아래로 벗어남) 재배치를 해. 조건이 참이면 옛 셀들에서 <code>RemoveDynamicActor</code>, 새 셀들에 <code>AddDynamicActor</code>. 조건이 거짓 — 즉 아직 같은 셀 안에서 꼼지락 — 이면 <strong>이 블록을 통째로 건너뛰어</strong>. 아무 리스트도 안 건드려.</p>
 <p>그리고 <code>UNLIKELY(...)</code> 매크로 보이지? 컴파일러한테 "이 분기는 잘 안 일어난다"고 힌트를 주는 거야. 대부분의 프레임에서 대부분의 액터는 셀을 안 넘거든. 코드 저자도 "재배치는 드문 일"이라고 못 박아둔 셈이야.</p>
 <div class="note"><strong>잠깐 맞춰봐 🔮</strong><br>그럼 셀을 절대 안 넘는 액터 — 벽에 걸린 문짝 — 는 매 프레임 이 위치 비교 산수라도 돌까, 아니면 그것마저 안 돌까?<br><strong>반전 👉</strong> 그것마저 안 돌아. 문짝은 애초에 <strong>정적(static) 액터</strong>로 등록돼서(<code>AddActor_Static</code>, <code>ReplicationGraph.h:598</code>) 이 동적 액터 순회 루프에 <strong>들어오지도 않아</strong>. 셀에 딱 한 번 넣고 끝. 축②가 "안 움직이면 비교조차 스킵"이 아니라 "안 움직이는 놈은 아예 명단에서 뺀다"까지 간다는 거지. 위치 비교(S7)를 겪는 건 오직 매 프레임 움직일 수 있는 동적 액터뿐이야.</div>
@@ -171,6 +177,7 @@ public:
 			Node-&gt;PrepareForReplication();
 		}
 	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>for (UReplicationGraphNode* Node : PrepareForReplicationNodes)</code><br>&bull;&nbsp;<strong><code>{ ... }</code></strong> = 함께 실행되는 코드 묶음.<br>&bull;&nbsp;<strong><code>QUICK_SCOPE_CYCLE_COUNTER(...)</code></strong> = 이 구간 시간이 얼마나 걸렸는지 프로파일러에 재는 도장.<br>&bull;&nbsp;<strong><code>for (... : PrepareForReplicationNodes)</code></strong> = 준비해야 하는 노드 목록에서 하나씩 꺼내 반복한다.<br>&bull;&nbsp;<strong><code>UReplicationGraphNode* Node</code></strong> = 노드 자체가 아니라 노드가 있는 주소를 들고 있다.<br>&bull;&nbsp;<strong><code>Node-&gt;PrepareForReplication()</code></strong> = 그 노드에게 "복제 전에 준비해"라고 호출한다.</div>
 <p>이 루프는 <strong>커넥션 수와 무관</strong>해. 접속자가 10명이든 1000명이든 딱 한 번 돌아. 여기서 격자 노드의 <code>PrepareForReplication</code>(:5831)이 불려서 §4의 셀 재배치가 벌어지는 거야. 무거운 쓰기 작업을 여기 몰아넣은 게 축①의 앞부분.</p>
 <p>그다음이 커넥션별 수집 루프:</p>
 <p><strong>[S3] 커넥션별 Gather 루프</strong> — <code>ReplicationGraph.cpp:1290-1298</code></p>
@@ -183,6 +190,7 @@ public:
 				{
 					Node-&gt;GatherActorListsForConnection(Parameters);
 				}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>Node-&gt;GatherActorListsForConnection(Parameters)</code><br>&bull;&nbsp;<strong><code>GlobalGraphNodes</code></strong> = 모든 커넥션이 같이 쓰는 공용 노드 목록.<br>&bull;&nbsp;<strong><code>ConnectionManager-&gt;ConnectionGraphNodes</code></strong> = 이 커넥션 매니저가 들고 있는 전용 노드 목록. <code>-&gt;</code>는 그 안으로 들어가는 화살표야.<br>&bull;&nbsp;<strong><code>GatherActorListsForConnection</code></strong> = 이 커넥션에게 보낼 액터 후보를 모으라는 함수 이름.<br>&bull;&nbsp;<strong><code>Parameters</code></strong> = "누구 기준으로 모을지" 같은 필요한 재료를 담은 꾸러미.<br>&bull;&nbsp;<strong><code>for</code></strong> = 목록을 처음부터 끝까지 하나씩 도는 반복문.</div>
 <p>이 <code>Gather</code>는 커넥션 1명당 한 번씩 불려(위 코드가 커넥션 루프 <strong>안</strong>에 있어). 그럼 격자 노드는 여기서 뭘 하냐 — 전체 셀을 다 뒤질까? 아니. <strong>그 커넥션의 뷰어가 선 셀만</strong> 골라서 그 셀에게 위임해:</p>
 <p><strong>[S5] 뷰어가 선 셀만 골라 위임 (N×M 절감 핵심)</strong> — <code>ReplicationGraph.cpp:6280-6290</code></p>
 <div class="code-block">		FIntPoint CurGridCell {CellX, CellY};
@@ -196,6 +204,7 @@ public:
 			}
 
 			UniqueCurrentGridCells.Add(CurGridCell);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>if (!UniqueCurrentGridCells.Contains(CurGridCell))</code><br>&bull;&nbsp;<strong><code>FIntPoint CurGridCell {CellX, CellY}</code></strong> = 정수 좌표 두 칸짜리 상자에 현재 셀 X/Y를 담는다.<br>&bull;&nbsp;<strong><code>{CellX, CellY}</code></strong> = 새 상자를 만들 때 처음부터 값 두 개를 넣는 C++식.<br>&bull;&nbsp;<strong><code>!</code></strong> = 아니다. <code>!Contains</code>는 "아직 안 들어있으면"이라고 읽으면 돼.<br>&bull;&nbsp;<strong><code>.Contains(CurGridCell)</code></strong> = 목록에 이 셀이 이미 있는지 물어본다.<br>&bull;&nbsp;<strong><code>if (UReplicationGraphNode_GridCell* CellNode = GetCell(...))</code></strong> = 셀을 꺼내 <code>CellNode</code>에 담고, 비어 있지 않을 때만 안쪽으로 들어간다.<br>&bull;&nbsp;<strong><code>GetCell(GetGridX(CellX), CellY)</code></strong> = X줄을 먼저 꺼내고, 그 안에서 Y칸 셀을 찾는다.<br>&bull;&nbsp;<strong><code>CellNode-&gt;GatherActorListsForConnection(Params)</code></strong> = 찾은 셀 노드한테 "이 커넥션용 액터 목록을 모아줘"라고 시킨다.<br>&bull;&nbsp;<strong><code>UniqueCurrentGridCells.Add(CurGridCell)</code></strong> = 이 셀은 처리했다고 중복 방지 목록에 기록한다.<br>🔁 <strong>이제 다시 보자.</strong> <code>CurGridCell {CellX, CellY}</code>로 현재 셀 이름표를 만들고 → <code>!Contains</code>로 "처음 보는 셀인가" 확인하고 → <code>GetCell</code>로 그 셀 노드만 꺼내 → <code>GatherActorListsForConnection</code>을 부른다. 즉 <strong>전체 맵이 아니라 지금 보는 셀 하나만 뒤지는 코드</strong>야.</div>
 <p>여기 <code>CellX, CellY</code>는 뷰어 위치를 <code>(ViewLoc - SpatialBias) / CellSize</code>로 바꾼 셀 좌표야. 그 셀 노드(<code>UReplicationGraphNode_GridCell</code>)를 <code>GetCell</code>로 꺼내서 걔한테만 <code>GatherActorListsForConnection</code>을 던져. <strong>전체 액터를 순회하는 코드가 어디에도 없지.</strong> 이게 100만 번을 서너 번으로 줄이는 바로 그 지점이야.</p>
 <p><code>UniqueCurrentGridCells</code>는 화면 분할 등으로 뷰어가 여럿일 때 <strong>같은 셀을 두 번 모으지 않게</strong> 하는 중복 방지 장치야. 이미 처리한 셀이면 스킵.</p>
 <hr>

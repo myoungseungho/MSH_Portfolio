@@ -53,7 +53,10 @@ a.xref:hover { background:#bbdefb; }
 <p>MMORPG도 똑같은 문제를 풀어. "이벤트 30초 남음", "스킬 쿨타임 끝나는 시각" 같은 걸 클라 화면에 그리려면, 클라가 <strong>"지금 서버 시각"</strong>을 알아야 해. 근데 서버랑 클라의 시계는 안 맞아.</p>
 <ul><li>서버는 새벽에 켰고 클라는 방금 접속했어. 둘 다 "레벨 시작 후 흐른 초"를 세는데 출발점이 완전히 달라.</li><li>네트워크 지연도 껴. 서버가 "지금 100.0초야" 하고 쏜 순간, 그게 클라에 도착하면 이미 100.05초야.</li></ul>
 <p>그래서 UE도 시차 방식을 써. 클라가 <strong>"서버 시각 − 내 시각" 차이(delta)</strong>를 한 번 알아내면, 그 뒤론 자기 로컬 시계에 delta만 더해서 서버 시각을 스스로 계산해. 이걸 구현한 게 이 챕터의 주인공, <code>AGameStateBase</code>야.</p>
+<p>지금부터 진짜 UE 코드가 처음 나와. <strong>겁먹지 마</strong> — 함수 이름 주변의 기호만 풀면, 이 줄은 그냥 "서버 시각 물어보는 버튼"으로 읽혀.</p>
 <div class="code-block">double AGameStateBase::GetServerWorldTimeSeconds() const   // "지금 서버 시각 몇 초?"</div>
+<div class="note gloss">🔤 <strong>첫 줄 기호 사전</strong> — <code>double AGameStateBase::GetServerWorldTimeSeconds() const</code><br>&bull;&nbsp;<strong><code>double</code></strong> = 소수점까지 담는 숫자 그릇. 시간처럼 <code>100.05초</code> 같은 값을 담으려고 써.<br>&bull;&nbsp;<strong><code>AGameStateBase::</code></strong> = <code>AGameStateBase</code>라는 클래스에 딸린 함수라는 소속 표시. <code>::</code>는 "~안의"라고 읽으면 돼.<br>&bull;&nbsp;<strong><code>GetServerWorldTimeSeconds()</code></strong> = "서버 월드 시간이 몇 초인지 가져와"라는 함수 이름. 괄호 <code>()</code>는 부를 때 쓰는 손잡이야.<br>&bull;&nbsp;<strong><code>const</code></strong> = 이 함수는 값을 읽어줄 뿐, 게임스테이트 안의 상태를 멋대로 바꾸지 않겠다는 약속.<br>&bull;&nbsp;<strong><code>//</code></strong> = 오른쪽은 사람이 읽는 메모. 컴파일러는 실행하지 않아.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>double</code>(소수 시간 반환) → <code>AGameStateBase::</code>(게임스테이트 소속) → <code>GetServerWorldTimeSeconds()</code>(서버 시각 묻기) → <code>const</code>(읽기만 함). 이어 읽으면 <strong>"게임스테이트에게 지금 서버 시각 추정치를 숫자로 물어보는 함수"</strong>야.</div>
 <p>이 함수 하나를 아무 데서나 부르면 서버 시각 추정치가 튀어나와. 어떻게 그게 가능한지가 이 챕터 전부야. 세 갈래 코드가 협력하는데, <strong>누가 어느 머신에서 도는지</strong>가 핵심이라 역할로 나눠서 볼게.</p>
 <div class="note">값이 서버→클라로 어떻게 자동 전송되고, 도착하면 왜 콜백이 불리는지가 안 그려지면 → <a class="xref" href="ch-17-repnotify.html">repnotify</a>, <a class="xref" href="ch-14-lifetime-props.html">lifetime-props</a> 먼저 보고 와.</div>
 <hr>
@@ -81,6 +84,8 @@ a.xref:hover { background:#bbdefb; }
 			TimerManager.SetTimer(TimerHandle_UpdateServerTimeSeconds, this, &amp;AGameStateBase::UpdateServerTimeSeconds, ServerWorldTimeSecondsUpdateFrequency, true);
 		}
 	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>if (World-&gt;IsGameWorld() &amp;&amp; GetLocalRole() == ROLE_Authority)</code><br>&bull;&nbsp;<strong><code>if (...)</code></strong> = 괄호 안 조건이 맞을 때만 안쪽 블록을 실행하라는 문.<br>&bull;&nbsp;<strong><code>World-&gt;IsGameWorld()</code></strong> = <code>World</code>가 가리키는 월드한테 "진짜 게임 월드야?"라고 묻는 것. <code>-&gt;</code>는 포인터가 가리키는 대상의 기능을 부를 때 쓰는 화살표야.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = "그리고". 왼쪽 조건도 맞고 오른쪽 조건도 맞아야 통과해.<br>&bull;&nbsp;<strong><code>== ROLE_Authority</code></strong> = 내 역할이 서버 권한자와 같은지 비교. <code>==</code>는 "같다?", <code>ROLE_Authority</code>는 "서버가 주인"이라는 역할 딱지야.<br>&bull;&nbsp;<strong><code>&gt; 0.f</code></strong> = 갱신 주기가 0보다 큰지 확인. <code>0.f</code>는 <code>0초</code>를 float 숫자로 적은 모양이야.<br>&bull;&nbsp;<strong><code>SetTimer(...)</code></strong> = 타이머 알람을 등록하는 함수. 정해진 시간이 지나면 지정한 함수를 불러줘.<br>&bull;&nbsp;<strong><code>this</code></strong> = 지금 이 <code>AGameStateBase</code> 객체 자신.<br>&bull;&nbsp;<strong><code>&amp;AGameStateBase::UpdateServerTimeSeconds</code></strong> = 타이머가 나중에 부를 함수의 주소표. <code>&amp;</code>는 "이 함수가 어디 있는지 가리켜"라는 뜻으로 보면 돼.<br>&bull;&nbsp;<strong><code>true</code></strong> = 반복 켜기. 여기서는 한 번만 울리는 알람이 아니라 계속 울리는 알람이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>World-&gt;IsGameWorld()</code>(진짜 게임 월드이고) → <code>&amp;&amp;</code>(그리고) → <code>GetLocalRole() == ROLE_Authority</code>(내가 서버라면) → <code>UpdateServerTimeSeconds()</code>(지금 한 번 찍고) → <code>SetTimer(..., true)</code>(앞으로도 0.1초마다 반복). 한 줄 흐름은 <strong>"서버에서만 자기 시각 갱신 알람을 켠다"</strong>야.</div>
 <p><code>GetLocalRole() == ROLE_Authority</code> — 이 액터의 권한자, 즉 <strong>서버에서만</strong> 이 블록을 타. 클라는 여기 못 들어와. 서버는 즉시 한 번 <code>UpdateServerTimeSeconds()</code>를 부르고, 그다음 <code>SetTimer</code>로 <strong>주기 반복(마지막 인자 <code>true</code>)</strong> 등록해. 주기는 <code>ServerWorldTimeSecondsUpdateFrequency</code>인데 기본값이 이거야.</p>
 <p><strong><code>GameStateBase.cpp:35-39</code></strong></p>
 <div class="code-block">	// Default to every 100 ms
@@ -88,6 +93,8 @@ a.xref:hover { background:#bbdefb; }
 
 	SumServerWorldTimeSecondsDelta = 0.0;
 	NumServerWorldTimeSecondsDeltas = 0;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>ServerWorldTimeSecondsUpdateFrequency = 0.1f;</code><br>&bull;&nbsp;<strong><code>//</code></strong> = 사람에게 남긴 설명 메모. <code>Default to every 100 ms</code>는 "기본은 100ms마다"라는 뜻이야.<br>&bull;&nbsp;<strong><code>=</code></strong> = 오른쪽 값을 왼쪽 이름표가 붙은 칸에 넣기.<br>&bull;&nbsp;<strong><code>0.1f</code></strong> = 0.1초짜리 float 숫자. 뒤의 <code>f</code>는 "이건 float야"라는 꼬리표야.<br>&bull;&nbsp;<strong><code>0.0</code></strong> = 소수점이 있는 0. 시차 합계의 출발값을 비워두는 느낌이야.<br>&bull;&nbsp;<strong><code>;</code></strong> = C++ 문장의 마침표.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>ServerWorldTimeSecondsUpdateFrequency = 0.1f</code>는 "갱신 주기는 0.1초"이고, <code>Sum... = 0.0</code>, <code>Num... = 0</code>은 "아직 모은 시차 샘플이 없다"로 초기화하는 거야.</div>
 <p>0.1초 = 100ms. 그러니까 서버는 <strong>초당 10번</strong> 자기 시각을 갱신해. 갱신 함수는 놀랄 만큼 짧아.</p>
 <p><strong><code>GameStateBase.cpp:155-162</code></strong></p>
 <div class="code-block">void AGameStateBase::UpdateServerTimeSeconds()
@@ -98,6 +105,8 @@ a.xref:hover { background:#bbdefb; }
 		ReplicatedWorldTimeSecondsDouble = World-&gt;GetTimeSeconds();
 	}
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>void AGameStateBase::UpdateServerTimeSeconds()</code><br>&bull;&nbsp;<strong><code>void</code></strong> = 이 함수는 값을 돌려주지 않아. 그냥 안에서 할 일을 하고 끝나.<br>&bull;&nbsp;<strong><code>UWorld* World</code></strong> = <code>UWorld</code>라는 월드 객체를 가리키는 포인터. <code>*</code>는 "직접 물건이 아니라 위치표를 들고 있다"는 표시야.<br>&bull;&nbsp;<strong><code>GetWorld()</code></strong> = 지금 이 게임스테이트가 속한 월드를 가져오는 함수.<br>&bull;&nbsp;<strong><code>if (World)</code></strong> = <code>World</code>가 비어 있지 않을 때만 안으로 들어가. 빈 위치표면 쓰면 위험하니까 먼저 확인하는 거야.<br>&bull;&nbsp;<strong><code>World-&gt;GetTimeSeconds()</code></strong> = 월드한테 "시작 후 몇 초 지났어?"라고 묻기.<br>&bull;&nbsp;<strong><code>ReplicatedWorldTimeSecondsDouble = ...</code></strong> = 복제될 시간 변수 칸에 방금 얻은 서버 월드 시각을 넣기.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>GetWorld()</code>로 월드를 잡고 → <code>if (World)</code>로 진짜 있는지 확인하고 → <code>World-&gt;GetTimeSeconds()</code>로 지금 시간을 읽고 → <code>ReplicatedWorldTimeSecondsDouble</code>에 넣는다. 핵심은 <strong>"서버 시간이 담길 복제 변수에 raw 초를 꽂는다"</strong>야.</div>
 <p>하는 일은 딱 하나. <strong>자기 월드 시각(<code>World-&gt;GetTimeSeconds()</code>)을 복제 변수 <code>ReplicatedWorldTimeSecondsDouble</code>에 대입.</strong> 이게 끝이야. "보내라"는 명령도, 소켓도 없어. 그냥 복제 변수에 대입하기만 하면, UE의 리플리케이션이 알아서 "값 바뀌었네" 하고 클라들로 실어 날라. (그 자동 전송 장치가 궁금하면 → <a class="xref" href="ch-12-server-replicate-actors.html">server-replicate-actors</a>)</p>
 <p>여기서 초보가 헷갈리는 지점 하나. <strong>서버는 delta 근처에도 안 가.</strong> 그냥 raw 초를 복제 변수에 꽂을 뿐이야. delta는 순전히 클라 몫이지.</p>
 <hr>
@@ -136,14 +145,20 @@ a.xref:hover { background:#bbdefb; }
 		}
 	}
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>void AGameStateBase::OnRep_ReplicatedWorldTimeSecondsDouble()</code><br>&bull;&nbsp;<strong><code>OnRep_...</code></strong> = 복제 값이 클라에 도착했을 때 UE가 눌러주는 초인종 함수 이름. "ReplicatedWorldTimeSecondsDouble이 바뀌었어!"라는 알림이야.<br>&bull;&nbsp;<strong><code>const double</code></strong> = 이번 줄에서 만든 소수 숫자를 이 블록 안에서 바꾸지 않겠다는 약속.<br>&bull;&nbsp;<strong><code>ReplicatedWorldTimeSecondsDouble - World-&gt;GetTimeSeconds()</code></strong> = 서버가 보낸 시각에서 내 로컬 시각을 빼서, 이번에 본 시차 한 조각을 구하는 식.<br>&bull;&nbsp;<strong><code>+=</code></strong> = 기존 값에 오른쪽 값을 더해서 다시 저장하기. <code>Sum += x</code>는 <code>Sum = Sum + x</code>랑 같아.<br>&bull;&nbsp;<strong><code>/=</code></strong> = 기존 값을 오른쪽 값으로 나눠서 다시 저장하기.<br>&bull;&nbsp;<strong><code>&gt;</code></strong> = 왼쪽이 오른쪽보다 크면. 여기선 샘플 개수가 250개를 넘었는지 봐.<br>&bull;&nbsp;<strong><code>== 0.0</code></strong> = 값이 정확히 0인지 비교. 첫 보정값을 아직 못 잡았는지 가르는 문으로 쓰여.<br>&bull;&nbsp;<strong><code>else</code></strong> = 위 <code>if</code>가 아니면 이쪽으로 와.<br>&bull;&nbsp;<strong><code>* 0.5</code></strong> = 절반만 반영하기. 목표까지 한 번에 뛰지 말고 반만 움직이라는 뜻이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>ReplicatedWorldTimeSecondsDouble - World-&gt;GetTimeSeconds()</code>(이번 시차 샘플 구하기) → <code>Sum += ...</code>, <code>Num += 1</code>(샘플을 평균 재료에 쌓기) → <code>TargetWorldTimeSecondsDelta = Sum / Num</code>(목표 시차 만들기) → <code>+= (Target - Current) * 0.5</code>(현재 보정치를 목표 쪽으로 절반만 이동). 통째로 읽으면 <strong>"받은 서버 시각으로 delta를 재고, 평균 내고, 튀지 않게 반만 따라간다"</strong>야.</div>
 <p>길어 보여도 네 계단이야. 천천히 밟자.</p>
 <p><strong>1계단 — 시차 1샘플 구하기 (<code>:169</code>).</strong></p>
 <div class="code-block">const double ServerWorldTimeDelta = ReplicatedWorldTimeSecondsDouble - World-&gt;GetTimeSeconds();</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>const double ServerWorldTimeDelta = ReplicatedWorldTimeSecondsDouble - World-&gt;GetTimeSeconds();</code><br>&bull;&nbsp;<strong><code>const double</code></strong> = 소수점 있는 숫자인데, 이번 샘플 값은 만든 뒤 바꾸지 않겠다는 뜻.<br>&bull;&nbsp;<strong><code>ServerWorldTimeDelta</code></strong> = "서버 시각과 내 시각의 차이"를 담는 이름표.<br>&bull;&nbsp;<strong><code>-</code></strong> = 빼기. 여기선 서버가 보낸 시각에서 내 로컬 시각을 빼.<br>&bull;&nbsp;<strong><code>World-&gt;GetTimeSeconds()</code></strong> = 내 월드 시계가 지금 몇 초인지 읽어오는 호출.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>ReplicatedWorldTimeSecondsDouble</code>(방금 받은 서버 시각)에서 <code>World-&gt;GetTimeSeconds()</code>(내 시각)를 빼서 <code>ServerWorldTimeDelta</code>에 담는다. 한 줄 뜻은 <strong>"이번에 측정한 시차 샘플 하나 만들기"</strong>야.</div>
 <p>방금 서버가 보낸 값 빼기 내 로컬 시각. 이게 "이번에 측정한 시차 한 방울"이야. 근데 이걸 그대로 쓰면 안 돼 — 네트워크 지연이 매번 들쭉날쭉이라 이 한 방울은 노이즈투성이거든. 그래서 아래 두 계단으로 눌러줘.</p>
 <p><strong>2계단 — 누적 평균 (<code>:172-180</code>).</strong> 시차 한 방울을 <code>Sum</code>에 더하고 개수를 하나 세. <code>Sum / Num</code>이 지금까지 평균 시차야. 튀는 샘플이 하나 껴도 평균이 눌러버려. 근데 무한정 쌓으면 옛날 값이 발목을 잡겠지? 그래서 <strong>250개가 넘으면</strong> <code>Sum</code>을 개수로 나눠 한 값으로 접고 개수를 1로 리셋해. "지금까지 평균 하나를 새 출발점 삼아 다시 센다"는 뜻이야. 오래된 기억을 흘려보내 <strong>현재 시차를 대표</strong>하게 유지하는 거지.</p>
 <p><strong>3계단 — 목표 시차 (<code>:182</code>).</strong> <code>TargetWorldTimeSecondsDelta = Sum / Num</code>. 지금 이 순간 "가고 싶은 최종 시차 값"이야.</p>
 <p><strong>4계단 — 스무딩 보간 (<code>:184-192</code>).</strong> 여기가 제일 예뻐. 목표값으로 <strong>한 번에 확 안 바꿔.</strong></p>
 <div class="code-block">ServerWorldTimeSecondsDelta += (TargetWorldTimeSecondsDelta - ServerWorldTimeSecondsDelta) * 0.5;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>ServerWorldTimeSecondsDelta += (TargetWorldTimeSecondsDelta - ServerWorldTimeSecondsDelta) * 0.5;</code><br>&bull;&nbsp;<strong><code>+=</code></strong> = 지금 값에 오른쪽 계산 결과를 더해서 다시 저장해.<br>&bull;&nbsp;<strong><code>(TargetWorldTimeSecondsDelta - ServerWorldTimeSecondsDelta)</code></strong> = "목표 시차까지 아직 얼마나 남았나"를 재는 차이.<br>&bull;&nbsp;<strong><code>* 0.5</code></strong> = 그 차이의 절반만 쓰기. 100% 점프가 아니라 50%만 이동해.<br>&bull;&nbsp;<strong><code>;</code></strong> = C++ 문장 끝.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Target - Current</code>로 남은 거리를 재고 → <code>* 0.5</code>로 절반만 잡고 → <code>+=</code>로 현재 delta에 더한다. 즉 <strong>"목표 시차로 한 번에 순간이동하지 말고 반 걸음만 다가가기"</strong>야.</div>
 <p>"목표 − 현재"의 절반만 이동해. 지금 delta가 3.0인데 목표가 3.4면, 3.4로 점프하는 게 아니라 3.2(절반)까지만 가. 다음 갱신 때 또 절반, 또 절반... 목표로 스르륵 수렴해. 왜 이렇게 굼뜨게? <strong>시계가 튀는 게 제일 나쁘거든.</strong> delta가 확 바뀌면 화면의 카운트다운이 갑자기 뒤로 갔다 앞으로 갔다 튀어. 절반씩만 따라가면 지연 스파이크가 껴도 부드럽게 흡수돼. (단, 맨 처음 한 번은 비교할 이전값이 없으니 <code>== 0.0</code> 가지에서 목표값을 그냥 통째로 받아.)</p>
 <p>이 네 계단을 통과한 결과가 <code>ServerWorldTimeSecondsDelta</code>에 쌓여. 그리고 <strong>이 변수는 복제 안 돼.</strong> 순전히 클라가 자기 안에서 굴린 값이야.</p>
 <hr>
@@ -161,6 +176,8 @@ a.xref:hover { background:#bbdefb; }
 
 	return 0.;
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>double AGameStateBase::GetServerWorldTimeSeconds() const</code><br>&bull;&nbsp;<strong><code>return</code></strong> = 이 함수의 답으로 값을 돌려주고 끝내라는 말.<br>&bull;&nbsp;<strong><code>World-&gt;GetTimeSeconds() + ServerWorldTimeSecondsDelta</code></strong> = 내 로컬 시각에 클라가 다듬어둔 보정치를 더하기.<br>&bull;&nbsp;<strong><code>+</code></strong> = 더하기. 여기서는 "내 시계 + 시차"야.<br>&bull;&nbsp;<strong><code>return 0.;</code></strong> = 월드를 못 구했을 때는 안전하게 0초를 답으로 돌려줘. <code>0.</code>은 소수점 있는 0이야.<br>&bull;&nbsp;<strong><code>const</code></strong> = 이 함수는 시각을 계산해서 보여줄 뿐, 게임스테이트 상태를 바꾸지 않겠다는 표시.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>if (World)</code>(월드가 있으면) → <code>return GetTimeSeconds() + ServerWorldTimeSecondsDelta</code>(내 시각에 보정치 더해서 답하기) → 없으면 <code>return 0.</code>. 핵심은 <strong>"매번 서버에 묻지 않고, 내 시계와 delta로 서버 시각을 만들어낸다"</strong>야.</div>
 <p><strong>내 로컬 시각 + 아까 다듬은 보정치.</strong> 이게 서버 시각 추정이야. 매번 서버한테 물어본 게 아니라, 클라가 들고 있는 delta로 <strong>스스로 계산</strong>했어 — 시차 비유 그대로지.</p>
 <p>서버에선 delta가 0이라 이 함수가 그냥 자기 진짜 시각을 돌려주고, 클라에선 delta가 더해져 서버랑 (거의) 같은 시각이 나와. 실제로 엔진이 이걸 이렇게 써.</p>
 <p><strong><code>GameStateBase.cpp:240-243</code></strong></p>
@@ -168,6 +185,8 @@ a.xref:hover { background:#bbdefb; }
 {
 	return GetServerWorldTimeSeconds();
 }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>float AGameStateBase::GetPlayerStartTime(AController* Controller) const</code><br>&bull;&nbsp;<strong><code>float</code></strong> = 소수점 있는 숫자를 돌려주는 타입. <code>double</code>보다 가벼운 시간 숫자 그릇이라고 보면 돼.<br>&bull;&nbsp;<strong><code>AController* Controller</code></strong> = 플레이어를 조종하는 컨트롤러를 가리키는 포인터 인자. 여기 코드에선 이름만 받아두고 직접 쓰진 않아.<br>&bull;&nbsp;<strong><code>return GetServerWorldTimeSeconds();</code></strong> = 플레이어 시작 시각을 물어봐도 결국 서버 시각 계산 함수의 답을 그대로 돌려줘.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>GetPlayerStartTime(...)</code>은 복잡한 새 계산을 하지 않고 <code>GetServerWorldTimeSeconds()</code>를 그대로 <code>return</code>해. 즉 <strong>"플레이어 시작 시간도 서버 시각 기준으로 맞춘다"</strong>는 뜻이야.</div>
 <p>"이 플레이어 언제 시작했나"를 서버 시각 기준으로 답해. 서버든 클라든 같은 답이 나오니까 리스폰 타이머 같은 걸 양쪽에서 일관되게 그릴 수 있어.</p>
 <hr>
 </div>
@@ -178,6 +197,8 @@ a.xref:hover { background:#bbdefb; }
 
 	DOREPLIFETIME_CONDITION( AGameStateBase, GameModeClass,	COND_InitialOnly );
 	DOREPLIFETIME( AGameStateBase, ReplicatedWorldTimeSecondsDouble );</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>DOREPLIFETIME( AGameStateBase, ReplicatedWorldTimeSecondsDouble )</code><br>&bull;&nbsp;<strong><code>DOREPLIFETIME</code></strong> = "이 변수를 복제 명단에 올려"라는 등록 매크로. 값을 지금 보내는 줄이 아니라, 보낼 대상이라고 신고하는 줄이야.<br>&bull;&nbsp;<strong><code>DOREPLIFETIME_CONDITION</code></strong> = 복제 명단에 올리되 조건까지 붙이는 버전.<br>&bull;&nbsp;<strong><code>COND_InitialOnly</code></strong> = 처음 연결될 때만 보내라는 조건. <code>GameModeClass</code>는 계속 보낼 필요가 없어서 이렇게 걸려 있어.<br>&bull;&nbsp;<strong><code>AGameStateBase, ReplicatedWorldTimeSecondsDouble</code></strong> = <code>AGameStateBase</code> 안의 <code>ReplicatedWorldTimeSecondsDouble</code> 변수를 명단에 올린다는 뜻. 쉼표는 "클래스 이름, 변수 이름"을 나누는 칸막이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>SpectatorClass</code>도 등록되고, <code>GameModeClass</code>는 <code>COND_InitialOnly</code> 조건으로 등록되고, 마지막에 <code>ReplicatedWorldTimeSecondsDouble</code>이 <code>DOREPLIFETIME</code>으로 등록돼. 이 줄 덕분에 <strong>서버가 대입한 raw 시각만 클라로 복제되고, delta는 명단에 없어서 복제되지 않는다</strong>는 게 보인다.</div>
 <p><code>DOREPLIFETIME(..., ReplicatedWorldTimeSecondsDouble)</code> — "이 변수를 네트워크로 복제해라." 이 등록이 있어야 서버가 <code>UpdateServerTimeSeconds</code>에서 대입한 값이 클라로 날아가. 여기 목록에 <strong><code>ServerWorldTimeSecondsDelta</code>는 없어.</strong> 봤지? delta는 애초에 복제 대상이 아니야. 서버가 보내는 건 raw 시각 하나뿐이고, delta는 클라가 만든다 — 이 한 줄이 그걸 증명해. (<code>DOREPLIFETIME</code>이 뭔지 → <a class="xref" href="ch-14-lifetime-props.html">lifetime-props</a>)</p>
 <hr>
 </div>
