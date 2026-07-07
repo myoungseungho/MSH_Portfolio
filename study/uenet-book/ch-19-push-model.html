@@ -21,6 +21,14 @@ a.xref { background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; 
 a.xref:hover { background:#bbdefb; }
 .note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
 .note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -44,9 +52,9 @@ a.xref:hover { background:#bbdefb; }
 <div class="note">"이 액터의 어떤 프로퍼티가 바뀌었지? 바뀐 것만 클라에 보내야 하는데."</div>
 <p>가장 정직한 방법은 <strong>전부 비교</strong>하는 거야. 지난번에 보낸 값을 그림자(shadow)로 하나 들고 있다가, 매 프레임 현재값이랑 하나하나 <code>memcmp</code> 해서 다르면 "바뀜"으로 판정. 이게 UE의 전통적 리플리케이션 방식이고, 이걸 <strong>폴링(polling)</strong> 또는 <strong>비교 방식(compare)</strong> 이라고 불러.</p>
 <p>문제가 뭘까? 한번 맞춰봐.</p>
-<div class="note">액터가 10만 개, 각자 프로퍼티가 30개. 근데 이번 프레임에 실제로 바뀐 건 그중 5개뿐. 폴링은 몇 번 비교할까?</div>
+<div class="note">액터가 10만 개, 각자 프로퍼티가 30개. 근데 이번 프레임에 실제로 바뀐 건 그중 5개뿐.<br>폴링은 몇 번 비교할까?</div>
 <p>...정답: <strong>300만 번</strong>. 5개 바꾸겠다고 300만 번을 비교해. 안 바뀐 걸 확인하려고 안 바뀐 걸 전부 만져보는 거지. UE 소스 주석도 이걸 그대로 인정해:</p>
-<div class="note">"Where the system starts to fall down is in terms of performance... there's no choice but to compare every property on every object." — <code>PushModel.h:34-38</code></div>
+<div class="note">"Where the system starts to fall down is in terms of performance... there's no choice but to compare every property on every object."<br>— <code>PushModel.h:34-38</code></div>
 <p><strong>Push Model</strong>은 이 발상을 뒤집어. 비교하지 말고, <strong>값을 바꾼 놈이 직접 손들게</strong> 하자. "나 바뀌었어요"라고 push하게. 그럼 서버는 손든 놈만 보면 돼.</p>
 <ul><li><strong>폴링(Pull)</strong>: 서버가 매 프레임 "너 바뀌었니? 너는? 너는?" — 전부 물어봄</li><li><strong>푸시(Push)</strong>: 값 바꾼 게임 코드가 "저 바뀌었어요!" — 바뀐 놈만 신고</li></ul>
 <p>이 챕터는 그 "손드는 장치"가 실제 코드로 어떻게 생겼는지를 본다.</p>
@@ -98,7 +106,7 @@ a.xref:hover { background:#bbdefb; }
 <p>여기가 이 챕터에서 제일 헷갈리는 부분이자 제일 똑똑한 부분이야. dirty 상태가 <strong>한 군데가 아니라 두 군데</strong>에 있어.</p>
 <ul><li><code>FPushModelPerObjectState</code> — <strong>오브젝트 1개당 하나</strong>. 모든 넷드라이버가 공유하는 <strong>글로벌</strong> dirty. 게임 코드는 여기에만 push해.</li><li><code>FPushModelPerNetDriverState</code> — <strong>넷드라이버마다 하나</strong>. 실제 리플리케이트 비교는 여기서 봄.</li></ul>
 <p>왜 굳이 둘로 나눴을까? 맞춰봐.</p>
-<div class="note">서버 하나에 넷드라이버가 여러 개일 수 있어(게임용 + 서버사이드 리플레이 녹화용 등). 게임 코드가 값 바꿀 때마다 곧바로 모든 넷드라이버 상태에 복사하면 뭐가 낭비지?</div>
+<div class="note">서버 하나에 넷드라이버가 여러 개일 수 있어(게임용 + 서버사이드 리플레이 녹화용 등).<br>게임 코드가 값 바꿀 때마다 곧바로 모든 넷드라이버 상태에 복사하면 뭐가 낭비지?</div>
 <p>...반전: <strong>리플리케이트 후보 액터 중 실제로 이번에 보내는 건 극히 일부</strong>야. 대부분은 relevancy·dormancy로 이번 프레임에 안 보내(→ <a class="xref" href="ch-24-relevancy.html">relevancy</a>, <a class="xref" href="ch-26-dormancy.html">dormancy</a>). 그런데 값 바꿀 때마다 넷드라이버 전부에 미리 복사해두면, 결국 안 보낼 놈들 상태까지 부지런히 갱신하는 헛수고가 돼. 소스도 이 이유를 명시해(<code>PushModel.cpp:110-131</code>).</p>
 <p>그래서 <strong>lazy flush(지연 반영)</strong>. 게임 코드는 글로벌에만 쌓아두고, <strong>진짜 리플리케이트하기 직전</strong>에만 그 오브젝트의 글로벌 dirty를 각 넷드라이버로 몰아서 OR 연산으로 밀어넣어. <code>PushModelPerObjectState.h:74</code>:</p>
 <div class="code-block">		void PushDirtyStateToNetDrivers()

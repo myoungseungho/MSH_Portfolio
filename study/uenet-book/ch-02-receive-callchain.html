@@ -21,6 +21,14 @@ a.xref { background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; 
 a.xref:hover { background:#bbdefb; }
 .note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
 .note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -46,7 +54,7 @@ a.xref:hover { background:#bbdefb; }
 <ol><li>상자를 받는다 (누가 보냈는지 아직 모름) → <strong>날바이트 수신</strong></li><li>포장 테이프를 뜯는다 (암호화 풀기) → <strong>핸들러 통과</strong></li><li>상자 안에 송장 번호가 있다 (몇 번째 택배냐, 앞에 빠진 거 없냐) → <strong>시퀀스/ack</strong></li><li>상자 안에 작은 봉투가 여러 개 들어있다 → 각 봉투를 담당 부서로 배달 → <strong>Bunch 디스패치</strong></li></ol>
 <p>이 4단계를 <strong>실제로 구현하는 게</strong> <code>NetConnection.cpp</code>의 세 함수야: <code>ReceivedRawPacket</code> → <code>ReceivedPacket</code> → <code>DispatchPacket</code>.</p>
 <p>이번 챕터 목표는 하나. <strong>날바이트가 어떻게 채널까지 배달되는가, 그 콜체인의 뼈대와 "왜"</strong> 만 머리에 넣는 거야. 라인 하나하나 다 안 봐. 계단 세 개만.</p>
-<div class="note">이 챕터 소스: <code>_study/UE_Network/Engine/Source/Runtime/Engine/Private/NetConnection.cpp</code> 전제가 흔들리면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a> (이 파일이 뭐 하는 놈인지부터)</div>
+<div class="note">이 챕터 소스: <code>_study/UE_Network/Engine/Source/Runtime/Engine/Private/NetConnection.cpp</code><br>전제가 흔들리면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a> (이 파일이 뭐 하는 놈인지부터)</div>
 <hr>
 </div>
 <div class="conversation"><h2>1. 전체 지도: 세 함수, 세 관문</h2>
@@ -54,6 +62,7 @@ a.xref:hover { background:#bbdefb; }
 <table class="compare-table"><thead><tr><th>함수 (줄번호)</th><th>관문</th><th>한 줄</th></tr></thead><tbody><tr><td><code>ReceivedRawPacket</code>(2056)</td><td>날바이트 → 비트리더</td><td>포장 뜯고 비트 단위로 읽을 준비</td></tr><tr><td><code>ReceivedPacket</code>(3143)</td><td>시퀀스/ack</td><td>몇 번째 패킷이냐, 순서 맞냐 판정</td></tr><tr><td><code>DispatchPacket</code>(3496)</td><td>Bunch 분해</td><td>패킷 하나를 봉투 여러 개로 쪼개 채널 배달</td></tr></tbody></table>
 <p>핵심 감각: <strong>한 함수 = 한 책임.</strong> 바이트를 만지는 놈, 순서를 따지는 놈, 쪼개는 놈이 따로야. 우리 서버로 치면 "recv 콜백 → 패킷헤더 파싱 → 핸들러 디스패치"를 세 함수로 칼같이 나눠둔 거지.</p>
 <hr>
+<p>지금부터 진짜 코드가 나와. <strong>겁먹지 마</strong> — 낯선 기호는 코드 바로 아래 🔤 상자에서 하나씩 풀어줄게. 통째로 외우는 게 아니라 "아, 이게 이거구나"만 잡으면 돼.</p>
 </div>
 <div class="conversation"><h2>2. 1층: ReceivedRawPacket — 포장 뜯기</h2>
 <p><code>UNetConnection::ReceivedRawPacket(void* InData, int32 Count)</code> — 여기가 <strong>최초 진입점</strong>이야. 드라이버가 <code>InData</code>(바이트 포인터)랑 <code>Count</code>(바이트 수)만 던지고 끝. 아무 해석도 안 된 날것.</p>
@@ -71,6 +80,7 @@ a.xref:hover { background:#bbdefb; }
 		if (IncomingResult == EIncomingResult::Success)
 		{
 			Count = PacketView.DataView.NumBytes();</div>
+<div class="note gloss">🔤 <strong>기호 풀이</strong><br>&bull;&nbsp;<strong><code>Handler.IsValid()</code></strong> = "핸들러(암호화·압축 담당)가 준비돼 있나?" 확인. 있을 때만 통과시켜.<br>&bull;&nbsp;<strong><code>-&gt;</code></strong> = 화살표는 "그 놈의 것을 꺼내/시켜". <code>Handler-&gt;Incoming()</code> = 핸들러한테 "들어온 거 처리해" 시키기.<br>&bull;&nbsp;<strong><code>EIncomingResult</code></strong> = 처리 결과를 담는 값. 앞의 <code>E</code>는 보통 "정해진 보기 중 하나"(enum)라는 신호 — 여기선 성공/실패 같은.<br>&bull;&nbsp;<strong><code>== EIncomingResult::Success</code></strong> = "결과가 성공과 같으면". <code>==</code>는 "같다", <code>::Success</code>는 그 보기 중 '성공'.</div>
 <p><code>Handler-&gt;Incoming()</code>이 복호화·디코드를 해서 <code>PacketView</code>에 다시 담아줘. 성공하면 <code>Count</code>를 <strong>복호화 후 크기</strong>로 갱신해(2094). 실패하면? 위에서 안 보였지만 폴트리커버리 시도하고, 안 되면 <code>Close</code>로 연결을 끊어. 즉 <strong>의심스러운 바이트는 여기서 컷.</strong> (핸들러 내부가 궁금하면 → <a class="xref" href="ch-08-packethandler.html">packethandler</a>)</p>
 <h3>2-2. 여기서 첫 함정: "실제 비트 길이"를 어떻게 알아?</h3>
 <p>자, 예측 한번 해보자. 복호화 끝났으면 <code>Count</code> 바이트를 그냥 읽으면 될 것 같지? <strong>맞춰봐.</strong></p>
@@ -93,7 +103,9 @@ a.xref:hover { background:#bbdefb; }
 
 
 			FBitReader Reader(Data, BitSize);</div>
+<div class="note gloss">🔤 <strong>비트 만지는 코드 풀이</strong> — 여기가 이 챕터에서 제일 낯설어. 천천히.<br>&bull;&nbsp;<strong><code>uint8 LastByte = Data[Count-1]</code></strong> = <code>Data</code>(바이트들이 늘어선 배열)에서 <strong>맨 마지막 칸</strong>(<code>Count-1</code>번째)을 꺼내 <code>LastByte</code>에 담아. <code>uint8</code>=0~255를 담는 한 바이트. 대괄호 <code>[..]</code>는 "몇 번째 칸".<br>&bull;&nbsp;<strong><code>0x80</code></strong> = 16진수. 2진수로는 <code>1000 0000</code> = <strong>맨 왼쪽(최상위) 비트 하나만 1</strong>. "제일 높은 자리"를 콕 집는 마스크야.<br>&bull;&nbsp;<strong><code>LastByte &amp; 0x80</code></strong> = 비트 AND. "맨 왼쪽 비트가 켜져 있나?"만 뽑아봐. 앞에 <code>!(...)</code>니까 "아직 안 켜졌으면" 계속 돌아.<br>&bull;&nbsp;<strong><code>LastByte *= 2</code></strong> = 2를 곱하면 2진수로는 <strong>왼쪽으로 한 칸 밀기</strong>. 다음 비트를 맨 왼쪽 자리로 끌어와 검사하려는 거야.<br>&bull;&nbsp;정리: 이 <code>while</code>은 <strong>왼쪽으로 밀며 첫 1(터미네이터)을 찾을 때까지 길이를 깎는</strong> 반복이야.</div>
 <p>읽어보면: 일단 전체 비트 수에서 1 뺀 값으로 시작(<code>Count*8 - 1</code>). 마지막 바이트를 왼쪽으로 밀면서(<code>*= 2</code>) 최상위 비트가 <code>1</code>이 될 때까지 <code>BitSize</code>를 깎아. 그 <code>1</code>이 바로 터미네이터고, 그게 진짜 끝이야. 그렇게 구한 <code>BitSize</code>로 <code>FBitReader</code>를 만들어 — 이제부터 <strong>비트 단위로</strong> 읽는 리더가 준비된 거지.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 코드 = "마지막 바이트에서 <strong>제일 왼쪽에 켜진 1</strong>을 찾아 → 거기가 진짜 끝 → 그 길이로 비트 리더를 만든다." 처음엔 <code>&amp; 0x80</code>, <code>*= 2</code>가 암호였는데, 이제 '끝 표시(터미네이터) 찾기'로 읽히지?</div>
 <div class="note"><code>LastByte == 0</code>이면? 마지막 바이트가 통째로 0이라는 건 터미네이터 비트조차 없다는 뜻 = 손상된 패킷. 아래 <code>else</code>에서 MalformedPacket로 처리하고 버려.</div>
 <h3>2-3. 다음 계단으로</h3>
 <p><strong>NetConnection.cpp:2185~2191</strong></p>
@@ -121,6 +133,7 @@ a.xref:hover { background:#bbdefb; }
 
 			return;
 		}</div>
+<div class="note gloss">🔤 <strong>기호 풀이</strong><br>&bull;&nbsp;<strong><code>FNetPacketNotify::FNotificationHeader Header;</code></strong> = 시퀀스 헤더를 담을 <strong>빈 상자</strong>(<code>Header</code>) 하나 준비. <code>F</code>로 시작하면 보통 UE의 값 묶음(구조체).<br>&bull;&nbsp;<strong><code>if (!PacketNotify.ReadHeader(...))</code></strong> = 헤더를 읽어보고, <strong><code>!</code>(못 읽었으면)</strong> 안으로 들어가 경고 찍고 <code>return</code>(함수 즉시 종료). <code>!</code>는 "아니면/실패면".<br>&bull;&nbsp;<strong><code>UE_LOG(LogNet, Warning, ...)</code></strong> = 네트워크 로그에 <strong>경고</strong> 한 줄. (여긴 Fatal 아니라 Warning — 게임을 죽이진 않고 이 연결만 정리해.)</div>
 <p>패킷 맨 앞에는 <strong>시퀀스 헤더</strong>가 붙어있어(송장 번호 + 상대가 어디까지 받았다는 ack 정보). <code>PacketNotify.ReadHeader</code>가 그걸 읽어. 못 읽으면 = 헤더가 깨졌다 = 신뢰 불가 → <code>ReadHeaderFail</code>로 연결 정리하고 리턴. <strong>깨진 송장은 상자 안 열어봐.</strong></p>
 <h3>3-2. 순서 판정: 갭이면 잠깐 보관, 옛날 거면 버림</h3>
 <p>헤더를 읽었으면 <code>PacketNotify.GetSequenceDelta(Header)</code>(3247)로 <strong>기대값과의 간격</strong>을 계산해. 세 갈래야:</p>
@@ -135,6 +148,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="code-block">			else
 			{
 				PacketNotify.AckSeq(InPacketId);</div>
+<div class="note gloss">🔤 <strong>기호 풀이</strong> — <code>if (bDispatchPacket) DispatchPacket(...)</code> / <code>else ... AckSeq(...)</code><br>&bull;&nbsp;<strong><code>bDispatchPacket</code></strong> = <code>b</code>로 시작하면 보통 참/거짓 스위치(bool). "이 패킷을 열어서 배달할까?" 값.<br>&bull;&nbsp;<strong><code>AckSeq</code> / <code>NakSeq</code></strong> = 상대에게 보내는 신호. Ack="잘 받았어", Nak="못 받았어(다시 보내)". <code>Seq</code>=몇 번 패킷인지.</div>
 <p>순서·검증 다 통과했으면 <code>DispatchPacket</code>으로 넘겨 상자를 연다(3층). 그리고 이 패킷을 어떻게 처리했는지 송신측에 알려줘 — 잘 받았으면 <code>AckSeq</code>(확인), 버릴 거면 <code>NakSeq</code>(거부, :3457). 이 신호로 상대가 "재전송할지 말지"를 정해.</p>
 <div class="note"><code>DispatchPacket</code>이 <code>bSkipAck</code>/<code>bHasBunchErrors</code>를 <strong>참조로</strong> 돌려줘. 상자 속 봉투 하나라도 썩었으면 여기로 그 사실이 올라와서, ack 안 하거나(재전송 유도) 연결을 닫는 판단에 쓰여.</div>
 <p><strong>2층 요약:</strong> 송장 읽기 → 순서 판정(갭=보관 / 옛날=버림 / 정상=진행) → 상자 열기 → ack/nak 통보.</p>
@@ -153,8 +167,10 @@ a.xref:hover { background:#bbdefb; }
 				// Warning: May destroy channel
 				Channel-&gt;ReceivedRawBunch(Bunch, bLocalSkipAck);
 			}</div>
+<div class="note gloss">🔤 <strong>기호 풀이</strong><br>&bull;&nbsp;<strong><code>while(!Reader.AtEnd())</code></strong> = "리더가 <strong>끝에 안 닿은 동안</strong> 반복". 패킷 안 봉투(Bunch)를 하나씩 다 꺼낼 때까지 돌아.<br>&bull;&nbsp;<strong><code>FInBunch Bunch(this)</code></strong> = 봉투 하나(<code>Bunch</code>)를 만들어. <code>this</code>=지금 이 연결, <code>In</code>=수신용.<br>&bull;&nbsp;<strong><code>Channel != nullptr</code></strong> = "채널이 <strong>비어있지 않으면</strong>". <code>nullptr</code>=아무것도 안 가리킴(빈 것). 채널이 있어야 배달하지.<br>&bull;&nbsp;<strong><code>Channel-&gt;ReceivedRawBunch(Bunch, ...)</code></strong> = 그 채널한테 "이 봉투 받아" 시키기.</div>
 <p><code>Channel-&gt;ReceivedRawBunch(Bunch, ...)</code> — <strong>여기가 이 챕터의 종착역.</strong> 이 줄을 넘어가면 더는 "연결(Connection) 계층"이 아니라 <strong>채널 계층</strong>이야. 액터 복제, 컨트롤 메시지 같은 논리적 스트림 처리가 거기서 시작돼. (<code>// Warning: May destroy channel</code> 주석 보이지? 배달 도중 채널이 스스로 닫힐 수 있어서 조심하라는 거야.)</p>
-<div class="note">Bunch 하나가 채널 안에서 어떻게 조립되고 순서 맞춰지는지는 → <a class="xref" href="ch-04-datachannel-nextbunch.html">datachannel-nextbunch</a> "패킷 vs Bunch"가 아직 헷갈리면 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a></div>
+<div class="note reread">🔁 <strong>다시 보자.</strong> <code>while(!Reader.AtEnd()) { ... Channel-&gt;ReceivedRawBunch(Bunch) }</code> = "패킷 안 봉투를 <strong>끝까지 하나씩 꺼내 각 채널에 배달</strong>". 세 함수 릴레이(바이트→순서→분해)의 진짜 끝이 이 한 줄이야.</div>
+<div class="note">Bunch 하나가 채널 안에서 어떻게 조립되고 순서 맞춰지는지는 → <a class="xref" href="ch-04-datachannel-nextbunch.html">datachannel-nextbunch</a><br>"패킷 vs Bunch"가 아직 헷갈리면 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a></div>
 <p><strong>3층 요약:</strong> <code>while</code> 돌며 Bunch 헤더 읽고 → 채널 찾거나 만들고 → <code>ReceivedRawBunch</code>로 배달. 끝.</p>
 <hr>
 </div>
@@ -201,4 +217,4 @@ a.xref:hover { background:#bbdefb; }
 </div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>소켓 날바이트 → (핸들러 복호화) → 터미네이터로 진짜 비트길이 찾아 FBitReader → 시퀀스/ack로 순서 판정 → 패킷을 Bunch들로 쪼개 채널에 배달</strong> — 세 함수가 각자 한 관문(바이트/순서/분해)만 지키며 릴레이한다.</p>
-<div class="note">막히면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a> 다음 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a> (봉투 하나의 정체) · 이어서 → <a class="xref" href="ch-04-datachannel-nextbunch.html">datachannel-nextbunch</a> (채널 안에서 조립)</div></div><nav class="booknav"><a href="ch-01-netconnection-overview.html"><span class="lbl">← 이전</span>NetConnection — 한 연결이 담당하는 모든 것</a><a class="nx" href="ch-03-bunch-vs-packet.html"><span class="lbl">다음 →</span>Bunch가 뭐고 패킷과 뭐가 다른가</a></nav></div></body></html>
+<div class="note">막히면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a><br>다음 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a> (봉투 하나의 정체) · 이어서 → <a class="xref" href="ch-04-datachannel-nextbunch.html">datachannel-nextbunch</a> (채널 안에서 조립)</div></div><nav class="booknav"><a href="ch-01-netconnection-overview.html"><span class="lbl">← 이전</span>NetConnection — 한 연결이 담당하는 모든 것</a><a class="nx" href="ch-03-bunch-vs-packet.html"><span class="lbl">다음 →</span>Bunch가 뭐고 패킷과 뭐가 다른가</a></nav></div></body></html>

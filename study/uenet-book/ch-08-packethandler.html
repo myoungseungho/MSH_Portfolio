@@ -21,6 +21,14 @@ a.xref { background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; 
 a.xref:hover { background:#bbdefb; }
 .note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
 .note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -39,7 +47,7 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>PacketHandler: 암호화·압축·핸드셰이크의 관문</h1><p>언리얼 네트워크 · 08 / 42</p></header><div class="conversation"><div class="note">Phase 2 / 소켓과 게임로직 사이의 "검문소 줄" 막히면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a> · <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a></div>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>PacketHandler: 암호화·압축·핸드셰이크의 관문</h1><p>언리얼 네트워크 · 08 / 42</p></header><div class="conversation"><div class="note">Phase 2 / 소켓과 게임로직 사이의 "검문소 줄"<br>막히면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a> · <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a></div>
 <hr></div>
 <div class="conversation"><h2>0. 먼저 그림부터 — "공항 보안검색대"</h2>
 <p>너 공항 가봤지. 비행기 타기 전에 그냥 게이트로 못 걸어가. 줄을 서서 검문소를 <strong>순서대로</strong> 통과해야 해.</p>
@@ -87,7 +95,7 @@ a.xref:hover { background:#bbdefb; }
 <p>— <code>NetConnection.cpp:706–726</code></p>
 <p>세 줄만 눈에 담자.</p>
 <ul><li><code>MakeUnique&lt;PacketHandler&gt;()</code> (706행): 이 커넥션 <strong>전용</strong> 검문소 줄 하나 생성. 커넥션마다 자기 줄을 따로 소유해(<code>TUniquePtr&lt;PacketHandler&gt; Handler;</code>, <code>NetConnection.h:444</code>). 옆 커넥션이랑 안 섞여.</li><li><code>Mode</code> (710행): 내가 <strong>클라냐 서버냐</strong>를 여기서 정해. <code>Driver-&gt;ServerConnection</code>이 있으면(=내가 서버에 붙은 클라면) Client, 아니면 Server. 같은 검문소라도 클라/서버 역할이 달라서 이걸 먼저 박아둬.</li><li><code>InitializeDelegates(... &amp;UNetConnection::LowLevelSend ...)</code> (722행): 검문소 줄의 <strong>최종 출구</strong>를 실제 소켓 송신 함수에 연결. 짐이 모든 검문소를 다 통과하면 이 함수로 나가서 소켓에 실린다.</li></ul>
-<div class="note">잠깐 예측. <code>Handler-&gt;Initialize</code>에 <code>MaxPacket * 8</code>을 넘기는데(726행), 이 <code>8</code>은 뭘까? 맞춰봐.  …정답: <strong>바이트 → 비트</strong> 변환이야. 검문소들은 헤더를 비트 단위로 잘게 떼어 쓰거든(1비트짜리 플래그도 있음). 그래서 최대 패킷 크기를 바이트가 아니라 비트로 넘겨줘야 계산이 맞아. 뒤에서 "예약 비트" 얘기 나올 때 이게 다시 등장해.</div>
+<div class="note">잠깐 예측. <code>Handler-&gt;Initialize</code>에 <code>MaxPacket * 8</code>을 넘기는데(726행), 이 <code>8</code>은 뭘까? 맞춰봐.<br>…정답: <strong>바이트 → 비트</strong> 변환이야. 검문소들은 헤더를 비트 단위로 잘게 떼어 쓰거든(1비트짜리 플래그도 있음). 그래서 최대 패킷 크기를 바이트가 아니라 비트로 넘겨줘야 계산이 맞아. 뒤에서 "예약 비트" 얘기 나올 때 이게 다시 등장해.</div>
 <hr>
 </div>
 <div class="conversation"><h2>2. 최외곽 검문소 — 무상태 핸드셰이크를 맨 바깥에 세운다</h2>
@@ -277,4 +285,4 @@ a.xref:hover { background:#bbdefb; }
 </div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>PacketHandler는 소켓과 게임로직 사이의 검문소 줄이다 — 나갈 땐 안에서 바깥으로 껍질을 입히고(OutgoingHigh→Outgoing), 들어올 땐 바깥에서 안으로 껍질을 벗기며(Incoming→IncomingHigh), 최외곽 핸드셰이크를 통과한 놈만 진짜 데이터를 주고받는다.</strong></p>
-<div class="note">다음 → <a class="xref" href="ch-09-handshake.html">handshake</a> (무상태 핸드셰이크 상세) · <a class="xref" href="ch-40-security.html">security</a> (암호화·인증 큰 그림) 옆으로 → <a class="xref" href="ch-10-ipnetdriver-socket.html">ipnetdriver-socket</a> (최종 Outgoing→LowLevelSend가 소켓에 실리는 곳)</div></div><nav class="booknav"><a href="ch-07-reliability-ack.html"><span class="lbl">← 이전</span>안 잃게: 시퀀스·ack·재전송</a><a class="nx" href="ch-09-handshake.html"><span class="lbl">다음 →</span>핸드셰이크: 연결은 어떻게 맺어지나</a></nav></div></body></html>
+<div class="note">다음 → <a class="xref" href="ch-09-handshake.html">handshake</a> (무상태 핸드셰이크 상세) · <a class="xref" href="ch-40-security.html">security</a> (암호화·인증 큰 그림)<br>옆으로 → <a class="xref" href="ch-10-ipnetdriver-socket.html">ipnetdriver-socket</a> (최종 Outgoing→LowLevelSend가 소켓에 실리는 곳)</div></div><nav class="booknav"><a href="ch-07-reliability-ack.html"><span class="lbl">← 이전</span>안 잃게: 시퀀스·ack·재전송</a><a class="nx" href="ch-09-handshake.html"><span class="lbl">다음 →</span>핸드셰이크: 연결은 어떻게 맺어지나</a></nav></div></body></html>

@@ -21,6 +21,14 @@ a.xref { background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; 
 a.xref:hover { background:#bbdefb; }
 .note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
 .note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -39,14 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>NetConnection — 한 연결이 담당하는 모든 것</h1><p>언리얼 네트워크 · 01 / 42</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람. 이 챕터가 끝나면 "연결 하나(<code>UNetConnection</code>)가 대체 무슨 일까지 책임지는가"의 전체 지도가 머릿속에 생긴다. 세부 콜체인은 다음 챕터들이 파고들 거고, 여기선 <strong>뼈대</strong>만.</div>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>NetConnection — 한 연결이 담당하는 모든 것</h1><p>언리얼 네트워크 · 01 / 42</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람.<br>이 챕터가 끝나면 "연결 하나(<code>UNetConnection</code>)가 대체 무슨 일까지 책임지는가"의 전체 지도가 머릿속에 생긴다. 세부 콜체인은 다음 챕터들이 파고들 거고, 여기선 <strong>뼈대</strong>만.</div>
 <hr></div>
 <div class="conversation"><h2>0. 먼저 비유부터 — 한 손님을 끝까지 책임지는 웨이터</h2>
 <p>식당에 손님 한 명이 앉았다고 쳐. 그 손님을 전담하는 웨이터 한 명이 붙어. 이 웨이터가 하는 일을 쭉 나열해보면:</p>
 <ol><li><strong>자리 세팅</strong> — 냅킨 깔고, 물 따르고, 메뉴판 준다. (초기화)</li><li><strong>주문받기</strong> — 손님이 말하는 걸 주방 용어로 옮겨 적는다. (수신)</li><li><strong>음식 나르기</strong> — 주방이 만든 걸 손님한테 가져다준다. (송신)</li><li><strong>테이블 여러 개 관리</strong> — 애피타이저 접시, 메인 접시, 디저트 접시를 따로따로 챙긴다. (채널 관리)</li><li><strong>손님 배웅</strong> — 계산 끝나면 자리 치우고 인사하고 보낸다. (종료)</li><li><strong>틈틈이 살핌</strong> — "물 더 드릴까요?" 하고 주기적으로 들여다본다. (Tick)</li></ol>
 <p><code>UNetConnection</code>이 딱 이 웨이터야. <strong>클라이언트 한 명당 서버에 이 객체 하나</strong>가 붙어서, 그 한 연결에 관한 위 여섯 가지를 전부 책임진다. 그리고 이 웨이터의 업무 매뉴얼을 코드로 적어놓은 게 <code>NetConnection.cpp</code>(6498줄)야.</p>
 <p>이번 챕터는 그 매뉴얼의 <strong>목차</strong>를 그리는 거다. 각 업무를 실제로 어떤 함수가 맡는지, 그 함수들이 어떤 순서로 손을 잡는지. 세부 구현은 안 판다 — 지도만.</p>
-<div class="note"><strong>소스 위치</strong> (둘 다 이 클론에 실제로 있음, 아래 코드는 전부 그 파일에서 그대로 뽑음) - 구현: <code>Engine/Source/Runtime/Engine/Private/NetConnection.cpp</code> - 헤더: <code>Engine/Source/Runtime/Engine/Classes/Engine/NetConnection.h</code></div>
+<div class="note"><strong>소스 위치</strong> (둘 다 이 클론에 실제로 있음, 아래 코드는 전부 그 파일에서 그대로 뽑음)<br>&bull;&nbsp;구현: <code>Engine/Source/Runtime/Engine/Private/NetConnection.cpp</code><br>&bull;&nbsp;헤더: <code>Engine/Source/Runtime/Engine/Classes/Engine/NetConnection.h</code></div>
 <hr>
 </div>
 <div class="conversation"><h2>1. 먼저 알고 갈 것 — 이건 "추상 클래스"다</h2>
@@ -243,4 +251,4 @@ a.xref:hover { background:#bbdefb; }
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong><code>UNetConnection</code>은 클라 한 명당 하나 붙는 "전담 웨이터"다 — 초기화·수신·송신·채널·종료를 다 책임지되, 진짜 소켓질(<code>LowLevelSend</code>)만은 하위 클래스에 위임한 추상 골격이다.</strong></p>
 <hr>
-<div class="note">막히면(선행 개념) → <a class="xref" href="ch-39-connection-lifecycle.html">connection-lifecycle</a> · <a class="xref" href="ch-05-channel-types.html">channel-types</a> 다음(수신 체인 정주행) → <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a></div></div><nav class="booknav"><a href="index.html"><span class="lbl">←</span>목차로</a><a class="nx" href="ch-02-receive-callchain.html"><span class="lbl">다음 →</span>패킷이 도착하면: 수신 콜체인</a></nav></div></body></html>
+<div class="note">막히면(선행 개념) → <a class="xref" href="ch-39-connection-lifecycle.html">connection-lifecycle</a> · <a class="xref" href="ch-05-channel-types.html">channel-types</a><br>다음(수신 체인 정주행) → <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a></div></div><nav class="booknav"><a href="index.html"><span class="lbl">←</span>목차로</a><a class="nx" href="ch-02-receive-callchain.html"><span class="lbl">다음 →</span>패킷이 도착하면: 수신 콜체인</a></nav></div></body></html>

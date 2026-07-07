@@ -21,6 +21,14 @@ a.xref { background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; 
 a.xref:hover { background:#bbdefb; }
 .note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
 .note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -39,7 +47,7 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>보낼 때 — 송신 콜체인</h1><p>언리얼 네트워크 · 06 / 42</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람. 이 챕터가 끝나면 "내가 만든 데이터 한 덩어리가 어떤 계단을 밟아 소켓까지 걸어가는지, 그리고 <strong>언제 진짜로 소켓을 때리는지(Flush)</strong>"가 머릿속에 그려질 거야.  <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a>의 자매편이야. 저긴 "상자를 받아 까는 길", 여긴 "상자를 싸서 내보내는 길". 방향만 반대고 뼈대는 거울처럼 대칭이야.</div>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>보낼 때 — 송신 콜체인</h1><p>언리얼 네트워크 · 06 / 42</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람.<br>이 챕터가 끝나면 "내가 만든 데이터 한 덩어리가 어떤 계단을 밟아 소켓까지 걸어가는지, 그리고 <strong>언제 진짜로 소켓을 때리는지(Flush)</strong>"가 머릿속에 그려질 거야.<br><a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a>의 자매편이야. 저긴 "상자를 받아 까는 길", 여긴 "상자를 싸서 내보내는 길". 방향만 반대고 뼈대는 거울처럼 대칭이야.</div>
 <hr></div>
 <div class="conversation"><h2>0. 먼저 비유부터 — 집 앞 우체통</h2>
 <p>편지 부칠 때 생각해봐. 편지 한 통 쓸 때마다 우체국까지 뛰어가진 않잖아? 집 앞 우체통에 <strong>툭 넣어두면</strong>, 우체부가 정해진 시간에 와서 <strong>한꺼번에 걷어간다.</strong></p>
@@ -51,7 +59,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그리고 이 챕터의 진짜 질문은 이거 하나야:</p>
 <div class="note"><strong>"정해진 순간"이 대체 언제냐?</strong></div>
 <p>이걸 실제로 구현한 함수들을 하나씩 밟아보자.</p>
-<div class="note">용어 두 개만 미리 깔고 갈게. 자세한 건 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a> - <strong>패킷(Packet)</strong>: UDP 한 방으로 나가는 바이트 덩어리 = "봉투". - <strong>번치(Bunch)</strong>: 그 봉투 안에 담기는 논리적 데이터 조각 = "편지". 봉투 하나에 편지 여러 통.</div>
+<div class="note">용어 두 개만 미리 깔고 갈게. 자세한 건 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a><br>&bull;&nbsp;<strong>패킷(Packet)</strong>: UDP 한 방으로 나가는 바이트 덩어리 = "봉투".<br>&bull;&nbsp;<strong>번치(Bunch)</strong>: 그 봉투 안에 담기는 논리적 데이터 조각 = "편지". 봉투 하나에 편지 여러 통.</div>
 <hr>
 </div>
 <div class="conversation"><h2>1. 전체 콜체인 한 장으로</h2>
@@ -113,7 +121,7 @@ a.xref:hover { background:#bbdefb; }
 </div>
 <div class="conversation"><h2>2. 잠깐, 맞춰봐 (예측-검증)</h2>
 <p>Bunch를 버퍼에 쓰려고 커넥션이 버퍼 기록을 시작했어. <strong>순서상 뭐가 먼저 일어날까?</strong></p>
-<div class="note">1. 일단 데이터를 버퍼에 쓴다 → 다 쓰고 나서 "어라, 넘쳤네?" 확인한다. 2. 쓰기 <strong>전에</strong> "이거 지금 버퍼에 들어가?" 먼저 확인한다 → 안 되면 비우고(Flush) 쓴다.</div>
+<div class="note">1. 일단 데이터를 버퍼에 쓴다 → 다 쓰고 나서 "어라, 넘쳤네?" 확인한다.<br>2. 쓰기 <strong>전에</strong> "이거 지금 버퍼에 들어가?" 먼저 확인한다 → 안 되면 비우고(Flush) 쓴다.</div>
 <p>게임 서버 감각이면 1번이 자연스러워 보여. "일단 memcpy 하고 사이즈 체크" 패턴 많이 쓰니까.</p>
 <p>...근데 <strong>정답은 2번이야.</strong> <code>SendRawBunch</code>가 버퍼에 손대기 직전 코드를 봐.</p>
 <p><strong>[스니펫 1] 헤더 준비(Prepare) 먼저, 그다음 TimeSensitive 세팅, 그다음 기록 — <code>NetConnection.cpp:4482-4492</code></strong></p>

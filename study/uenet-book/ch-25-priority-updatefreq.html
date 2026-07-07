@@ -21,6 +21,14 @@ a.xref { background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; 
 a.xref:hover { background:#bbdefb; }
 .note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
 .note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -47,7 +55,7 @@ a.xref:hover { background:#bbdefb; }
 <p>앞 축이 <strong>NetUpdateFrequency</strong>(갱신빈도), 뒤 축이 <strong>NetPriority</strong>(우선순위)야. 헷갈리기 쉬운데 완전히 다른 축이라는 걸 먼저 못박자.</p>
 <ul><li>갱신빈도 = <strong>얼마나 자주</strong> (시간 간격)</li><li>우선순위 = <strong>누가 먼저</strong> (포화 시 생존 순번)</li></ul>
 <p>그리고 이 둘을 실제로 굴리는 게 <code>UNetDriver::ServerReplicateActors</code> 파이프라인이야. 이 챕터는 그 파이프라인을 따라간다.</p>
-<div class="note">앞 단계(어떤 액터가 애초에 후보에 오르나 = relevancy)가 헷갈리면 → <a class="xref" href="ch-24-relevancy.html">relevancy</a> 이 뒤에 "안 변하는 액터는 아예 복제 끄기"가 궁금하면 → <a class="xref" href="ch-26-dormancy.html">dormancy</a></div>
+<div class="note">앞 단계(어떤 액터가 애초에 후보에 오르나 = relevancy)가 헷갈리면 → <a class="xref" href="ch-24-relevancy.html">relevancy</a><br>이 뒤에 "안 변하는 액터는 아예 복제 끄기"가 궁금하면 → <a class="xref" href="ch-26-dormancy.html">dormancy</a></div>
 <hr>
 </div>
 <div class="conversation"><h2>큰 그림: 세 단계</h2>
@@ -121,7 +129,7 @@ a.xref:hover { background:#bbdefb; }
 	}
 }</div>
 <p>세 가지만 보면 돼.</p>
-<ol><li><strong><code>Time = ElapsedTime - Channel-&gt;LastUpdateTime</code></strong> — 이 액터를 마지막으로 보낸 뒤 흐른 시간. 오래 못 보냈을수록 커진다.</li><li>**점수 = <code>65536 * GetNetPriority(...)</code>** — 65536은 그냥 정수 스케일링(float를 int 점수로). 본질은 <code>GetNetPriority</code>.</li><li><strong>Viewer 여럿이면 <code>Max</code></strong> — 한 연결에 시점이 여러 개면(분할화면 등) 그중 가장 높은 점수 채택.</li></ol>
+<ol><li><strong><code>Time = ElapsedTime - Channel-&gt;LastUpdateTime</code></strong> — 이 액터를 마지막으로 보낸 뒤 흐른 시간. 오래 못 보냈을수록 커진다.</li><li><strong>점수 = <code>65536 * GetNetPriority(...)</code></strong> — 65536은 그냥 정수 스케일링(float를 int 점수로). 본질은 <code>GetNetPriority</code>.</li><li><strong>Viewer 여럿이면 <code>Max</code></strong> — 한 연결에 시점이 여러 개면(분할화면 등) 그중 가장 높은 점수 채택.</li></ol>
 <p>그럼 <code>GetNetPriority</code>의 정체는? 이게 이 챕터의 심장이야.</p>
 <p><code>Runtime/Engine/Private/ActorReplication.cpp:45</code></p>
 <div class="code-block">float AActor::GetNetPriority(const FVector&amp; ViewPos, const FVector&amp; ViewDir, AActor* Viewer, AActor* ViewTarget, UActorChannel* InChannel, float Time, bool bLowBandwidth)
@@ -140,7 +148,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그리고 같은 함수 맨 끝:</p>
 <p><code>Runtime/Engine/Private/ActorReplication.cpp:88</code></p>
 <div class="code-block">	return NetPriority * Time;</div>
-<p>**최종식: <code>NetPriority * Time</code>.**</p>
+<p><strong>최종식: <code>NetPriority * Time</code>.</strong></p>
 <p>여기서 두 재료의 성격이 확 갈려.</p>
 <ul><li><strong><code>NetPriority</code></strong> — 액터가 들고 있는 고정 가중치. 기본 <code>1.0</code>. 캐릭터는 높게, 배경 장식은 낮게 세팅. <strong>절대 순번이 아니라 배수</strong>야. 2.0이면 같은 조건에서 점수 2배.</li><li><strong><code>Time</code></strong> — 상수가 아니라 <strong>"마지막 전송 후 흐른 시간"</strong>. 그리고 함수 중간에서 거리/시야로 배수 조정돼:</li><li>내가 보는 대상(ViewTarget)이거나 그 소유물 → <code>Time *= 4.f</code> (코드 :56)</li><li>정면으로 똑바로 쳐다보는 중 → <code>Time *= 2.f</code> (:80)</li><li>등 뒤 + 멀다 → <code>Time *= 0.2f</code> (:69)</li></ul>
 <p><code>NetPriority</code>(고정 중요도) × <code>Time</code>(굶은 시간 × 거리·시야 보정) — 이 곱이 점수다.</p>
@@ -182,4 +190,4 @@ a.xref:hover { background:#bbdefb; }
 </div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>갱신빈도(1/Freq)가 "얼마나 자주 후보에 올릴지"를 시간으로 잠그고, 우선순위(NetPriority × 굶은시간)가 "대역폭이 찰 때 누가 컷라인 위에 남을지"를 정한다 — 두 축이 좁은 문 앞의 배분을 나눠 맡는다.</strong></p>
-<div class="note">막히면 → <a class="xref" href="ch-24-relevancy.html">relevancy</a> (애초에 후보가 되는 조건) 다음 → <a class="xref" href="ch-26-dormancy.html">dormancy</a> (안 변하는 액터는 아예 복제 정지)</div></div><nav class="booknav"><a href="ch-24-relevancy.html"><span class="lbl">← 이전</span>관련성: 누구에게 보낼지 (Relevancy)</a><a class="nx" href="ch-26-dormancy.html"><span class="lbl">다음 →</span>Dormancy: 안 바뀌는 액터는 재운다</a></nav></div></body></html>
+<div class="note">막히면 → <a class="xref" href="ch-24-relevancy.html">relevancy</a> (애초에 후보가 되는 조건)<br>다음 → <a class="xref" href="ch-26-dormancy.html">dormancy</a> (안 변하는 액터는 아예 복제 정지)</div></div><nav class="booknav"><a href="ch-24-relevancy.html"><span class="lbl">← 이전</span>관련성: 누구에게 보낼지 (Relevancy)</a><a class="nx" href="ch-26-dormancy.html"><span class="lbl">다음 →</span>Dormancy: 안 바뀌는 액터는 재운다</a></nav></div></body></html>

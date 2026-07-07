@@ -21,6 +21,14 @@ a.xref { background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; 
 a.xref:hover { background:#bbdefb; }
 .note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
 .note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -39,7 +47,7 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>남을 부드럽게: 보간 / 외삽 / 스무딩 (Simulated Proxy Smoothing)</h1><p>언리얼 네트워크 · 32 / 42</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람. 앞 챕터에서 "내 캐릭터"가 어떻게 움직이고(예측) 서버가 어떻게 틀렸다고 고쳐주는지(보정)를 봤어. 이번엔 정반대편 — <strong>화면에 보이는 "남"의 캐릭터</strong>를 다룬다.</div>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>남을 부드럽게: 보간 / 외삽 / 스무딩 (Simulated Proxy Smoothing)</h1><p>언리얼 네트워크 · 32 / 42</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람.<br>앞 챕터에서 "내 캐릭터"가 어떻게 움직이고(예측) 서버가 어떻게 틀렸다고 고쳐주는지(보정)를 봤어. 이번엔 정반대편 — <strong>화면에 보이는 "남"의 캐릭터</strong>를 다룬다.</div>
 <hr></div>
 <div class="conversation"><h2>0) 들어가며 — 정거장에 띄엄띄엄 도착하는 버스</h2>
 <p>친구가 버스 타고 오는 걸 지도 앱으로 본다고 해봐. 버스 GPS가 매 순간 오는 게 아니라 <strong>5초에 한 번씩</strong> 위치를 쏴. 그럼 지도 위 버스 아이콘이 어떻게 보일까.</p>
@@ -58,7 +66,7 @@ a.xref:hover { background:#bbdefb; }
 </div>
 <div class="conversation"><h2>1) 큰 그림 — 캡슐과 메시를 분리해라</h2>
 <p>스무딩의 <strong>핵심 아이디어 딱 하나</strong>만 먼저 못 박자. 나머지는 다 여기서 파생돼.</p>
-<div class="note"><strong>충돌 캡슐(collision capsule)</strong> 은 정확한 서버 좌표로 <strong>즉시 순간이동</strong>시킨다. <strong>눈에 보이는 메시(mesh)</strong> 만 옛 위치에 잠깐 남겨두고 <strong>서서히 따라붙게</strong> 한다.</div>
+<div class="note"><strong>충돌 캡슐(collision capsule)</strong> 은 정확한 서버 좌표로 <strong>즉시 순간이동</strong>시킨다.<br><strong>눈에 보이는 메시(mesh)</strong> 만 옛 위치에 잠깐 남겨두고 <strong>서서히 따라붙게</strong> 한다.</div>
 <p>왜 굳이 둘을 나눠? 여기서 예측 하나 해보자. <strong>왜 캡슐까지 부드럽게 밀지 않고 순간이동시킬까?</strong></p>
 <p>...캡슐은 <strong>게임 규칙의 몸통</strong>이거든. 총알 히트 판정, 벽 충돌, "저 캐릭터 지금 어디 있냐"는 질문의 정답은 전부 캡슐 위치로 답해. 이걸 부드럽게 미루면 판정이 과거 위치로 틀어져. 반면 메시는 그냥 <strong>눈요기</strong>야 — 좀 늦게 도착해도 게임 규칙엔 아무 영향 없어. 그러니까:</p>
 <ul><li><strong>캡슐 = 정확성 담당</strong> → 서버 좌표로 즉시 스냅(pop).</li><li><strong>메시 = 부드러움 담당</strong> → 옛 위치와 새 위치의 차이(offset)를 저장해두고 매 틱 조금씩 0으로 줄임.</li></ul>
@@ -237,4 +245,4 @@ enum class ENetworkSmoothingMode : uint8
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <div class="note"><strong>남의 캐릭터는 충돌 캡슐만 정확한 서버 좌표로 즉시 순간이동시키고, 눈에 보이는 메시는 옛 위치와의 차이(offset)를 저장해뒀다 매 틱 0으로 녹여서 — "정확성은 즉시, 부드러움은 서서히"로 순간이동을 숨긴다.</strong></div>
 <hr>
-<div class="note">막히면 → <a class="xref" href="ch-30-client-prediction.html">client-prediction</a> (내 캐릭터는 왜/어떻게 먼저 움직이나), <a class="xref" href="ch-31-server-reconciliation.html">server-reconciliation</a> (서버가 틀렸다고 고치는 반대편), <a class="xref" href="ch-29-charactermovement-overview.html">charactermovement-overview</a> (CMC 전체 지도) 다음 → <a class="xref" href="ch-33-root-motion-replication.html">root-motion-replication</a> (몽타주·루트모션이 얹히면 위치 보정은 어떻게 꼬이나), <a class="xref" href="ch-34-server-time-sync.html">server-time-sync</a> (Linear 보간이 목매는 그 "서버 타임스탬프" 시계는 어떻게 맞추나), <a class="xref" href="ch-35-lag-compensation.html">lag-compensation</a> (서버가 과거로 되감아 히트 판정하는 이야기)</div></div><nav class="booknav"><a href="ch-31-server-reconciliation.html"><span class="lbl">← 이전</span>서버 보정 — ClientAdjustPosition</a><a class="nx" href="ch-33-root-motion-replication.html"><span class="lbl">다음 →</span>애니가 만드는 이동을 복제하기 — Root Motion Replication</a></nav></div></body></html>
+<div class="note">막히면 → <a class="xref" href="ch-30-client-prediction.html">client-prediction</a> (내 캐릭터는 왜/어떻게 먼저 움직이나), <a class="xref" href="ch-31-server-reconciliation.html">server-reconciliation</a> (서버가 틀렸다고 고치는 반대편), <a class="xref" href="ch-29-charactermovement-overview.html">charactermovement-overview</a> (CMC 전체 지도)<br>다음 → <a class="xref" href="ch-33-root-motion-replication.html">root-motion-replication</a> (몽타주·루트모션이 얹히면 위치 보정은 어떻게 꼬이나), <a class="xref" href="ch-34-server-time-sync.html">server-time-sync</a> (Linear 보간이 목매는 그 "서버 타임스탬프" 시계는 어떻게 맞추나), <a class="xref" href="ch-35-lag-compensation.html">lag-compensation</a> (서버가 과거로 되감아 히트 판정하는 이야기)</div></div><nav class="booknav"><a href="ch-31-server-reconciliation.html"><span class="lbl">← 이전</span>서버 보정 — ClientAdjustPosition</a><a class="nx" href="ch-33-root-motion-replication.html"><span class="lbl">다음 →</span>애니가 만드는 이동을 복제하기 — Root Motion Replication</a></nav></div></body></html>

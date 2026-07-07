@@ -21,6 +21,14 @@ a.xref { background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; 
 a.xref:hover { background:#bbdefb; }
 .note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
 .note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -39,14 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>NetDriver — 프레임마다 도는 엔진</h1><p>언리얼 네트워크 · 11 / 42</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람. 이 챕터가 끝나면 "엔진이 매 프레임 네트워크를 <strong>언제, 어떤 순서로</strong> 돌리는지" — 특히 <strong>받는 펌프(TickDispatch)</strong>와 <strong>모든 커넥션을 도는 상위 루프(TickFlush)</strong>의 뼈대가 머릿속에 그려질 거야.  <a class="xref" href="ch-06-send-callchain.html">send-callchain</a>의 자매편이야. 저긴 "번치 한 덩어리가 소켓까지 걸어가는 길", 여긴 그 길을 <strong>매 프레임 누가 불러서 돌리는가</strong> — 한 층 위에서 내려다보는 시점이야.</div>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>NetDriver — 프레임마다 도는 엔진</h1><p>언리얼 네트워크 · 11 / 42</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람.<br>이 챕터가 끝나면 "엔진이 매 프레임 네트워크를 <strong>언제, 어떤 순서로</strong> 돌리는지" — 특히 <strong>받는 펌프(TickDispatch)</strong>와 <strong>모든 커넥션을 도는 상위 루프(TickFlush)</strong>의 뼈대가 머릿속에 그려질 거야.<br><a class="xref" href="ch-06-send-callchain.html">send-callchain</a>의 자매편이야. 저긴 "번치 한 덩어리가 소켓까지 걸어가는 길", 여긴 그 길을 <strong>매 프레임 누가 불러서 돌리는가</strong> — 한 층 위에서 내려다보는 시점이야.</div>
 <hr></div>
 <div class="conversation"><h2>0. 먼저 비유부터 — 심장은 "계속" 뛰는 게 아니라 "박자"로 뛴다</h2>
 <p>우체국 하나 떠올려봐. 이 우체국은 24시간 문 열어두고 사람 올 때마다 즉석에서 처리하지 않아. 대신 <strong>정해진 박자</strong>로 움직여.</p>
 <ul><li>아침에 문 열면 → <strong>밤새 우편함에 쌓인 편지를 싹 걷어 안으로 들인다</strong> (받기)</li><li>하루 일 다 하고 → <strong>오늘 나갈 편지를 봉투에 담아 트럭에 실어 내보낸다</strong> (보내기)</li><li>문 닫고, 다음 날 또 똑같이.</li></ul>
 <p>게임 엔진 네트워크가 정확히 이 박자야. 엔진은 매 프레임(대략 1/60초)마다 심장을 <strong>한 번</strong> 뛰는데, 그 한 박동 안에서 네트워크 담당자가 <strong>두 번</strong> 불려 나와 — 앞에서 한 번(받기), 뒤에서 한 번(보내기).</p>
 <p>이 "네트워크 담당자"가 바로 <strong>UNetDriver</strong>야. 그리고 이 챕터는 그 담당자가 프레임마다 뭘 하는지, 뼈대만 딱 훑어.</p>
-<div class="note">핵심 직관 하나 먼저 박아두자. <strong>매 프레임 = 받기 펌프 1번 + 보내기 펌프 1번.</strong> 이 두 펌프를 실제로 구현한 함수가 <code>TickDispatch</code>(받기)와 <code>TickFlush</code>(보내기)야. 이 챕터의 주인공.</div>
+<div class="note">핵심 직관 하나 먼저 박아두자.<br><strong>매 프레임 = 받기 펌프 1번 + 보내기 펌프 1번.</strong> 이 두 펌프를 실제로 구현한 함수가 <code>TickDispatch</code>(받기)와 <code>TickFlush</code>(보내기)야. 이 챕터의 주인공.</div>
 <hr>
 </div>
 <div class="conversation"><h2>1. 그런데 월드는 NetDriver를 어떻게 부를까? — 델리게이트 한 방</h2>
@@ -65,7 +73,7 @@ a.xref:hover { background:#bbdefb; }
 }</div>
 <p>— <code>World.cpp:10541</code></p>
 <p><code>.Broadcast(DeltaTime)</code> 이 딱 한 줄이 방송이야. 여기 등록된 리스너(=우리 NetDriver의 <code>InternalTickDispatch</code>)가 자동으로 호출돼. <strong>월드는 NetDriver를 직접 몰라도 되는 느슨한 결합</strong> — 이게 델리게이트를 쓰는 이유야.</p>
-<div class="note">잠깐 맞춰봐 🤔 — 그럼 <code>InternalTickDispatch</code>가 바로 소켓에서 패킷을 퍼올릴까? ... 아니야. 반전. <code>Internal</code>은 <strong>감싸는 층</strong>일 뿐이고, 소켓 읽기는 저 아래 또 한 겹 안쪽에 있어. 그것도 이 클론엔 절반이 없어. 왜 그런지 아래에서 풀게.</div>
+<div class="note">잠깐 맞춰봐 🤔 — 그럼 <code>InternalTickDispatch</code>가 바로 소켓에서 패킷을 퍼올릴까?<br>... 아니야. 반전. <code>Internal</code>은 <strong>감싸는 층</strong>일 뿐이고, 소켓 읽기는 저 아래 또 한 겹 안쪽에 있어. 그것도 이 클론엔 절반이 없어. 왜 그런지 아래에서 풀게.</div>
 <hr>
 </div>
 <div class="conversation"><h2>2. Broadcast → Internal → Tick, 3단 래핑</h2>
@@ -139,7 +147,7 @@ a.xref:hover { background:#bbdefb; }
 <p>— <code>NetDriver.cpp:2709</code></p>
 <p>역순(<code>Num()-1</code>부터 <code>0</code>까지) 루프인 게 포인트야. 중간에 <code>CleanUp()</code>으로 배열 원소가 빠져도 인덱스가 안 꼬이거든. 상태가 <code>USOCK_Closed</code>면 정리, 아니면 <code>PreTickDispatch()</code>로 이번 프레임 수신 준비만 시켜.</p>
 <p><strong>여기까지가 베이스가 하는 전부야.</strong> 시간 갱신, 히치 감지, <code>UpdateStandbyCheatStatus()</code>(대기 상태 치트 감지), 닫힌 커넥션 청소, 각 커넥션 <code>PreTickDispatch()</code>. 그럼 실제 소켓 읽기는?</p>
-<div class="note">### 🔬 이 클론에 소스 미포함 — 실제 소켓 recv는 대조 불가  진짜 <code>recvfrom</code>을 while 루프로 퍼올리는 코드는 <strong>서브클래스 <code>IpNetDriver::TickDispatch</code>가 이 베이스 함수를 오버라이드해서</strong> 채워. 그런데 이 학습 트리엔 Engine 모듈만 담겨 있어서 <strong><code>IpNetDriver.cpp</code> / <code>IpConnection.cpp</code> 파일 자체가 없어</strong> (<code>find -iname "IpNetDriver*"</code> → 0건).  그래서 이 챕터는 베이스 <code>UNetDriver</code> 흐름까지만 verbatim으로 대조했어. "소켓에서 UDP를 while로 다 빨아들이는" 부분은 개념으로만 알아둬: - 서브클래스가 <code>while (Socket-&gt;RecvFrom(...))</code> 로 이번 프레임 도착분을 싹 퍼올려서 - 보낸 주소로 커넥션을 찾고(없으면 새 커넥션/핸드셰이크) - <code>Connection-&gt;ReceivedRawPacket()</code>으로 넘겨 위로 올린다  소켓에서 올라온 raw가 번치로 풀려 위로 전달되는 <strong>받는 쪽 상세 계단</strong>은 → <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a>, IpNetDriver 소켓 층 자체는 → <a class="xref" href="ch-10-ipnetdriver-socket.html">ipnetdriver-socket</a></div>
+<div class="note">### 🔬 이 클론에 소스 미포함 — 실제 소켓 recv는 대조 불가<br>진짜 <code>recvfrom</code>을 while 루프로 퍼올리는 코드는 <strong>서브클래스 <code>IpNetDriver::TickDispatch</code>가 이 베이스 함수를 오버라이드해서</strong> 채워. 그런데 이 학습 트리엔 Engine 모듈만 담겨 있어서 <strong><code>IpNetDriver.cpp</code> / <code>IpConnection.cpp</code> 파일 자체가 없어</strong> (<code>find -iname "IpNetDriver*"</code> → 0건).<br>그래서 이 챕터는 베이스 <code>UNetDriver</code> 흐름까지만 verbatim으로 대조했어. "소켓에서 UDP를 while로 다 빨아들이는" 부분은 개념으로만 알아둬:<br>&bull;&nbsp;서브클래스가 <code>while (Socket-&gt;RecvFrom(...))</code> 로 이번 프레임 도착분을 싹 퍼올려서<br>&bull;&nbsp;보낸 주소로 커넥션을 찾고(없으면 새 커넥션/핸드셰이크)<br>&bull;&nbsp;<code>Connection-&gt;ReceivedRawPacket()</code>으로 넘겨 위로 올린다<br>소켓에서 올라온 raw가 번치로 풀려 위로 전달되는 <strong>받는 쪽 상세 계단</strong>은 → <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a>, IpNetDriver 소켓 층 자체는 → <a class="xref" href="ch-10-ipnetdriver-socket.html">ipnetdriver-socket</a></div>
 <p>즉 베이스 <code>TickDispatch</code>의 진짜 역할은 "<strong>받기 펌프의 뼈대/관리</strong>"고, "<strong>펌프질 그 자체</strong>"는 서브클래스가 끼워 넣는 구조야. 초보가 제일 헷갈리는 지점이라 크게 박아둔다.</p>
 <p>받고 나면 <code>BroadcastPostTickDispatch()</code> → <code>UNetDriver::PostTickDispatch()</code>(<code>NetDriver.cpp:2762</code>)로 수신 후처리(대기 중이던 RPC flush 등)를 하고 받기 단계 끝.</p>
 <hr>

@@ -21,6 +21,14 @@ a.xref { background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; 
 a.xref:hover { background:#bbdefb; }
 .note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
 .note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -45,7 +53,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그런데 교실 바닥에 격자무늬 타일을 깔고 "너는 네가 밟고 선 타일하고, 딱 붙은 옆 타일만 보면 돼"라고 규칙을 바꾸면? 학생 한 명이 훑는 대상이 999명에서 <strong>타일 몇 칸 안의 서너 명</strong>으로 확 줄어. 전체 계산이 O(N²)에서 거의 O(N)으로 내려앉아.</p>
 <p>게임 서버가 매 프레임 하는 "이 액터를 이 플레이어한테 보내야 하나?"(관련성, <a class="xref" href="ch-24-relevancy.html">relevancy</a>) 판정이 정확히 그 900번 / 100만 번짜리 문제야. 전통 경로(<a class="xref" href="ch-12-server-replicate-actors.html">server-replicate-actors</a>)는 매 프레임 전체 액터를 훑어. 100명까지는 버텨. 1000명이 되면 못 버텨.</p>
 <p><strong>이 "타일 깔기"를 실제로 구현한 게 이 챕터의 주인공, <code>UReplicationGraphNode_GridSpatialization2D</code>야.</strong> 월드를 <code>CellSize</code> 간격 격자로 쪼개고, 플레이어는 자기가 선 셀만 조회하게 만들어. 파일은 특이하게 <code>Engine/Source</code>가 아니라 플러그인 쪽에 있어:</p>
-<div class="note">소스 위치: <code>Engine/Plugins/Runtime/ReplicationGraph/</code> 이 클론엔 플러그인 소스가 <strong>전량 포함</strong>돼 있어서 아래 코드는 전부 원문 대조 완료야. (미포함 항목 없음)</div>
+<div class="note">소스 위치: <code>Engine/Plugins/Runtime/ReplicationGraph/</code><br>이 클론엔 플러그인 소스가 <strong>전량 포함</strong>돼 있어서 아래 코드는 전부 원문 대조 완료야. (미포함 항목 없음)</div>
 <hr>
 </div>
 <div class="conversation"><h2>1) 큰 그림: N×M을 N+M으로 쪼개는 두 개의 축</h2>
@@ -149,7 +157,7 @@ public:
 						}</div>
 <p>저 <code>if</code> 조건이 축②의 전부야. "새 사각형이 옛 사각형과 <strong>전혀 안 겹칠 때만</strong>"(완전히 왼쪽/오른쪽/위/아래로 벗어남) 재배치를 해. 조건이 참이면 옛 셀들에서 <code>RemoveDynamicActor</code>, 새 셀들에 <code>AddDynamicActor</code>. 조건이 거짓 — 즉 아직 같은 셀 안에서 꼼지락 — 이면 <strong>이 블록을 통째로 건너뛰어</strong>. 아무 리스트도 안 건드려.</p>
 <p>그리고 <code>UNLIKELY(...)</code> 매크로 보이지? 컴파일러한테 "이 분기는 잘 안 일어난다"고 힌트를 주는 거야. 대부분의 프레임에서 대부분의 액터는 셀을 안 넘거든. 코드 저자도 "재배치는 드문 일"이라고 못 박아둔 셈이야.</p>
-<div class="note"><strong>잠깐 맞춰봐 🔮</strong> 그럼 셀을 절대 안 넘는 액터 — 벽에 걸린 문짝 — 는 매 프레임 이 위치 비교 산수라도 돌까, 아니면 그것마저 안 돌까?  <strong>반전 👉</strong> 그것마저 안 돌아. 문짝은 애초에 <strong>정적(static) 액터</strong>로 등록돼서(<code>AddActor_Static</code>, <code>ReplicationGraph.h:598</code>) 이 동적 액터 순회 루프에 <strong>들어오지도 않아</strong>. 셀에 딱 한 번 넣고 끝. 축②가 "안 움직이면 비교조차 스킵"이 아니라 "안 움직이는 놈은 아예 명단에서 뺀다"까지 간다는 거지. 위치 비교(S7)를 겪는 건 오직 매 프레임 움직일 수 있는 동적 액터뿐이야.</div>
+<div class="note"><strong>잠깐 맞춰봐 🔮</strong><br>그럼 셀을 절대 안 넘는 액터 — 벽에 걸린 문짝 — 는 매 프레임 이 위치 비교 산수라도 돌까, 아니면 그것마저 안 돌까?<br><strong>반전 👉</strong> 그것마저 안 돌아. 문짝은 애초에 <strong>정적(static) 액터</strong>로 등록돼서(<code>AddActor_Static</code>, <code>ReplicationGraph.h:598</code>) 이 동적 액터 순회 루프에 <strong>들어오지도 않아</strong>. 셀에 딱 한 번 넣고 끝. 축②가 "안 움직이면 비교조차 스킵"이 아니라 "안 움직이는 놈은 아예 명단에서 뺀다"까지 간다는 거지. 위치 비교(S7)를 겪는 건 오직 매 프레임 움직일 수 있는 동적 액터뿐이야.</div>
 <hr>
 </div>
 <div class="conversation"><h2>5) 절감 축① 실물: 준비는 밖에서 1회, 수집은 안에서 커넥션마다</h2>
