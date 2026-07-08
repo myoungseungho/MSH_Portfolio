@@ -49,6 +49,14 @@ a.xref:hover { background:#bbdefb; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>안 잃게: 시퀀스·ack·재전송</h1><p>언리얼 네트워크 · 07 / 43</p></header><div class="conversation"><div class="note">이 챕터 한 문장: <strong>UDP는 편지를 흘려도 책임 안 진다. 그 위에서 "번호 매기고 · 받았다는 회신 받고 · 안 오면 다시 보내는" 신뢰성을 엔진이 직접 짜는 법</strong>을 뼈대만 본다.<br>막히면 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a> (Bunch와 패킷이 왜 다른 물건인지) · <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a> (커넥션이 뭘 들고 있는지)</div>
 <hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이 상황을 바로 알아. <code>SP_*</code> 패킷 하나 보냈는데 클라가 못 받았거나, <code>CM_*</code> 요청이 두 번 온 것처럼 보이거나, 아이템 지급 순서가 뒤집혀서 "칼을 받은 뒤에 인벤토리를 열어야 하는데, 인벤토리만 먼저 열림" 같은 일이 터지는 거야.</p>
+<p>우리 조선 서버는 TCP 위에서 움직이니까 이런 걱정 대부분을 커널이 대신 해줘. IOCP 워커가 완료 통지를 받고, <code>CChosunPlayer</code> 쪽으로 넘겨서 단일스레드 로직에서 순서대로 처리하면, 보통은 "앞 패킷이 빠졌나?", "이 패킷 다시 보내야 하나?"를 직접 세지 않아도 돼. TCP가 번호표, 수령증, 재전송을 뒤에서 해주기 때문이야.</p>
+<p>근데 UE는 UDP를 쓴다. UDP는 그냥 일반 우편이라서 편지를 잃어버려도 미안하다는 말도 안 하고, 3번 편지보다 4번 편지가 먼저 도착해도 아무렇지 않아. 이 상태로 "아이템 획득", "RPC 실행", "액터 생성" 같은 중요한 메시지를 보내면 게임은 금방 이상해진다. 한 명한테만 칼이 없거나, 이미 죽은 몬스터가 다시 맞거나, 서버와 클라가 서로 다른 세상을 보게 돼.</p>
+<p>그래서 이 챕터의 답은 <strong>시퀀스·ack·재전송</strong>이야. 편지마다 번호를 붙이고, 받은 쪽이 "받았어"라고 알려주면 사본을 버리고, 안 왔다고 판단되면 같은 편지를 다시 보낸다. 어려운 말 같지만 등기우편이랑 똑같아. 번호표 붙이고, 수령증 받고, 수령증 안 오면 다시 부치는 것.</p>
+<p>여기서 중요한 건 UE가 이걸 <strong>모든 데이터에 똑같이</strong> 하지 않는다는 점이야. 매 프레임 위치처럼 오래된 값은 잃어도 다음 값이 오면 되지만, 아이템 획득 같은 reliable bunch는 잃으면 안 된다. 그래서 UE는 UDP 위에서 필요한 것만 골라 reliable로 만들고, 그걸 <code>OutRec</code>, <code>ChSequence</code>, <code>PacketId</code>, <code>ack/nak</code>로 관리한다.</p>
+<p>이걸 지금 배우는 이유도 흐름상 딱 맞아. 앞에서 Bunch와 Packet의 차이, 그리고 <code>UNetConnection</code>이 연결 상태를 들고 있다는 걸 봤지. 이제 그 연결이 "중요한 Bunch를 정말 안 잃게 하려면 뭘 들고 있어야 하는가"를 보는 차례야. 이 장을 잡아야 뒤에서 수신 정렬, PacketHandler, 채널 동작을 읽을 때 "아, 이 번호와 수령증 때문에 저 코드가 있는 거구나" 하고 길이 보인다.</p>
+</div>
 <div class="conversation"><h2>0. 들어가기 전에 — 등기우편 비유</h2>
 <p>일반 우편이랑 등기우편 차이 알지?</p>
 <ul><li><strong>일반 우편(UDP 그 자체)</strong>: 우체통에 넣으면 끝. 도착했는지 안 했는지 아무도 안 알려줘. 잃어버려도 그만.</li><li><strong>등기우편(reliable bunch)</strong>: 편지마다 <strong>일련번호</strong>를 매기고, 받는 사람이 <strong>수령증</strong>에 사인해서 돌려보내. 그 수령증이 안 오면? <strong>똑같은 편지를 다시 부친다.</strong></li></ul>

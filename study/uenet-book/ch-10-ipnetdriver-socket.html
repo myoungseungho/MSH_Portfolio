@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>IpNetDriver: 소켓과 실제로 만나는 곳</h1><p>언리얼 네트워크 · 10 / 43</p></header><div class="conversation"><h2>들어가기 전에: "택배 회사"랑 "택배 기사"는 다른 사람이야</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>IpNetDriver: 소켓과 실제로 만나는 곳</h1><p>언리얼 네트워크 · 10 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이 장면은 익숙해. <code>CChosunPlayer</code>가 있고, IOCP 워커가 <code>WSARecv</code> 완료를 받고, <code>CM_*</code> 패킷을 풀어서 로직 큐에 넣고, 응답은 <code>SP_*</code>로 만들어 <code>WSASend</code>에 태워 보낸다. 그런데 UE 코드를 보면 이상해. 채널, 번치, Ack, <code>FlushNet</code>까지 다 보이는데, 정작 "진짜 소켓에 쏘는 줄"이 안 보인다.</p>
+<p>이걸 모르면 디버깅할 때 길을 잃어. "패킷이 안 나가요"라는 문제를 들고 <code>UNetConnection</code>만 뒤지다가 <code>LowLevelSend</code> 몸통이 비어 있는 걸 보고 멈춰버린다. 수신도 마찬가지야. <code>TickDispatch</code>가 받는다는데 <code>recvfrom</code>은 안 보이고, connectionless 핸드셰이크는 커넥션도 없는데 어떻게 답장을 보내는지 헷갈린다. 조선 서버로 치면 IOCP 워커, 세션 객체, 패킷 핸들러, 락 걸어야 하는 위치가 한 파일에 섞여 있는데 "진짜 IO는 어디야?"를 못 찾는 상태야.</p>
+<p>언리얼도 같은 문제를 만났고, 답은 <strong>계약과 구현을 갈라놓는 것</strong>이야. 엔진 코어의 <code>UNetDriver</code> / <code>UNetConnection</code>은 "소켓으로 보내라"는 규칙만 잡고, 실제 <code>recvfrom</code> / <code>SendTo</code>는 <code>UIpNetDriver</code> / <code>UIpConnection</code> 같은 아래쪽 구현체가 맡는다. 회사가 배송 규칙을 만들고, 기사가 실제 트럭을 모는 구조라고 보면 된다.</p>
+<p>우리 서버에 대입하면 더 쉽다. 지금은 IOCP 코드가 Windows 전용으로 박혀 있지만, 만약 Linux epoll이나 콘솔 네트워크까지 갈아끼워야 한다면 <code>CChosunPlayer</code>와 <code>SP_*</code> / <code>CM_*</code> 처리 로직은 그대로 두고, 소켓을 때리는 층만 인터페이스 뒤로 빼야 한다. UE의 IpNetDriver 층이 바로 그 분리선이다. 어디까지가 단일스레드 게임 로직이고, 어디부터가 플랫폼별 소켓질인지 선을 그어주는 장치다.</p>
+<p>그래서 이 챕터를 여기서 배운다. 앞에서는 <code>UNetConnection</code>, 수신 체인, 송신 체인, <code>NetDriver</code> 틱처럼 엔진 안쪽 길을 봤다. 이제 그 바이트가 엔진 코어를 떠나 진짜 네트워크로 나가는 마지막 문을 볼 차례야. 이 경계선을 알아야 다음에 핸드셰이크나 PacketHandler를 볼 때도 "이건 코어 규칙이고, 저건 실제 소켓 구현이다"라고 헷갈리지 않는다.</p>
+</div>
+<div class="conversation"><h2>들어가기 전에: "택배 회사"랑 "택배 기사"는 다른 사람이야</h2>
 <p>지금까지 우리는 엔진 안쪽 이야기만 했어. 번치를 쌓고, 패킷으로 묶고, 신뢰성 체크하고, 커넥션에 흘려보내고. 근데 잠깐. 그 묶인 바이트가 <strong>진짜 랜선을 타고 나가는 그 순간</strong> — <code>recvfrom</code>, <code>sendto</code> 같은 OS 소켓 시스템콜이 실제로 불리는 그 지점 — 은 대체 코드 어디에 있을까?</p>
 <p>여기서 초보가 가장 많이 넘어져. "당연히 NetDriver 어딘가에 <code>socket.Send()</code>가 있겠지"라고 찾아. 근데 아무리 뒤져도 안 나와. <code>UNetConnection::LowLevelSend</code>를 열어보면 <strong>몸통이 없어</strong>. <code>UNetDriver::GetSocketSubsystem</code>도 몸통이 없어. 다 텅 비어 있어.</p>
 <p>이게 버그가 아니야. <strong>설계야.</strong></p>

@@ -49,6 +49,13 @@ a.xref:hover { background:#bbdefb; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>조건부 복제 (COND_)</h1><p>언리얼 네트워크 · 18 / 43</p></header><div class="conversation"><div class="note">앞장 <a class="xref" href="ch-16-changelist.html">changelist</a>까지는 "<strong>어떤 프로퍼티가 바뀌었나</strong>"를 골라냈어.<br>이번 장은 그 위에 필터 하나가 더 얹혀. "<strong>바뀐 건 맞는데, 이 커넥션한테도 보내야 하나?</strong>"<br>그게 <code>COND_</code> 조건부 복제야.</div>
 <hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 "값이 바뀌었다"와 "그 값을 누구한테 보낼까"가 다른 문제라는 걸 금방 느껴봤을 거야. <code>CChosunPlayer</code>의 체력, 소지금, 현재 타겟, 스킬 쿨타임이 바뀌면 서버는 그걸 알고 있어야 해. IOCP 워커가 <code>CM_*</code> 패킷을 받아 게임 스레드로 넘기고, 단일 스레드 로직이 상태를 바꾸는 것까지는 익숙하지.</p>
+<p>근데 바뀐 값을 그냥 <code>SP_*</code> 패킷으로 접속자 전원에게 뿌리면 바로 사고가 나. 내 소지금이 옆 사람 클라에 보이고, 내 입력으로 이미 아는 애니메이션이 나한테 또 오고, 100명이 보는 맵에서 사소한 내부 값까지 전부 흘러가면 대역폭도 터져. 더 무서운 건 조건 검사가 여기저기 흩어지는 거야. 패킷 핸들러마다 "이건 주인만", "이건 주인 빼고"를 따로 적기 시작하면 락 위치도 애매해지고, 한 군데 빠뜨린 버그는 찾기 어렵다.</p>
+<p>그래서 필요한 질문은 이거야. <strong>바뀐 프로퍼티가 맞다 해도, 지금 이 커넥션에게 보낼 자격이 있나?</strong> 우체국으로 치면 편지가 만들어진 것과 배달 주소가 맞는 것은 다른 일이야. 편지가 있다고 아무 우편함에 넣으면 안 되잖아.</p>
+<p>언리얼도 같은 문제를 만났고, 그 답이 <code>COND_</code> 조건부 복제야. 프로퍼티마다 <code>COND_OwnerOnly</code>, <code>COND_SkipOwner</code> 같은 딱지를 붙여두고, 실제 전송 순간에는 커넥션의 상황을 보고 통과시킬지 막을지 결정해. 핵심은 "무엇이 바뀌었나"가 아니라 <strong>"바뀐 것 중 이 사람에게 갈 것만 남긴다"</strong> 야.</p>
+<p>이걸 지금 배우는 이유도 흐름상 딱 맞아. 앞장 <a class="xref" href="ch-16-changelist.html">changelist</a>에서는 "이번 프레임에 뭐가 바뀌었나"를 골라냈어. 하지만 그 목록은 아직 전원 공용 장바구니야. 이번 장에서 그 장바구니를 커넥션별로 걸러야, 다음 전송 단계에서 진짜로 보낼 Bunch가 깨끗하게 만들어진다.</p>
+</div>
 <div class="conversation"><h2>1. 먼저 그림부터 — 우편함 앞의 문지기</h2>
 <p>네가 게임 서버를 짜봤으니 이 상황은 익숙할 거야. 한 액터(예: 플레이어 캐릭터)의 값이 바뀌었어. 체력, 소지금, 어떤 내부 쿨타임 같은 것들.</p>
 <p>근데 이걸 <strong>접속 중인 모든 클라한테 똑같이 다 뿌리면 안 돼.</strong></p>

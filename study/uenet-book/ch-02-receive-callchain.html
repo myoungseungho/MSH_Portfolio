@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>패킷이 도착하면: 수신 콜체인</h1><p>언리얼 네트워크 · 02 / 43</p></header><div class="conversation"><h2>0. 들어가기 전에: "택배가 문 앞에 왔다"</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>패킷이 도착하면: 수신 콜체인</h1><p>언리얼 네트워크 · 02 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>게임 서버를 짜봤으면 이 장면을 이미 알아. IOCP 워커가 <code>GQCS</code>에서 완료 통지를 받고, 버퍼에 바이트가 들어왔고, 이제 <code>SP_*</code>든 <code>CM_*</code>든 뭔가 처리해야 해. 그런데 소켓이 준 건 친절한 "스킬 사용 패킷"이 아니라 그냥 바이트 덩어리야.</p>
+<p>여기서 길을 잘못 잡으면 바로 사고가 나. 워커 스레드가 받은 바이트를 대충 <code>CChosunPlayer</code>에 던졌는데 패킷이 반쪽만 왔거나, 헤더 길이가 틀렸거나, 순서가 꼬였거나, 아직 복호화도 안 됐다고 해보자. 그러면 엉뚱한 <code>CM_</code> 핸들러가 열리고, 잘못된 플레이어 상태를 만지고, 락을 잡은 채 게임 로직까지 들어가다가 서버가 멈칫한다.</p>
+<p>그래서 보통 우리는 단계를 나눠. 먼저 바이트를 안전하게 풀고, 패킷 경계를 확인하고, 어떤 메시지인지 고르고, 마지막에 단일스레드 게임 로직 큐로 넘긴다. 초딩식으로 말하면 택배 상자를 받자마자 장난감을 꺼내 휘두르는 게 아니라, 포장 뜯고, 송장 보고, 방별로 분류해서 배달하는 거야.</p>
+<p>언리얼도 같은 문제를 만났고, 그 답이 이 챕터의 수신 콜체인이야. <code>ReceivedRawPacket</code>이 날바이트를 받고, <code>ReceivedPacket</code>이 순서와 ack를 보고, <code>DispatchPacket</code>이 Bunch를 채널로 배달한다. 우리 서버의 "recv 완료 → 헤더 파싱 → <code>SP_*</code>/<code>CM_*</code> 디스패치"와 같은 자리라고 보면 된다.</p>
+<p>이걸 지금 배우는 이유도 분명해. 1장에서 <code>UNetConnection</code>이 클라 한 명을 책임지는 그릇이라는 걸 봤지. 이제 그 그릇 안으로 <strong>처음 데이터가 들어오는 길</strong>을 봐야 다음의 채널, reliable 재전송, 복제, RPC가 어디서 시작되는지 이해된다. 입구를 모르고 집 안 구조를 외우면, 나중에 버그가 났을 때 "패킷이 어디서 사라졌는지"를 못 찾는다.</p>
+</div>
+<div class="conversation"><h2>0. 들어가기 전에: "택배가 문 앞에 왔다"</h2>
 <p>우리 서버 짜본 사람은 <code>recv()</code>가 뭘 주는지 알잖아. 그냥 <strong>바이트 덩어리</strong> 하나 던져줘. <code>char buf[N]</code>에 몇 바이트 들어왔다, 끝. 그 안에 뭐가 들었는지, 어디까지가 한 패킷인지, 순서가 맞는지 — 그건 다 <strong>네가</strong> 풀어야 해.</p>
 <p>UE도 정확히 여기서 시작해. 소켓 드라이버가 바이트 덩어리를 툭 던지고 사라져. 그 다음부터가 이 챕터야.</p>
 <p>비유를 하나 깔자. 문 앞에 <strong>택배 상자</strong>가 도착했어.</p>

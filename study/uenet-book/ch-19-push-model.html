@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Push Model — 폴링 대신 수동 dirty</h1><p>언리얼 네트워크 · 19 / 43</p></header><div class="conversation"><h2>0. 문 앞에서: "누가 바뀐 걸 어떻게 알지?"</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Push Model — 폴링 대신 수동 dirty</h1><p>언리얼 네트워크 · 19 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이런 고민을 해봤을 거야. <code>CChosunPlayer</code>의 체력, 위치, 버프, 장비, 퀘스트 상태가 계속 바뀌는데, 클라한테는 <strong>바뀐 것만</strong> 보내고 싶어. 안 바뀐 값까지 매 틱 <code>SP_*</code> 패킷으로 다 뿌리면 대역폭도 아깝고, 서버도 쓸데없는 일을 너무 많이 하니까.</p>
+<p>가장 쉬운 방법은 매 틱 전부 훑는 거야. "체력 바뀌었니? 위치는? 버프는? 인벤은?" 하고 모든 플레이어의 모든 값을 비교해. 액터가 적을 때는 괜찮아 보이지만, 사람이 많아지고 프로퍼티가 늘어나면 안 바뀐 걸 확인하려고 안 바뀐 값까지 계속 만지는 꼴이 돼. 5개 바뀌었는지 보려고 300만 칸을 뒤지는 상황이 나오는 거지.</p>
+<p>우리 조선 서버로 치면 IOCP 워커가 <code>CM_*</code> 패킷을 받아 값 하나를 바꿨는데, 나중에 단일스레드 게임 루프가 "뭐가 바뀌었더라?" 하고 전체 상태를 다시 뒤지는 그림이야. 더 무서운 건 최적화하려고 락을 여기저기 걸기 시작하면, 바뀐 값 찾는 일 자체가 서버 발목을 잡을 수 있다는 점이야.</p>
+<p>그래서 언리얼도 같은 문제를 만났고, 그 답이 <strong>Push Model</strong>이야. 서버가 매번 "너 바뀌었니?" 하고 물어보는 대신, 값을 바꾼 코드가 그 순간 "나 바뀌었어요" 하고 dirty 비트를 켠다. 학교에서 선생님이 전교생을 하나씩 부르는 대신, 숙제 낸 애만 손드는 식이야.</p>
+<p>이걸 지금 배우는 이유도 분명해. 앞에서 RepLayout과 changelist로 "프로퍼티가 어떤 번호로 펼쳐지고, 바뀐 목록이 어떻게 만들어지는지"를 봤다면, 이번 장은 그 바뀐 목록을 더 싸게 만드는 장치야. 다음 조건부 리플리케이션이나 Iris로 넘어가기 전에, <strong>무엇을 보낼지 고르는 비용 자체를 어떻게 줄이는지</strong> 잡고 가야 뒤가 덜 흔들려.</p>
+</div>
+<div class="conversation"><h2>0. 문 앞에서: "누가 바뀐 걸 어떻게 알지?"</h2>
 <p>네트워크 게임 서버는 매 틱마다 이런 고민을 해.</p>
 <div class="note">"이 액터의 어떤 프로퍼티가 바뀌었지? 바뀐 것만 클라에 보내야 하는데."</div>
 <p>가장 정직한 방법은 <strong>전부 비교</strong>하는 거야. 지난번에 보낸 값을 그림자(shadow)로 하나 들고 있다가, 매 프레임 현재값이랑 하나하나 <code>memcmp</code> 해서 다르면 "바뀜"으로 판정. 이게 UE의 전통적 리플리케이션 방식이고, 이걸 <strong>폴링(polling)</strong> 또는 <strong>비교 방식(compare)</strong> 이라고 불러.</p>

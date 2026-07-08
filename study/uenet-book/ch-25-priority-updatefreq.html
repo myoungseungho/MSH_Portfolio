@@ -48,6 +48,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>우선순위와 갱신빈도</h1><p>언리얼 네트워크 · 25 / 43</p></header><div class="conversation"><div class="note">대역폭이라는 좁은 문으로, 누굴 얼마나 자주 통과시킬까</div></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이 고민을 해봤을 거야. <code>CChosunPlayer</code>가 100명, 500명 붙어 있는데, 서버가 매 틱마다 "이 사람 위치, 저 몬스터 HP, 저 문 열림 상태"를 전부 <code>SP_*</code> 패킷으로 뿌릴 수는 없어. IOCP 워커가 열심히 받고 보내도, 마지막에는 결국 <strong>대역폭이라는 좁은 문</strong>을 지나야 하거든.</p>
+<p>이 기준이 없으면 바로 난장판이 돼. 별로 안 변하는 장식 액터랑, 지금 칼 맞고 있는 플레이어 상태가 같은 줄에 서면 어떻게 될까? 문짝 상태 보내느라 중요한 피격/이동 갱신이 늦고, 클라는 "분명 피했는데 맞았다"거나 "상대가 순간이동했다"처럼 느껴. 락을 잘 잡고 단일스레드 큐로 순서를 맞춰도, <strong>보낼 수 있는 양 자체가 모자라면</strong> 공정한 순서만으로는 해결이 안 돼.</p>
+<p>그래서 필요한 게 두 개의 질문이야. 첫째, <strong>얼마나 자주 볼 것인가?</strong> 벽이나 문처럼 천천히 변하는 건 가끔만 보면 되고, 플레이어 위치처럼 자주 변하는 건 더 자주 봐야 해. 이게 <code>NetUpdateFrequency</code>야.</p>
+<p>둘째, <strong>막히면 누구부터 살릴 것인가?</strong> 대역폭이 꽉 찼을 때 가까운 적, 방금 데미지를 준 액터, 오래 못 보낸 액터가 먼저 가야 할 수 있어. 이게 <code>NetPriority</code>야. 갱신빈도는 "시계", 우선순위는 "줄 세우기"라고 보면 돼.</p>
+<p>언리얼도 같은 문제를 만났고, 답을 <code>UNetDriver::ServerReplicateActors</code> 안에 넣어뒀어. 먼저 시간으로 후보를 줄이고, 그다음 연결별로 점수를 매긴 뒤, 대역폭이 찰 때까지 높은 순서대로 보낸다. 우리 서버에서 <code>CM_</code> 패킷 처리 후 송신 큐에 뭘 먼저 밀어 넣을지 정하는 감각과 닮아 있어.</p>
+<p>이걸 지금 배우는 이유도 흐름상 딱 맞아. 앞에서는 <strong>애초에 이 클라에게 보일 액터인가</strong>를 보는 relevancy를 잡았고, 이번에는 <strong>보일 액터 중 얼마나 자주, 누구 먼저 보낼까</strong>를 본다. 다음 dormancy로 가면 "안 변하는 애는 아예 재워두자"가 나오니까, 이 챕터는 복제 트래픽을 줄 세우는 중간 관문이야.</p>
+</div>
 <div class="conversation"><h2>들어가기 전에</h2>
 <p>서버가 매 틱 클라한테 액터 상태를 뿌린다고 해보자. 근데 뿌릴 게 500개인데 이번 틱에 100개어치 대역폭밖에 없어. 그럼 어떡하지?</p>
 <p>방법은 두 축이야.</p>

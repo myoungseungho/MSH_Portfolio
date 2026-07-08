@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>관련성: 누구에게 보낼지 (Relevancy)</h1><p>언리얼 네트워크 · 24 / 43</p></header><div class="conversation"><h2>0) 들어가며 — 파티에서 굳이 안 부르는 사람</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>관련성: 누구에게 보낼지 (Relevancy)</h1><p>언리얼 네트워크 · 24 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이미 이 고민을 해봤을 거야. 몬스터가 움직였다, 아이템이 떨어졌다, 누가 스킬을 썼다. 그때 서버는 <code>SP_*</code> 패킷을 아무한테나 다 뿌리면 안 돼. <strong>누가 이 소식을 알아야 하는지</strong> 먼저 골라야 해.</p>
+<p>이걸 안 고르면 바로 터져. 필드에 플레이어 500명, 액터 수천 개가 있는데 몬스터 위치 갱신을 전원에게 매 틱 보내면 IOCP 워커는 <code>WSASend</code> 일감에 깔리고, 커넥션 send 큐는 불어나고, 결국 락 잡는 시간과 복사 비용만 늘어. 받는 클라도 문제야. 화면에 보이지도 않는 남의 전투 <code>CM_</code>/<code>SP_</code> 조각을 계속 받으면, 게임이 아니라 우체통 정리부터 하게 돼.</p>
+<p>우리 조선 서버도 그래서 <code>CChosunPlayer</code>가 있는 위치, 파티, 존, 시야셀 같은 걸 보고 "이 사람한테 보낼까 말까"를 먼저 판단하잖아. 싱글스레드 게임 로직에서 대상 목록을 좁혀놓고, IOCP는 그 결과만 나르는 구조가 되어야 서버가 산다. <strong>관심 없는 사람에게는 안 보낸다</strong>는 규칙이 없으면, 아무리 패킷 핸들러를 잘 짜도 대역폭과 CPU가 새어 나가.</p>
+<p>언리얼도 똑같은 문제를 만났고, 그 답이 바로 <strong>Relevancy(관련성)</strong>야. <code>AActor::IsNetRelevantFor</code>는 액터마다, 커넥션마다 "이걸 이 플레이어에게 보낼 필요가 있나?"를 묻는 관문이다. 거리 안에 있으면 보내고, 주인한테만 의미 있으면 주인에게만 보내고, 전역으로 꼭 알아야 하는 건 거리와 상관없이 보낸다.</p>
+<p>왜 지금 배우냐면, 앞에서 서버가 매 틱 복제 후보를 추리고 보내는 큰 흐름을 봤기 때문이야. 이제는 그 후보 중 <strong>애초에 누구한테 갈 자격이 있는지</strong>를 잘라야 한다. 이 챕터가 그 문이고, 다음에는 관련 있다고 통과한 애들 사이에서 "누구 먼저, 얼마나 자주" 보낼지를 다룬다.</p>
+</div>
+<div class="conversation"><h2>0) 들어가며 — 파티에서 굳이 안 부르는 사람</h2>
 <p>동네잔치를 연다고 해봐. 초대장을 몇 장 찍어야 할까? 온 동네 만 명한테 다 돌려? 아니지. <strong>잔치 소리가 들릴 거리 안에 사는 사람</strong>한테만 돌려. 옆 동네 사람한테 "우리 집 잔치해요" 초대장 보내봤자 종이 낭비, 우편배달부 다리 고생, 받는 사람도 귀찮아.</p>
 <p>서버도 똑같아. 월드에 액터가 수천 개 떠 있어. 근데 저 멀리 지도 반대편에서 벌어지는 몬스터 싸움을, 여기 있는 내 클라에 <strong>초당 수십 번씩 보낼 이유가 없어.</strong> 화면에 보이지도 않는데. 그 트래픽은 그냥 낭비야.</p>
 <p>그래서 서버는 액터마다 커넥션마다 이걸 물어봐.</p>

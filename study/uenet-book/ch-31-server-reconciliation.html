@@ -49,6 +49,13 @@ a.xref:hover { background:#bbdefb; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>서버 보정 — ClientAdjustPosition</h1><p>언리얼 네트워크 · 31 / 43</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람.<br>이 챕터가 끝나면 "서버가 '너 위치 틀렸어' 하고 클라를 되돌릴 때, 그 신호가 어느 함수에서 출발해서 어느 함수로 도착하는지"가 머릿속에 그려질 거야.<br><a class="xref" href="ch-30-client-prediction.html">client-prediction</a>의 바로 다음 편이야. 저긴 "클라가 서버 안 기다리고 먼저 움직이는 쪽", 여긴 "그 먼저 움직인 걸 서버가 채점하고, 틀렸으면 되돌리는 쪽".</div>
 <hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이 장면을 바로 알아. 클라가 "나 여기로 이동했어" 하고 <code>CM_*</code> 이동 패킷을 보내오면, 서버는 <code>CChosunPlayer</code>의 위치를 그냥 믿을 수가 없어. IOCP 워커가 패킷을 받아도, 최종 판정은 결국 단일 로직 스레드에서 "이 속도 말이 되나?", "벽을 뚫었나?", "락 걸린 상태인데 움직였나?"를 검사해야 하잖아.</p>
+<p>그런데 검사만 하고 끝내면 문제가 터져. 클라는 화면 끊김을 줄이려고 이미 자기 화면에서 먼저 움직였고, 서버가 나중에 "그거 틀렸어"라고만 생각하고 아무 신호도 안 보내면 둘의 세계가 갈라져. 클라 화면에선 문을 지나갔는데 서버에선 아직 문 앞이고, 다음 <code>SP_*</code> 결과는 맞는데 위치만 이상해서 고무줄처럼 튀거나, 더 심하면 맞아야 할 공격이 안 맞고 맞지 말아야 할 공격이 맞는다.</p>
+<p>그래서 필요한 게 <strong>서버 보정(server reconciliation)</strong>이야. 서버가 유일한 채점자라서, 맞은 이동은 "통과"라고 알려주고, 틀린 이동은 "정답 위치는 여기야. 그 지점부터 다시 해"라고 돌려보낸다. UE에서 그 빨간 펜 신호가 바로 <code>ClientAdjustPosition</code>이고, 통과 도장이 <code>ClientAckGoodMove</code>야.</p>
+<p>우리 조선 서버 식으로 말하면, 서버가 <code>CChosunPlayer</code>의 권위 위치를 기준으로 클라 보고를 채점한 뒤 <code>SP_위치보정</code> 같은 패킷을 보내는 구조와 닮았어. 차이는 UE 클라가 그냥 좌표만 덮어쓰지 않고, 저장해둔 입력을 정답 위치부터 다시 재생(replay)해서 "핑 때문에 먼저 움직였던 느낌"을 최대한 살린다는 점이야.</p>
+<p>왜 지금 배우냐면, 바로 앞 <a class="xref" href="ch-30-client-prediction.html">client-prediction</a>에서 "클라가 서버를 안 기다리고 먼저 움직이는 이유"를 봤기 때문이야. 먼저 움직이게 허락했으면, 반드시 그걸 서버가 채점하고 되돌리는 길도 있어야 해. 이 챕터는 그 반쪽, 즉 서버의 채점 결과가 <code>NetDriver</code>와 <code>PlayerController</code>를 거쳐 <code>ClientAdjustPosition</code>까지 어떻게 흘러가는지 보는 자리야.</p>
+</div>
 <div class="conversation"><h2>0. 먼저 비유부터 — 받아쓰기 채점</h2>
 <p>받아쓰기 시험을 생각해봐. 선생님이 불러주고, 너는 공책에 <strong>네 나름대로</strong> 적어. 다 적고 나서 선생님한테 공책을 내밀지. 그럼 선생님이 두 가지 중 하나를 해.</p>
 <ul><li>다 맞았으면 <strong>동그라미</strong> 쫙 치고 "통과". → 너는 그냥 다음 문제로 넘어감.</li><li>한 군데 틀렸으면 <strong>빨간 펜으로 정답을 써주고</strong>, "여기부터 다시 써". → 너는 그 지점으로 돌아가서 <strong>다시 받아쓰기</strong>.</li></ul>

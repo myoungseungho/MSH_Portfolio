@@ -49,6 +49,13 @@ a.xref:hover { background:#bbdefb; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>NetDriver — 프레임마다 도는 엔진</h1><p>언리얼 네트워크 · 11 / 43</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람.<br>이 챕터가 끝나면 "엔진이 매 프레임 네트워크를 <strong>언제, 어떤 순서로</strong> 돌리는지" — 특히 <strong>받는 펌프(TickDispatch)</strong>와 <strong>모든 커넥션을 도는 상위 루프(TickFlush)</strong>의 뼈대가 머릿속에 그려질 거야.<br><a class="xref" href="ch-06-send-callchain.html">send-callchain</a>의 자매편이야. 저긴 "번치 한 덩어리가 소켓까지 걸어가는 길", 여긴 그 길을 <strong>매 프레임 누가 불러서 돌리는가</strong> — 한 층 위에서 내려다보는 시점이야.</div>
 <hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이 고민을 해봤을 거야. IOCP 워커가 <code>CM_*</code> 패킷을 받았다고 해서, 그 자리에서 바로 <code>CChosunPlayer</code> 상태를 막 고치면 편해 보이지만 곧 문제가 생겨. 몬스터 이동 중인데 데미지 패킷이 끼어들고, 인벤 저장 중인데 교환 패킷이 들어오고, 결국 락을 여기저기 붙이다가 서버가 실타래처럼 꼬여.</p>
+<p>그래서 우리 조선 서버도 "받는 곳"과 "진짜 게임 로직을 처리하는 곳"을 나눠. 워커는 받은 걸 큐에 넣고, 싱글스레드 쪽에서 순서대로 <code>SP_*</code> 처리를 하게 만들지. 이렇게 해야 한 프레임, 한 턴, 한 박자 안에서 누가 먼저 움직이고 누가 나중에 맞았는지가 정리돼.</p>
+<p>이 박자가 없으면 네트워크는 난장판이 돼. 어떤 클라는 이번 프레임 결과를 받고, 어떤 클라는 지난 프레임 결과를 받고, 어떤 패킷은 액터 복제 전에 나가고, 어떤 패킷은 복제 뒤에 나가. 서버가 "지금은 받는 시간", "지금은 게임 로직 시간", "지금은 보내는 시간"을 못 나누면, 같은 월드 안에서도 사람마다 다른 영화를 보게 되는 셈이야.</p>
+<p>언리얼도 똑같은 문제를 만났고, 그 답이 바로 <strong>NetDriver의 프레임 틱</strong>이야. 프레임 앞쪽에서 <code>TickDispatch</code>가 들어온 걸 정리하고, 프레임 뒤쪽에서 <code>TickFlush</code>가 모든 <code>UNetConnection</code>을 한 바퀴 돌며 이번 프레임 몫을 내보내. 계속 아무 때나 처리하는 게 아니라, 엔진 심장 박동에 맞춰 "받기 → 게임 로직 → 보내기"로 줄을 세우는 거지.</p>
+<p>그래서 이 챕터가 여기 있어. 앞에서 <code>UNetConnection</code>과 <a class="xref" href="ch-06-send-callchain.html">send-callchain</a>으로 "커넥션 하나가 어떻게 보내는지"를 봤다면, 이제는 한 층 위에서 <strong>누가 매 프레임 그 커넥션들을 전부 깨워서 돌리는지</strong>를 봐야 해. 이걸 잡아야 뒤에 나오는 수신 체인, 소켓 드라이버, 액터 복제도 "아, 이 박자 안의 어느 칸이구나" 하고 제자리를 찾는다.</p>
+</div>
 <div class="conversation"><h2>0. 먼저 비유부터 — 심장은 "계속" 뛰는 게 아니라 "박자"로 뛴다</h2>
 <p>우체국 하나 떠올려봐. 이 우체국은 24시간 문 열어두고 사람 올 때마다 즉석에서 처리하지 않아. 대신 <strong>정해진 박자</strong>로 움직여.</p>
 <ul><li>아침에 문 열면 → <strong>밤새 우편함에 쌓인 편지를 싹 걷어 안으로 들인다</strong> (받기)</li><li>하루 일 다 하고 → <strong>오늘 나갈 편지를 봉투에 담아 트럭에 실어 내보낸다</strong> (보내기)</li><li>문 닫고, 다음 날 또 똑같이.</li></ul>

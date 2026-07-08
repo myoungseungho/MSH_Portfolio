@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>VoIP: 인게임 음성 채널</h1><p>언리얼 네트워크 · 37 / 43</p></header><div class="conversation"><h2>채팅은 글자, 음성은 소리 — 근데 흐르는 길은 똑같다</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>VoIP: 인게임 음성 채널</h1><p>언리얼 네트워크 · 37 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>게임 서버를 짜봤으면 채팅 릴레이는 이미 알아. <code>CM_CHAT</code> 같은 패킷이 들어오면, 서버가 "이 말을 들을 사람들"을 골라서 <code>SP_CHAT</code>처럼 다시 뿌리지. 우리 조선 서버로 치면 <code>CChosunPlayer</code>가 속한 파티, 맵, 길드 사람들을 훑고, IOCP가 받은 요청을 결국 단일스레드 게임 로직 쪽에서 정리해서 보내는 흐름이야.</p>
+<p>그런데 음성은 채팅보다 훨씬 까다로워. 글자 한 줄은 조금 늦어도 읽을 수 있지만, 소리는 1초만 밀려도 로봇처럼 들리고, 오래된 목소리가 뒤늦게 오면 차라리 안 오는 게 나아. 게다가 100명이 있는 방에서 20명이 동시에 말하면, 서버는 "누가 누구 목소리를 들어도 되는지"를 계속 판정해야 해. 이걸 아무 생각 없이 전원에게 다 뿌리면 CPU도 대역폭도 금방 터진다.</p>
+<p>여기서 더 위험한 착각이 있어. "음성은 그냥 P2P로 직접 보내면 되지 않나?" 싶지만, 게임 서버 관점에서는 그럼 규칙을 강제하기가 어려워져. 음소거, 팀 보이스, 거리 기반 보이스, 차단 목록 같은 판단은 서버가 잡고 있어야 해. 우리 서버에서 클라가 마음대로 <code>SP_*</code>를 만들어 뿌리게 두지 않는 것처럼, UE도 내 목소리를 일단 서버로 올리고 서버가 자격 있는 사람에게만 되뿌리는 쪽을 기본 뼈대로 삼아.</p>
+<p>그래서 이 챕터의 답이 <code>UVoiceChannel</code>과 <code>UNetDriver::ReplicateVoicePacket</code>이야. <code>UVoiceChannel</code>은 연결마다 붙은 "소리 전용 송신 줄"이고, <code>ReplicateVoicePacket</code>은 채팅 릴레이처럼 받은 음성 조각을 다른 클라들의 Voice 채널 큐에 나눠 넣는 함수야. 락을 잔뜩 걸어 여러 스레드가 뒤엉키게 하기보다, 연결별 큐에 쌓고 Tick에서 흘려보내는 방식이라 우리 단일스레드 처리 감각과도 잘 맞아.</p>
+<p>지금 이걸 배우는 이유는, 앞에서 배운 채널·Bunch·reliable/unreliable·핸드셰이크가 실제 기능 하나에 한꺼번에 붙는 장면이 바로 음성이기 때문이야. Actor 복제처럼 "꼭 도착해야 하는 데이터"와 달리, 음성은 "옛날 것보다 지금 것"이 더 중요해. 그래서 이 챕터를 보면 UE 네트워크가 기능 성격에 따라 같은 연결 위에서도 전혀 다른 전송 규칙을 고르는 감이 잡힌다.</p>
+</div>
+<div class="conversation"><h2>채팅은 글자, 음성은 소리 — 근데 흐르는 길은 똑같다</h2>
 <p>게임 서버 짜봤으면 채팅 패킷은 익숙하지. 클라가 문자열 하나 서버로 던지면, 서버가 같은 방/길드 사람들한테 되뿌린다. 원리는 단순해. "한 명이 보낸 걸 → 자격 있는 여럿에게 → 복사해서 뿌린다."</p>
 <p>음성 채팅도 뼈대는 <strong>글자 한 판</strong> 다를 게 없어. 문자열 대신 압축된 소리 조각(음성 패킷)이 흐를 뿐이야. 한 명이 마이크에 대고 말하면 → 서버가 → 같은 채널 사람들에게 → 그 소리 조각을 복사해 뿌린다. 딱 채팅 릴레이의 음성 버전인 거지.</p>
 <p>그런데 여기서 초보가 가장 크게 헷갈리는 지점이 하나 있어. "음성이면 P2P 아냐? 마이크 켠 사람이 상대방한테 직접 쏘는 거 아냐?" 아니야. <strong>UE 기본 모델은 서버 권위</strong>야. 내 목소리는 일단 서버로 올라가고, 서버가 "이 사람 목소리를 저 사람이 들을 자격이 있나" 판정한 다음 되뿌려. P2P가 아니라 채팅이랑 똑같은 서버 릴레이. (음소거·거리·팀 제한을 서버가 강제하려면 이래야 하거든.)</p>

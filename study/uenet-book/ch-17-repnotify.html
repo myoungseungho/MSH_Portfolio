@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>RepNotify — 값이 도착하면 콜백</h1><p>언리얼 네트워크 · 17 / 43</p></header><div class="conversation"><h2>초인종 이야기부터</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>RepNotify — 값이 도착하면 콜백</h1><p>언리얼 네트워크 · 17 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이런 고민을 해봤을 거야. <code>CChosunPlayer</code>의 HP가 바뀌었을 때, 클라 UI는 언제 갱신해야 할까? 매 프레임 "HP 바뀌었나?" 하고 뒤져볼 수도 있고, <code>SP_*</code> 패킷을 받은 순간 "HP 바뀜" 이벤트를 하나 꽂아둘 수도 있어.</p>
+<p>그런데 이 장치가 없으면 금방 지저분해져. HP, MP, 좌표, 버프가 한 번에 들어오는데 HP 처리 중간에 바로 UI 콜백을 불러버리면, 아직 좌표나 버프는 예전 값일 수 있어. 반대로 매 프레임 폴링으로 확인하면 1명일 땐 괜찮아도 100명, 1000개 프로퍼티가 되면 "혹시 바뀌었나?"만 보느라 일을 낭비해. 락까지 섞이면 더 피곤하고, 단일스레드 로직 흐름도 흐려져.</p>
+<p>그래서 우리 서버에서도 IOCP 워커가 받은 바이트를 바로 게임 로직으로 막 흔들지 않고, <code>CM_</code> 요청이나 상태 변경을 큐에 얹은 뒤 안전한 흐름에서 처리하잖아. <strong>받는 중에는 기록만 하고, 다 받은 뒤 한 번에 처리한다.</strong> 이 감각이 RepNotify를 이해하는 핵심이야.</p>
+<p>언리얼도 같은 문제를 만났고, 답이 바로 <strong>RepNotify</strong>야. 값이 복제돼서 도착하면 "이 프로퍼티의 초인종을 나중에 울려야 함"이라고 메모해두고, 수신이 끝난 안전한 지점에서 <code>OnRep_Health()</code> 같은 콜백을 딱 울려준다. 그래서 UI 갱신, 이펙트 재생, 사운드 같은 후처리를 폴링 없이 붙일 수 있어.</p>
+<p>왜 지금 배우냐면, 앞에서 복제 데이터가 어떻게 흘러오는지 봤다면 이제는 그 값이 <strong>게임 코드의 반응</strong>으로 이어지는 순간을 볼 차례라서야. 뒤의 조건 복제, Push Model 같은 최적화도 결국 "언제 누구에게 보내고, 도착했을 때 무엇을 울릴까"의 문제로 이어져. RepNotify는 그 중간에 있는 초인종 배선도야.</p>
+</div>
+<div class="conversation"><h2>초인종 이야기부터</h2>
 <p>택배가 왔어. 두 가지 방식이 있지.</p>
 <p>하나는 네가 5초마다 문을 열어보는 거야. "왔나? 안 왔네. 왔나? 안 왔네." 이걸 폴링(polling)이라고 불러. 값이 바뀌었는지 매 프레임 직접 확인하는 방식.</p>
 <p>다른 하나는 초인종을 달아두는 거야. 택배가 도착하는 "순간"에 딩동 하고 울려. 너는 문 열어볼 필요 없이 소리만 들으면 돼. 이게 콜백(callback)이야.</p>

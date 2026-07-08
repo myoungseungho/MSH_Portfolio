@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>클라 예측: SavedMove로 먼저 움직이고, ServerMove로 보고하기</h1><p>언리얼 네트워크 · 30 / 43</p></header><div class="conversation"><h2>먼저 움직이고 나중에 허락받기</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>클라 예측: SavedMove로 먼저 움직이고, ServerMove로 보고하기</h1><p>언리얼 네트워크 · 30 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 조선 서버에서 이동 패킷을 만져봤으면 이 흐름은 익숙할 거야. 클라가 <code>CM_*</code> 패킷으로 "나 여기로 움직였어"를 보내고, 서버는 <code>CChosunPlayer</code> 상태를 갱신한 다음 주변 사람들에게 <code>SP_*</code>로 뿌려. IOCP 워커가 바이트를 받아도, 진짜 위치 판정은 락을 줄이거나 단일스레드 큐로 몰아서 순서대로 처리하려고 하지.</p>
+<p>그런데 액션 게임에서 클라가 서버 허락을 기다린 뒤에만 움직인다면 바로 망가져. 핑이 100ms면 W를 눌러도 0.1초 뒤에야 캐릭터가 꿈틀해. 손가락은 지금 눌렀는데 화면은 늦게 반응하니까, 플레이어 입장에서는 키보드와 캐릭터 사이에 고무줄이 낀 느낌이 난다.</p>
+<p>반대로 클라를 그냥 믿어버리면 더 큰 사고가 난다. 클라가 "나 벽을 통과했어", "순간이동했어"라고 말해도 서버가 막을 방법이 없어져. 그래서 필요한 건 양쪽을 섞은 방식이야. <strong>내 화면에서는 먼저 움직이되, 서버에는 그 움직임을 낱장 기록으로 보내고, 서버가 나중에 맞는지 검사하게 하는 것.</strong></p>
+<p>언리얼도 같은 문제를 만났고, 그 답이 바로 <strong>클라이언트 예측</strong>이야. 내 캐릭터(<code>AutonomousProxy</code>)는 먼저 움직이고, 그때의 입력과 위치를 <code>SavedMove</code>로 저장해둔 다음, <code>ServerMove</code> RPC로 서버에 보고한다. 서버가 "맞아" 하면 그 기록은 버리고, "틀렸어" 하면 그 기록을 바탕으로 되돌려 다시 밟을 수 있어.</p>
+<p>왜 지금 배우냐면, 여기서부터 CharacterMovement의 네트워크가 진짜 게임처럼 보이기 시작하기 때문이야. 앞에서 Role, RPC, 복제의 길을 봤다면, 이 챕터는 그 도구들이 <strong>내 캐릭터 조작감</strong>을 살리는 데 어떻게 쓰이는지 보여준다. 그리고 다음 챕터의 되감기/재생(reconciliation)을 이해하려면, 먼저 "무엇을 저장했고 무엇을 서버에 보냈는지"부터 알아야 해.</p>
+</div>
+<div class="conversation"><h2>먼저 움직이고 나중에 허락받기</h2>
 <p>핑이 100ms라고 해보자. 내가 W를 눌러. 서버한테 "나 앞으로 갈게" 물어보고, 서버가 "그래 가"라고 답할 때까지 기다렸다가 움직이면? 0.1초 뒤에야 캐릭터가 꿈틀해. 조작이 진흙탕처럼 느껴져. 게임이 못 나가.</p>
 <p>그래서 온라인 게임은 반대로 해. <strong>일단 내 화면에선 먼저 움직여버려.</strong> 서버 허락은 안 기다려. 대신 "나 이렇게 움직였어"를 서버에 보고서로 부쳐둬. 서버가 나중에 "맞네" 하면 그대로 두고, "아닌데?" 하면 그때 되돌려. 이걸 <strong>클라이언트 예측(client-side prediction)</strong>이라고 해. 낙관적으로 먼저 믿고 가는 거지.</p>
 <p>근데 "먼저 움직였다"는 걸 나중에 되돌리려면, 내가 뭘 어떻게 움직였는지 <strong>기록해둬야</strong> 해. 안 그러면 서버가 "너 3프레임 전 위치가 틀렸어" 했을 때 그 3프레임을 다시 밟을 수가 없잖아. 그 기록 한 장 한 장이 <code>FSavedMove_Character</code>고, 그걸 서버로 부치는 우편이 <code>ServerMove</code> RPC야.</p>

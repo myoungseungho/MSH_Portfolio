@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Channel 종류: Control / Actor / Voice</h1><p>언리얼 네트워크 · 05 / 43</p></header><div class="conversation"><h2>하나의 선(線)에 여러 물건을 실으면 안 되나?</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Channel 종류: Control / Actor / Voice</h1><p>언리얼 네트워크 · 05 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이미 아는 장면이야. 소켓 하나로 <code>CM_LOGIN</code>, <code>CM_MOVE</code>, <code>CM_CHAT</code>, <code>CM_ATTACK</code> 같은 패킷이 우르르 들어오고, 서버는 헤더의 <code>wID</code>를 보고 "이건 로그인, 이건 이동, 이건 채팅" 하고 갈라 보내지. 우리 조선 서버에서 IOCP 워커가 바이트를 받으면 결국 <code>CM_*</code> 핸들러로 나눠 태우는 그 감각이야.</p>
+<p>근데 이 구분이 그냥 숫자 switch 하나로만 끝나면 금방 피곤해져. 로그인 중인 클라가 아직 인증도 안 끝났는데 액터 이동이 먼저 오면? 음성 데이터가 밀려서 이동 패킷까지 막으면? 어떤 액터의 복제 상태를 다른 액터 패킷 처리 중에 건드리면? 락을 덕지덕지 붙이거나, 단일스레드 큐 안에서도 "이 상태가 누구 것인지"를 계속 손으로 추적해야 해.</p>
+<p>그래서 UE는 같은 문제를 더 큰 구조로 풀어. <code>UNetConnection</code>이라는 한 연결 안에 <strong>Channel</strong>이라는 논리적 길을 여러 개 뚫어두고, 연결 제어는 Control, 액터 복제는 Actor, 음성은 Voice처럼 역할별로 따로 보낸다. 겉으로는 소켓 하나지만, 안쪽에는 색깔 다른 전선이 여러 가닥 들어 있는 셈이야.</p>
+<p>특히 중요한 건 상태가 같이 딸려간다는 점이야. Actor Channel은 액터 하나를 붙잡고 그 액터 전용 복제 흐름을 책임지고, Control Channel은 0번 자리에서 로그인·종료 같은 연결 생명줄을 붙잡아. 우리 서버로 치면 <code>CChosunPlayer</code> 안에 "접속 제어용 처리", "캐릭터 상태용 처리", "음성/부가 데이터 처리"를 한데 섞지 않고, 각자 전용 통로와 상태칸을 준 느낌에 가깝다.</p>
+<p>왜 지금 배우냐면, 앞에서 <code>UNetConnection</code>이라는 큰 그릇을 봤고 이제 그 안이 어떻게 칸막이 되는지 알아야 하기 때문이야. 이걸 모르면 다음에 나오는 bunch 라우팅, reliable/ack, ActorChannel 복제 흐름이 전부 "어디로 배달되는 얘기인지" 흐릿해져. 이번 챕터는 그 배달 주소표를 먼저 읽는 시간이다.</p>
+</div>
+<div class="conversation"><h2>하나의 선(線)에 여러 물건을 실으면 안 되나?</h2>
 <p>게임 서버 짜봤으면 소켓 하나로 온갖 걸 다 밀어넣어 본 적 있을 거야. 로그인 패킷, 이동 패킷, 채팅 패킷 전부 같은 TCP 스트림에. 그러다 보면 이런 게 헷갈리지. "지금 온 이 바이트 덩어리가 이동이야 채팅이야? 헤더 보고 분기해야지."</p>
 <p>UE는 그 "분기"를 아예 <strong>자료구조로</strong> 만들어놨어. 하나의 연결(UNetConnection) 안에 <strong>채널(Channel)</strong> 이라는 논리적 스트림을 여러 개 파놓고, 종류별로 나눠 실어. 로그인·연결관리는 이 선으로, 액터 복제는 저 선으로, 음성은 또 다른 선으로.</p>
 <p>비유하자면 하나의 케이블 안에 색깔 다른 전선 여러 가닥이 든 거야. 겉은 케이블 하나(소켓 하나)인데 안에서는 역할별로 갈라져 있어.</p>

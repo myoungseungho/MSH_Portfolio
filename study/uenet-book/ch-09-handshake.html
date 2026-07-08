@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>핸드셰이크: 연결은 어떻게 맺어지나</h1><p>언리얼 네트워크 · 09 / 43</p></header><div class="conversation"><h2>들어가기 전에: "노크"를 그냥 믿으면 안 돼</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>핸드셰이크: 연결은 어떻게 맺어지나</h1><p>언리얼 네트워크 · 09 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면, 클라가 처음 접속 버튼을 누르는 순간부터 이미 고민이 시작돼. 아직 <code>CChosunPlayer</code>도 없고, 로그인 <code>CM_*</code> 패킷을 믿을 수도 없고, IOCP 워커가 받아 온 건 그냥 "어딘가에서 날아온 첫 바이트"일 뿐이야.</p>
+<p>이 단계를 대충 넘기면 서버 문 앞이 금방 터진다. 가짜 주소로 접속 시도 비슷한 걸 1만 번 던지는 놈이 있을 때, 그때마다 플레이어 객체를 만들고, 락을 잡고, 세션 테이블에 넣고, 단일스레드 게임 로직까지 태우면 진짜 유저보다 가짜 의자가 먼저 자리를 차지해.</p>
+<p>그래서 UE도 정식 연결을 만들기 전에 먼저 묻는다. "너 진짜 왕복 가능한 클라 맞아?" 그 답이 이 챕터의 주제인 <code>StatelessConnectHandshake</code>야. 서버가 상태를 미리 잡지 않고 쿠키를 던졌다가, 클라가 되가져오면 그제서야 <code>UNetConnection</code> 쪽 문을 열어 주는 장치다.</p>
+<p>조선 서버식으로 말하면 <code>SP_*</code>를 마음 놓고 보내고 <code>CM_*</code>를 핸들러에 태우기 전에, Gate 앞에서 가짜 노크를 걸러내는 초소를 세우는 일이다. <code>CChosunPlayer</code>를 만들지 말지, 락 잡고 세션 맵에 넣을지 말지를 결정하기 전에 비용 싼 검문부터 하는 거야.</p>
+<p>이걸 지금 배우는 이유는 앞에서 <code>UNetConnection</code>이라는 "한 연결의 그릇"을 봤기 때문이야. 이제는 그 그릇이 <strong>언제 만들어져도 되는지</strong>, 그릇 만들기 전의 낯선 패킷을 누가 붙잡는지 알아야 다음의 로그인, 채널, 복제 흐름이 말이 된다.</p>
+</div>
+<div class="conversation"><h2>들어가기 전에: "노크"를 그냥 믿으면 안 돼</h2>
 <p>문을 하나 떠올려봐. 누가 밖에서 "똑똑" 노크를 해. 그럼 넌 문을 열어줄까?</p>
 <p>집이면 열어주겠지. 근데 이 문이 <strong>수천 명이 동시에 노크하는 서버의 문</strong>이고, 그 중 상당수가 "노크 소리만 흉내 내는 가짜"라면? 노크할 때마다 네가 의자 하나씩 꺼내서 손님 자리를 미리 깔아준다면, 가짜 노크 1만 개가 의자 1만 개를 깔게 만들고 — 방이 꽉 차서 진짜 손님이 못 들어와. 이게 스푸핑(IP 위조) 홍수 공격이야.</p>
 <p>그래서 영리한 문지기는 이렇게 해. 노크가 오면 의자를 깔지 않고, 대신 <strong>"이 종이 다시 가져와"</strong> 하면서 도장 찍힌 종이 한 장을 던져. 진짜 손님은 그 종이를 받아서 되가져와 → 그제서야 의자를 깐다. 가짜 노크(위조 IP)는 그 종이를 <strong>받을 주소가 애초에 자기가 아니라서</strong> 되가져올 수가 없어. 자동으로 걸러진다.</p>

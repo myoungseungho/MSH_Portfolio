@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>ActorChannel — 액터 하나가 복제되는 입구</h1><p>언리얼 네트워크 · 13 / 43</p></header><div class="conversation"><h2>들어가기 전에: "복제"가 뭔지부터</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>ActorChannel — 액터 하나가 복제되는 입구</h1><p>언리얼 네트워크 · 13 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이런 고민을 해봤을 거야. <code>CChosunPlayer</code>가 몬스터를 때렸고, HP가 100에서 80으로 바뀌었어. 그럼 서버는 <code>SP_*</code> 패킷으로 "이 몬스터 HP가 80이야"를 보내야 해. 근데 진짜 질문은 이거야. <strong>무슨 값을, 누구한테, 어떤 순서로, 얼마나 작게 보낼 거야?</strong></p>
+<p>이걸 대충 처리하면 바로 터져. 매 프레임 모든 몬스터의 모든 값을 모든 클라한테 보내면 트래픽이 폭발해. 반대로 바뀐 값 하나를 빼먹으면 어떤 클라는 몬스터가 죽었는데도 살아 있는 것처럼 보여. 처음 보는 액터인데 HP 변경분만 보내면 클라는 "그래서 얘가 누군데?" 하고 길을 잃어. 조선 서버에서 <code>CM_*</code> 처리 중에 버퍼를 잘못 조립하면 <code>SP_*</code> 하나가 깨지는 것처럼, 복제 봉투도 순서와 경계가 틀리면 화면이 깨져.</p>
+<p>언리얼도 같은 문제를 만났고, 그 답이 바로 <strong><code>UActorChannel::ReplicateActor()</code></strong> 야. 액터 하나 전용 창구에서 봉투(Bunch)를 만들고, 처음 보는 액터면 스폰 정보부터 넣고, 이미 아는 액터면 바뀐 프로퍼티만 넣고, 딸린 서브오브젝트도 같이 챙겨. 그러고 나서 진짜 보낼 게 있을 때만 봉투를 봉해서 보낸다.</p>
+<p>우리 조선 서버로 치면 IOCP 워커가 받은 <code>CM_*</code>를 게임 로직 쪽으로 넘긴 뒤, 단일스레드 구간에서 안전하게 <code>SP_*</code> 응답을 조립하는 느낌이야. 아무 데서나 락 잡고 아무 순서로 패킷을 써버리면 레이스와 중복 전송이 생기니까, 언리얼은 ActorChannel이라는 한 창구에서 "이 액터 한 마리"를 차근차근 포장하게 만든 거야.</p>
+<p>그래서 이 챕터가 지금 나와. 앞 챕터에서 NetDriver가 "이번 프레임에 어떤 액터를 누구에게 보낼지" 골랐다면, 이제는 <strong>골라진 액터 하나를 실제 봉투로 어떻게 싸는지</strong> 볼 차례야. 이 입구를 잡아야 뒤에 나오는 프로퍼티 diff, RepLayout, changelist, 서브오브젝트 복제가 전부 "아, 봉투 안에 들어가는 재료들이구나" 하고 이어진다.</p>
+</div>
+<div class="conversation"><h2>들어가기 전에: "복제"가 뭔지부터</h2>
 <p>멀티플레이 게임을 생각해봐. 서버에 몬스터 한 마리가 있어. 그 몬스터의 HP가 100에서 80으로 깎였어. 그럼 그 화면을 보고 있는 모든 클라이언트한테 "얘 HP 80이야"를 알려줘야겠지.</p>
 <p>이걸 언리얼에서는 <strong>복제(Replication)</strong> 라고 불러. 서버에 있는 액터(Actor)의 상태를 클라이언트한테 그대로 "베껴서" 보내는 거야.</p>
 <p>근데 여기서 첫 계단. 액터 한 마리를 복제한다는 건 구체적으로 뭘 하는 걸까?</p>

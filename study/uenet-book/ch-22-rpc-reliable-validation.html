@@ -48,6 +48,13 @@ a.xref:hover { background:#bbdefb; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>RPC 신뢰성과 검증 (reliable vs unreliable, WithValidation)</h1><p>언리얼 네트워크 · 22 / 43</p></header><div class="conversation"><div class="note">앞 챕터에서 RPC가 "이 함수를 저쪽 컴퓨터에서 실행해줘"라는 원격 호출이란 걸 봤어.<br>막히면 → <a class="xref" href="ch-21-rpc-types.html">rpc-types</a></div></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 <code>CM_MOVE</code>, <code>CM_ATTACK</code>, <code>CM_USE_ITEM</code> 같은 패킷을 보낼 때 이미 이 고민을 했을 거야. <strong>이 패킷은 꼭 도착해야 하나?</strong> 아니면 한두 번 빠져도 다음 패킷으로 덮이면 되나? 반대로 서버가 <code>SP_ITEM_ADD</code>나 <code>SP_QUEST_REWARD</code>를 보낼 때는 "이거 잃어버리면 큰일인데" 하고 생각했을 거고.</p>
+<p>이 기준이 없으면 서버가 이상하게 망가져. 이동 좌표를 전부 "무조건 도착"으로 쌓아두면 클라가 잠깐 끊겼을 때 낡은 이동 봉투가 줄줄이 밀려와서 게임이 늦게 반응해. 반대로 아이템 지급이나 문 열기 같은 걸 "잃어버려도 됨"으로 보내면 유저 화면에는 보상이 사라진 것처럼 보일 수 있어. 빠른 게 답일 때와, 꼭 도착해야 하는 게 답일 때가 다르다.</p>
+<p>그리고 도착만 한다고 끝도 아니야. 클라가 <code>CM_MOVE</code>로 "나 지금 1000미터 순간이동했어"라고 보내면, IOCP 워커가 패킷을 잘 받고 락을 잘 잡고 단일스레드 로직 큐에 잘 넘겨도 그 내용이 거짓이면 서버가 당해. <code>CChosunPlayer</code> 안에서 상태를 안전하게 바꾸는 것과, <strong>클라가 보낸 값을 믿어도 되는지 검사하는 것</strong>은 다른 문제야.</p>
+<p>언리얼도 똑같은 문제를 만났고, 그 답이 바로 <strong>RPC의 reliable/unreliable 선택</strong>과 <strong>WithValidation 검증 관문</strong>이야. reliable은 "이건 잃어버리면 안 돼"라고 약속하는 길이고, unreliable은 "최신 값만 중요하니 빠르게 흘려보내자"는 길이야. WithValidation은 서버가 실행 전에 "이 부탁, 말이 되나?" 하고 문 앞에서 한 번 막아보는 문지기고.</p>
+<p>왜 지금 배우냐면, 앞 챕터에서 RPC의 종류를 봤다면 이제는 "누가 누구에게 부르나"를 넘어서 <strong>이 호출을 얼마나 믿고, 얼마나 꼭 보내야 하느냐</strong>를 배워야 하거든. 이걸 잡아야 다음에 나올 ownership, 보안, 이동 보정 이야기가 뜬구름이 안 돼. RPC는 그냥 함수 호출처럼 보이지만, 실제 서버에서는 신뢰성 선택과 검증이 빠지는 순간 바로 장애나 핵으로 이어진다.</p>
+</div>
 <div class="conversation"><h2>들어가기 — 택배 두 종류</h2>
 <p>너 택배 두 번 보내봤다고 생각해봐.</p>
 <p>하나는 그냥 문 앞에 툭 던지고 가는 택배야. 도착했는지 안 했는지 확인 안 해. 잃어버려도 그만. 대신 빠르고 싸.</p>

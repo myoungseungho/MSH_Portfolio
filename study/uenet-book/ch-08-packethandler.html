@@ -49,6 +49,13 @@ a.xref:hover { background:#bbdefb; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>PacketHandler: 암호화·압축·핸드셰이크의 관문</h1><p>언리얼 네트워크 · 08 / 43</p></header><div class="conversation"><div class="note">Phase 2 / 소켓과 게임로직 사이의 "검문소 줄"<br>막히면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a> · <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a></div>
 <hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>게임 서버를 짜봤으면 이미 이 감각이 있어. IOCP 워커가 소켓에서 바이트를 받았다고 해서 그걸 바로 <code>CChosunPlayer</code>나 단일스레드 게임 로직에 던지진 않잖아. 먼저 길이 맞는지, 암호를 풀어야 하는지, <code>CM_</code> 패킷으로 믿어도 되는지, 아직 접속 인증 중인 놈인지 확인해야 해.</p>
+<p>이 중간 관문이 없으면 바로 사고가 난다. 아무 클라나 처음 던진 쓰레기 바이트가 게임 로직까지 들어오고, 압축된 걸 안 풀고 읽어서 패킷 ID가 엉뚱하게 나오고, 암호화 순서가 한 칸만 어긋나도 정상 유저의 <code>CM_</code>이 깨진 패킷처럼 보인다. 더 나쁘면 아직 검증도 안 된 연결 때문에 서버가 플레이어 객체나 락 잡는 작업을 먼저 해버려서, 정작 게임 로직 스레드는 "이거 진짜 유저야?"라는 질문까지 떠안게 된다.</p>
+<p>우리 조선 서버로 치면 <code>SP_</code>/<code>CM_</code> 처리 함수 앞에 있는 복호화·조립·검증 줄이 무너지는 거야. 워커 스레드가 날 바이트를 정리해서 "온전한 패킷 하나"로 만들어줘야 단일스레드 쪽은 순서대로 로직만 보면 되는데, 그 역할이 없으면 모든 핸들러가 자기 앞에서 방어 코드를 다시 써야 해.</p>
+<p>언리얼도 같은 문제를 만났고, 그 답이 바로 <code>PacketHandler</code>야. <code>UNetConnection</code> 하나마다 소켓과 게임 로직 사이에 검문소 줄을 세우고, <code>HandlerComponent</code>들이 핸드셰이크·압축·암호화 같은 일을 순서대로 맡는다. 들어오는 패킷은 바깥에서 안으로 벗기고, 나가는 패킷은 안에서 바깥으로 입히는 구조라서, "누가 먼저 만지고 누가 나중에 만지는지"가 설계의 핵심이 된다.</p>
+<p>그래서 이 챕터를 지금 배운다. 앞에서는 <code>UNetConnection</code>이 한 연결의 그릇이고, 수신 체인이 <code>ReceivedRawPacket</code>에서 게임 채널로 이어진다는 큰 길을 봤다. 이제 그 길 한가운데 있는 검문소를 알아야 다음의 핸드셰이크·보안·소켓 송신 이야기가 허공에 뜨지 않는다.</p>
+</div>
 <div class="conversation"><h2>0. 먼저 그림부터 — "공항 보안검색대"</h2>
 <p>너 공항 가봤지. 비행기 타기 전에 그냥 게이트로 못 걸어가. 줄을 서서 검문소를 <strong>순서대로</strong> 통과해야 해.</p>
 <ol><li>신분 확인 (이 사람 진짜 탑승객 맞아?)</li><li>짐 X-ray (안에 뭐 들었는지 풀어서 본다)</li><li>금속탐지 (몸에 이상한 거 없나)</li></ol>

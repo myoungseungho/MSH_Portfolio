@@ -47,7 +47,15 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Iris: Epic이 복제를 새로 만든 이유</h1><p>언리얼 네트워크 · 28 / 43</p></header><div class="conversation"><h2>0) 들어가며 — 김밥을 100명한테 나눠줄 때</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Iris: Epic이 복제를 새로 만든 이유</h1><p>언리얼 네트워크 · 28 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤다면 이미 비슷한 고민을 해봤을 거야. <code>CChosunPlayer</code> 하나가 움직이면 서버는 그 플레이어의 위치, 방향, HP, 상태이상 같은 값을 다른 사람들에게 알려줘야 해. 우리 조선 서버로 치면 IOCP 워커가 <code>CM_*</code> 패킷을 받아오고, 게임 로직은 단일스레드에서 상태를 정리한 뒤 <code>SP_*</code> 패킷으로 필요한 사람들에게 뿌리는 그림이야.</p>
+<p>처음에는 그냥 "접속자마다 상태를 다시 읽고, 다시 계산하고, 다시 패킷으로 만들면 되지"라고 생각하기 쉬워. 그런데 접속자가 10명이면 괜찮아도 500명, 1000명이 되면 같은 캐릭터 상태를 사람 수만큼 다시 만지는 일이 생겨. 락을 잘못 잡으면 IOCP 쪽과 게임 로직 쪽이 서로 기다리고, 락을 피하려고 복사를 많이 하면 CPU와 메모리가 줄줄 샌다.</p>
+<p>더 무서운 건 "누구에게 무엇을 보낼까"보다 "한 번 정한 값을 어떻게 싸게 여러 명에게 보내나"가 병목이 된다는 점이야. 같은 <code>CChosunPlayer</code>의 위치 하나를 보낼 뿐인데, 커넥션마다 float을 다시 줄이고, 문자열을 다시 만지고, baseline을 다시 비교하면 서버는 김밥 한 줄을 손님마다 새로 마는 가게가 돼버려.</p>
+<p>그래서 이 챕터의 답이 Iris야. Iris는 무거운 변환을 먼저 한 번 해두고, 그 결과를 커넥션별 전송 단계에서 재사용하려는 복제 시스템이야. 쉽게 말하면 게임 객체의 복잡한 값을 네트워크가 먹기 쉬운 작은 도시락으로 먼저 싸두고, 손님마다 다른 반찬만 조금 바꿔서 내보내는 방식에 가깝다.</p>
+<p>여기서 중요한 단어가 <code>Quantize</code>, <code>Delta</code>, <code>Fragment</code>, <code>NetRefHandle</code> 같은 것들이야. 이름은 어렵지만 문제의식은 단순해. "상태를 매번 새로 만들지 말고", "바뀐 것만 보내고", "객체가 자기 조각을 책임지고", "큰 UObject 포인터 대신 작은 손잡이로 가리키자"는 이야기야.</p>
+<p>이걸 지금 배우는 이유도 흐름상 딱 맞아. 앞에서 <code>UNetConnection</code>, 채널, RPC, RepLayout, ActorChannel처럼 기존 UE 복제의 길을 봤으니 이제 "그 방식이 커지면 어디가 아픈가"를 볼 차례야. Iris를 먼저 감으로 잡아두면, 뒤에서 실제 이동 복제나 대규모 액터 복제를 볼 때 "아, 그래서 무거운 일은 한 번만 하고 커넥션별 차이만 나중에 처리하는구나" 하고 길이 보인다.</p>
+</div>
+<div class="conversation"><h2>0) 들어가며 — 김밥을 100명한테 나눠줄 때</h2>
 <p>김밥집 사장님이 있어. 손님 100명이 똑같은 김밥을 주문했어. 어떻게 만들까?</p>
 <p>방법 A: 손님이 올 때마다 그 자리에서 재료 썰고 밥 짓고 말아. 100번 처음부터. 방법 B: 재료를 미리 딱 한 번 손질해서 김밥 완성해두고, 손님 오면 그냥 썰어서 담기만 해.</p>
 <p>당연히 B가 빠르지. "무거운 준비(재료 손질)를 한 번만" 하고, 그 결과물을 여러 손님이 나눠 쓰는 거야.</p>

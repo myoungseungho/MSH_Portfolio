@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>랙 보상: 지연을 되감아 과거 시점으로 히트 판정</h1><p>언리얼 네트워크 · 35 / 43</p></header><div class="conversation"><h2>0. 들어가기 전에: "분명 머리에 맞췄는데 안 맞아"</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>랙 보상: 지연을 되감아 과거 시점으로 히트 판정</h1><p>언리얼 네트워크 · 35 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>게임 서버를 짜봤으면 이 감각은 이미 있어. <code>SP_*</code> 스킬 요청이 오면 서버가 최종 판정을 하고, <code>CM_*</code> 결과를 내려보내야 해. <code>CChosunPlayer</code>가 "나 저 몹 맞췄어요"라고 말했다고 그대로 믿으면 바로 핵판이 되니까.</p>
+<p>그런데 서버가 권위를 쥔다고 문제가 끝나진 않아. IOCP 워커가 패킷을 받아 단일스레드 로직 큐에 넘기는 동안에도 시간은 흐르고, 공격자가 본 적 위치와 서버가 지금 보는 적 위치가 달라져. 유저 화면에서는 칼끝이나 조준선이 닿았는데 서버는 "현재 위치 기준으로는 안 맞음"이라고 하면, 유저는 버그처럼 느껴.</p>
+<p>이걸 방치하면 논타겟 전투가 전부 답답해져. 핑이 조금만 튀어도 빠른 대상은 계속 빗나가고, 운영팀에는 "분명 맞췄는데 왜 안 맞냐"는 CS가 쌓여. 반대로 클라 판정을 믿으면 조작 패킷 한 방에 다 맞는 게임이 돼.</p>
+<p>그래서 이 챕터의 답이 <strong>랙 보상</strong>, 더 정확히는 <strong>서버가 과거 시점으로 히트 판정을 되감는 방법</strong>이야. 서버 권위는 유지하되, 판정 순간만 "그 유저가 실제로 보고 쏜 장면"으로 되돌려 채점하는 거지. 사진첩에서 그때 사진을 꺼내 보고 판정한 다음, 다시 현재로 돌아오는 느낌이야.</p>
+<p>이걸 지금 배우는 이유도 분명해. 앞에서 서버 시각 동기화와 스무딩을 배웠으니, 이제 "클라가 왜 과거를 보고 있는지"와 "서버가 그 과거를 어떻게 계산하는지"를 연결할 차례야. 다음 능력/GAS 예측으로 넘어가기 전에, 서버 판정이 지연을 어떻게 공정하게 흡수하는지 잡아야 이후 예측·검증 흐름이 덜 뜬다.</p>
+</div>
+<div class="conversation"><h2>0. 들어가기 전에: "분명 머리에 맞췄는데 안 맞아"</h2>
 <p>FPS든 액션 MMO든, 유저가 제일 억울해하는 순간이 이거야. 조준선 딱 갖다 대고 쐈는데, 서버가 "빗나감" 판정을 내려. 핵도 아니고 렉도 아닌데 왜?</p>
 <p>우리 조선 서버 감각으로 먼저 깔자. 스킬 명중 판정, 누가 해? <strong>당연히 서버.</strong> 클라가 "나 맞췄어"라고 우기면 그대로 믿는 순간 핵 천국이 되니까, 최종 판정은 서버가 쥐는 게 철칙이야(서버 권위, → <a class="xref" href="ch-40-security.html">security</a>). 여기까진 UE도 똑같아.</p>
 <p>근데 함정은 <strong>"서버가 몇 시점의 위치로 판정하느냐"</strong> 야.</p>

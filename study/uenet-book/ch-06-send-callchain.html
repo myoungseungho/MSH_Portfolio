@@ -49,6 +49,13 @@ a.xref:hover { background:#bbdefb; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>보낼 때 — 송신 콜체인</h1><p>언리얼 네트워크 · 06 / 43</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람.<br>이 챕터가 끝나면 "내가 만든 데이터 한 덩어리가 어떤 계단을 밟아 소켓까지 걸어가는지, 그리고 <strong>언제 진짜로 소켓을 때리는지(Flush)</strong>"가 머릿속에 그려질 거야.<br><a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a>의 자매편이야. 저긴 "상자를 받아 까는 길", 여긴 "상자를 싸서 내보내는 길". 방향만 반대고 뼈대는 거울처럼 대칭이야.</div>
 <hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 "패킷 보내기"가 그냥 <code>send()</code> 한 번으로 끝나지 않는다는 걸 알아. <code>CChosunPlayer</code>가 움직였다고 바로 <code>SP_Move</code>를 때리고, 아이템 먹었다고 바로 <code>SP_ItemGet</code>을 때리고, 채팅 하나마다 바로 소켓을 치면 일단은 쉬워 보이지.</p>
+<p>근데 사람이 500명 되고 한 프레임에 상태 변화가 와르르 생기면 터져. IOCP 워커는 계속 <code>WSASend</code> 요청을 물고, 같은 플레이어 send 큐에 여러 스레드가 덤비면 락이 늘고, <code>CM_</code> 처리하다 만든 응답이 어느 타이밍에 밖으로 나갔는지도 흐려져. 초딩식으로 말하면 편지 한 통마다 우체국에 뛰어가는 꼴이라, 다리가 먼저 부러진다.</p>
+<p>그래서 제대로 된 서버는 "보낼 것 만들기"와 "진짜 소켓 치기"를 분리해. 게임 로직은 단일스레드 구간에서 <code>SP_*</code> 같은 논리 데이터들을 차곡차곡 쌓고, 네트워크 쪽은 정해진 순간에 묶어서 내보내야 해. 그래야 락도 줄고, 프레임 단위 순서도 읽히고, "왜 이 패킷이 지금 나갔지?"를 추적할 수 있어.</p>
+<p>언리얼도 같은 문제를 만났고, 그 답이 이번 챕터의 <strong>송신 콜체인</strong>이야. <code>Bunch</code>는 보낼 일거리, <code>SendBuffer</code>는 임시 우체통, <code>FlushNet</code>은 우체부가 걷어가는 순간, <code>LowLevelSend</code>는 진짜 소켓 write야. 핵심은 "Bunch를 만들었다"가 곧 "소켓을 때렸다"가 아니라는 것.</p>
+<p>이걸 지금 배우는 이유도 분명해. 앞의 <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a>에서 바깥에서 들어온 상자를 어떻게 까는지 봤다면, 이번에는 우리가 만든 상자를 어떻게 싸서 밖으로 보내는지 보는 차례야. 이 길을 잡아야 뒤에서 <code>Bunch</code>와 <code>Packet</code>, reliable/Ack, Tick flush, 실제 소켓 구현을 볼 때 "아, 지금은 쌓는 중이구나"와 "여기가 진짜 발사구나"를 구분할 수 있어.</p>
+</div>
 <div class="conversation"><h2>0. 먼저 비유부터 — 집 앞 우체통</h2>
 <p>편지 부칠 때 생각해봐. 편지 한 통 쓸 때마다 우체국까지 뛰어가진 않잖아? 집 앞 우체통에 <strong>툭 넣어두면</strong>, 우체부가 정해진 시간에 와서 <strong>한꺼번에 걷어간다.</strong></p>
 <p>UE 송신도 딱 이거야.</p>

@@ -47,7 +47,15 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Dormancy: 안 바뀌는 액터는 재운다</h1><p>언리얼 네트워크 · 26 / 43</p></header><div class="conversation"><h2>0) 들어가며 — 자는 사람한테는 안부 전화 안 한다</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Dormancy: 안 바뀌는 액터는 재운다</h1><p>언리얼 네트워크 · 26 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이런 고민을 해봤을 거야. IOCP 워커가 <code>CM_MOVE</code>, <code>CM_ATTACK</code> 같은 패킷을 받아서 싱글스레드 로직 큐로 넘기고, 로직 스레드는 주변 플레이어에게 <code>SP_*</code> 패킷을 뿌려. 여기까지는 익숙해. 그런데 <strong>아무 일도 안 일어난 애들</strong>은 어떻게 해야 할까?</p>
+<p>상점 NPC, 맵 장식물, 닫힌 문, 움직이지 않는 몬스터가 1만 개 있다고 해보자. 얘들이 매 틱 그대로인데도 "나 아직 여기 있어요"를 모든 클라에게 계속 보내면, send 버퍼가 쌓이고, 브로드캐스트 루프가 길어지고, 락 잡는 구간도 늘고, 정작 중요한 전투 패킷이 밀린다. 안 바뀐 걸 계속 보내는 건, 잠자는 사람한테 1초마다 전화해서 "아직 자요?" 묻는 꼴이야.</p>
+<p>그래서 서버는 질문을 바꿔야 해. "누구를 먼저 보낼까?"보다 더 앞에, <strong>"얘는 아예 안 보내도 되는 애 아닌가?"</strong> 를 물어야 해. 우리 조선 서버라면 브로드캐스트 대상 목록에서 가만히 있는 NPC를 빼고, HP나 위치가 진짜 바뀌는 순간에만 다시 <code>SP_*</code>를 뿌리는 최적화로 생각하면 된다.</p>
+<p>언리얼도 똑같은 문제를 만났고, 그 답이 바로 <strong>dormancy</strong>야. 안 바뀌는 액터는 복제 후보에서 빼서 재우고, 값이 바뀌는 순간 <code>FlushNetDormancy</code>로 깨워서 한 번 더 보내. 액터를 삭제하는 게 아니라, 클라와 서버가 이미 알고 있는 상태를 믿고 <strong>네트워크만 잠시 쉬게 하는 장치</strong>야.</p>
+<p>이 챕터를 지금 배우는 이유도 흐름상 딱 맞아. 지난 챕터에서 priority와 update frequency로 "후보 중 누구를 얼마나 자주 보낼까"를 봤다면, dormancy는 그보다 더 센 카드야. 후보에 올린 뒤 아끼는 게 아니라, <strong>첫 관문에서 후보 자체를 빼버리는</strong> 최적화거든.</p>
+<p>그리고 이제 우리는 <code>UNetConnection</code>, 채널, 복제 루프를 이미 봤어. 그래서 "액터가 잔다"는 말이 실제로는 커넥션별 채널을 닫고, 장부에서 dormant로 옮기고, 필요할 때 다시 active로 돌리는 일이라는 걸 읽을 준비가 됐다. 이걸 잡아야 다음의 Replication Graph도 "대규모 서버에서 안 보내도 되는 것을 더 똑똑하게 빼는 구조"로 이어진다.</p>
+</div>
+<div class="conversation"><h2>0) 들어가며 — 자는 사람한테는 안부 전화 안 한다</h2>
 <p>동네에 가로등 100개가 서 있다고 쳐. 낮이든 밤이든 그 자리에 그대로야. 안 움직이고, 색도 안 변해. 그런데 서버가 매 틱마다 "가로등1 위치 (10,20), 가로등2 위치 (10,40)…" 이걸 100개 × 접속자 수만큼 계속 보낸다면?</p>
 <p>바보 같지. <strong>안 바뀌는데 왜 계속 보내.</strong></p>
 <p>이게 dormancy(도먼시, 휴면)의 전부야. 값이 안 변하는 액터는 "재운다". 재우면 서버가 그 액터를 복제 후보 목록에서 빼버려서, 그 자리에 있는 줄 클라도 알고 서버도 아는데 <strong>트래픽만 0</strong>이 돼. 그러다 진짜로 뭔가 바뀌면? 그때 딱 깨워서 한 번 더 보내고 다시 재워.</p>

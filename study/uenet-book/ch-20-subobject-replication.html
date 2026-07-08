@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>컴포넌트·서브오브젝트 복제 — 부품들이 같이 실려 나가는 법</h1><p>언리얼 네트워크 · 20 / 43</p></header><div class="conversation"><h2>들어가기 전에: 액터는 혼자가 아니야</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>컴포넌트·서브오브젝트 복제 — 부품들이 같이 실려 나가는 법</h1><p>언리얼 네트워크 · 20 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이런 패킷을 한 번쯤 만들었을 거야. <code>CChosunPlayer</code> 하나를 클라에 보내는데, 캐릭터 기본 정보만 보내면 끝이 아니지. 장착 무기, 버프 목록, 펫, 인벤토리 칸, 퀘스트 상태처럼 <strong>플레이어 몸에 붙은 부품들</strong>도 같이 가야 화면이 맞아.</p>
+<p>이걸 아무 규칙 없이 보내면 바로 터져. 예를 들어 <code>SP_PlayerInfo</code>에는 "3번 무기 오브젝트를 들고 있음"이라고 써놨는데, 정작 3번 무기 데이터가 아직 클라에 안 왔다고 해보자. 클라는 "3번이 누구야?" 하고 빈손 캐릭터를 만들거나, 참조가 끊긴 상태로 UI를 그리게 돼. IOCP 워커 여러 개가 동시에 조립한다면 순서 보장하려고 락까지 신경 써야 하고, <code>CM_</code> 응답을 받은 쪽도 패킷 순서 하나 틀리면 이상한 상태를 보게 돼.</p>
+<p>그래서 우리 서버에서도 큰 데이터를 보낼 때는 은근히 순서를 정해. 먼저 참조당할 작은 것들을 만들 수 있게 보내고, 그다음 그것들을 물고 있는 큰 구조를 보낸다. 이삿짐으로 치면 서랍장 이름표만 먼저 보내는 게 아니라, 서랍 안 물건이 뭔지 알 수 있게 한 뒤 서랍장을 조립하게 하는 거야.</p>
+<p>언리얼도 같은 문제를 만났고, 그 답이 바로 <strong>컴포넌트·서브오브젝트 복제</strong>야. 액터 본체만 보내는 게 아니라, 그 밑에 달린 컴포넌트와 그 아래 서브오브젝트를 한 봉투(Bunch)에 어떤 순서로 실을지 엔진이 정해준다. 핵심은 단순해: <strong>참조당하는 서브오브젝트를 먼저, 컴포넌트 본체를 나중에</strong>.</p>
+<p>왜 지금 배우냐면, 앞 챕터에서 이미 액터가 <code>UActorChannel</code>을 통해 봉투에 담기는 큰 흐름을 봤기 때문이야. 이제 그 봉투 안쪽으로 한 칸 더 들어가서 "액터 본체 다음에 붙은 부품들은 어떻게 같이 실리나"를 볼 차례다. 뒤에서 넷컨디션, 프로퍼티 등록, Push Model을 이해하려면 먼저 이 부품 적재 순서를 잡아야 해.</p>
+</div>
+<div class="conversation"><h2>들어가기 전에: 액터는 혼자가 아니야</h2>
 <p>앞 챕터(<a class="xref" href="ch-13-actorchannel-replicate.html">actorchannel-replicate</a>)에서 액터 한 마리가 봉투(Bunch) 하나에 담겨 복제되는 걸 봤어. 근데 게임 속 액터는 진짜 "혼자"인 경우가 거의 없어.</p>
 <p>캐릭터 하나를 떠올려봐. 그 캐릭터는 껍데기 액터 밑에:</p>
 <ul><li><strong>이동 컴포넌트</strong>(CharacterMovement) — 속도·가속도·점프 상태</li><li><strong>인벤토리 컴포넌트</strong> — 그 밑에 또 아이템 오브젝트들</li><li><strong>버프/디버프 오브젝트들</strong></li></ul>

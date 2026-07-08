@@ -47,7 +47,14 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>연결 생명주기: 접속부터 끊김까지</h1><p>언리얼 네트워크 · 39 / 43</p></header><div class="conversation"><h2>손님이 문을 두드리면 무슨 일이 벌어지나</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>연결 생명주기: 접속부터 끊김까지</h1><p>언리얼 네트워크 · 39 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이 고민을 이미 해봤을 거야. 클라가 서버에 붙는 순간은 그냥 "소켓 연결됨" 하나로 끝나지 않아. <code>CM_LOGIN</code> 같은 로그인 패킷을 받고, DB나 밴 목록을 보고, 캐릭터를 붙이고, 맵 입장 준비를 끝내고, 나갈 때는 <code>LogOut</code>까지 태워야 해. 손님이 문을 열었다고 바로 밥상에 앉히는 게 아닌 것처럼, 서버도 순서대로 확인해야 한다.</p>
+<p>이 순서가 없으면 진짜 쉽게 터져. IOCP 워커가 접속을 받자마자 <code>CChosunPlayer</code>를 만들어 붙였는데, 그 사이 DB 심사가 실패하거나 클라가 맵 로딩 중에 끊기면 어떻게 될까? 아직 정식 유저도 아닌데 로그아웃 저장을 태우거나, 없는 캐릭터를 정리하려 들거나, 다른 워커와 락 잡는 순서가 꼬여서 "접속 중" 세션과 "게임 중" 유저가 뒤섞인다. <code>SP_*</code>를 보내도 되는 상태인지, <code>CM_*</code>를 아직 협상으로 봐야 하는지 기준이 없으면 서버가 사람을 헷갈려.</p>
+<p>그래서 이 챕터의 답은 <strong>연결 생명주기</strong>야. UE는 접속을 한 덩어리로 보지 않고, 문 앞 판정 → 로그인 협상 → 클라 맵 로딩 → 조인 → PlayerController 생성 → 끊김 정리로 잘게 나눠. <code>NotifyAcceptingConnection</code>, <code>NotifyControlMessage</code>, <code>PreLoginAsync</code>, <code>NMT_Join</code>, <code>SpawnPlayActor</code>, <code>CleanUp</code>, <code>Logout</code> 같은 함수들이 각 관문을 맡는 거지.</p>
+<p>우리 조선 서버로 치면 "소켓 세션", "로그인 중", "캐릭터 붙음", "게임 입장 완료", "정리 중"을 같은 <code>CChosunPlayer</code> 안에서도 상태로 나눠 보는 감각이야. UE는 이걸 <code>UNetConnection</code>과 PlayerController의 관계로 더 엄격하게 쪼개놨어. 특히 단일 게임 스레드에서 순서대로 처리하니까 락은 덜 보이지만, 대신 어느 시점에 객체를 만들어도 되는지 훨씬 분명해야 해.</p>
+<p>왜 지금 배우냐면, 앞에서 <code>UNetConnection</code>이 "클라 한 명을 담는 그릇"이라는 걸 봤기 때문이야. 이제는 그 그릇이 언제 손님 후보인지, 언제 정식 플레이어인지, 언제 조용히 버려야 하는지를 알아야 한다. 이걸 잡고 나면 뒤의 핸드셰이크·보안·수신 처리에서 "왜 아직 PlayerController가 없지?", "왜 여기서는 <code>Logout</code>을 안 부르지?" 같은 질문이 헷갈리지 않는다.</p>
+</div>
+<div class="conversation"><h2>손님이 문을 두드리면 무슨 일이 벌어지나</h2>
 <p>가게를 하나 떠올려봐. 손님이 문을 밀고 들어와. 근데 가게 주인이 아무나 다 들이진 않아. 순서가 있어.</p>
 <ol><li><strong>문 앞에서 판정</strong> — "지금 손님 받는 가게 맞아? 아니면 문 닫는 중이야?"</li><li><strong>신원 확인</strong> — "예약자 명단에 있어? 밴 당한 사람 아니야?"</li><li><strong>자리 안내</strong> — "OK, 통과. 저기 3번 테이블로 가"</li><li><strong>착석 완료 처리</strong> — "앉았네. 물수건 갖다주고 주문 받자"</li><li><strong>나갈 때 정리</strong> — "가셨으니 테이블 치우고 명단에서 빼자"</li></ol>
 <p>MMORPG 서버 프로그래머면 이 흐름이 하나도 안 낯설걸. 우리 조선협객전도 클라가 소켓 붙이면 <code>SetClient</code> 어쩌고 하면서 세션 만들고, 끊기면 <code>LogOut</code> 태워서 정리하잖아. 딱 그거야.</p>

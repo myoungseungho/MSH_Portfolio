@@ -47,7 +47,15 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>RPC는 어느 연결로 가나: 소유권</h1><p>언리얼 네트워크 · 23 / 43</p></header><div class="conversation"><h2>편지를 부치는데 주소가 없다면</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>RPC는 어느 연결로 가나: 소유권</h1><p>언리얼 네트워크 · 23 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이 고민을 이미 해봤어. <code>SP_*</code> 패킷을 클라한테 보낼 때, 서버는 항상 "이걸 <strong>누구한테</strong> 보내지?"를 먼저 정해야 해. <code>CChosunPlayer</code>가 들고 있는 세션으로 보낼지, 주변 사람들에게 뿌릴지, 아니면 아무에게도 보내면 안 되는지 말이야.</p>
+<p>이 판단이 없으면 바로 사고가 난다. A 유저가 강화 성공 UI를 봐야 하는데 B 유저한테 <code>CM_*</code>가 가거나, 파티 초대 응답이 엉뚱한 소켓으로 나가거나, 주인 없는 오브젝트가 서버 RPC를 쏴서 서버가 "이거 누구 요청인데?" 하고 조용히 씹어버린다. 100명이 붙어 있는 서버에서 주소 없는 패킷은 택배 송장 없는 상자랑 같아. 창고에 쌓이거나, 더 나쁘면 남의 집으로 간다.</p>
+<p>우리 조선 서버에서는 보통 <code>CChosunPlayer</code>나 세션 객체가 답을 준다. IOCP 워커가 바이트를 받아도, 결국 단일스레드 게임 로직으로 넘겨서 "이 요청은 어떤 플레이어의 것인가"를 확인하고 처리하지. 락을 많이 걸어서 아무 데나 직접 만지는 게 아니라, 소유한 플레이어와 그 큐를 기준으로 안전하게 흘려보내는 식이야.</p>
+<p>언리얼도 같은 문제를 만났고, 그 답이 바로 <strong>RPC 소유권(Ownership)</strong> 이야. RPC는 함수처럼 보이지만, 네트워크로 나가려면 결국 <code>UNetConnection</code>이라는 목적지가 필요해. UE는 그 목적지를 액터의 <code>Owner</code> 사슬을 타고 올라가며 찾고, 끝에서 만나는 PlayerController의 커넥션을 주소로 삼는다.</p>
+<p>그래서 이 챕터는 "RPC를 어떻게 선언하나" 다음에 와야 해. 앞에서 RPC 종류를 배웠다면 이제는 더 중요한 질문, <strong>그 RPC가 실제로 어느 연결로 가는가</strong>를 잡을 차례야. 이걸 알아야 Client RPC가 왜 어떤 액터에서는 잘 가고 어떤 액터에서는 버려지는지, Server RPC가 왜 소유 클라에서만 의미가 있는지 납득된다.</p>
+<p>지금 여기서 소유권을 잡아두면 뒤의 코드가 훨씬 덜 무섭다. <code>GetFunctionCallspace</code>는 "보낼지 말지"를 정하고, <code>GetNetConnection</code>은 "보낸다면 누구에게 보낼지"를 정한다. 즉 이번 챕터는 RPC 문법과 실제 소켓 사이에 붙는 <strong>주소 찾기 규칙</strong>을 배우는 장이다.</p>
+</div>
+<div class="conversation"><h2>편지를 부치는데 주소가 없다면</h2>
 <p>택배를 하나 부친다고 해보자. 상자는 다 쌌어. 그런데 <strong>"어디로 보내지?"</strong> 가 안 정해졌으면 이 상자는 창고에 그냥 쌓여. 버려지지도, 배달되지도 않고.</p>
 <p>RPC(원격 함수 호출)도 똑같아. 서버에서 <code>클라한테 이거 실행시켜</code> 하고 함수를 부르면, 엔진은 두 가지를 순서대로 정해야 돼.</p>
 <ol><li><strong>방향</strong> — 이 호출을 *여기서* 그냥 실행할까(Local), *원격*으로 보낼까(Remote), 아니면 *조용히 버릴까*(Absorbed)?</li><li><strong>주소</strong> — 원격으로 보낸다면, 수많은 클라 소켓 중 <strong>정확히 누구의 소켓</strong>으로 보내지?</li></ol>
