@@ -49,6 +49,15 @@ a.xref:hover { background:#bbdefb; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>NetConnection — 한 연결이 담당하는 모든 것</h1><p>언리얼 네트워크 · 01 / 43</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 UE 네트워크는 처음인 사람.<br>이 챕터가 끝나면 "연결 하나(<code>UNetConnection</code>)가 대체 무슨 일까지 책임지는가"의 전체 지도가 머릿속에 생긴다. 세부 콜체인은 다음 챕터들이 파고들 거고, 여기선 <strong>뼈대</strong>만.</div>
 <hr></div>
+<div class="conversation"><h2>왜 이걸 먼저 배워? — 문제의식부터</h2>
+<p>잠깐. <code>NetConnection</code>이 <strong>뭔지</strong> 설명하기 전에, <strong>왜 하필 이걸 1번으로 배우는지</strong>부터 짚자. 이유를 알고 보면 훨씬 잘 박히거든.</p>
+<p>네가 게임 서버를 짜봤으면 이 고민을 반드시 해봤어. <strong>클라 한 명이 접속하는 순간</strong>, 서버는 그 사람에 관한 걸 <strong>한 뭉치</strong>로 들고 있어야 해:</p>
+<ul><li>그 사람 전용 소켓(연결 통로)</li><li>받다 만 패킷 조각 / 보낼 패킷 큐</li><li>암호화 키, 어디까지 받았는지(시퀀스 번호)</li><li>지금 이 연결이 열어둔 채널들…</li></ul>
+<p>이걸 <strong>한 곳에 안 묶어두면</strong> 어떻게 될까? 100명이 접속한 순간 <strong>누구 데이터가 누구 건지 뒤죽박죽</strong>이 돼. 그래서 우리 조선 서버도 <code>CChosunPlayer</code> 같은 객체 하나에 그 사람 관련 상태를 싹 묶어놓잖아. 그게 없으면 서버가 안 돌아가니까.</p>
+<p><strong>언리얼도 똑같은 문제를 만났고, 그 답이 바로 <code>UNetConnection</code>이야.</strong> "한 연결에 관한 모든 것"을 담는 그릇. <strong>클라 한 명 = 서버에 이 객체 하나.</strong></p>
+<p><strong>그래서 이게 1번 챕터인 이유</strong> — 앞으로 배울 거의 전부(채널·Bunch·복제·RPC·핸드셰이크)가 결국 <strong>이 그릇 안에서, 이 그릇을 통해</strong> 일어나. 여길 안 잡고 넘어가면 "채널이 어디 붙는지", "복제가 누구한테 가는지"가 전부 <strong>허공에 뜬 얘기</strong>가 돼 — 집 주소를 모르고 골목 이름만 외우는 꼴이지.</p>
+<p>자, 그럼 이 그릇이 <strong>구체적으로 무슨 일까지</strong> 책임지는지, 비유로 먼저 감을 잡자.</p>
+</div>
 <div class="conversation"><h2>0. 먼저 비유부터 — 한 손님을 끝까지 책임지는 웨이터</h2>
 <p>식당에 손님 한 명이 앉았다고 쳐. 그 손님을 전담하는 웨이터 한 명이 붙어. 이 웨이터가 하는 일을 쭉 나열해보면:</p>
 <ol><li><strong>자리 세팅</strong> — 냅킨 깔고, 물 따르고, 메뉴판 준다. (초기화)</li><li><strong>주문받기</strong> — 손님이 말하는 걸 주방 용어로 옮겨 적는다. (수신)</li><li><strong>음식 나르기</strong> — 주방이 만든 걸 손님한테 가져다준다. (송신)</li><li><strong>테이블 여러 개 관리</strong> — 애피타이저 접시, 메인 접시, 디저트 접시를 따로따로 챙긴다. (채널 관리)</li><li><strong>손님 배웅</strong> — 계산 끝나면 자리 치우고 인사하고 보낸다. (종료)</li><li><strong>틈틈이 살핌</strong> — "물 더 드릴까요?" 하고 주기적으로 들여다본다. (Tick)</li></ol>
