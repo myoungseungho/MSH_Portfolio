@@ -1,0 +1,333 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>RHI — CPU가 GPU에게 말 거는 법 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>RHI — CPU가 GPU에게 말 거는 법</h1><p>언리얼 렌더링 · 03 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "언리얼이 D3D12/Vulkan 차이를 어디서 가리고, CPU가 어떤 공용 창구로 GPU에게 말 거는지"가 잡힌다.</div>
+<hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 서버를 짜봤으면 이미 비슷한 구조를 알아.</p>
+<p>게임 로직은 "이 유저에게 이동 패킷 보내"라고 말하지, 매번 IOCP의 <code>WSASend</code> 세부 옵션을 직접 만지면 안 돼.</p>
+<p>DirectX를 만져봤다면 GPU에게 말 거는 일이 훨씬 까다롭다는 것도 알아.</p>
+<p>디바이스, 큐, 커맨드 리스트, 리소스 상태, 셰이더 바이트코드까지 정확히 맞춰야 하거든.</p>
+<p>그런데 엔진이 D3D12, Vulkan, Metal, NullRHI를 렌더러 곳곳에서 직접 상대하면 어떻게 될까?</p>
+<p>텍스처 하나 만들 때도 D3D12면 <code>ID3D12Resource</code>, Vulkan이면 <code>VkImage</code> 식으로 갈라져.</p>
+<p>셰이더 하나 만들 때마다 <code>if D3D12</code>, <code>if Vulkan</code>이 퍼지면 기능 하나 고칠 때 플랫폼 수만큼 버그가 늘어나.</p>
+<p>그래서 언리얼도 같은 문제를 만났고, 답이 <strong>RHI(Render Hardware Interface)</strong> 야.</p>
+<p>렌더러는 "픽셀 셰이더 만들어", "백버퍼 줘", "프레임 끝났어" 같은 공용 언어로 말한다.</p>
+<p>실제 번역은 선택된 RHI 백엔드가 한다.</p>
+<p><code>D3D12RHI</code>가 잡히면 D3D12 말로, <code>VulkanRHI</code>가 잡히면 Vulkan 말로 내려가는 식이야.</p>
+<p>왜 지금 배우냐면, 앞 장 <a class="xref" href="ch-02-render-thread.html">render-thread</a>에서 렌더 스레드가 분리되는 이유를 봤어.</p>
+<p>이제 그 렌더 스레드가 GPU에게 명령을 내릴 <strong>문</strong>을 알아야 해.</p>
+<p>다음 장 <a class="xref" href="ch-04-rhi-commandlist.html">rhi-commandlist</a>는 그 문으로 들어갈 명령을 어떻게 쌓는지 보고, <a class="xref" href="ch-05-d3d12-backend.html">d3d12-backend</a>는 공용 말이 진짜 D3D12 호출로 바뀌는 지점까지 내려갈 거야.</p>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 공항의 공용 출국 창구</h2>
+<p>공항을 생각해보자.</p>
+<p>너는 여행객이고, 목적지는 여러 나라야.</p>
+<p>미국은 영어, 일본은 일본어, 프랑스는 프랑스어를 쓴다.</p>
+<p>네가 나라별 서류와 항공사 내부 양식을 전부 외워야 한다면 여행이 아니라 고문이지.</p>
+<p>그래서 공항에는 공용 출국 창구가 있어.</p>
+<p>너는 창구에 "이 사람을 이 나라로 보내줘", "짐은 이만큼이야", "탑승 준비 끝났어"라고 말한다.</p>
+<p>창구 뒤 직원이 항공사별 양식을 알아서 처리해.</p>
+<p>RHI가 딱 이 창구야.</p>
+<p>CPU 쪽 렌더러는 <code>GDynamicRHI</code>라는 공용 창구 손잡이를 잡고 말한다.</p>
+<p>창구 뒤에는 D3D12 직원, Vulkan 직원, Metal 직원, NullRHI 직원이 앉을 수 있어.</p>
+<p>중요한 건 렌더러가 항공사 창고까지 직접 뛰어다니지 않는다는 거야.</p>
+<div class="note"><strong>소스 위치</strong> (아래 코드는 전부 이 클론의 실제 파일에서 그대로 뽑음)<br>&bull;&nbsp;공통 구현: <code>Engine/Source/Runtime/RHI/Private/DynamicRHI.cpp</code><br>&bull;&nbsp;공통 인터페이스: <code>Engine/Source/Runtime/RHI/Public/DynamicRHI.h</code><br>&bull;&nbsp;Windows 백엔드 선택: <code>Engine/Source/Runtime/RHI/Private/Windows/WindowsDynamicRHI.cpp</code></div>
+<hr>
+</div>
+<div class="conversation"><h2>1. RHI 창구의 모양 — <code>FDynamicRHI</code></h2>
+<p>먼저 공용 창구의 간판부터 보자.</p>
+<p><code>FDynamicRHI</code>는 "RHI라면 최소한 이런 일을 해야 한다"는 약속을 적어둔 타입이야.</p>
+<p><strong><code>DynamicRHI.h:205</code></strong></p>
+<div class="code-block">class FDynamicRHI
+{
+public:
+	using FRHICalcTextureSizeResult = ::FRHICalcTextureSizeResult;
+
+	/** Declare a virtual destructor, so the dynamic RHI can be deleted without knowing its type. */
+	RHI_API virtual ~FDynamicRHI();
+
+	/** Initializes the RHI; separate from IDynamicRHIModule::CreateRHI so that GDynamicRHI is set when it is called. */
+	virtual void Init() = 0;
+
+	/** Called after the RHI is initialized; before the render thread is started. */
+	virtual void PostInit() {}
+
+	/** Shutdown the RHI; handle shutdown and resource destruction before the RHI's actual destructor is called (so that all resources of the RHI are still available for shutdown). */
+	virtual void Shutdown() = 0;
+
+	virtual const TCHAR* GetName() = 0;
+
+	virtual ERHIInterfaceType GetInterfaceType() const { return ERHIInterfaceType::Hidden; }
+	virtual FDynamicRHI* GetNonValidationRHI() { return this; }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>FDynamicRHI</code> 간판<br>&bull;&nbsp;<strong><code>class FDynamicRHI</code></strong> = "RHI 창구라면 이런 모양이어야 해"라고 적은 설계도야.<br>&bull;&nbsp;<strong><code>public:</code></strong> = 밖에서 부를 수 있는 메뉴판 영역이야.<br>&bull;&nbsp;<strong><code>virtual</code></strong> = 자식 백엔드가 자기 방식으로 갈아끼울 수 있는 함수야.<br>&bull;&nbsp;<strong><code>= 0</code></strong> = 몸통이 없는 순수가상 함수. D3D12/Vulkan 같은 실제 직원이 반드시 채워야 해.<br>&bull;&nbsp;<strong><code>Init()</code></strong> = 창구 문 열기. 실제 디바이스와 기본 상태를 준비하는 시작점이야.<br>&bull;&nbsp;<strong><code>Shutdown()</code></strong> = 창구 닫기. 리소스가 살아 있을 때 안전하게 정리하는 함수야.<br>&bull;&nbsp;<strong><code>GetName()</code></strong> = 오늘 창구 뒤에 누가 앉았는지 이름을 물어보는 함수야.<br>&bull;&nbsp;<strong><code>ERHIInterfaceType::Hidden</code></strong> = 기본 정체성은 숨김. 실제 백엔드는 D3D12, Vulkan 같은 이름표를 줄 수 있어.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>FDynamicRHI</code>는 구현이 아니라 약속이야. 렌더러는 "창구야, 열어", "창구야, 닫아"라고만 말하고, 실제로 D3D12 디바이스를 만들지 Vulkan 인스턴스를 만들지는 뒤 직원이 처리한다.</div>
+<p>서버로 치면 <code>INetworkTransport</code> 아래에 <code>TcpTransport</code>, <code>UdpTransport</code>, <code>LoopbackTransport</code>를 꽂는 구조와 비슷해.</p>
+<p>게임 로직은 <code>Send()</code>만 부른다.</p>
+<p>RHI도 렌더러에게 그런 공용 언어를 준다.</p>
+</div>
+<div class="conversation"><h2>2. 창구 손잡이 — <code>GDynamicRHI</code></h2>
+<p>공항에는 여러 항공사가 있어도 승객은 안내판에 적힌 "오늘 여기로 오세요" 창구 하나를 찾아가.</p>
+<p>언리얼의 그 안내판이 전역 포인터 <code>GDynamicRHI</code>야.</p>
+<p><strong><code>DynamicRHI.cpp:34</code></strong></p>
+<div class="code-block">// Globals.
+FDynamicRHI* GDynamicRHI = NULL;
+RHIGetGPUUsageType RHIGetGPUUsage = nullptr;
+bool bDriverDenylistMessageShown = false;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 전역 RHI 손잡이<br>&bull;&nbsp;<strong><code>FDynamicRHI*</code></strong> = <code>FDynamicRHI</code> 실물을 직접 들고 있는 게 아니라, 그 실물을 가리키는 손잡이야.<br>&bull;&nbsp;<strong><code>GDynamicRHI</code></strong> = 오늘 선택된 RHI 창구. D3D12일 수도, NullRHI일 수도 있어.<br>&bull;&nbsp;<strong><code>NULL</code></strong> = 아직 창구가 안 정해졌다는 빈값이야.<br>&bull;&nbsp;<strong><code>nullptr</code></strong> = 새 C++식 빈 포인터야.<br>&bull;&nbsp;<strong><code>bool</code></strong> = 참/거짓 값. 드라이버 경고 팝업을 이미 보여줬는지 기록해.</div>
+<p>렌더러 곳곳은 "D3D12 객체 어디 있어?"라고 묻지 않는다.</p>
+<p>대부분은 <code>GDynamicRHI</code>를 통해 공용 함수로 간다.</p>
+<p>창구 뒤 직원이 D3D12인지 Vulkan인지는 이 손잡이 안쪽 문제야.</p>
+</div>
+<div class="conversation"><h2>3. 시작할 때 창구를 고른다 — <code>RHIInit</code></h2>
+<p><code>GDynamicRHI</code>는 엔진 시작 중 <code>RHIInit</code>에서 채워진다.</p>
+<p>렌더링을 아예 할 수 없는 상황이면 <code>NullRHI</code>.</p>
+<p>렌더링을 할 수 있으면 플랫폼이 실제 Dynamic RHI를 만든다.</p>
+<p><strong><code>DynamicRHI.cpp:278</code></strong></p>
+<div class="code-block">void RHIInit(bool bHasEditorToken)
+{
+	if (!GDynamicRHI)
+	{
+#if RHI_ENABLE_RESOURCE_INFO
+		FRHIResource::StartTrackingAllResources();
+#endif
+
+		// read in any data driven shader platform info structures we can find
+		FGenericDataDrivenShaderPlatformInfo::Initialize();
+
+		GRHICommandList.LatchBypass(); // read commandline for bypass flag
+
+		if (!FApp::CanEverRender())
+		{
+			InitNullRHI();
+		}
+		else
+		{
+			LLM_SCOPE(ELLMTag::RHIMisc);
+
+			GDynamicRHI = PlatformCreateDynamicRHI();
+			if (GDynamicRHI)
+			{</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>RHIInit</code> 입구<br>&bull;&nbsp;<strong><code>void RHIInit(bool bHasEditorToken)</code></strong> = 값을 돌려주지 않는 RHI 초기화 함수야.<br>&bull;&nbsp;<strong><code>if (!GDynamicRHI)</code></strong> = 아직 창구가 없을 때만 안쪽 초기화를 한다. <code>!</code>는 참/거짓 뒤집기야.<br>&bull;&nbsp;<strong><code>#if RHI_ENABLE_RESOURCE_INFO</code></strong> = 컴파일 옵션이 켜졌을 때만 이 줄들을 넣는 전처리 조건이야.<br>&bull;&nbsp;<strong><code>FGenericDataDrivenShaderPlatformInfo::Initialize()</code></strong> = 데이터로 정의된 셰이더 플랫폼 정보를 먼저 읽는다.<br>&bull;&nbsp;<strong><code>GRHICommandList.LatchBypass()</code></strong> = 커맨드 리스트 우회 옵션을 커맨드라인에서 붙잡아둔다.<br>&bull;&nbsp;<strong><code>FApp::CanEverRender()</code></strong> = 이 실행 환경이 애초에 렌더링을 할 수 있는지 묻는다.<br>&bull;&nbsp;<strong><code>InitNullRHI()</code></strong> = 진짜 GPU 창구 대신 아무것도 그리지 않는 Null 창구를 연다.<br>&bull;&nbsp;<strong><code>PlatformCreateDynamicRHI()</code></strong> = Windows/Linux/Android 같은 플랫폼별 코드에게 "오늘 쓸 RHI 창구 만들어줘"라고 맡긴다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>RHIInit</code>은 셰이더 플랫폼 정보와 커맨드 리스트 설정을 잡고, 렌더링 불가 환경이면 <code>InitNullRHI()</code>로 빈 창구를 열어. 렌더링 가능하면 <code>PlatformCreateDynamicRHI()</code>로 실제 창구를 만든다. 공항에서 "오늘 어느 항공사 카운터를 열지" 정하는 장면이야.</div>
+<p>Windows가 뭘 고를지는 Windows 파일이 정하고, Linux가 뭘 고를지는 Linux 파일이 정해.</p>
+</div>
+<div class="conversation"><h2>4. Windows는 D3D12/Vulkan 모듈 이름을 고른다</h2>
+<p>Windows 쪽은 선택지를 실제 모듈 이름으로 바꾼다.</p>
+<p>여기서 D3D12와 Vulkan 차이가 창구 뒤로 밀려난다.</p>
+<p><strong><code>WindowsDynamicRHI.cpp:137</code></strong></p>
+<div class="code-block">	switch (InWindowsRHI)
+	{
+	default: check(false);
+	case EWindowsRHI::D3D11:  return TEXT("D3D11RHI");
+	case EWindowsRHI::D3D12:  return TEXT("D3D12RHI");
+	case EWindowsRHI::Vulkan: return TEXT("VulkanRHI");
+	case EWindowsRHI::OpenGL: return TEXT("OpenGLDrv");</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 선택지를 모듈 이름으로 바꾸기<br>&bull;&nbsp;<strong><code>switch</code></strong> = 값이 무엇인지에 따라 여러 갈래 중 하나를 고르는 문법이야.<br>&bull;&nbsp;<strong><code>case EWindowsRHI::D3D12</code></strong> = 선택지가 D3D12라면 이 줄을 탄다는 뜻이야.<br>&bull;&nbsp;<strong><code>return TEXT("D3D12RHI")</code></strong> = 호출한 쪽에 <code>D3D12RHI</code>라는 모듈 이름을 돌려준다.<br>&bull;&nbsp;<strong><code>VulkanRHI</code></strong> = Vulkan 직원이 들어 있는 모듈 이름이야.<br>&bull;&nbsp;<strong><code>default: check(false);</code></strong> = 예상 못 한 값이면 개발 중에 바로 터뜨리는 안전장치야.</div>
+<p>짧지만 이 토막이 "D3D12/Vulkan 차이를 가리는 층"을 잘 보여줘.</p>
+<p>앞면은 <code>EWindowsRHI</code>라는 엔진 선택지야.</p>
+<p>뒤쪽은 <code>D3D12RHI</code>, <code>VulkanRHI</code>라는 실제 모듈 이름이야.</p>
+<p>승객은 공용 창구로 가고, 공항은 내부 항공사 이름표를 찾아간다.</p>
+</div>
+<div class="conversation"><h2>5. 모듈이 창구 실물을 만든다</h2>
+<p>Windows의 <code>LoadDynamicRHIModule</code>은 프로젝트 설정, 선호 RHI, 강제 RHI, 기능 레벨, 지원 여부를 보고 모듈을 고른다.</p>
+<p>그 다음 <code>PlatformCreateDynamicRHI</code>가 실제 창구 객체를 만든다.</p>
+<p><strong><code>WindowsDynamicRHI.cpp:1243</code></strong></p>
+<div class="code-block">FDynamicRHI* PlatformCreateDynamicRHI()
+{
+	FDynamicRHI* DynamicRHI = nullptr;
+
+	ERHIFeatureLevel::Type RequestedFeatureLevel;
+	const TCHAR* LoadedRHIModuleName;
+	IDynamicRHIModule* DynamicRHIModule = LoadDynamicRHIModule(RequestedFeatureLevel, LoadedRHIModuleName);
+
+	if (DynamicRHIModule)
+	{
+		// Create the dynamic RHI.
+		DynamicRHI = DynamicRHIModule-&gt;CreateRHI(RequestedFeatureLevel);
+		GLoadedRHIModuleName = LoadedRHIModuleName;
+	}
+
+	return DynamicRHI;
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 창구 객체 만들기<br>&bull;&nbsp;<strong><code>FDynamicRHI* PlatformCreateDynamicRHI()</code></strong> = 플랫폼별로 실제 RHI 창구를 만들어 돌려주는 함수야.<br>&bull;&nbsp;<strong><code>nullptr</code></strong> = 아직 만든 창구가 없다는 빈값이야.<br>&bull;&nbsp;<strong><code>RequestedFeatureLevel</code></strong> = 이 창구가 어느 기능 레벨로 열릴지 담는 값이야.<br>&bull;&nbsp;<strong><code>LoadedRHIModuleName</code></strong> = 실제로 로드한 모듈 이름표야.<br>&bull;&nbsp;<strong><code>LoadDynamicRHIModule(...)</code></strong> = 설정과 지원 여부를 보고 모듈을 고르는 함수야.<br>&bull;&nbsp;<strong><code>DynamicRHIModule-&gt;CreateRHI(...)</code></strong> = 모듈에게 "이 기능 레벨로 실제 RHI 객체 만들어"라고 시킨다.<br>&bull;&nbsp;<strong><code>GLoadedRHIModuleName</code></strong> = 나중에 로그나 프로파일러가 "오늘 D3D12RHI 씀" 같은 정보를 볼 수 있게 저장하는 이름표야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>PlatformCreateDynamicRHI()</code>는 <code>LoadDynamicRHIModule</code>로 모듈을 고르고, 모듈이 있으면 <code>CreateRHI</code>로 실제 <code>FDynamicRHI</code> 자식 객체를 만든다. 그래서 공통 <code>RHIInit</code>은 Windows가 D3D12를 골랐는지 Vulkan을 골랐는지 몰라도 <code>GDynamicRHI = PlatformCreateDynamicRHI();</code> 한 줄로 받아올 수 있어.</div>
+<p>여기서 드디어 <code>GDynamicRHI</code>가 채워진다.</p>
+</div>
+<div class="conversation"><h2>6. 공용 함수들은 <code>GDynamicRHI</code>로 보낸다</h2>
+<p>창구가 정해졌으면 이제 상위 렌더러는 공용 함수만 부르면 된다.</p>
+<p>아래는 셰이더를 만드는 작은 래퍼들이야.</p>
+<p>직접 D3D12 API를 부르지 않고 <code>GDynamicRHI-&gt;...</code>로 넘긴다.</p>
+<p><strong><code>DynamicRHI.h:1093</code></strong></p>
+<div class="code-block">inline FPixelShaderRHIRef RHICreatePixelShader(TArrayView&lt;const uint8&gt; Code, const FSHAHash&amp; Hash)
+{
+	LLM_SCOPE(ELLMTag::Shaders);
+	return GDynamicRHI-&gt;RHICreatePixelShader(Code, Hash);
+}
+
+inline FVertexShaderRHIRef RHICreateVertexShader(TArrayView&lt;const uint8&gt; Code, const FSHAHash&amp; Hash)
+{
+	LLM_SCOPE(ELLMTag::Shaders);
+	return GDynamicRHI-&gt;RHICreateVertexShader(Code, Hash);
+}
+
+inline FMeshShaderRHIRef RHICreateMeshShader(TArrayView&lt;const uint8&gt; Code, const FSHAHash&amp; Hash)
+{
+	LLM_SCOPE(ELLMTag::Shaders);
+	return GDynamicRHI-&gt;RHICreateMeshShader(Code, Hash);
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 공용 생성 함수<br>&bull;&nbsp;<strong><code>inline</code></strong> = 헤더 안에 작게 펼칠 수 있는 함수라는 뜻이야.<br>&bull;&nbsp;<strong><code>FPixelShaderRHIRef</code></strong> = 픽셀 셰이더 RHI 리소스 손잡이야.<br>&bull;&nbsp;<strong><code>TArrayView&lt;const uint8&gt; Code</code></strong> = 셰이더 바이트코드를 복사하지 않고 바라보는 얇은 창이야.<br>&bull;&nbsp;<strong><code>const FSHAHash&amp; Hash</code></strong> = 셰이더 코드의 해시를 참조로 받는다.<br>&bull;&nbsp;<strong><code>LLM_SCOPE(ELLMTag::Shaders)</code></strong> = 메모리 추적에서 "셰이더 관련 작업"이라고 표시하는 범위야.<br>&bull;&nbsp;<strong><code>return GDynamicRHI-&gt;RHICreatePixelShader(...)</code></strong> = 공용 함수가 실제 창구 뒤 직원에게 일을 넘기는 줄이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 렌더러가 <code>RHICreatePixelShader</code>를 부르면 이 함수가 직접 D3D12 API를 호출하지 않아. <code>GDynamicRHI-&gt;RHICreatePixelShader</code>로 넘긴다. D3D12 창구가 열렸으면 D3D12 방식으로 만들고, 다른 창구가 열렸으면 그쪽 방식으로 만든다.</div>
+<p>이게 렌더러를 살려준다.</p>
+<p>BasePass, Shadow, Lumen 같은 상위 렌더링 코드는 "픽셀 셰이더 필요해"라고만 말하면 돼.</p>
+<p>D3D12의 루트 시그니처나 Vulkan의 디스크립터 셋 같은 디테일은 백엔드 쪽으로 내려간다.</p>
+<div class="note">실제 D3D12 백엔드 안쪽은 → <a class="xref" href="ch-05-d3d12-backend.html">d3d12-backend</a></div>
+</div>
+<div class="conversation"><h2>7. 열었으면 닫는다 — <code>RHIExit</code></h2>
+<p>창구는 시작할 때만 중요한 게 아니야.</p>
+<p>끝날 때도 중요해.</p>
+<p>GPU 명령이 남아 있는데 디바이스를 먼저 부수면 사고 난다.</p>
+<p>그래서 종료 때는 캐시를 정리하고, 밀린 명령을 플러시하고, RHI를 닫고, 포인터를 비운다.</p>
+<p><strong><code>DynamicRHI.cpp:432</code></strong></p>
+<div class="code-block">void RHIExit()
+{
+	if (!GUsingNullRHI &amp;&amp; GDynamicRHI != NULL)
+	{
+		// Clean up all cached pipelines
+		PipelineStateCache::Shutdown();
+
+		// Flush any potential commands queued before we shut things down.
+		FRHICommandListExecutor::GetImmediateCommandList().ImmediateFlush(EImmediateFlushType::FlushRHIThread);
+
+		// Destruct the dynamic RHI.
+		GDynamicRHI-&gt;Shutdown();
+		delete GDynamicRHI;
+		GDynamicRHI = NULL;
+
+#if RHI_ENABLE_RESOURCE_INFO
+		FRHIResource::StopTrackingAllResources();
+#endif
+	}
+	else if (GUsingNullRHI)
+	{
+		// If we are using NullRHI flush the command list here in case somethings has been added to the command list during exit calls
+		FRHICommandListExecutor::GetImmediateCommandList().ImmediateFlush(EImmediateFlushType::FlushRHIThreadFlushResources);
+		FRHICommandListExecutor::GetImmediateCommandList().ImmediateFlush(EImmediateFlushType::FlushRHIThread);
+	}
+
+	GRHICommandList.CleanupGraphEvents();
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — RHI 종료<br>&bull;&nbsp;<strong><code>RHIExit()</code></strong> = RHI 창구를 닫는 엔진 종료 루틴이야.<br>&bull;&nbsp;<strong><code>!GUsingNullRHI &amp;&amp; GDynamicRHI != NULL</code></strong> = NullRHI가 아니고 실제 창구가 있을 때만 일반 종료를 탄다.<br>&bull;&nbsp;<strong><code>PipelineStateCache::Shutdown()</code></strong> = 미리 구워둔 파이프라인 상태 캐시를 정리한다.<br>&bull;&nbsp;<strong><code>ImmediateFlush(EImmediateFlushType::FlushRHIThread)</code></strong> = 밀린 RHI 스레드 명령을 즉시 밀어낸다.<br>&bull;&nbsp;<strong><code>GDynamicRHI-&gt;Shutdown()</code></strong> = 창구 뒤 직원에게 "네 리소스부터 안전하게 정리해"라고 시킨다.<br>&bull;&nbsp;<strong><code>delete GDynamicRHI</code></strong> = 창구 객체 자체를 메모리에서 없앤다.<br>&bull;&nbsp;<strong><code>GDynamicRHI = NULL</code></strong> = 이제 창구 손잡이가 빈값이라고 표시한다.</div>
+<p>종료는 <code>PipelineStateCache::Shutdown()</code>으로 PSO 캐시를 치우고, <code>ImmediateFlush</code>로 밀린 명령을 비운 뒤, <code>GDynamicRHI-&gt;Shutdown()</code>으로 실제 백엔드 리소스를 정리한다.</p>
+<p>공항으로 치면 승객 줄을 다 처리하고, 항공사 카운터 장비를 반납하고, 안내판에서 창구 번호를 지우는 순서야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>콜/데이터 흐름 한눈에</h2>
+<div class="code-block">엔진 시작
+  |
+  v
+RHIInit (:278)
+  |
+  +-- 렌더링 불가 -&gt; InitNullRHI (:60)
+  |
+  +-- 렌더링 가능
+        |
+        v
+     PlatformCreateDynamicRHI (:1243, WindowsDynamicRHI.cpp)
+        |
+        v
+     LoadDynamicRHIModule (:1147, WindowsDynamicRHI.cpp)
+        |
+        +-- D3D12  -&gt; "D3D12RHI"  (:141)
+        +-- Vulkan -&gt; "VulkanRHI" (:142)
+        |
+        v
+     DynamicRHIModule-&gt;CreateRHI(...)
+        |
+        v
+     GDynamicRHI = 실제 FDynamicRHI 자식 객체
+        |
+        v
+상위 렌더러 공용 호출
+        |
+        +-- RHICreatePixelShader (:1093)
+        +-- RHICreateVertexShader (:1099)
+        +-- RHICreateMeshShader (:1105)
+        |
+        v
+GDynamicRHI-&gt;RHI...()
+        |
+        v
+D3D12RHI / VulkanRHI / NullRHI 실제 구현
+        |
+        v
+GPU 드라이버와 하드웨어
+
+엔진 종료
+  |
+  v
+RHIExit (:432)</div>
+<p>이 그림에서 제일 중요한 선은 <code>GDynamicRHI = PlatformCreateDynamicRHI()</code>야.</p>
+<p>이 한 줄 때문에 위쪽 렌더러는 공용 언어를 쓰고, 아래쪽 백엔드는 자기 나라 말을 쓴다.</p>
+</div>
+<div class="conversation"><h2>우리 서버·DirectX 랑 비교</h2>
+<p>우리 조선 서버랑 비교하면 RHI는 "게임 로직과 실제 IO 구현 사이의 어댑터"야.</p>
+<p>서버 로직은 <code>SP_ITEM_DROP</code>을 보낸다고 말하지, 그게 TCP send buffer에 몇 바이트로 쪼개져 들어가는지는 전송 계층이 처리해.</p>
+<p>RHI도 비슷해.</p>
+<p>렌더러는 "픽셀 셰이더 만들어"라고 말하지, D3D12에서 루트 시그니처와 PSO 캐시를 어떻게 엮는지는 D3D12RHI가 처리해.</p>
+<p>DirectX 경험이 있으면 <code>ID3D12Device</code>, <code>ID3D12CommandQueue</code>, <code>ID3D12GraphicsCommandList</code>부터 떠올릴 거야.</p>
+<p>언리얼 상위 렌더러는 그 이름들을 매번 직접 만지지 않아.</p>
+<p>앞쪽에서는 <code>FRHITexture</code>, <code>FRHIBuffer</code>, <code>FRHICommandList</code>, <code>FDynamicRHI</code> 같은 언리얼식 단어를 먼저 본다.</p>
+<p>대신 상위 렌더러가 플랫폼 분기 지옥에 빠지지 않게 막는 거야.</p>
+</div>
+<div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
+<ul><li>RHI는 렌더러가 GPU 백엔드에게 말하는 공용 창구야.</li><li><code>FDynamicRHI</code>는 그 창구가 지켜야 할 인터페이스고, <code>GDynamicRHI</code>는 오늘 선택된 창구 손잡이야.</li><li><code>RHIInit</code>은 <code>PlatformCreateDynamicRHI()</code>로 실제 백엔드를 만들고, Windows는 <code>D3D12RHI</code>나 <code>VulkanRHI</code> 같은 모듈을 고른다.</li><li>상위 렌더러의 <code>RHICreatePixelShader</code> 같은 공용 함수는 직접 D3D12를 부르지 않고 <code>GDynamicRHI-&gt;...</code>로 넘긴다.</li><li>다음 장 <a class="xref" href="ch-04-rhi-commandlist.html">rhi-commandlist</a>는 이 창구에 제출할 명령 묶음을 어떻게 쌓는지 보는 장이야.</li></ul>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>RHI는 CPU 쪽 렌더러가 D3D12/Vulkan 차이를 직접 떠안지 않게 해주는 공용 출국 창구고, <code>GDynamicRHI</code>는 시작 때 선택된 실제 창구로 모든 RHI 호출을 넘기는 손잡이다.</strong></p>
+<hr>
+<div class="note">막히면(선행 개념) → <a class="xref" href="ch-01-cpu-vs-gpu.html">cpu-vs-gpu</a> · <a class="xref" href="ch-02-render-thread.html">render-thread</a><br>다음(명령을 쌓고 제출하기) → <a class="xref" href="ch-04-rhi-commandlist.html">rhi-commandlist</a> · <a class="xref" href="ch-05-d3d12-backend.html">d3d12-backend</a></div></div><nav class="booknav"><a href="ch-02-render-thread.html"><span class="lbl">← 이전</span>게임 스레드 vs 렌더 스레드 — 왜 나눴나</a><a class="nx" href="ch-04-rhi-commandlist.html"><span class="lbl">다음 →</span>RHICommandList — 명령을 쌓고 제출하기</a></nav></div></body></html>

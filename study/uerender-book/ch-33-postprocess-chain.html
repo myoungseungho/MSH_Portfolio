@@ -1,0 +1,277 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>후처리 체인 — 톤매핑·블룸 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>후처리 체인 — 톤매핑·블룸</h1><p>언리얼 렌더링 · 33 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "HDR 장면 색이 블룸을 거쳐 화면용 LDR 색으로 바뀌는 후처리 체인"이 잡힌다.</div>
+<hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 DirectX로 렌더타깃을 만져봤으면 이 느낌을 알 거야.</p>
+<p>셰이더가 계산한 빛은 보통 <code>float</code>야. 태양은 1보다 훨씬 밝고, 금속 반사는 더 튀고, 어두운 골목은 0에 바짝 붙어. 그런데 모니터에 마지막으로 내보내는 색은 보통 8비트나 10비트 안에 들어가야 해. <strong>HDR 장면 색을 그대로 백버퍼에 밀어 넣으면</strong> 밝은 곳은 하얗게 터지고, 어두운 곳은 뭉개져.</p>
+<p>블룸도 그냥 "예쁜 효과"가 아니야. 밝은 픽셀 주변으로 빛이 번져 보이는 현상인데, 이걸 풀 해상도 원본에 정직하게 다 하면 비용이 커져. 1920x1080 화면 전체를 여러 번 흐리면, GPU가 후반부에서 숨이 차. 그래서 렌더러는 작은 해상도로 내리고, 흐리고, 다시 섞는 식으로 일을 나눠.</p>
+<p><strong>언리얼도 같은 문제를 만났고, 답이 후처리 체인이야.</strong> 장면을 다 그린 뒤 <code>SceneColor</code>라는 사진을 들고, 모션블러, 블룸, 노출, 톤매핑, 안티앨리어싱, 업스케일 같은 작업대를 줄줄이 통과시켜. 각 작업대는 입력 사진을 받아 새 사진을 내놓고, 다음 작업대는 그 새 사진을 이어받아.</p>
+<p>왜 지금 배우냐면, 앞 장에서 TAA가 시간축으로 픽셀을 모으는 법을 봤지 → <a class="xref" href="ch-32-temporal-aa.html">temporal-aa</a>. 그 다음엔 "이제 모은 HDR 화면을 진짜 모니터 색으로 어떻게 마감하냐"가 남아. 이 챕터가 그 마감 라인이야. 다음 장 GPU 프로파일링 → <a class="xref" href="ch-34-gpu-profiling.html">gpu-profiling</a>으로 가면, 이 후처리 작업대들이 실제로 몇 ms를 먹는지도 보게 된다.</p>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 사진관 보정 라인</h2>
+<p>사진관을 생각해보자.</p>
+<p>사진사가 RAW 사진을 찍었어. RAW에는 빛 정보가 넉넉하게 들어 있어. 창밖은 엄청 밝고, 방 안은 어둡고, 네온사인은 눈부셔. 그런데 손님에게 줄 건 종이 사진이고, 종이는 표현할 수 있는 밝기 범위가 좁아.</p>
+<p>그래서 사진관에는 보정 라인이 있어.</p>
+<ol><li><strong>원본 사진 받기</strong> — 아직 HDR 같은 넓은 밝기 사진.</li><li><strong>작업표 만들기</strong> — 어떤 보정대를 켤지 고른다.</li><li><strong>빛 번짐 만들기</strong> — 밝은 부분만 작게 줄여 흐린 뒤 다시 섞는다. 이게 블룸.</li><li><strong>인화용 밝기로 눌러 담기</strong> — 넓은 밝기를 종이/모니터 범위로 압축한다. 이게 톤매핑.</li><li><strong>마지막 손질</strong> — FXAA/SMAA, 디버그, 업스케일 같은 꼬리 작업.</li></ol>
+<p>언리얼의 <code>PostProcessing.cpp</code>는 이 사진관 작업표야. 특히 <code>AddPostProcessingPasses</code>가 큰 라인 하나를 지휘해. 여기서 <code>SceneColor</code>라는 사진이 계속 다음 작업대로 넘어가. <code>PassSequence</code>는 작업표고, <code>Bloom</code>은 빛 번짐 레이어고, <code>AddTonemapPass</code>는 인화기야.</p>
+</div>
+<div class="conversation"><h2>1. 출발점 — SceneColor는 계속 갈아끼우는 사진이다</h2>
+<p>후처리의 시작은 "장면을 다 그린 색"이야. 언리얼 코드에서는 이걸 <code>SceneColor</code>로 잡아. 중요한 건 이 변수가 <strong>한 번 만들고 끝나는 원본</strong>이 아니라는 점이야. 패스를 지나면서 새 텍스처로 계속 바뀌는 손잡이야.</p>
+<p><strong><code>PostProcessing.cpp:391</code></strong></p>
+<div class="code-block">	// Whether should process the alpha channel of the scene color.
+	const bool bProcessSceneColorAlpha = IsPostProcessingWithAlphaChannelSupported();
+	const EPixelFormat SceneColorFormat = bProcessSceneColorAlpha ? PF_FloatRGBA : PF_FloatR11G11B10;
+
+	// Scene color is updated incrementally through the post process pipeline.
+	FScreenPassTexture SceneColor((*Inputs.SceneTextures)-&gt;SceneColorTexture, PrimaryViewRect);
+
+	// Assigned before and after the tonemapper.
+	FScreenPassTextureSlice SceneColorBeforeTonemapSlice;
+	FScreenPassTexture SceneColorAfterTonemap;
+
+	// Unprocessed scene color stores the original input.
+	const FScreenPassTexture OriginalSceneColor = SceneColor;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>SceneColor</code> 첫 세팅<br>&bull;&nbsp;<strong><code>const bool</code></strong> = 한 번 정하면 안 바꾸는 참/거짓 값이야.<br>&bull;&nbsp;<strong><code>EPixelFormat</code></strong> = 텍스처 한 픽셀이 어떤 형식인지 정하는 이름표야. <code>PF_FloatRGBA</code>면 RGBA를 float 쪽으로 들고 간다는 느낌.<br>&bull;&nbsp;<strong><code>? :</code></strong> = 짧은 if야. 조건이 맞으면 앞 값, 아니면 뒤 값을 골라.<br>&bull;&nbsp;<strong><code>FScreenPassTexture</code></strong> = 후처리 패스가 화면 텍스처를 들고 다닐 때 쓰는 포장지야.<br>&bull;&nbsp;<strong><code>(*Inputs.SceneTextures)-&gt;SceneColorTexture</code></strong> = 입력 묶음 안의 실제 SceneColor 텍스처를 꺼내는 길이야.<br>&bull;&nbsp;<strong><code>FScreenPassTextureSlice</code></strong> = 텍스처 전체가 아니라 필요한 조각, 또는 배열 텍스처의 한 조각을 가리키는 손잡이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 먼저 알파까지 처리할지 보고 → 그에 맞춰 <code>SceneColorFormat</code>을 고르고 → 입력 장면색을 <code>SceneColor</code>로 감싼다. 그리고 톤매핑 전/후 사진을 따로 기억할 자리까지 만들어. 즉 사진관이 "원본 사진, 인화 전 사진, 인화 후 사진" 보관함을 준비하는 장면이야.</div>
+<p>여기서 제일 중요한 주석은 이거야.</p>
+<p><code>Scene color is updated incrementally through the post process pipeline.</code></p>
+<p>말 그대로야. 후처리 체인은 <code>SceneColor</code>를 하나씩 바꿔 끼우며 진행돼. 서버 코드로 치면 패킷 버퍼가 복호화 → 압축해제 → 파싱 → 핸들러 dispatch 를 지나면서 "지금 단계의 버퍼"로 계속 바뀌는 느낌이야.</p>
+<p>원본도 따로 보관해. <code>OriginalSceneColor</code>가 그 역할이야. 사진관으로 치면 RAW 원본은 서랍에 넣어두고, 작업대 위 사진만 계속 바꾸는 거지.</p>
+</div>
+<div class="conversation"><h2>2. 작업표 켜기 — 설정을 보고 패스를 활성화한다</h2>
+<p>패스 이름만 있다고 실행되는 건 아니야. 이번 뷰에서 실제로 쓸지 골라야 해. 예를 들어 FXAA를 쓰기로 한 뷰면 <code>FXAA</code>를 켜고, SMAA가 아니면 <code>SMAA</code>는 꺼. 톤매핑도 디버그 시각화 상황에 따라 꺼질 수 있어. 이번 챕터에서 볼 핵심 이름은 <code>PostProcessMaterialBeforeBloom</code>, <code>Tonemap</code>, <code>PostProcessMaterialAfterTonemapping</code>이야.</p>
+<p><strong><code>PostProcessing.cpp:728</code></strong></p>
+<div class="code-block">		const FPostProcessMaterialChain PostProcessMaterialBeforeBloomChain = GetPostProcessMaterialChain(View, BL_SceneColorBeforeBloom);
+		const FPostProcessMaterialChain PostProcessMaterialAfterTonemappingChain = GetPostProcessMaterialChain(View, BL_SceneColorAfterTonemapping);
+
+		PassSequence.SetEnabled(EPass::MotionBlur, bVisualizeMotionBlur || bMotionBlurEnabled);
+		PassSequence.SetEnabled(EPass::PostProcessMaterialBeforeBloom, PostProcessMaterialBeforeBloomChain.Num() != 0);
+		PassSequence.SetEnabled(EPass::Tonemap, bTonemapEnabled);
+		PassSequence.SetEnabled(EPass::FXAA, AntiAliasingMethod == AAM_FXAA);
+		PassSequence.SetEnabled(EPass::SMAA, AntiAliasingMethod == AAM_SMAA);
+		PassSequence.SetEnabled(EPass::PostProcessMaterialAfterTonemapping, PostProcessMaterialAfterTonemappingChain.Num() != 0);
+		PassSequence.SetEnabled(EPass::VisualizeDepthOfField, bVisualizeDepthOfField);
+		PassSequence.SetEnabled(EPass::VisualizeLocalExposure, EngineShowFlags.VisualizeLocalExposure);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 작업표 켜고 끄기<br>&bull;&nbsp;<strong><code>FPostProcessMaterialChain</code></strong> = 후처리 머티리얼 여러 개를 줄로 묶은 거야.<br>&bull;&nbsp;<strong><code>GetPostProcessMaterialChain(View, ...)</code></strong> = 이 뷰에 붙은 후처리 머티리얼 줄을 가져와.<br>&bull;&nbsp;<strong><code>BL_SceneColorBeforeBloom</code></strong> = "블룸 전에 실행하는 위치"라는 이름표야.<br>&bull;&nbsp;<strong><code>PassSequence.SetEnabled(...)</code></strong> = 작업표에서 해당 작업대를 켜거나 꺼.<br>&bull;&nbsp;<strong><code>||</code></strong> = 또는. 둘 중 하나만 참이어도 참이야.<br>&bull;&nbsp;<strong><code>Num() != 0</code></strong> = 목록에 하나라도 있으면 켠다는 뜻이야.<br>&bull;&nbsp;<strong><code>AntiAliasingMethod == AAM_FXAA</code></strong> = 이번 뷰의 안티앨리어싱 방식이 FXAA인지 검사해.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 블룸 전/톤매핑 후 머티리얼 줄을 먼저 가져오고 → 각 줄이 비어 있지 않으면 해당 패스를 켜고 → 톤매핑, FXAA, SMAA도 뷰 설정대로 켠다. 작업표가 "이 사진은 2번 작업대 건너뛰고, 3번 작업대는 켜고, 4번은 FXAA로" 같은 체크리스트가 되는 거야.</div>
+<p>이게 체인 구조의 핵심이야. 언리얼은 "함수 하나가 모든 효과를 한 번에 처리"하지 않아. 작업표를 만들고, 각 작업대가 켜졌는지 보고, 켜진 작업대만 통과시켜.</p>
+<p>서버로 치면 미들웨어 체인과 비슷해. 어떤 연결은 암호화 핸들러가 켜지고, 어떤 연결은 압축 핸들러가 꺼지고, 어떤 연결은 로깅 필터가 붙는 식이지. 후처리도 똑같이 "이번 뷰에 필요한 필터만 줄 세우기"야.</p>
+</div>
+<div class="conversation"><h2>3. 블룸을 할지 말지 — 밝은 번짐 레이어가 필요한가</h2>
+<p>이제 블룸 쪽으로 내려가자. 블룸은 밝은 부분을 뽑아 흐리는 작업이야. 언리얼은 먼저 블룸을 실제로 만들 조건을 본다. 강도가 0이면 할 필요가 없어. TSR 시각화 같은 특수 모드면 피하기도 해. FFT 블룸인지 가우시안 블룸인지도 여기서 갈라진다.</p>
+<p><strong><code>PostProcessing.cpp:778</code></strong></p>
+<div class="code-block">		const bool bBloomEnabled = !bVisualizeTSR
+			&amp;&amp; View.FinalPostProcessSettings.BloomIntensity &gt; 0.0f
+			&amp;&amp; (bFFTBloomEnabled ? View.FinalPostProcessSettings.BloomConvolutionIntensity : View.FinalPostProcessSettings.BloomGaussianIntensity) &gt; 0.0f;
+		bFFTBloomEnabled = bFFTBloomEnabled &amp;&amp; bBloomEnabled;
+
+		const bool bLensFlareEnabled = bBloomEnabled &amp;&amp; IsLensFlaresEnabled(View);
+
+		const bool bBasicEyeAdaptationEnabled = bEyeAdaptationEnabled &amp;&amp; (AutoExposureMethod == EAutoExposureMethod::AEM_Basic);
+		const bool bLocalExposureBlurredLum = bLocalExposureEnabled &amp;&amp; View.FinalPostProcessSettings.LocalExposureMethod == ELocalExposureMethod::Bilateral &amp;&amp; View.FinalPostProcessSettings.LocalExposureBlurredLuminanceBlend &gt; 0.0f;
+
+		const bool bProcessQuarterResolution = CVarPostProcessingQuarterResolutionDownsample.GetValueOnRenderThread() == 1;
+		const bool bProcessEighthResolution = CVarPostProcessingQuarterResolutionDownsample.GetValueOnRenderThread() == 2;
+		const bool bMotionBlurNeedsHalfResInput = PassSequence.IsEnabled(EPass::MotionBlur) &amp;&amp; DoesMotionBlurNeedsHalfResInput() &amp;&amp; !bVisualizeMotionBlur;
+
+		const float FFTBloomResolutionFraction = GetFFTBloomResolutionFraction(PostTAAViewSize);
+
+		const bool bProduceSceneColorChain = (
+			bBasicEyeAdaptationEnabled ||
+			(bBloomEnabled &amp;&amp; !bFFTBloomEnabled) ||
+			(bLensFlareEnabled &amp;&amp; bFFTBloomEnabled) ||
+			bLocalExposureBlurredLum);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 블룸 조건<br>&bull;&nbsp;<strong><code>bBloomEnabled</code></strong> = 블룸을 진짜 할지 말지 담는 참/거짓 값이야.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = 그리고. 조건이 전부 맞아야 참이야.<br>&bull;&nbsp;<strong><code>View.FinalPostProcessSettings</code></strong> = 카메라/볼륨에서 합쳐진 최종 후처리 설정 묶음이야.<br>&bull;&nbsp;<strong><code>BloomIntensity &gt; 0.0f</code></strong> = 블룸 강도가 0보다 커야 한다는 뜻이야.<br>&bull;&nbsp;<strong><code>bFFTBloomEnabled ? ... : ...</code></strong> = FFT 블룸이면 컨볼루션 강도를 보고, 아니면 가우시안 강도를 봐.<br>&bull;&nbsp;<strong><code>CVarPostProcessingQuarterResolutionDownsample</code></strong> = 콘솔 변수로 낮은 해상도 처리 방식을 고르는 스위치야.<br>&bull;&nbsp;<strong><code>bProduceSceneColorChain</code></strong> = 작은 해상도 사진 묶음을 만들어야 하는지 결정하는 값이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 블룸 강도와 모드를 보고 <code>bBloomEnabled</code>를 정하고 → 렌즈 플레어/노출 보정도 이어서 판단하고 → 반/1/4/1/8 해상도 사진 묶음이 필요한지 <code>bProduceSceneColorChain</code>에 모은다. 사진관이 "빛 번짐 작업을 할 거면 작은 복사본을 여러 장 뽑아두자"라고 결정하는 장면이야.</div>
+<p>왜 작은 사진이 필요할까?</p>
+<p>블룸은 흐림이야. 흐림은 주변 픽셀을 많이 읽어야 해. 원본 4K 사진을 크게 흐리면 픽셀을 너무 많이 만져야 하지. 그래서 먼저 사진을 작게 만든다. 작은 사진에서는 같은 반경의 블러도 훨씬 싸.</p>
+<p>이게 DirectX에서 렌더타깃 mip 체인을 만들어서 blur pass를 여러 번 돌리는 감각과 같아. 풀해상도 RTV 하나로 버티는 게 아니라, half, quarter, eighth 텍스처를 준비해서 비용을 낮추는 거야.</p>
+</div>
+<div class="conversation"><h2>4. 블룸 내부 — 작은 사진들을 흐려서 더한다</h2>
+<p>가우시안 블룸의 실제 함수는 <code>PostProcessBloomSetup.cpp</code>에 있다. <code>PostProcessing.cpp</code>는 "블룸 필요해"라고 판단하고, 가우시안 블룸이면 <code>AddGaussianBloomPasses</code>를 부른다. 그 안의 루프를 보면 여러 단계의 작은 텍스처를 가져와서 흐리고 더하는 구조가 바로 보인다.</p>
+<p><strong><code>PostProcessBloomSetup.cpp:235</code></strong></p>
+<div class="code-block">		const uint32 BloomQualityToSceneDownsampleStage[] =
+		{
+			static_cast&lt;uint32&gt;(-1), // Disabled (sentinel entry to preserve indices)
+			3, // Q1
+			3, // Q2
+			4, // Q3
+			5, // Q4
+			6  // Q5
+		};
+
+		static_assert(UE_ARRAY_COUNT(BloomStages) == BloomQualityCountMax, "Array must be one less than the number of bloom quality entries.");
+		static_assert(UE_ARRAY_COUNT(BloomQualityToSceneDownsampleStage) == BloomQualityCountMax, "Array must be one less than the number of bloom quality entries.");
+
+		check(BloomQualityIndex &lt; BloomQualityCountMax);
+
+		// Use bloom quality to select the number of downsample stages to use for bloom.
+		const uint32 BloomStageCount = BloomQualityToSceneDownsampleStage[BloomQualityIndex];
+
+		const float BloomIntensity = Settings.BloomIntensity * Settings.BloomGaussianIntensity;
+		const float TintScale = (1.0f / BloomQualityCountMax) * BloomIntensity;
+
+		for (uint32 StageIndex = 0, SourceIndex = BloomQualityCountMax - 1; StageIndex &lt; BloomStageCount; ++StageIndex, --SourceIndex)
+		{
+			const FBloomStage&amp; BloomStage = BloomStages[StageIndex];
+
+			if (BloomStage.Size &gt; SMALL_NUMBER)
+			{
+				FGaussianBlurInputs PassInputs;
+				PassInputs.NameX = TEXT("BloomX");
+				PassInputs.NameY = TEXT("BloomY");
+				PassInputs.Filter = SceneDownsampleChain-&gt;GetTexture(SourceIndex);
+				PassInputs.Additive = PassOutputs;
+				PassInputs.CrossCenterWeight = FVector2f(CrossCenterWeight);	// LWC_TODO: Precision loss
+				PassInputs.KernelSizePercent = BloomStage.Size * Settings.BloomSizeScale;
+				PassInputs.TintColor = BloomStage.Tint * TintScale;
+
+				PassOutputs = AddGaussianBlurPass(GraphBuilder, View, PassInputs);
+			}
+		}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 블룸 루프<br>&bull;&nbsp;<strong><code>BloomQualityToSceneDownsampleStage[]</code></strong> = 품질별로 몇 단계 작은 사진까지 쓸지 정한 표야.<br>&bull;&nbsp;<strong><code>static_cast&lt;uint32&gt;(-1)</code></strong> = 타입을 <code>uint32</code>로 강제로 맞추는 변환이야. 여기서는 Disabled 자리 보존용 센티널이야.<br>&bull;&nbsp;<strong><code>static_assert(...)</code></strong> = 컴파일할 때 검사하는 안전장치야.<br>&bull;&nbsp;<strong><code>for (...)</code></strong> = 여러 단계를 반복하는 루프야.<br>&bull;&nbsp;<strong><code>++StageIndex, --SourceIndex</code></strong> = 단계 번호는 올리고, 소스 텍스처 인덱스는 내려.<br>&bull;&nbsp;<strong><code>SceneDownsampleChain-&gt;GetTexture(SourceIndex)</code></strong> = 작은 해상도 사진 묶음에서 한 장을 꺼내.<br>&bull;&nbsp;<strong><code>PassInputs.Additive = PassOutputs</code></strong> = 이전 단계 블룸 결과를 더할 대상으로 넘겨.<br>&bull;&nbsp;<strong><code>AddGaussianBlurPass(...)</code></strong> = 실제로 X/Y 방향 흐림 패스를 추가하는 함수야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 품질이 높으면 더 많은 작은 사진 단계를 쓰고 → 각 단계에서 크기와 틴트를 꺼내고 → <code>SceneDownsampleChain-&gt;GetTexture(SourceIndex)</code>로 작은 사진을 가져와 → <code>AddGaussianBlurPass</code>로 흐린 뒤 <code>PassOutputs</code>에 누적해. 이게 사진관의 "작은 복사본 여러 장을 흐려서 빛 번짐 레이어를 만든다"는 작업이야.</div>
+<p>여기서 "블룸은 화면 전체에 그냥 흰색을 얹는 것"이 아니라는 게 중요해. 블룸은 별도 텍스처로 만들어져. 그리고 톤매퍼에 들어갈 때 <code>Bloom</code> 입력으로 합쳐진다.</p>
+<p>사진관 말로 하면, 원본 사진 위에 바로 붓질하지 않고, 빛 번짐만 따로 투명 필름에 만든 뒤, 인화기에 같이 넣는 거야.</p>
+</div>
+<div class="conversation"><h2>5. 톤매핑 — HDR 사진과 블룸 레이어를 같이 인화한다</h2>
+<p>이제 핵심 관문이다. 톤매핑은 HDR <code>SceneColor</code>를 화면에 낼 수 있는 범위로 바꾸는 작업이야. 하지만 혼자 하지 않아. 여기서 블룸, 로컬 노출, 아이 어댑테이션, 컬러 그레이딩 LUT가 같이 들어간다.</p>
+<p><code>PostProcessing.cpp</code>에서는 <code>FTonemapInputs</code>를 채우고, 마지막에 <code>AddTonemapPass</code>를 부른다.</p>
+<p><strong><code>PostProcessing.cpp:1458</code></strong></p>
+<div class="code-block">				FTonemapInputs PassInputs;
+				PassSequence.AcceptOverrideIfLastPass(EPass::Tonemap, PassInputs.OverrideOutput);
+				PassInputs.SceneColor = SceneColorSlice;
+				PassInputs.Bloom = Bloom;
+				PassInputs.SceneColorApplyParamaters = SceneColorApplyParameters;
+				PassInputs.LocalExposureBilateralGridTexture = LocalExposureBilateralGridTexture;
+				PassInputs.BlurredLogLuminanceTexture = LocalExposureBlurredLogLumTexture;
+				PassInputs.ExposureFusion = FScreenPassTextureSlice::CreateFromScreenPassTexture(GraphBuilder, ExposureFusionData.Result);
+				PassInputs.LocalExposureParameters = &amp;LocalExposureParameters;
+				PassInputs.EyeAdaptationParameters = &amp;EyeAdaptationParameters;
+				PassInputs.EyeAdaptationBuffer = EyeAdaptationBuffer;
+				PassInputs.ColorGradingTexture = ColorGradingTexture;
+				PassInputs.bWriteAlphaChannel = AntiAliasingMethod == AAM_FXAA || AntiAliasingMethod == AAM_SMAA || bProcessSceneColorAlpha;
+				PassInputs.bOutputInHDR = bTonemapOutputInHDR;
+
+				SceneColor = AddTonemapPass(GraphBuilder, View, PassInputs);
+			}
+		}
+		else
+		{
+			SceneColor = FScreenPassTexture(SceneColorSlice);
+		}
+		
+		SceneColor = AddAfterPass(EPass::Tonemap, SceneColor);
+
+		SceneColorAfterTonemap = SceneColor;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 톤매퍼 입력<br>&bull;&nbsp;<strong><code>FTonemapInputs</code></strong> = 톤매퍼에게 줄 재료 상자야.<br>&bull;&nbsp;<strong><code>AcceptOverrideIfLastPass</code></strong> = 이 패스가 마지막이면 출력 대상을 바로 최종 렌더타깃으로 덮어쓸 수 있게 허락하는 장치야.<br>&bull;&nbsp;<strong><code>SceneColorSlice</code></strong> = 톤매핑 전 HDR 사진 조각이야.<br>&bull;&nbsp;<strong><code>PassInputs.Bloom = Bloom</code></strong> = 아까 만든 빛 번짐 레이어를 톤매퍼에 같이 넣는 줄이야.<br>&bull;&nbsp;<strong><code>EyeAdaptationBuffer</code></strong> = 눈 적응, 즉 자동 노출 계산 결과를 담는 버퍼야.<br>&bull;&nbsp;<strong><code>ColorGradingTexture</code></strong> = 색보정 LUT 텍스처야.<br>&bull;&nbsp;<strong><code>bOutputInHDR</code></strong> = 최종 출력을 HDR로 남길지 정하는 스위치야.<br>&bull;&nbsp;<strong><code>AddTonemapPass(...)</code></strong> = 실제 톤매핑 패스를 RDG에 추가하고 새 <code>SceneColor</code>를 돌려주는 함수야.<br>&bull;&nbsp;<strong><code>AddAfterPass(EPass::Tonemap, SceneColor)</code></strong> = 톤매핑 뒤에 붙은 확장 콜백이 있으면 이어서 실행하는 통로야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 톤매퍼 입력 상자를 만들고 → HDR 장면색과 블룸 레이어를 넣고 → 노출/컬러그레이딩 재료를 넣고 → <code>AddTonemapPass</code>로 인화한다. 그 결과가 다시 <code>SceneColor</code>가 되고, <code>AddAfterPass</code>를 지나 <code>SceneColorAfterTonemap</code>에 저장돼. 아까는 이름이 길었는데 이제 "인화기에 넣는 재료 목록"으로 읽히지?</div>
+<p>여기서 HDR→LDR이 일어난다. 정확히 말하면 항상 LDR만은 아니야. <code>bOutputInHDR</code>가 참이면 HDR 출력용으로 남길 수도 있어. 하지만 일반적인 화면 출력에서는 넓은 밝기 범위를 디스플레이가 먹을 수 있는 범위로 접는다.</p>
+<p>중요한 건 순서야.</p>
+<p>블룸은 톤매핑 전에 준비돼. 톤매퍼는 원본 HDR 장면색과 블룸을 같이 받아. 그 뒤에 FXAA/SMAA나 AfterTonemapping 머티리얼이 붙는다.</p>
+<p>사진관 비유로 다시 말하면, 빛 번짐 필름을 따로 만든 뒤, 원본 RAW와 필름을 같이 인화기에 넣는다. 인화가 끝난 사진에 마지막 먼지 제거와 가장자리 보정을 붙이는 거야.</p>
+</div>
+<div class="conversation"><h2>6. 콜/데이터 흐름 한눈에</h2>
+<p>큰 흐름을 줄번호와 함께 펴면 이렇다.</p>
+<div class="code-block">AddPostProcessingPasses (:347)
+  |
+  |-- SceneColor 준비 (:391)
+  |     HDR 장면색을 후처리 사진으로 감싼다
+  |
+  |-- EPass 작업표 선언 (:441)
+  |     MotionBlur / BeforeBloom / Tonemap / FXAA / SMAA ...
+  |
+  |-- PassSequence.SetEnabled (:728)
+  |     이번 뷰에서 켤 작업대만 체크한다
+  |
+  |-- Bloom 조건 판단 (:778)
+  |     BloomIntensity, Gaussian/FFT, 낮은 해상도 체인 필요 여부
+  |
+  |-- AddGaussianBloomPasses (:1388 -&gt; PostProcessBloomSetup.cpp:197)
+  |     작은 사진 여러 장을 흐려 Bloom 텍스처를 만든다
+  |
+  |-- FTonemapInputs 채우기 (:1458)
+  |     SceneColorSlice + Bloom + Exposure + ColorGrading
+  |
+  |-- AddTonemapPass (:1473)
+  |     HDR 사진을 화면용 출력으로 인화한다
+  |
+  |-- AddAfterPass(Tonemap) (:1481)
+  |     톤매핑 뒤 확장 패스를 붙인다
+  |
+  `-- FXAA/SMAA/AfterTonemapping/Debug/Upscale 꼬리 패스</div>
+<p>한 줄로 줄이면 이거야.</p>
+<div class="code-block">HDR SceneColor
+  -&gt; optional MotionBlur
+  -&gt; BeforeBloom material
+  -&gt; downsample chain
+  -&gt; Bloom texture
+  -&gt; Tonemap(SceneColor + Bloom + Exposure + LUT)
+  -&gt; LDR/HDR output SceneColor
+  -&gt; FXAA/SMAA/AfterTonemapping</div>
+<p>후처리 체인은 "하나의 거대한 픽셀 셰이더"가 아니야. 작은 작업대 여러 개가 RDG 위에 올라가는 구조야. 그래서 중간 텍스처가 생기고, 해상도가 달라지고, 어떤 패스는 컴퓨트로, 어떤 패스는 픽셀 셰이더로 갈 수 있어.</p>
+<p>이건 앞에서 배운 RDG 감각과도 이어져 → <a class="xref" href="ch-11-rdg.html">rdg</a>. 패스가 많아질수록 리소스 수명과 배리어를 사람이 직접 다 관리하기 어렵거든. 후처리 체인이 길어질수록 RDG가 왜 필요한지 더 선명해져.</p>
+</div>
+<div class="conversation"><h2>7. 우리 서버·DirectX 랑 비교</h2>
+<p>우리 조선 서버의 패킷 처리랑 비교해보자.</p>
+<div class="code-block">IOCP 수신 -&gt; 암호 해제 -&gt; 압축 해제 -&gt; 패킷 파싱 -&gt; CM_ 핸들러
+SceneColor -&gt; 모션블러 -&gt; 블룸 준비 -&gt; 톤매핑 -&gt; AA -&gt; 출력</div>
+<p>둘 다 "중간 결과를 다음 단계로 넘기는 파이프라인"이야. 다만 서버는 바이트 버퍼가 흐르고, 렌더러는 GPU 텍스처가 흐른다.</p>
+<p>서버에서 미들웨어를 켜고 끄듯이, 언리얼은 <code>PassSequence.SetEnabled</code>로 패스를 켜고 꺼. 암호화가 꺼진 연결에서는 복호화 핸들러를 건너뛰듯이, 블룸 강도가 0이면 블룸 패스를 건너뛰어.</p>
+<p>DirectX 경험으로 보면 더 직접적이야. HDR 렌더타깃을 만들고, 밝은 부분 threshold, downsample, blur, combine, tonemap, swapchain backbuffer 출력으로 가는 그 순서와 같은 뼈대야. 언리얼은 여기에 노출 보정, 컬러그레이딩 LUT, 포스트프로세스 머티리얼, 뷰 익스텐션, 디버그 패스, 업스케일러가 다 꽂혀. 그래서 단순한 <code>RenderPostProcess()</code> 하나가 아니라, <code>PassSequence</code>와 RDG 패스로 조립한다.</p>
+<p>서버에서 패킷을 여러 스레드가 마음대로 만지면 터지잖아. 후처리에서도 <code>SceneColor</code>가 어느 패스의 출력인지 명확해야 해. 이걸 헷갈리면 같은 텍스처를 읽고 쓰거나, 톤매핑 전 HDR을 써야 하는데 톤매핑 후 LDR을 읽는 사고가 난다.</p>
+</div>
+<div class="conversation"><h2>8. 이 챕터에서 딱 이것만</h2>
+<ul><li>후처리 체인은 <code>SceneColor</code>를 계속 갱신하는 작업대 줄이야.</li><li><code>PassSequence</code>는 이번 뷰에서 어떤 작업대를 켤지 정하는 작업표야.</li><li>블룸은 낮은 해상도 체인을 써서 밝은 번짐 레이어를 만든다.</li><li>톤매퍼는 <code>SceneColor + Bloom + Exposure + ColorGrading</code>을 받아 화면용 색으로 인화한다.</li><li>톤매핑 전 HDR과 톤매핑 후 색은 서로 다르니, 어느 시점의 <code>SceneColor</code>인지 항상 구분해야 해.</li></ul>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>언리얼 후처리는 HDR <code>SceneColor</code>라는 사진을 <code>PassSequence</code> 작업표대로 넘기며, 블룸 레이어를 먼저 만들고 톤매퍼에서 함께 눌러 담아 화면용 색으로 마감하는 체인이다.</strong></p>
+<hr>
+<div class="note">막히면 → <a class="xref" href="ch-32-temporal-aa.html">temporal-aa</a> · <a class="xref" href="ch-11-rdg.html">rdg</a> · <a class="xref" href="ch-10-shader-parameters.html">shader-parameters</a><br>다음 → <a class="xref" href="ch-34-gpu-profiling.html">gpu-profiling</a></div></div><nav class="booknav"><a href="ch-32-temporal-aa.html"><span class="lbl">← 이전</span>TAA — 시간을 가로질러 픽셀을 모으다</a><a class="nx" href="ch-34-gpu-profiling.html"><span class="lbl">다음 →</span>GPU 프로파일링과 디버깅</a></nav></div></body></html>

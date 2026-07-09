@@ -1,0 +1,274 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>셰이더 — GPU에서 도는 작은 프로그램 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>셰이더 — GPU에서 도는 작은 프로그램</h1><p>언리얼 렌더링 · 08 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 ".usf/.ush, 정점/픽셀/컴퓨트 셰이더, <code>FGlobalShader</code>가 한 줄로 이어지는 구조"가 잡힌다.</div>
+<hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 서버를 짜봤으면 패킷 디스패처 감각은 이미 있어. <code>CM_MOVE</code>라는 번호만 있다고 로직이 도는 게 아니지. 그 번호가 어느 핸들러로 가는지, 어떤 바디를 읽는지, 어느 스레드에서 처리되는지가 전부 맞아야 해.</p>
+<p>렌더링도 똑같아. CPU가 "이 텍스처 밉맵 만들어"라고 말해도 GPU는 C++ 함수를 직접 호출하지 못해. GPU가 실행하는 건 이미 컴파일된 작은 프로그램이고, 그 프로그램이 셰이더야.</p>
+<p>이 연결이 틀리면 바로 터진다. C++은 <code>MainCS</code>를 찾는데 <code>.usf</code> 안에 그 함수가 없거나, <code>SF_Compute</code>라고 등록했는데 함수 모양이 픽셀 셰이더라면 컴파일 단계에서 막힌다. 서버로 치면 패킷 ID는 있는데 핸들러 시그니처가 안 맞는 상황이야.</p>
+<p>그래서 언리얼도 같은 문제를 만났고, 답이 <strong>셰이더 타입 등록 장부</strong>야. C++ 클래스는 "어느 파일, 어느 함수, 어느 GPU 스테이지"인지 들고 있고, <code>.usf</code> 파일은 실제 GPU에서 돌 HLSL 코드를 들고 있다.</p>
+<p>왜 지금 배우냐면, 앞 장의 PSO 안에는 결국 셰이더 손잡이가 들어간다. → <a class="xref" href="ch-07-pso.html">pso</a> 다음 장은 그 셰이더가 어떻게 컴파일되는지 본다. → <a class="xref" href="ch-09-shader-compile.html">shader-compile</a> 그러니까 이번 장은 "GPU 프로그램의 주소록"을 먼저 읽는 자리야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 주방 레시피 카드와 주문표</h2>
+<p>이번 챕터는 주방으로 생각하자. GPU는 요리사고, CPU는 매니저야.</p>
+<p>매니저가 "밉맵 만들어!"라고 소리친다고 요리가 나오진 않아. 주방에는 실제 레시피 카드가 있어야 하고, 매니저 책상에는 그 레시피를 가리키는 주문표가 있어야 해.</p>
+<ul><li><code>.usf</code> = 실제 조리 시작점이 있는 메인 레시피 카드</li><li><code>.ush</code> = 여러 레시피가 같이 보는 공용 메모장</li><li><code>MainVS</code> = 재료 위치를 잡는 손질 담당</li><li><code>MainPS</code> = 접시에 색을 얹는 플레이팅 담당</li><li><code>MainCS</code> = 칸을 나눠 여러 요리사가 동시에 처리하는 작업반</li><li><code>FGlobalShader</code> = C++ 매니저가 들고 있는 전역 주문표</li><li><code>IMPLEMENT_GLOBAL_SHADER</code> = 주문표에 파일·함수·조리대를 찍는 도장</li></ul>
+<p>이 비유를 끝까지 끌고 간다. 셰이더를 읽는다는 건 두 장을 같이 보는 일이야. 하나는 <code>.usf</code> 레시피 카드고, 다른 하나는 C++ 주문표다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>1. <code>.usf</code>와 <code>.ush</code> — 먼저 파일 규칙부터</h2>
+<p>언리얼 셰이더는 그냥 윈도우 경로로 움직이지 않아. <code>/Engine/Private/ComputeGenerateMips.usf</code> 같은 가상 셰이더 경로로 움직여. 그 경로 끝에는 <code>usf</code>나 <code>ush</code>가 와야 한다.</p>
+<p><strong><code>ShaderCore.cpp:1664</code></strong></p>
+<div class="code-block">	const FStringView Extension = FPathViews::GetExtension(VirtualFilePath);
+	const bool bIsSharedDirectory = GShaderSourceSharedVirtualDirectories.ContainsByPredicate([&amp;VirtualFilePath](const FString&amp; SharedDirectory) { return VirtualFilePath.StartsWith(SharedDirectory); });
+	if (bIsSharedDirectory)
+	{
+		if ((Extension != TEXTVIEW("h")))
+		{
+			FString Error = FString::Printf(TEXT("Extension on virtual shader source file name \"%s\" is wrong. Only .h is allowed for shared headers that are shared between C++ and shader code."), *FString(VirtualFilePath));
+			ReportVirtualShaderFilePathError(CompileErrors, Error);
+			bSuccess = false;
+		}	
+	}
+	else if (VirtualFilePath.StartsWith(TEXT("/ThirdParty/")))
+	{
+		// Third party includes don't have naming convention restrictions
+	}
+	else
+	{
+		if ((Extension != TEXT("usf") &amp;&amp; Extension != TEXT("ush")) || VirtualFilePath.EndsWith(TEXT(".usf.usf")))
+		{
+			FString Error = FString::Printf(TEXT("Extension on virtual shader source file name \"%s\" is wrong. Only .usf or .ush allowed."), *FString(VirtualFilePath));
+			ReportVirtualShaderFilePathError(CompileErrors, Error);
+			bSuccess = false;
+		}
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 가상 셰이더 경로<br>&bull;&nbsp;<strong><code>FPathViews::GetExtension</code></strong> = 파일 확장자만 뽑는 도구야.<br>&bull;&nbsp;<strong><code>FStringView</code></strong> = 문자열을 복사하지 않고 바라보는 얇은 손잡이야.<br>&bull;&nbsp;<strong><code>ContainsByPredicate</code></strong> = 목록을 돌면서 조건에 맞는 게 있는지 찾는 함수야.<br>&bull;&nbsp;<strong><code>TEXT("usf")</code> / <code>TEXT("ush")</code></strong> = 언리얼 문자열로 감싼 확장자 이름이야.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code> / <code>||</code></strong> = <code>&amp;&amp;</code>는 "그리고", <code>||</code>는 "또는"이야.<br>&bull;&nbsp;<strong><code>ReportVirtualShaderFilePathError</code></strong> = 잘못된 셰이더 경로를 에러로 남기는 함수야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 코드는 확장자를 뽑고 → 공유 헤더면 <code>.h</code>만 허용하고 → 일반 셰이더 경로면 <code>.usf</code> 또는 <code>.ush</code>만 허용해. 즉 주방 레시피와 공용 메모장은 정해진 이름표를 달아야 한다는 뜻이야.</div>
+<p>그런데 <code>.usf</code>와 <code>.ush</code>는 역할이 같지 않아. 둘 다 셰이더 소스 경로로 인정되지만, C++ 주문표가 직접 컴파일 대상으로 가리키는 메인 파일은 <code>.usf</code>야.</p>
+<p><strong><code>Shader.h:1879</code></strong></p>
+<div class="code-block">	{ \
+		checkf(FPaths::GetExtension(InSourceFilename) == TEXT("usf"), \
+			TEXT("Incorrect virtual shader path extension for %s '%s': Only .usf files should be compiled."), \
+			InShaderClassUserFriendlyName, InSourceFilename); \
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>.usf</code> 컴파일 체크<br>&bull;&nbsp;<strong><code>checkf(...)</code></strong> = 조건이 틀리면 메시지를 찍고 멈추는 검사야.<br>&bull;&nbsp;<strong><code>FPaths::GetExtension</code></strong> = 파일명에서 확장자를 꺼낸다.<br>&bull;&nbsp;<strong><code>InSourceFilename</code></strong> = C++ 주문표가 가리키는 셰이더 파일 이름이야.<br>&bull;&nbsp;<strong><code>\</code></strong> = 매크로가 다음 줄까지 이어진다는 표시야.<br>&bull;&nbsp;<strong><code>Only .usf files should be compiled</code></strong> = 이 주문표는 <code>.usf</code> 메인 레시피를 컴파일해야 한다는 못박기야.</div>
+<p>여기서 정리하자. <code>.usf</code>는 펼쳐서 컴파일할 메인 레시피 카드고, <code>.ush</code>는 그 안에서 include하는 공용 메모장이다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>2. <code>FGlobalShader</code> — 전역 주문표</h2>
+<p><code>FGlobalShader</code>는 특정 머티리얼에 묶이지 않는 셰이더의 C++ 껍데기야. 화면 복사, 밉맵 생성, 텍스처 클리어 같은 엔진 공용 작업에 자주 나온다.</p>
+<p>밉맵 생성 코드에서 주문표가 어떻게 생겼는지 보자. 같은 <code>.usf</code> 파일을 두고, 컴퓨트·정점·픽셀 스테이지가 각각 다른 진입 함수를 가리킨다.</p>
+<p><strong><code>GenerateMips.cpp:38</code></strong></p>
+<div class="code-block">IMPLEMENT_GLOBAL_SHADER(FGenerateMipsCS, "/Engine/Private/ComputeGenerateMips.usf", "MainCS", SF_Compute);
+
+class FGenerateMipsVS : public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FGenerateMipsVS);
+	SHADER_USE_PARAMETER_STRUCT(FGenerateMipsVS, FGlobalShader);
+	using FParameters = FEmptyShaderParameters;
+
+	static void ModifyCompilationEnvironment(const FShaderPermutationParameters&amp;, FShaderCompilerEnvironment&amp; OutEnvironment)
+	{
+		OutEnvironment.SetDefine(TEXT("GENMIPS_COMPUTE"), 0);
+	}
+};
+
+IMPLEMENT_GLOBAL_SHADER(FGenerateMipsVS, "/Engine/Private/ComputeGenerateMips.usf", "MainVS", SF_Vertex);
+
+class FGenerateMipsPS : public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FGenerateMipsPS);
+	SHADER_USE_PARAMETER_STRUCT(FGenerateMipsPS, FGlobalShader);
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER(FVector2f, HalfTexelSize)
+		SHADER_PARAMETER(float, Level)
+		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, MipInSRV)
+		SHADER_PARAMETER_SAMPLER(SamplerState, MipSampler)
+		RENDER_TARGET_BINDING_SLOTS()
+	END_SHADER_PARAMETER_STRUCT()
+
+	static void ModifyCompilationEnvironment(const FShaderPermutationParameters&amp;, FShaderCompilerEnvironment&amp; OutEnvironment)
+	{
+		OutEnvironment.SetDefine(TEXT("GENMIPS_COMPUTE"), 0);
+	}
+};
+
+IMPLEMENT_GLOBAL_SHADER(FGenerateMipsPS, "/Engine/Private/ComputeGenerateMips.usf", "MainPS", SF_Pixel);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>FGlobalShader</code> 주문표<br>&bull;&nbsp;<strong><code>IMPLEMENT_GLOBAL_SHADER</code></strong> = C++ 클래스, <code>.usf</code> 파일, 함수 이름, 스테이지를 묶는 도장이야.<br>&bull;&nbsp;<strong><code>FGenerateMipsVS : public FGlobalShader</code></strong> = <code>FGenerateMipsVS</code>가 전역 셰이더 주문표를 물려받는다는 뜻이야.<br>&bull;&nbsp;<strong><code>DECLARE_GLOBAL_SHADER</code></strong> = 이 클래스가 전역 셰이더 타입이라고 선언하는 매크로야.<br>&bull;&nbsp;<strong><code>SHADER_USE_PARAMETER_STRUCT</code></strong> = 셰이더 입력값을 구조체로 받겠다는 선언이야.<br>&bull;&nbsp;<strong><code>BEGIN_SHADER_PARAMETER_STRUCT</code></strong> = GPU에 넘길 재료 목록을 여는 줄이야.<br>&bull;&nbsp;<strong><code>SF_Vertex</code> / <code>SF_Pixel</code> / <code>SF_Compute</code></strong> = 어느 GPU 조리대에서 돌지 정하는 스테이지 값이야.<br>&bull;&nbsp;<strong><code>OutEnvironment.SetDefine</code></strong> = 컴파일 전에 <code>#define</code> 값을 넣는 줄이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>FGenerateMipsCS</code>는 <code>MainCS</code>와 <code>SF_Compute</code>를 묶고, <code>FGenerateMipsVS</code>는 <code>MainVS</code>와 <code>SF_Vertex</code>를 묶고, <code>FGenerateMipsPS</code>는 <code>MainPS</code>와 <code>SF_Pixel</code>을 묶는다. 같은 레시피 카드라도 어느 함수와 어느 조리대를 고르느냐에 따라 완전히 다른 셰이더가 돼.</div>
+<p>이 한 줄을 볼 때는 네 칸만 읽으면 돼.</p>
+<table class="compare-table"><thead><tr><th>자리</th><th>예시</th><th>뜻</th></tr></thead><tbody><tr><td>C++ 타입</td><td><code>FGenerateMipsPS</code></td><td>엔진이 들고 다니는 주문표 이름</td></tr><tr><td>파일</td><td><code>ComputeGenerateMips.usf</code></td><td>실제 HLSL 레시피</td></tr><tr><td>함수</td><td><code>MainPS</code></td><td>GPU가 시작할 함수</td></tr><tr><td>스테이지</td><td><code>SF_Pixel</code></td><td>픽셀 조리대</td></tr></tbody></table>
+<hr>
+</div>
+<div class="conversation"><h2>3. <code>Shader.cpp</code> — 주문표를 장부에 꽂는다</h2>
+<p><code>IMPLEMENT_GLOBAL_SHADER</code>는 겉으로는 한 줄이지만, 결국 <code>FShaderType</code>을 만들고 전역 장부에 등록한다. 그 장부 항목이 파일명, 함수명, 스테이지를 보관한다.</p>
+<p><strong><code>Shader.cpp:262</code></strong></p>
+<div class="code-block">	: ShaderTypeForDynamicCast(InShaderTypeForDynamicCast)
+	, TypeLayout(&amp;InTypeLayout)
+	, Name(InName)
+	, TypeName(InName)
+	, HashedName(TypeName)
+	, HashedSourceFilename(InSourceFilename)
+	, SourceFilename(InSourceFilename)
+	, FunctionName(InFunctionName)
+	, Frequency(InFrequency)
+	, TypeSize(InTypeSize)
+	, TotalPermutationCount(InTotalPermutationCount)
+	, ConstructSerializedRef(InConstructSerializedRef)
+	, ConstructCompiledRef(InConstructCompiledRef)
+	, ShouldCompilePermutationRef(InShouldCompilePermutationRef)
+	, ShouldPrecachePermutationRef(InShouldPrecachePermutationRef)
+	, GetRayTracingPayloadTypeRef(InGetRayTracingPayloadTypeRef)
+	, GetShaderBindingLayoutTypeRef(InGetShaderBindingLayoutTypeRef)
+#if WITH_EDITOR
+	, ModifyCompilationEnvironmentRef(InModifyCompilationEnvironmentRef)
+	, ValidateCompiledResultRef(InValidateCompiledResultRef)
+	, GetOverrideJobPriorityRef(InGetOverrideJobPriorityRef)
+	, GetPermutationIdStringRef(InGetPermutationIdStringRef)
+#endif // WITH_EDITOR
+	, RootParametersMetadata(InRootParametersMetadata)
+	, GlobalListLink(this)
+{
+	FTypeLayoutDesc::Register(InTypeLayout);
+
+	//make sure the name is shorter than the maximum serializable length
+	check(FCString::Strlen(InName) &lt; NAME_SIZE);
+
+	// Make sure the format of the source file path is right.
+	check(CheckVirtualShaderFilePath(InSourceFilename));
+
+	// register this shader type
+	GlobalListLink.LinkHead(GetTypeList());
+	GetNameToTypeMap().Add(HashedName, this);
+
+	TArray&lt;FShaderType*&gt;&amp; SortedTypes = GetSortedShaderTypes(InShaderTypeForDynamicCast);
+	const int32 SortedIndex = Algo::LowerBoundBy(SortedTypes, HashedName, [](const FShaderType* InType) { return InType-&gt;GetHashedName(); });
+	SortedTypes.Insert(this, SortedIndex);
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>FShaderType</code> 장부<br>&bull;&nbsp;<strong><code>: ShaderTypeForDynamicCast(...)</code></strong> = 생성자 본문 전에 멤버들을 채우는 초기화 목록이야.<br>&bull;&nbsp;<strong><code>SourceFilename(InSourceFilename)</code></strong> = 주문표의 <code>.usf</code> 파일명을 장부에 저장한다.<br>&bull;&nbsp;<strong><code>FunctionName(InFunctionName)</code></strong> = <code>MainCS</code> 같은 진입 함수 이름을 저장한다.<br>&bull;&nbsp;<strong><code>Frequency(InFrequency)</code></strong> = <code>SF_Vertex</code> 같은 스테이지 값을 저장한다.<br>&bull;&nbsp;<strong><code>check(CheckVirtualShaderFilePath(...))</code></strong> = 가상 셰이더 경로 규칙을 다시 검사한다.<br>&bull;&nbsp;<strong><code>GlobalListLink.LinkHead(GetTypeList())</code></strong> = 전역 셰이더 타입 목록에 이 타입을 건다.<br>&bull;&nbsp;<strong><code>GetNameToTypeMap().Add(HashedName, this)</code></strong> = 이름으로 다시 찾을 수 있게 맵에 등록한다.<br>&bull;&nbsp;<strong><code>SortedTypes.Insert</code></strong> = 정렬된 타입 목록에도 꽂아 넣는다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> C++ 주문표의 파일명은 <code>SourceFilename</code>, 함수명은 <code>FunctionName</code>, 스테이지는 <code>Frequency</code>에 들어간다. 그리고 <code>GlobalListLink</code>와 <code>GetNameToTypeMap()</code>에 등록된다. 서버 디스패처 테이블에 패킷 핸들러를 꽂는 것과 같은 느낌이야.</div>
+<p>여기까지가 C++ 쪽 준비다. 아직 GPU 코드는 안 돌았다. 엔진이 "나중에 이 이름을 보면 이 파일의 이 함수를 이 스테이지로 컴파일해"라고 장부에 적어둔 단계야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>4. 실제 <code>.usf</code> — 컴퓨트 셰이더</h2>
+<p>이제 주문표가 가리킨 레시피 카드를 열자. <code>FGenerateMipsCS</code>는 <code>ComputeGenerateMips.usf</code>의 <code>MainCS</code>를 가리켰다. 그 함수가 실제로 있다.</p>
+<p><strong><code>ComputeGenerateMips.usf:23</code></strong></p>
+<div class="code-block">[numthreads(8, 8, 1)]
+void MainCS(uint3 DT_ID : SV_DispatchThreadID)
+{
+    float2 UV = TexelSize * (DT_ID.xy + 0.5f);
+
+#if GENMIPS_SRGB
+    half4 outColor = MipInSRV.SampleLevel(MipSampler, UV, 0);
+    outColor = half4(LinearToSrgb(outColor.xyz), outColor.w);
+#else
+    float4 outColor = MipInSRV.SampleLevel(MipSampler, UV, 0);
+#endif
+
+#if GENMIPS_SWIZZLE
+    MipOutUAV[DT_ID.xy] = outColor.zyxw;
+#else
+    MipOutUAV[DT_ID.xy] = outColor;
+#endif
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 컴퓨트 셰이더<br>&bull;&nbsp;<strong><code>[numthreads(8, 8, 1)]</code></strong> = 한 작업반에 GPU 스레드가 8×8×1명 있다는 뜻이야.<br>&bull;&nbsp;<strong><code>uint3 DT_ID : SV_DispatchThreadID</code></strong> = 이 스레드가 전체 작업판에서 맡은 칸 좌표야.<br>&bull;&nbsp;<strong><code>float2 UV</code></strong> = 텍스처를 찍을 2D 좌표야.<br>&bull;&nbsp;<strong><code>SampleLevel</code></strong> = 특정 밉 레벨에서 텍스처를 읽는 함수야.<br>&bull;&nbsp;<strong><code>half4</code> / <code>float4</code></strong> = 색 네 성분을 담는 숫자 묶음이야.<br>&bull;&nbsp;<strong><code>MipOutUAV[DT_ID.xy] = outColor</code></strong> = 이 스레드가 맡은 출력 칸에 색을 쓴다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>MainCS</code>는 작업반 함수야. GPU 스레드마다 <code>DT_ID.xy</code>가 다르고, 각 스레드는 자기 칸의 UV로 입력 텍스처를 읽은 뒤 출력 텍스처의 자기 칸에 색을 쓴다. 정점도 삼각형도 없어. 그냥 작업판을 잘라 병렬 처리하는 방식이야.</div>
+<p>컴퓨트 셰이더는 일반 병렬 작업에 강해. 밉맵 생성, 컬링, 타일 분류, 통계 계산 같은 곳에서 자주 나온다. 주방 비유로는 큰 도마를 64칸씩 나눠서 요리사들에게 맡기는 작업반이다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>5. 같은 <code>.usf</code> 안의 정점/픽셀 셰이더</h2>
+<p>같은 파일 아래에는 <code>MainVS</code>와 <code>MainPS</code>도 있다. 아까 C++ 주문표에서 <code>SF_Vertex</code>, <code>SF_Pixel</code>로 등록한 그 함수들이야.</p>
+<p><strong><code>ComputeGenerateMips.usf:80</code></strong></p>
+<div class="code-block">void MainVS(in float4 InPosition : ATTRIBUTE0, in float2 InUV : ATTRIBUTE1,	out float4 OutPosition : SV_POSITION, out float2 OutUV : TEXCOORD0)
+{
+	OutPosition = InPosition;
+	OutPosition.xy = -1.0f + 2.0f * InPosition.xy;
+	OutPosition.xy *= float2( 1, -1 );
+	OutUV = InUV;
+}
+
+void MainPS(float4 InPosition : SV_POSITION,	float2 InUV : TEXCOORD0, out float4 OutColor : SV_Target0)
+{
+    OutColor = MipInSRV.SampleLevel(MipSampler, InUV + HalfTexelSize, Level);
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 정점/픽셀 셰이더<br>&bull;&nbsp;<strong><code>ATTRIBUTE0</code> / <code>ATTRIBUTE1</code></strong> = 정점 버퍼에서 들어오는 입력 칸이야.<br>&bull;&nbsp;<strong><code>SV_POSITION</code></strong> = GPU 래스터라이저가 이해하는 화면 위치야.<br>&bull;&nbsp;<strong><code>TEXCOORD0</code></strong> = 다음 단계로 넘기는 텍스처 좌표 통로야.<br>&bull;&nbsp;<strong><code>SV_Target0</code></strong> = 픽셀 셰이더가 0번 렌더 타깃에 쓸 색이야.<br>&bull;&nbsp;<strong><code>out float4 OutColor</code></strong> = 함수 밖으로 색 네 성분을 내보내겠다는 뜻이야.<br>&bull;&nbsp;<strong><code>InUV + HalfTexelSize</code></strong> = 텍스처 좌표를 반 픽셀만큼 보정해서 찍는 계산이야.</div>
+<p>정점 셰이더는 "재료 위치 손질" 담당이다. 픽셀 셰이더는 "접시에 색 얹기" 담당이다. 컴퓨트 셰이더는 "도마 칸 나눠서 병렬 작업" 담당이다.</p>
+<p>중요한 건 함수 이름만으로 스테이지가 정해지는 게 아니라는 점이야. 진짜 장부에는 C++의 <code>IMPLEMENT_GLOBAL_SHADER(..., "MainPS", SF_Pixel)</code>처럼 함수 이름과 스테이지가 같이 박힌다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>6. 한눈에 보는 흐름</h2>
+<p>GenerateMips.cpp:38 IMPLEMENT_GLOBAL_SHADER(FGenerateMipsCS, "...usf", "MainCS", SF_Compute) | v Shader.cpp:262 SourceFilename / FunctionName / Frequency 저장 GlobalListLink.LinkHead(GetTypeList()) | v ShaderCore.cpp:1664 가상 경로와 usf/ush 확장자 검사 | v ComputeGenerateMips.usf:23 void MainCS(uint3 DT_ID : SV_DispatchThreadID) | v GPU 스레드들이 각자 DT_ID.xy 칸에 결과 기록</p>
+<p>정점/픽셀은 같은 구조에서 마지막 함수만 바뀐다.</p>
+<p>FGenerateMipsVS + MainVS + SF_Vertex → 정점 위치와 UV를 넘김</p>
+<p>FGenerateMipsPS + MainPS + SF_Pixel → SV_Target0에 색을 씀</p>
+<p>이제 <code>FGlobalShader</code>를 보면 겁먹지 말고 네 칸만 읽어. C++ 타입, <code>.usf</code> 파일, 진입 함수, 스테이지. 이 네 칸이 맞으면 주문표와 레시피가 연결된다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>우리 서버·DirectX 랑 비교</h2>
+<p>서버 디스패처랑 거의 같은 감각으로 보면 된다.</p>
+<table class="compare-table"><thead><tr><th>서버</th><th>언리얼 셰이더</th></tr></thead><tbody><tr><td>패킷 ID</td><td>셰이더 타입 이름</td></tr><tr><td>핸들러 함수</td><td><code>.usf</code> 진입 함수</td></tr><tr><td>패킷 바디</td><td>셰이더 파라미터 구조체</td></tr><tr><td>디스패처 등록</td><td><code>IMPLEMENT_GLOBAL_SHADER</code></td></tr><tr><td>핸들러 테이블</td><td><code>FShaderType</code> 전역 목록/맵</td></tr></tbody></table>
+<p>차이는 실행 위치야. 패킷 핸들러는 CPU에서 돈다. 셰이더 본문은 GPU에서 돈다. C++ 클래스 <code>FGenerateMipsPS</code> 자체가 GPU에서 도는 게 아니라, 그 클래스가 가리킨 <code>.usf</code> 함수가 컴파일되어 GPU에서 돈다.</p>
+<p>DirectX 경험으로는 이렇게 매핑하면 돼.</p>
+<table class="compare-table"><thead><tr><th>DirectX 감각</th><th>언리얼 이름</th></tr></thead><tbody><tr><td>HLSL 파일</td><td><code>.usf</code></td></tr><tr><td>HLSL include</td><td><code>.ush</code></td></tr><tr><td>entry point</td><td><code>"MainVS"</code>, <code>"MainPS"</code>, <code>"MainCS"</code></td></tr><tr><td>shader stage</td><td><code>SF_Vertex</code>, <code>SF_Pixel</code>, <code>SF_Compute</code></td></tr><tr><td>셰이더 리소스 바인딩</td><td><code>FParameters</code> → <a class="xref" href="ch-10-shader-parameters.html">shader-parameters</a></td></tr><tr><td>PSO의 VS/PS 슬롯</td><td>앞 장의 PSO → <a class="xref" href="ch-07-pso.html">pso</a></td></tr></tbody></table>
+<p>우리 서버에서 패킷 ID와 핸들러가 어긋나면 디버깅이 지옥이지. 렌더링에서도 셰이더 타입과 <code>.usf</code> 진입 함수가 어긋나면 똑같다. 그래서 <code>IMPLEMENT_GLOBAL_SHADER</code> 한 줄을 정확히 읽는 게 중요해.</p>
+<hr>
+</div>
+<div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
+<ol><li><code>.usf</code>는 메인 셰이더 레시피고, <code>.ush</code>는 공용 include 메모장이다.</li><li><code>FGlobalShader</code>는 머티리얼 밖 전역 셰이더의 C++ 주문표다.</li><li><code>IMPLEMENT_GLOBAL_SHADER</code>는 C++ 타입, 파일, 함수, 스테이지를 묶는다.</li><li><code>Shader.cpp</code>의 <code>FShaderType</code>은 그 정보를 장부에 저장하고 전역 목록에 등록한다.</li><li>GPU에서 도는 건 C++ 클래스가 아니라 <code>.usf</code> 안의 <code>MainVS</code> / <code>MainPS</code> / <code>MainCS</code>다.</li></ol>
+<hr>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>셰이더는 GPU에서 도는 작은 프로그램이고, 언리얼은 <code>.usf</code>의 진입 함수를 <code>FGlobalShader</code>/<code>FShaderType</code> 장부에 등록해서 C++ 주문표와 GPU 레시피를 연결한다.</strong></p>
+<hr>
+<div class="note">막히면(선행 개념) → <a class="xref" href="ch-07-pso.html">pso</a> · <a class="xref" href="ch-03-rhi-overview.html">rhi-overview</a><br>다음(컴파일 파이프라인) → <a class="xref" href="ch-09-shader-compile.html">shader-compile</a></div></div><nav class="booknav"><a href="ch-07-pso.html"><span class="lbl">← 이전</span>PSO — GPU의 설정 묶음</a><a class="nx" href="ch-09-shader-compile.html"><span class="lbl">다음 →</span>셰이더 컴파일 파이프라인</a></nav></div></body></html>

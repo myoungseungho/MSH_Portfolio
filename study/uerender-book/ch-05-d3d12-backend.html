@@ -1,0 +1,293 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>D3D12RHI — 진짜 하드웨어로 내려가는 지점 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>D3D12RHI — 진짜 하드웨어로 내려가는 지점</h1><p>언리얼 렌더링 · 05 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "RHI 명령이 어디서 진짜 D3D12 API 호출로 바뀌는가"가 잡힌다.</div>
+<hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>DirectX 12를 조금이라도 만져봤으면 <code>ID3D12GraphicsCommandList</code>가 낯설진 않을 거야. 결국 네이티브 DX에서는 <code>SetPipelineState</code>, <code>ResourceBarrier</code>, <code>DrawInstanced</code>, <code>Dispatch</code>, <code>CopyResource</code> 같은 호출이 명령 리스트에 찍히지. 게임 서버로 치면 <code>CM_MOVE</code> 같은 패킷이 마지막엔 진짜 핸들러 함수 하나를 타고 캐릭터 좌표를 바꾸는 지점이 있어야 하는 것과 같아.</p>
+<p>그런데 앞 장까지만 보면 언리얼은 일부러 그 지점을 숨겨. 렌더러는 <code>RHIDrawPrimitive</code>라고 말하고, <code>RHICommandList</code>는 그걸 주문서처럼 쌓아. 여기서 멈추면 RenderDoc에 찍힌 <code>DrawIndexedInstanced</code>와 엔진 코드의 <code>RHI</code> 호출이 서로 안 이어져. GPU 크래시가 나도 "어느 RHI 명령이 실제 D3D12 호출이 됐지?"를 못 찾게 된다.</p>
+<p>그래서 언리얼도 같은 문제를 만났고, 답이 <code>D3D12RHI</code>야. 공용 언어였던 RHI를 윈도우/D3D12용 방언으로 번역해서, 진짜 <code>ID3D12GraphicsCommandList</code> 버튼을 누르는 층. 그 중심에 <code>FD3D12CommandContext</code>와 <code>FD3D12StateCache</code>가 있어.</p>
+<p>왜 지금 배우냐면, 앞 장 <a class="xref" href="ch-04-rhi-commandlist.html">rhi-commandlist</a>가 "명령을 적고 제출하는 주문서"였다면 이번 장은 그 주문서가 주방 안쪽의 실제 화구 버튼으로 바뀌는 순간이야. 다음 장 <a class="xref" href="ch-06-rhi-resources.html">rhi-resources</a>와 <a class="xref" href="ch-07-pso.html">pso</a>에서 버퍼, 텍스처, PSO를 보려면 "얘들이 결국 어떤 D3D12 호출에 꽂히는지"를 먼저 알아야 해.</p>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 주문서가 주방 기계 버튼으로 바뀌는 순간</h2>
+<p>이번에도 식당으로 가자.</p>
+<p>앞 장의 <code>RHICommandList</code>는 웨이터가 적어둔 주문서였어. "파스타 하나", "스테이크 하나", "접시 비워", "냉장고에서 재료 꺼내" 같은 줄들이 쌓였지.</p>
+<p>그런데 주문서만 있으면 음식은 안 나와. 누군가는 주방 안으로 들어가서 실제 기계를 만져야 해.</p>
+<ol><li>주문서의 "파스타"를 읽는다.</li><li>파스타용 화구를 켠다.</li><li>팬을 올린다.</li><li>소스를 붓는다.</li><li>접시에 담는다.</li></ol>
+<p><code>D3D12RHI</code>가 이 주방 안쪽 사람이야. <code>RHI</code> 주문을 읽고, D3D12 기계의 실제 버튼을 누른다.</p>
+<p>이 챕터에서 계속 이렇게 부를게.</p>
+<ul><li><code>RHICommandList</code> = 손님 주문서.</li><li><code>FD3D12CommandContext</code> = 주문서를 읽고 주방 기계를 누르는 사람.</li><li><code>FD3D12StateCache</code> = 지금 켜진 화구, 팬, 접시 상태를 기억하는 칠판.</li><li><code>ID3D12GraphicsCommandList</code> = 진짜 주방 기계 버튼판.</li><li><code>DrawInstanced</code> / <code>Dispatch</code> / <code>ClearRenderTargetView</code> = 실제 버튼 이름.</li></ul>
+<p>중요한 건 하나야. 언리얼 렌더러 대부분은 "D3D12 버튼 이름"을 직접 부르지 않아. 대신 <code>RHI</code>로 말하고, D3D12RHI가 마지막에 버튼을 눌러.</p>
+</div>
+<div class="conversation"><h2>1. 전체 지도 — 추상 명령에서 네이티브 호출까지</h2>
+<p>큰 길은 이렇게 생겼어.</p>
+<div class="code-block">렌더러 / RenderCore
+    |
+    |  RHI 명령 호출
+    v
+FRHICommandList
+    |
+    |  기록된 명령 실행
+    v
+FD3D12CommandContext
+    |
+    |  상태 정리 + 리소스 바인딩 + 배리어
+    v
+FD3D12StateCache / DescriptorCache
+    |
+    |  실제 D3D12 메서드 호출
+    v
+ID3D12GraphicsCommandList</div>
+<p>이 그림에서 이번 장의 주인공은 아래쪽 세 칸이야. 특히 <code>FD3D12CommandContext</code>는 "RHI 함수 이름이 붙은 메서드"를 많이 들고 있어.</p>
+<p>예를 들면 이런 식이야.</p>
+<table class="compare-table"><thead><tr><th>RHI 쪽 말</th><th>D3D12RHI 안쪽</th><th>마지막 D3D12 버튼</th></tr></thead><tbody><tr><td><code>RHISetGraphicsPipelineState</code></td><td><code>StateCache.SetGraphicsPipelineState</code></td><td><code>SetPipelineState</code></td></tr><tr><td><code>RHIDispatchComputeShader</code></td><td><code>SetupDispatch</code> 후 실행</td><td><code>Dispatch</code></td></tr><tr><td><code>RHIDrawPrimitive</code></td><td><code>SetupDraw</code> 후 실행</td><td><code>DrawInstanced</code></td></tr><tr><td><code>RHIClearMRTImpl</code></td><td>RTV/DSV 찾고 실행</td><td><code>ClearRenderTargetView</code> / <code>ClearDepthStencilView</code></td></tr><tr><td>텍스처/버퍼 전송</td><td>copy context 선택</td><td><code>CopyResource</code> / <code>CopyTextureRegion</code></td></tr></tbody></table>
+<p>여기서 조심할 점이 있어. 모든 함수가 <code>D3D12CommandContext.cpp</code> 한 파일에 있진 않아. 이 클론에서는 명령별 몸통이 <code>D3D12Commands.cpp</code>, 상태 캐시는 <code>D3D12StateCache.cpp</code>, 복사 일부와 명령 리스트 관리는 <code>D3D12CommandContext.cpp</code>에 나뉘어 있어. 그래도 전부 같은 <code>D3D12RHI/Private</code> 주방 안쪽 코드야.</p>
+</div>
+<div class="conversation"><h2>2. 명령 리스트 닫기 — 주방에 넘기기 전 배리어부터 비운다</h2>
+<p>먼저 주요 소스인 <code>D3D12CommandContext.cpp</code>에서 명령 리스트를 닫는 장면을 보자. 주문서가 다 실행됐다고 바로 닫지 않아. 닫기 직전에 "아직 밀린 배리어가 있나?"부터 털어.</p>
+<p><strong><code>D3D12CommandContext.cpp:378</code></strong></p>
+<div class="code-block">void FD3D12ContextCommon::CloseCommandList()
+{
+	checkf(IsPendingCommands(), TEXT("The command list is empty."));
+	// Do this before we insert the final timestamp to ensure we're timing all the work on the command list.
+	// If the command list only has barrier work to do, this will open the command list for the first time
+	FlushResourceBarriers();
+
+	checkf(IsOpen(), TEXT("Command list is not open."));
+	checkf(Payloads.Num() &amp;&amp; CurrentPhase == EPhase::Execute, TEXT("Expected the current payload to be in the execute phase."));
+	
+	checkf(ActiveQueries == 0, TEXT("All queries must be completed before the command list is closed."));
+
+	FD3D12Payload* Payload = GetPayload(EPhase::Execute);
+
+	CommandList-&gt;Close();
+	CommandList = nullptr;
+
+	TimestampQueries    .CloseAndReset(Payload-&gt;BatchedObjects.QueryRanges);
+	OcclusionQueries    .CloseAndReset(Payload-&gt;BatchedObjects.QueryRanges);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 명령 리스트 닫기<br>&bull;&nbsp;<strong><code>FD3D12ContextCommon::CloseCommandList</code></strong> = D3D12 공통 컨텍스트 안의 명령 리스트 닫기 함수야. <code>::</code>는 "이 묶음 안에 있는 함수"라는 뜻.<br>&bull;&nbsp;<strong><code>checkf(...)</code></strong> = 조건이 틀리면 바로 잡아내는 검사야. 뒤의 <code>TEXT(...)</code>는 터질 때 보여줄 말.<br>&bull;&nbsp;<strong><code>FlushResourceBarriers()</code></strong> = 미뤄둔 리소스 상태 전환을 실제 명령 리스트에 밀어 넣는 함수야.<br>&bull;&nbsp;<strong><code>Payloads.Num()</code></strong> = <code>Payloads</code> 안에 몇 개 들어 있는지 세는 호출이야.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = 둘 다 참이어야 한다는 "그리고".<br>&bull;&nbsp;<strong><code>FD3D12Payload* Payload</code></strong> = <code>FD3D12Payload</code>를 가리키는 손잡이야. <code>*</code>는 포인터.<br>&bull;&nbsp;<strong><code>CommandList-&gt;Close()</code></strong> = D3D12 명령 리스트한테 "이제 기록 끝"이라고 닫는 호출이야.<br>&bull;&nbsp;<strong><code>nullptr</code></strong> = 이제 가리키는 대상이 없다는 빈 손잡이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>CloseCommandList()</code>는 먼저 빈 명령 리스트가 아닌지 확인하고 → <code>FlushResourceBarriers()</code>로 밀린 안전 표지판을 붙이고 → 실제 <code>CommandList-&gt;Close()</code>를 부른다. 주방 비유로 치면 주문서를 주방장에게 넘기기 전에 "이 재료는 냉장, 이 팬은 뜨거움" 같은 표시를 마지막으로 붙이는 거야.</div>
+<p>여기서 <code>CommandList-&gt;Close()</code>는 DirectX 12에서 익숙한 그 닫기 단계야. 언리얼의 RHI 주문서가 D3D12 명령 리스트에 다 기록된 다음, 제출 가능한 상태로 바뀌는 관문이지.</p>
+<p>다만 초보가 자주 놓치는 건 <code>FlushResourceBarriers()</code>야. D3D12는 리소스 상태를 개발자가 직접 맞춰야 해. "이 텍스처를 방금 렌더 타깃으로 썼는데 이제 셰이더에서 읽을 거야" 같은 말을 빼먹으면 GPU validation이 바로 화낸다. 그래서 D3D12RHI는 배리어를 모아뒀다가 적당한 순간에 명령 리스트로 흘려보내.</p>
+</div>
+<div class="conversation"><h2>3. PSO 세팅 — 상태 캐시가 <code>SetPipelineState</code> 버튼을 누른다</h2>
+<p>DirectX 12에서는 드로우 전에 PSO가 맞아야 해. 셰이더, 블렌드, 깊이, 래스터라이저 상태가 묶인 그 덩어리 말이야.</p>
+<p>언리얼 렌더러는 매번 <code>ID3D12GraphicsCommandList::SetPipelineState</code>를 직접 부르지 않아. 먼저 <code>RHISetGraphicsPipelineState</code> 같은 RHI 함수를 타고, 그 안에서 <code>StateCache</code>가 상태를 기억해. 그리고 실제로 바뀌어야 할 때만 D3D12 버튼을 누른다.</p>
+<p><strong><code>D3D12StateCache.cpp:413</code></strong></p>
+<div class="code-block">void FD3D12StateCache::InternalSetPipelineState(FD3D12PipelineState* InPipelineState)
+{
+	// See if we need to set our PSO:
+	// In D3D11, you could Set dispatch arguments, then set Draw arguments, then call Draw/Dispatch/Draw/Dispatch without setting arguments again.
+	// In D3D12, we need to understand when the app switches between Draw/Dispatch and make sure the correct PSO is set.
+
+	ID3D12PipelineState* const CurrentD3DPipelineState = PipelineState.Common.CurrentPipelineStateObject;
+	ID3D12PipelineState* const PendingD3DPipelineState = InPipelineState-&gt;GetPipelineState();
+
+	if (PipelineState.Common.bNeedSetPSO || CurrentD3DPipelineState == nullptr || CurrentD3DPipelineState != PendingD3DPipelineState)
+	{
+		PipelineState.Common.CurrentPipelineStateObject = PendingD3DPipelineState;
+
+		CmdContext.GraphicsCommandList()-&gt;SetPipelineState(PendingD3DPipelineState);
+
+		PipelineState.Common.bNeedSetPSO = false;
+	}
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — PSO 세팅<br>&bull;&nbsp;<strong><code>FD3D12StateCache</code></strong> = D3D12 상태를 기억하는 캐시야. 같은 상태를 반복해서 누르지 않게 해.<br>&bull;&nbsp;<strong><code>FD3D12PipelineState*</code></strong> = 언리얼이 감싼 D3D12 PSO 손잡이야.<br>&bull;&nbsp;<strong><code>ID3D12PipelineState* const</code></strong> = 진짜 D3D12 PSO 포인터인데, 이 변수 자체는 다른 걸 가리키도록 못 바꾼다는 뜻이야.<br>&bull;&nbsp;<strong><code>InPipelineState-&gt;GetPipelineState()</code></strong> = 언리얼 래퍼에서 실제 D3D12 PSO를 꺼내는 호출이야.<br>&bull;&nbsp;<strong><code>||</code></strong> = 조건 중 하나라도 맞으면 된다는 "또는".<br>&bull;&nbsp;<strong><code>CurrentD3DPipelineState != PendingD3DPipelineState</code></strong> = 지금 GPU에 박힌 PSO와 새로 박아야 할 PSO가 다른지 비교하는 거야.<br>&bull;&nbsp;<strong><code>CmdContext.GraphicsCommandList()-&gt;SetPipelineState(...)</code></strong> = 드디어 진짜 D3D12 명령 리스트에 PSO를 세팅하는 버튼이야.<br>&bull;&nbsp;<strong><code>bNeedSetPSO = false</code></strong> = 이제 세팅했으니 "다시 세팅 필요" 표시를 끄는 거야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 함수는 현재 PSO와 새 PSO를 비교하고 → 필요할 때만 <code>SetPipelineState</code>를 호출하고 → <code>bNeedSetPSO</code>를 꺼. 주방 칠판에 "지금 파스타 팬 세팅임"이라고 적어둬서, 같은 팬이면 다시 꺼내지 않는 장면이야.</div>
+<p>이 코드가 중요한 이유는 "RHI 함수 하나 = D3D12 호출 하나"가 항상 아니라는 걸 보여줘. 언리얼은 상태를 캐시하고 더러운 것만 밀어. 서버에서도 똑같지. 매 패킷마다 플레이어 전체 상태를 DB에 다 쓰지 않고, 바뀐 필드만 dirty로 잡아 반영하잖아.</p>
+<p>D3D12RHI도 비슷해. <code>StateCache</code>는 지금 GPU 명령 리스트에 어떤 상태가 걸렸는지 기억하고, 바뀐 것만 실제 D3D12 호출로 내려보낸다.</p>
+</div>
+<div class="conversation"><h2>4. 컴퓨트 — <code>RHIDispatchComputeShader</code>가 <code>Dispatch</code>로 떨어진다</h2>
+<p>이제 진짜 명령다운 장면을 보자. 컴퓨트 셰이더는 "몇 개 스레드 그룹을 돌려라"라는 명령이야. RHI 이름은 <code>RHIDispatchComputeShader</code>지만, 마지막 버튼은 D3D12의 <code>Dispatch</code>다.</p>
+<p><strong><code>D3D12Commands.cpp:140</code></strong></p>
+<div class="code-block">void FD3D12CommandContext::RHIDispatchComputeShader(uint32 ThreadGroupCountX, uint32 ThreadGroupCountY, uint32 ThreadGroupCountZ)
+{
+	RHI_DISPATCH_CALL_INC();
+
+	SetupDispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
+
+	GraphicsCommandList()-&gt;Dispatch(ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
+	
+	PostGpuEvent();
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 컴퓨트 디스패치<br>&bull;&nbsp;<strong><code>RHIDispatchComputeShader</code></strong> = RHI 공용 이름으로 "컴퓨트 셰이더 실행해"라는 함수야.<br>&bull;&nbsp;<strong><code>uint32</code></strong> = 부호 없는 32비트 정수야. 스레드 그룹 개수를 담는다.<br>&bull;&nbsp;<strong><code>ThreadGroupCountX/Y/Z</code></strong> = X, Y, Z 방향으로 몇 묶음의 스레드를 돌릴지 나타내는 값이야.<br>&bull;&nbsp;<strong><code>RHI_DISPATCH_CALL_INC()</code></strong> = 디스패치 호출 통계를 하나 올리는 매크로야.<br>&bull;&nbsp;<strong><code>SetupDispatch(...)</code></strong> = 디스패치 전에 디스크립터, 상수, 상태를 맞추는 준비 단계야.<br>&bull;&nbsp;<strong><code>GraphicsCommandList()-&gt;Dispatch(...)</code></strong> = 실제 D3D12 명령 리스트에 컴퓨트 실행 명령을 찍는 버튼이야.<br>&bull;&nbsp;<strong><code>PostGpuEvent()</code></strong> = GPU 이벤트 뒤처리, 명령 리스트 분할 같은 후처리를 하는 함수야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>RHIDispatchComputeShader</code>는 통계를 올리고 → <code>SetupDispatch</code>로 주방 세팅을 맞춘 뒤 → <code>GraphicsCommandList()-&gt;Dispatch(...)</code>를 누른다. 앞의 이름은 언리얼 말이고, 가운데 준비가 번역이고, 마지막 줄이 진짜 D3D12 말이야.</div>
+<p>여기서 <code>GraphicsCommandList()</code>라는 이름이 살짝 헷갈릴 수 있지만, D3D12의 direct command list는 그래픽스와 컴퓨트 명령을 둘 다 받을 수 있어. 여기서는 D3D12 명령을 기록하는 direct command list 손잡이라고 보면 돼.</p>
+<p><code>SetupDispatch</code> 안에서는 디스크립터 업데이트, compute shader constants, resource table, <code>StateCache.ApplyState(...Compute)</code>가 먼저 맞춰진다. 즉 <code>Dispatch</code> 한 줄 앞에 이미 "어떤 셰이더, 어떤 버퍼, 어떤 UAV를 물고 돌 건지"가 정해져 있어.</p>
+</div>
+<div class="conversation"><h2>5. 드로우 — <code>RHIDrawPrimitive</code>가 <code>DrawInstanced</code>로 떨어진다</h2>
+<p>렌더링에서 제일 익숙한 버튼은 드로우콜이지. 언리얼 쪽 이름은 <code>RHIDrawPrimitive</code>야. 하지만 D3D12로 내려가면 네가 아는 <code>DrawInstanced</code>가 나온다.</p>
+<p><strong><code>D3D12Commands.cpp:1216</code></strong></p>
+<div class="code-block">void FD3D12CommandContext::RHIDrawPrimitive(uint32 BaseVertexIndex, uint32 NumPrimitives, uint32 NumInstances)
+{
+	uint32 VertexCount = StateCache.GetVertexCount(NumPrimitives);
+	NumInstances = FMath::Max&lt;uint32&gt;(1, NumInstances);
+
+	RHI_DRAW_CALL_STATS(StateCache.GetGraphicsPipelinePrimitiveType(), VertexCount, NumPrimitives, NumInstances);
+
+	SetupDraw(nullptr, NumPrimitives * NumInstances, VertexCount * NumInstances);
+
+	GraphicsCommandList()-&gt;DrawInstanced(VertexCount, NumInstances, BaseVertexIndex, 0);
+
+	PostGpuEvent();
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 기본 드로우<br>&bull;&nbsp;<strong><code>BaseVertexIndex</code></strong> = 정점 버퍼에서 어디부터 읽을지 시작 위치야.<br>&bull;&nbsp;<strong><code>NumPrimitives</code></strong> = 삼각형 같은 primitive가 몇 개인지 나타내는 수야.<br>&bull;&nbsp;<strong><code>NumInstances</code></strong> = 같은 메시를 몇 번 반복해서 그릴지 나타내는 수야.<br>&bull;&nbsp;<strong><code>StateCache.GetVertexCount(...)</code></strong> = primitive 개수를 실제 정점 개수로 바꿔주는 계산이야. 삼각형이면 보통 primitive 하나에 정점 셋이지.<br>&bull;&nbsp;<strong><code>FMath::Max&lt;uint32&gt;(1, NumInstances)</code></strong> = 인스턴스 개수가 0이면 최소 1로 맞추는 안전장치야.<br>&bull;&nbsp;<strong><code>RHI_DRAW_CALL_STATS(...)</code></strong> = 드로우콜 통계를 기록하는 매크로야.<br>&bull;&nbsp;<strong><code>SetupDraw(nullptr, ...)</code></strong> = indexed draw가 아니니 index buffer 자리에 <code>nullptr</code>을 넘기고 드로우 준비를 한다는 뜻이야.<br>&bull;&nbsp;<strong><code>DrawInstanced(...)</code></strong> = 진짜 D3D12 드로우 버튼이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>RHIDrawPrimitive</code>는 primitive 개수를 정점 개수로 바꾸고 → 인스턴스 수를 최소 1로 맞추고 → <code>SetupDraw</code>로 상태와 리소스를 준비하고 → <code>DrawInstanced</code>를 찍는다. 주문서에는 "기본 도형 그려"라고 적혀 있었는데, 주방 안쪽 버튼판에서는 <code>DrawInstanced</code>라는 정확한 버튼을 누르는 거야.</div>
+<p><code>SetupDraw</code>가 별거 아닌 것처럼 보이면 안 돼. 그 안에서 그래픽스 리소스 테이블을 commit하고, 상수 버퍼를 commit하고, 인덱스 버퍼가 있으면 <code>StateCache.SetIndexBuffer</code>까지 해. 마지막엔 <code>StateCache.ApplyState(...Graphics)</code>로 PSO, root signature, descriptor table 같은 걸 실제 D3D12 상태로 맞춘다.</p>
+<p>indexed draw는 같은 파일 <code>D3D12Commands.cpp:1270</code>의 <code>RHIDrawIndexedPrimitive</code>로 가고, 마지막 줄에서 <code>DrawIndexedInstanced</code>를 호출해. 이번 챕터에선 하나만 기억하면 돼. RHI의 드로우 함수는 마지막에 D3D12의 draw 계열 함수로 떨어진다.</p>
+</div>
+<div class="conversation"><h2>6. 클리어 — 렌더 타깃과 깊이 버퍼도 D3D12 뷰 핸들로 지운다</h2>
+<p>화면을 그리기 전에 렌더 타깃을 특정 색으로 지우거나 깊이 버퍼를 1로 초기화하는 건 흔한 일이야. RHI에서는 "MRT를 clear해"라고 말하지만, D3D12에서는 RTV/DSV 핸들을 들고 <code>ClearRenderTargetView</code>, <code>ClearDepthStencilView</code>를 호출해야 해.</p>
+<p><strong><code>D3D12Commands.cpp:1466</code></strong></p>
+<div class="code-block">	if (ClearRTV || ClearDSV)
+	{
+		FlushResourceBarriers();
+
+		if (ClearRTV)
+		{
+			for (int32 TargetIndex = 0; TargetIndex &lt; BoundRenderTargets.GetNumActiveTargets(); TargetIndex++)
+			{
+				FD3D12RenderTargetView* RTView = BoundRenderTargets.GetRenderTargetView(TargetIndex);
+
+				if (RTView != nullptr &amp;&amp; bClearColorArray[TargetIndex])
+				{
+					GraphicsCommandList()-&gt;ClearRenderTargetView(RTView-&gt;GetOfflineCpuHandle(), (float*)&amp;ClearColorArray[TargetIndex], ClearRectCount, pClearRects);
+					UpdateResidency(RTView-&gt;GetResource());
+				}
+			}
+		}
+
+		if (ClearDSV)
+		{
+			GraphicsCommandList()-&gt;ClearDepthStencilView(DepthStencilView-&gt;GetOfflineCpuHandle(), (D3D12_CLEAR_FLAGS)ClearFlags, Depth, Stencil, ClearRectCount, pClearRects);
+			UpdateResidency(DepthStencilView-&gt;GetResource());
+		}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 렌더 타깃 클리어<br>&bull;&nbsp;<strong><code>ClearRTV || ClearDSV</code></strong> = 색 렌더 타깃이나 깊이/스텐실 중 하나라도 지울 게 있으면 들어간다는 뜻이야.<br>&bull;&nbsp;<strong><code>FlushResourceBarriers()</code></strong> = 지우기 전에 리소스 상태를 clear 가능한 상태로 맞추는 단계야.<br>&bull;&nbsp;<strong><code>for (int32 TargetIndex = 0; ...; TargetIndex++)</code></strong> = 활성 렌더 타깃을 0번부터 끝까지 하나씩 도는 반복문이야.<br>&bull;&nbsp;<strong><code>FD3D12RenderTargetView* RTView</code></strong> = D3D12 렌더 타깃 뷰를 언리얼이 감싼 손잡이야.<br>&bull;&nbsp;<strong><code>RTView != nullptr</code></strong> = 실제 뷰가 있는지 확인하는 조건이야.<br>&bull;&nbsp;<strong><code>GetOfflineCpuHandle()</code></strong> = D3D12가 알아먹는 CPU descriptor handle을 꺼내는 호출이야.<br>&bull;&nbsp;<strong><code>ClearRenderTargetView(...)</code></strong> = 색 렌더 타깃을 지우는 D3D12 버튼이야.<br>&bull;&nbsp;<strong><code>ClearDepthStencilView(...)</code></strong> = 깊이/스텐실을 지우는 D3D12 버튼이야.<br>&bull;&nbsp;<strong><code>UpdateResidency(...)</code></strong> = 이 리소스를 GPU가 쓸 예정이라고 residency 추적에 알려주는 호출이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 클리어는 먼저 <code>FlushResourceBarriers()</code>로 상태를 맞추고 → 색 타깃이면 RTV 핸들을 꺼내 <code>ClearRenderTargetView</code>를 누르고 → 깊이/스텐실이면 DSV 핸들을 꺼내 <code>ClearDepthStencilView</code>를 누른다. "접시 닦아"라는 주문이 실제로는 색 접시 버튼과 깊이 접시 버튼으로 갈라지는 거야.</div>
+<p>여기서 <code>GetOfflineCpuHandle()</code>이 핵심이야. D3D12는 리소스를 그냥 "텍스처 객체"로만 지우지 않아. RTV나 DSV descriptor handle을 줘야 해. 언리얼의 <code>FD3D12RenderTargetView</code>, <code>FD3D12DepthStencilView</code> 같은 래퍼는 바로 그 손잡이를 관리하는 포장지야.</p>
+</div>
+<div class="conversation"><h2>7. 복사 — 전체 리소스는 <code>CopyResource</code>로 간다</h2>
+<p>이번 장의 주요 파일 <code>D3D12CommandContext.cpp</code>에는 GPU 간 리소스 전송도 들어 있다. 텍스처 전체를 복사할 수도 있고, 버퍼 전체를 복사할 수도 있어. 핵심은 언리얼 리소스 래퍼에서 진짜 D3D12 리소스를 꺼낸 뒤 <code>CopyResource</code>를 누른다는 점이야.</p>
+<p><strong><code>D3D12CommandContext.cpp:953</code></strong></p>
+<div class="code-block">		FD3D12CommandContext* CopyContext = Param.bPullData ? DstContext : SrcContext;
+
+		if (Param.Texture)
+		{
+			FD3D12Texture* SrcTexture = FD3D12CommandContext::RetrieveTexture(Param.Texture, Param.SrcGPUIndex);
+			FD3D12Texture* DstTexture = FD3D12CommandContext::RetrieveTexture(Param.Texture, Param.DestGPUIndex);
+
+			// If the texture size is zero (Max.Z == 0, set in the constructor), copy the whole resource
+			if (Param.Max.Z == 0)
+			{
+				CopyContext-&gt;GraphicsCommandList()-&gt;CopyResource(DstTexture-&gt;GetResource()-&gt;GetResource(), SrcTexture-&gt;GetResource()-&gt;GetResource());
+			}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 리소스 복사<br>&bull;&nbsp;<strong><code>Param.bPullData ? DstContext : SrcContext</code></strong> = 데이터를 당기는 방식이면 목적지 컨텍스트를, 아니면 출발지 컨텍스트를 고르는 짧은 if야.<br>&bull;&nbsp;<strong><code>Param.Texture</code></strong> = 이번 복사 대상이 텍스처인지 보는 값이야. 없으면 아래 <code>else</code>에서 버퍼로 본다.<br>&bull;&nbsp;<strong><code>RetrieveTexture(...)</code></strong> = RHI 텍스처에서 해당 GPU 인덱스의 D3D12 텍스처를 꺼내는 함수야.<br>&bull;&nbsp;<strong><code>Param.Max.Z == 0</code></strong> = 복사 영역이 따로 지정되지 않았으니 전체 리소스를 복사한다는 약속으로 쓰는 조건이야.<br>&bull;&nbsp;<strong><code>CopyResource(...)</code></strong> = D3D12 전체 리소스 복사 버튼이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 코드는 복사를 어느 컨텍스트에서 할지 고르고 → 텍스처 래퍼에서 출발지와 목적지 D3D12 리소스를 꺼내고 → 전체 복사면 <code>CopyResource</code>를 호출한다. 주문서의 "재료 통째로 옮겨"가 실제 주방에선 D3D12 복사 버튼 하나로 떨어지는 거야.</div>
+<p>이 장면이 좋은 이유는 추상화의 양쪽을 한 번에 보여줘서야. 겉에서는 <code>Param.Texture</code>, <code>Param.Buffer</code>, <code>Param.SrcGPUIndex</code> 같은 언리얼 구조로 말해. 안쪽에서는 <code>CopyResource</code> 같은 D3D12 호출로 말하지. 영역 복사는 같은 함수 아래쪽에서 <code>CopyTextureRegionChecked</code> 경로로 갈라진다.</p>
+<p>즉 D3D12RHI는 단순히 함수 이름만 바꾸는 번역기가 아니야. 언리얼 리소스 래퍼에서 네이티브 D3D12 리소스와 핸들을 꺼내고, 필요한 상태와 영역 정보를 맞춘 다음, 진짜 API를 호출하는 계층이야.</p>
+</div>
+<div class="conversation"><h2>8. 코드 데이터 흐름 한눈에</h2>
+<p>이번 챕터의 흐름만 한 장으로 줄이면 이거야.</p>
+<div class="code-block">RHI 명령 재생
+    |
+    v
+FD3D12CommandContext
+    |
+    +-- RHISetGraphicsPipelineState
+    |       |
+    |       v
+    |   FD3D12StateCache::InternalSetPipelineState (:413)
+    |       |
+    |       v
+    |   GraphicsCommandList()-&gt;SetPipelineState
+    |
+    +-- RHIDispatchComputeShader (:140)
+    |       |
+    |       +-- SetupDispatch
+    |       v
+    |   GraphicsCommandList()-&gt;Dispatch
+    |
+    +-- RHIDrawPrimitive (:1216)
+    |       |
+    |       +-- SetupDraw
+    |       v
+    |   GraphicsCommandList()-&gt;DrawInstanced
+    |
+    +-- RHIClearMRTImpl (:1382)
+    |       |
+    |       +-- FlushResourceBarriers
+    |       v
+    |   ClearRenderTargetView / ClearDepthStencilView (:1478, :1486)
+    |
+    +-- TransferResource path in D3D12CommandContext.cpp (:953)
+    |       |
+    |       v
+    |   CopyResource / CopyTextureRegionChecked
+    |
+    v
+CloseCommandList (:378)
+    |
+    +-- FlushResourceBarriers
+    v
+CommandList-&gt;Close</div>
+<p>이 그림에서 <code>FD3D12CommandContext</code>는 RHI 명령의 도착지야. 실제 D3D12 호출은 보통 마지막 한두 줄에 있고, 그 앞에서 <code>SetupDraw</code>, <code>SetupDispatch</code>, <code>StateCache.ApplyState</code>, <code>FlushResourceBarriers</code> 같은 준비 함수가 먼저 돈다.</p>
+<p>그래서 D3D12RHI를 읽을 때는 "마지막 D3D12 버튼"만 보고 끝내면 안 돼. 그 버튼을 누르기 전에 어떤 상태를 맞췄는지도 같이 봐야 한다.</p>
+</div>
+<div class="conversation"><h2>9. 우리 서버·DirectX 랑 비교</h2>
+<p>게임 서버로 치면 <code>CM_*</code> 패킷 핸들러가 세션 상태를 검증하고 마지막에 캐릭터 상태를 바꾸는 것과 같아. D3D12RHI도 <code>RHI...</code> 함수에 도착한 뒤 <code>SetupDraw</code>, <code>SetupDispatch</code>, <code>StateCache.ApplyState</code>로 상태를 맞추고 마지막에 <code>DrawInstanced</code>, <code>Dispatch</code>, <code>CopyResource</code>를 누른다.</p>
+<p>dirty 필드만 DB에 쓰듯이 <code>StateCache</code>도 바뀐 PSO/루트서명/디스크립터만 밀어 넣어. 락이나 순서 보장을 빼먹으면 서버가 터지듯, 배리어나 리소스 상태를 빼먹으면 GPU validation이 터진다.</p>
+<p>DirectX 12 경험으로 보면 더 직접적이야. 손으로 DX12 샘플을 짤 때 <code>SetPipelineState → ResourceBarrier → DrawInstanced → Close → ExecuteCommandLists</code>로 가던 그 길을 언리얼도 간다. 다만 중간에 RHI 추상화, command list 기록, state cache, descriptor cache가 들어가 있을 뿐이야.</p>
+<p>그래서 RenderDoc이나 PIX에서 <code>DrawInstanced</code>를 봤다면 <code>D3D12Commands.cpp:1216</code>의 <code>RHIDrawPrimitive</code> 쪽으로 거슬러 올라갈 수 있어. 반대로 엔진 코드에서 <code>RHIDispatchComputeShader</code>를 봤다면 최종적으로 PIX에는 <code>Dispatch</code>가 찍힌다고 예상하면 된다.</p>
+</div>
+<div class="conversation"><h2>10. 이번 챕터에서 딱 이것만</h2>
+<ul><li><code>D3D12RHI</code>는 RHI 추상 명령을 D3D12 네이티브 호출로 바꾸는 마지막 백엔드야.</li><li><code>FD3D12CommandContext</code>는 주문서를 읽고 <code>GraphicsCommandList()-&gt;...</code> 버튼을 누르는 사람이다.</li><li><code>FD3D12StateCache</code>는 PSO, 루트서명, 디스크립터 같은 상태를 기억해서 필요한 것만 D3D12에 세팅한다.</li><li><code>RHIDispatchComputeShader</code>는 <code>Dispatch</code>, <code>RHIDrawPrimitive</code>는 <code>DrawInstanced</code>, clear는 <code>ClearRenderTargetView</code>/<code>ClearDepthStencilView</code>로 내려간다.</li><li>D3D12에서는 실제 호출 전에 descriptor commit, shader constants commit, resource barrier flush가 같이 따라온다.</li></ul>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>D3D12RHI는 언리얼의 RHI 주문서를 읽고, 상태 캐시와 배리어를 맞춘 뒤, 마지막에 <code>ID3D12GraphicsCommandList</code>의 진짜 버튼을 누르는 주방 안쪽 번역기다.</strong></p>
+<hr>
+<div class="note">막히면 → <a class="xref" href="ch-04-rhi-commandlist.html">rhi-commandlist</a> · <a class="xref" href="ch-03-rhi-overview.html">rhi-overview</a><br>다음 → <a class="xref" href="ch-06-rhi-resources.html">rhi-resources</a> · <a class="xref" href="ch-07-pso.html">pso</a></div></div><nav class="booknav"><a href="ch-04-rhi-commandlist.html"><span class="lbl">← 이전</span>RHICommandList — 명령을 쌓고 제출하기</a><a class="nx" href="ch-06-rhi-resources.html"><span class="lbl">다음 →</span>버퍼·텍스처·뷰 — GPU 메모리에 올리기</a></nav></div></body></html>

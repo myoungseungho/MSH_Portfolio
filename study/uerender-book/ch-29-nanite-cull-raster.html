@@ -1,0 +1,388 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Nanite 컬링과 소프트웨어 래스터 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Nanite 컬링과 소프트웨어 래스터</h1><p>언리얼 렌더링 · 29 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "Nanite가 보이는 클러스터를 GPU에서 고르고, 작은 삼각형은 컴퓨트 셰이더 소프트웨어 래스터 길로 직접 칠한다"는 흐름이 잡힌다.</div>
+<hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p><strong>1. 네가 아는 것에서 출발하자.</strong> 서버에서 접속자 1만 명이 있다고 해보자. 모든 유저에게 모든 몬스터를 매 틱 전부 검사하지 않지? AOI로 먼저 줄이고, 보낼 패킷만 큐에 넣고, 어떤 건 배치하고, 어떤 건 바로 보낸다. 핵심은 "일단 후보를 줄이고, 남은 일을 맞는 처리 라인으로 보낸다"야.</p>
+<p><strong>2. 렌더링도 안 줄이면 터진다.</strong> Nanite 메시에는 삼각형이 너무 많아. 화면에 1픽셀도 안 되는 작은 삼각형까지 전통적인 고정 기능 래스터 길로 전부 밀면, 드로우콜 문제가 사라져도 다른 병목이 생긴다. 큰 삼각형은 하드웨어 래스터가 잘 먹히지만, 미세 삼각형은 컴퓨트 셰이더가 직접 처리하는 길이 더 맞을 때가 있어.</p>
+<p><strong>3. 그래서 답이 Nanite 컬링과 소프트웨어 래스터야.</strong> 언리얼은 GPU에서 인스턴스, 노드, 클러스터를 줄이고, 최종 visible 클러스터를 SW/HW 두 줄로 나눠. 여기서 "소프트웨어"는 CPU가 아니라 GPU 컴퓨트 셰이더야. 작은 삼각형을 GPU 안의 일반 계산 셰이더가 직접 픽셀 후보로 찍는 거지.</p>
+<p><strong>4. 왜 지금 배우냐.</strong> 앞 장 <a class="xref" href="ch-28-nanite-overview.html">nanite-overview</a>에서 Nanite가 클러스터 계층을 GPU 주도로 고른다는 큰 그림을 봤어. 이번 장은 그 다음 칸이야. 후보가 보이는 클러스터가 된 뒤, 그걸 어떤 래스터 길로 보내고, 실제로 어떻게 컴퓨트 디스패치까지 내려가는지 본다. 다음 장 <a class="xref" href="ch-30-lumen-overview.html">lumen-overview</a>로 가기 전에 현대 렌더러의 "GPU가 일감을 직접 배정한다"는 감각을 확실히 잡아야 해.</p>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 물류센터 자동 분류기</h2>
+<p>이번 장은 물류센터로 보자.</p>
+<p>트럭에 상자가 산더미처럼 들어온다.</p>
+<p>센터장이 사람 손으로 모든 상자를 열어 보며 분류하면 망해.</p>
+<p>그래서 센터에는 자동 분류기가 있어.</p>
+<ol><li>먼저 안 보낼 상자는 버린다. 이게 컬링이야.</li><li>남은 상자는 큰 박스와 작은 봉투로 나눈다.</li><li>큰 박스는 컨베이어 벨트로 보낸다. 이게 하드웨어 래스터야.</li><li>작은 봉투는 빠른 분류 직원들이 직접 칸에 꽂는다. 이게 컴퓨트 셰이더 소프트웨어 래스터야.</li><li>두 줄의 결과는 같은 출고판에 모인다.</li></ol>
+<p>중요한 건 "소프트웨어"라는 단어에 속지 않는 거야.</p>
+<p>여기서 직원은 CPU 직원이 아니야.</p>
+<p>GPU 안에서 도는 컴퓨트 셰이더 직원이야.</p>
+<p>Nanite는 트럭 안의 모든 삼각형을 CPU가 만지는 구조가 아니라, GPU 물류센터가 직접 후보를 줄이고 줄을 나누는 구조야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>1. 먼저 스케줄러부터 — HW만 쓸지, SW도 쓸지</h2>
+<p>물류센터에 작은 봉투 분류 라인을 켤지 말지부터 정해야 해.</p>
+<p>언리얼은 <code>InitRasterContext</code>에서 래스터 스케줄링을 정한다.</p>
+<p><code>r.Nanite.ComputeRasterization</code>이 켜져 있으면 컴퓨트 래스터를 쓸 수 있고, 플랫폼이 async compute까지 받쳐주면 HW와 SW를 겹쳐 돌릴 수도 있어.</p>
+<p>반대로 이 옵션이 꺼지면 하드웨어 전용으로 강제한다.</p>
+<p><strong><code>NaniteCullRaster.cpp:6154</code></strong></p>
+<div class="code-block">	// Set rasterizer scheduling based on config and platform capabilities.
+	if (CVarNaniteComputeRasterization.GetValueOnRenderThread() != 0)
+	{
+		bAsyncCompute = bAsyncCompute
+			&amp;&amp; GSupportsEfficientAsyncCompute
+			&amp;&amp; (CVarNaniteEnableAsyncRasterization.GetValueOnRenderThread() != 0) 
+			&amp;&amp; EnumHasAnyFlags(GRHIMultiPipelineMergeableAccessMask, ERHIAccess::UAVMask)
+			&amp;&amp; !(bCustomPass &amp;&amp; !UseAsyncComputeForCustomPass(ViewFamily));
+		
+		RasterContext.RasterScheduling = bAsyncCompute ? ERasterScheduling::HardwareAndSoftwareOverlap : ERasterScheduling::HardwareThenSoftware;
+	}
+	else
+	{
+		// Force hardware-only rasterization.
+		RasterContext.RasterScheduling = ERasterScheduling::HardwareOnly;
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 래스터 스케줄러<br>&bull;&nbsp;<strong><code>CVarNaniteComputeRasterization</code></strong> = Nanite 컴퓨트 래스터 라인을 켤지 보는 콘솔 변수.<br>&bull;&nbsp;<strong><code>GetValueOnRenderThread()</code></strong> = 렌더 스레드에서 현재 설정값을 읽는다.<br>&bull;&nbsp;<strong><code>bAsyncCompute</code></strong> = 그래픽 파이프와 컴퓨트 파이프를 겹쳐 돌릴 수 있는지의 깃발.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = 조건이 전부 맞아야 통과한다는 "그리고".<br>&bull;&nbsp;<strong><code>EnumHasAnyFlags</code></strong> = 플래그 묶음 안에 원하는 기능이 하나라도 있는지 검사한다.<br>&bull;&nbsp;<strong><code>ERasterScheduling::HardwareAndSoftwareOverlap</code></strong> = 큰 박스 컨베이어와 작은 봉투 분류를 겹쳐 돌리는 모드.<br>&bull;&nbsp;<strong><code>ERasterScheduling::HardwareThenSoftware</code></strong> = 하드웨어 일을 먼저 하고, 그 다음 소프트웨어 래스터를 도는 모드.<br>&bull;&nbsp;<strong><code>ERasterScheduling::HardwareOnly</code></strong> = 작은 봉투 라인을 닫고 컨베이어만 쓰는 모드.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>CVarNaniteComputeRasterization</code>이 켜져 있으면 작은 봉투 라인을 열 수 있어. 거기에 async compute 조건까지 맞으면 <code>HardwareAndSoftwareOverlap</code>, 아니면 <code>HardwareThenSoftware</code>야. 옵션이 꺼지면 <code>HardwareOnly</code>로 고정된다. 즉 Nanite는 처음부터 HW/SW 두 라인을 스케줄러에 넣고 시작해.</div>
+<p>이 코드에서 "소프트웨어"는 CPU 루프가 아니야.</p>
+<p>이 장에서 계속 나오는 SW는 GPU 컴퓨트 파이프 쪽이야.</p>
+<p>서버로 치면 메인 게임 루프가 다 하는 게 아니라, 워커 큐를 따로 열어 병렬로 처리하는 느낌에 더 가까워.</p>
+<hr>
+</div>
+<div class="conversation"><h2>2. SW 라인의 정체 — <code>FMicropolyRasterizeCS</code></h2>
+<p>작은 봉투 라인이 실제로 어떤 프로그램으로 도는지 보자.</p>
+<p><code>FMicropolyRasterizeCS</code>는 Nanite 소프트웨어 래스터용 material shader 클래스야.</p>
+<p>컴파일 환경에 <code>SOFTWARE_RASTER</code>를 박고, 실제 엔트리 포인트는 <code>NaniteRasterizer.usf</code>의 <code>MicropolyRasterize</code>로 연결한다.</p>
+<p><strong><code>NaniteCullRaster.cpp:1737</code></strong></p>
+<div class="code-block">	static void ModifyCompilationEnvironment(const FMaterialShaderPermutationParameters&amp; Parameters, FShaderCompilerEnvironment&amp; OutEnvironment)
+	{
+		FPermutationDomain PermutationVector(Parameters.PermutationId);
+
+		FNaniteMaterialShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+
+		OutEnvironment.SetDefine(TEXT("SOFTWARE_RASTER"), 1);
+		OutEnvironment.SetDefine(TEXT("USE_ANALYTIC_DERIVATIVES"), 1);
+		OutEnvironment.SetDefine(TEXT("NANITE_MULTI_VIEW"), 1);
+
+		if (PermutationVector.Get&lt;FPixelProgrammableDim&gt;() || PermutationVector.Get&lt;FTessellationDim&gt;())
+		{
+			OutEnvironment.SetDefine(TEXT("NANITE_VERT_REUSE_BATCH"), 1);
+		}
+
+		if (PermutationVector.Get&lt;FPixelProgrammableDim&gt;() || PermutationVector.Get&lt;FTessellationDim&gt;() || PermutationVector.Get&lt;FVoxelsDim&gt;())
+		{
+			OutEnvironment.CompilerFlags.Add(CFLAG_Wave32);
+		}
+
+		if (PermutationVector.Get&lt;FTessellationDim&gt;())
+		{
+			OutEnvironment.SetDefine(TEXT("VIRTUAL_TEXTURE_FORCE_BILINEAR_FILTERING"), 1);
+		}
+
+		OutEnvironment.CompilerFlags.Add(CFLAG_CheckForDerivativeOps);
+
+		FVirtualShadowMapArray::SetShaderDefines(OutEnvironment);
+	}
+
+	void SetParameters(FRHIBatchedShaderParameters&amp; BatchedParameters, const FViewInfo&amp; View, const FMaterialRenderProxy* MaterialProxy, const FMaterial&amp; Material)
+	{
+		FMaterialShader::SetViewParameters(BatchedParameters, View, View.ViewUniformBuffer);
+		FMaterialShader::SetParameters(BatchedParameters, MaterialProxy, Material, View);
+	}
+};
+IMPLEMENT_MATERIAL_SHADER_TYPE(, FMicropolyRasterizeCS, TEXT("/Engine/Private/Nanite/NaniteRasterizer.usf"), TEXT("MicropolyRasterize"), SF_Compute);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 소프트웨어 래스터 셰이더<br>&bull;&nbsp;<strong><code>ModifyCompilationEnvironment</code></strong> = 셰이더를 컴파일할 때 켤 스위치를 넣는 함수.<br>&bull;&nbsp;<strong><code>OutEnvironment.SetDefine</code></strong> = HLSL 쪽 <code>#if</code>에서 볼 수 있는 이름을 켠다.<br>&bull;&nbsp;<strong><code>SOFTWARE_RASTER</code></strong> = 이 셰이더가 소프트웨어 래스터 길이라는 표시.<br>&bull;&nbsp;<strong><code>CFLAG_Wave32</code></strong> = GPU wave 크기 32를 요구하는 컴파일 플래그.<br>&bull;&nbsp;<strong><code>CFLAG_CheckForDerivativeOps</code></strong> = derivative 연산 사용을 검사하라는 플래그.<br>&bull;&nbsp;<strong><code>IMPLEMENT_MATERIAL_SHADER_TYPE</code></strong> = C++ 셰이더 클래스와 <code>.usf</code> 엔트리 포인트를 묶는 매크로.<br>&bull;&nbsp;<strong><code>SF_Compute</code></strong> = 이 엔트리 포인트가 컴퓨트 셰이더로 돈다는 뜻.</div>
+<p>여기서 중요한 줄은 둘이야.</p>
+<p><code>SOFTWARE_RASTER</code>가 켜지고, <code>SF_Compute</code>로 등록된다.</p>
+<p>그러니까 작은 삼각형을 "CPU에서 소프트웨어 렌더링" 하는 게 아니다.</p>
+<p>GPU 컴퓨트 셰이더가 고정 기능 래스터라이저 대신 픽셀 후보를 직접 쓰는 거야.</p>
+<p>DirectX로 치면 IA/VS/RS/PS 고정 흐름만 생각하면 안 돼.</p>
+<p>Compute Shader가 UAV에 직접 쓰는 길을 같이 떠올려야 한다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>3. 큰 흐름 — 컬링하고 바로 래스터한다</h2>
+<p>이제 물류센터 전체 흐름을 보자.</p>
+<p><code>FRenderer</code>는 먼저 래스터 패스에 쓸 셰이더와 자료를 준비하고, 그 다음 MainPass에서 컬링을 건 뒤 곧바로 래스터 패스를 붙인다.</p>
+<p>two-pass occlusion이 켜져 있으면 PostPass에서도 같은 조합이 한 번 더 돈다.</p>
+<p>아래 토막은 MainPass의 핵심이야.</p>
+<p><strong><code>NaniteCullRaster.cpp:6568</code></strong></p>
+<div class="code-block">	// No Occlusion Pass / Occlusion Main Pass
+	{
+		RDG_EVENT_SCOPE_CONDITIONAL(GraphBuilder, !Configuration.bTwoPassOcclusion, "NoOcclusionPass");
+		RDG_EVENT_SCOPE_CONDITIONAL(GraphBuilder, Configuration.bTwoPassOcclusion, "MainPass");
+
+		AddPass_InstanceHierarchyAndClusterCull( Configuration.bTwoPassOcclusion ? CULLING_PASS_OCCLUSION_MAIN : CULLING_PASS_NO_OCCLUSION );
+
+		MainPassBinning = AddPass_Rasterize(
+			DispatchContext,
+			SafeMainRasterizeArgsSWHW,
+			VisiblePatches,
+			VisiblePatchesMainArgs,
+			SplitWorkQueue,
+			OccludedPatches,
+			true
+		);
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — MainPass 연결<br>&bull;&nbsp;<strong><code>RDG_EVENT_SCOPE_CONDITIONAL</code></strong> = RDG 이벤트 이름을 조건에 따라 붙이는 디버그 표식.<br>&bull;&nbsp;<strong><code>Configuration.bTwoPassOcclusion</code></strong> = 오클루전을 두 번에 나눠 검사할지 보는 깃발.<br>&bull;&nbsp;<strong><code>AddPass_InstanceHierarchyAndClusterCull</code></strong> = 인스턴스, 계층 노드, 클러스터 후보를 줄이는 GPU 패스를 추가한다.<br>&bull;&nbsp;<strong><code>CULLING_PASS_OCCLUSION_MAIN</code></strong> = two-pass일 때 첫 번째 오클루전 컬링 패스.<br>&bull;&nbsp;<strong><code>CULLING_PASS_NO_OCCLUSION</code></strong> = previous HZB 없이 한 번에 가는 컬링 패스.<br>&bull;&nbsp;<strong><code>AddPass_Rasterize</code></strong> = visible 클러스터를 HW/SW 래스터 패스로 보내는 함수.<br>&bull;&nbsp;<strong><code>SafeMainRasterizeArgsSWHW</code></strong> = SW/HW 래스터 인자를 안전하게 정리한 버퍼.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> MainPass는 <code>AddPass_InstanceHierarchyAndClusterCull</code>로 안 보이는 상자를 버리고, 바로 <code>AddPass_Rasterize</code>로 남은 상자를 출고 라인에 올려. 컬링과 래스터가 따로 떨어진 장식이 아니라, RDG 그래프에서 바로 이어지는 두 단계야.</div>
+<p><code>SafeMainRasterizeArgsSWHW</code>라는 이름도 잘 봐.</p>
+<p>끝의 <code>SWHW</code>가 이번 장의 핵심 힌트야.</p>
+<p>하나의 패스 결과가 소프트웨어 래스터용 인자와 하드웨어 래스터용 인자를 같이 들고 간다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>4. visible 결과판 — SW는 앞에서, HW는 뒤에서 쌓는다</h2>
+<p>컬링 셰이더가 "이 클러스터는 보인다"라고 결정하면, 그 클러스터를 visible 목록에 넣어야 해.</p>
+<p>그런데 이 목록은 두 팀이 같이 쓴다.</p>
+<p>하드웨어 래스터 팀과 소프트웨어 래스터 팀.</p>
+<p>언리얼은 같은 <code>OutVisibleClustersSWHW</code> 버퍼를 쓰되, HW 클러스터는 뒤쪽에서, SW 클러스터는 앞쪽에서 채운다.</p>
+<p><strong><code>NaniteClusterCulling.usf:709</code></strong></p>
+<div class="code-block">	void EmitVisibleCluster(bool bUseHWRaster, uint2 TotalPrevDrawClusters, uint HWClusterCounterIndex, FVisibleCluster VisibleCluster)
+	{
+		if (bUseHWRaster)
+		{
+			uint ClusterOffsetHW = 0;
+			WaveInterlockedAddScalar_(VisibleClustersArgsSWHW[HWClusterCounterIndex], 1, ClusterOffsetHW);
+
+			uint VisibleClusterOffsetHW = ClusterOffsetHW;
+			VisibleClusterOffsetHW += TotalPrevDrawClusters.y;
+#if CULLING_PASS == CULLING_PASS_OCCLUSION_POST
+			VisibleClusterOffsetHW += OffsetClustersArgsSWHW[HWClusterCounterIndex];
+#endif
+			if (VisibleClusterOffsetHW &lt; MaxVisibleClusters)
+			{
+				StoreVisibleCluster(OutVisibleClustersSWHW, (MaxVisibleClusters - 1) - VisibleClusterOffsetHW, VisibleCluster, VIRTUAL_TEXTURE_TARGET);	// HW clusters written from the top
+			}
+		}
+		else
+		{
+			uint ClusterOffsetSW = 0;
+			WaveInterlockedAddScalar_(VisibleClustersArgsSWHW[0], 1, ClusterOffsetSW);
+
+			uint VisibleClusterOffsetSW = ClusterOffsetSW;
+			VisibleClusterOffsetSW += TotalPrevDrawClusters.x;
+#if CULLING_PASS == CULLING_PASS_OCCLUSION_POST
+			VisibleClusterOffsetSW += OffsetClustersArgsSWHW[0];
+#endif
+			if (VisibleClusterOffsetSW &lt; MaxVisibleClusters)
+			{
+				StoreVisibleCluster(OutVisibleClustersSWHW, VisibleClusterOffsetSW, VisibleCluster, VIRTUAL_TEXTURE_TARGET);	// SW clusters written from the bottom
+			}
+		}	
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — SW/HW 결과판<br>&bull;&nbsp;<strong><code>EmitVisibleCluster</code></strong> = 보이는 클러스터를 결과판에 넣는 함수.<br>&bull;&nbsp;<strong><code>bUseHWRaster</code></strong> = 이 클러스터를 하드웨어 래스터 길로 보낼지의 깃발.<br>&bull;&nbsp;<strong><code>WaveInterlockedAddScalar_</code></strong> = GPU 스레드들이 동시에 카운터를 올려도 충돌하지 않게 하는 원자 덧셈.<br>&bull;&nbsp;<strong><code>VisibleClustersArgsSWHW</code></strong> = SW/HW 각각 몇 개가 쌓였는지 세는 인자 버퍼.<br>&bull;&nbsp;<strong><code>HWClusterCounterIndex</code></strong> = HW 쪽 카운터가 있는 칸.<br>&bull;&nbsp;<strong><code>StoreVisibleCluster</code></strong> = visible 클러스터 정보를 버퍼에 쓴다.<br>&bull;&nbsp;<strong><code>top</code> / <code>bottom</code></strong> = 주석 그대로, HW는 위쪽 끝에서, SW는 아래쪽 시작에서 쌓는다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 하드웨어 팀은 <code>MaxVisibleClusters - 1</code> 쪽에서 내려오고, 소프트웨어 팀은 0번 쪽에서 올라가. 둘이 같은 창고를 쓰지만 서로 다른 문으로 들어와서 충돌을 줄이는 거야. CPU가 배열을 정리해서 넘기는 게 아니라, GPU wave가 카운터를 올리고 자기 자리를 직접 잡는다.</div>
+<p>서버식으로 보면 atomic counter로 결과 슬롯을 잡는 구조야.</p>
+<p>락 하나 잡고 전체 배열을 정렬하는 그림이 아니다.</p>
+<p>그래서 Nanite의 컬링 결과는 그냥 "보이는 것 목록"이 아니라, 이미 다음 래스터 라인까지 생각한 목록이야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>5. 래스터 패스 — 큰 박스는 HW, 작은 봉투는 SW</h2>
+<p>이제 visible 결과판을 실제 출고 라인으로 보낸다.</p>
+<p><code>AddPass_Rasterize</code> 안에는 하드웨어 래스터 패스와 소프트웨어 래스터 패스가 둘 다 보인다.</p>
+<p>하드웨어는 <code>DispatchHW</code>, 소프트웨어는 <code>DispatchSW</code>야.</p>
+<p>스케줄이 <code>HardwareOnly</code>가 아니면 SW triangle pass가 RDG에 추가된다.</p>
+<p><strong><code>NaniteCullRaster.cpp:5781</code></strong></p>
+<div class="code-block">	FRDGPass* HWTrianglesPass = GraphBuilder.AddPass(
+		RDG_EVENT_NAME("HW Rasterize (Triangles)"),
+		ClusterPassParameters,
+		ERDGPassFlags::Raster | ERDGPassFlags::SkipRenderPass,
+		[ClusterPassParameters, &amp;DispatchContext, ViewRect, &amp;SceneView = SceneView, bMainPass, HardwarePath, PSOCollectorIndex, RenderFlags = RenderFlags](FRDGAsyncTask, FRHICommandList&amp; RHICmdList)
+		{
+			DispatchContext.DispatchHW(
+				RHICmdList,
+				DispatchContext.Dispatches_HW_Triangles,
+				SceneView,
+				ViewRect,
+				HardwarePath,
+				PSOCollectorIndex,
+				*ClusterPassParameters
+			);
+		}
+	);
+
+	GraphBuilder.SetPassWorkload(HWTrianglesPass, PassWorkload);
+
+	if (Scheduling != ERasterScheduling::HardwareOnly)
+	{
+		FRDGPass* SWTrianglesPass = GraphBuilder.AddPass(
+			RDG_EVENT_NAME("SW Rasterize (Triangles)"),
+			ClusterPassParameters,
+			AsyncComputeFlag,
+			[ClusterPassParameters, &amp;DispatchContext, &amp;SceneView = SceneView, RenderFlags = RenderFlags, PSOCollectorIndex](FRDGAsyncTask, FRHIComputeCommandList&amp; RHICmdList)
+			{
+				DispatchContext.DispatchSW(
+					RHICmdList,
+					DispatchContext.Dispatches_SW_Triangles,
+					SceneView,
+					PSOCollectorIndex,
+					*ClusterPassParameters,
+					false /* Patches */
+				);
+			}
+		);
+
+		GraphBuilder.SetPassWorkload(SWTrianglesPass, PassWorkload);
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 래스터 패스 두 줄<br>&bull;&nbsp;<strong><code>GraphBuilder.AddPass</code></strong> = RDG 그래프에 실행할 작업 하나를 올린다.<br>&bull;&nbsp;<strong><code>RDG_EVENT_NAME("HW Rasterize (Triangles)")</code></strong> = GPU 디버거에서 보일 하드웨어 래스터 패스 이름.<br>&bull;&nbsp;<strong><code>ERDGPassFlags::Raster</code></strong> = 그래픽 래스터 파이프를 쓰는 패스라는 표시.<br>&bull;&nbsp;<strong><code>DispatchContext.DispatchHW</code></strong> = HW 래스터 목록을 실제 draw/mesh shader 길로 보낸다.<br>&bull;&nbsp;<strong><code>Scheduling != ERasterScheduling::HardwareOnly</code></strong> = 하드웨어 전용이 아니면 SW 패스도 추가한다.<br>&bull;&nbsp;<strong><code>AsyncComputeFlag</code></strong> = SW 패스를 async compute로 돌릴지, 일반 compute로 돌릴지 정한 플래그.<br>&bull;&nbsp;<strong><code>FRHIComputeCommandList</code></strong> = 컴퓨트 명령을 기록하는 RHI 커맨드 리스트.<br>&bull;&nbsp;<strong><code>DispatchContext.DispatchSW</code></strong> = SW 래스터 목록을 컴퓨트 셰이더 길로 보낸다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 같은 <code>ClusterPassParameters</code>를 들고 HW 패스와 SW 패스가 나뉜다. HW는 <code>ERDGPassFlags::Raster</code>와 <code>DispatchHW</code>, SW는 <code>AsyncComputeFlag</code>와 <code>DispatchSW</code>야. 물류센터로 치면 큰 박스 컨베이어와 작은 봉투 분류대가 같은 출고 지시서를 보고 각자 자기 줄을 처리하는 장면이다.</div>
+<p>여기서 "작은 삼각형"을 누가 작은지 판단했냐는 앞 단계의 일이다.</p>
+<p>컬링/비닝 셰이더가 visible 목록과 인자 버퍼를 만들어 놨고, <code>AddPass_Rasterize</code>는 그 결과를 실제 실행 라인에 꽂는다.</p>
+<p>그래서 Nanite를 읽을 때는 <code>Cull</code>과 <code>Raster</code>를 따로 외우면 안 돼.</p>
+<p>컬링 결과가 래스터 인자로 바로 이어진다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>6. SW 라인의 마지막 — 간접 컴퓨트 디스패치</h2>
+<p>마지막으로 <code>DispatchSW</code> 안쪽을 보자.</p>
+<p>여기서 진짜로 컴퓨트 셰이더 RHI를 잡고, 파라미터를 묶고, indirect compute dispatch를 날린다.</p>
+<p>이게 "작은 삼각형은 컴퓨트 셰이더로 직접 칠한다"의 C++ 쪽 끝단이야.</p>
+<p><strong><code>NaniteCullRaster.cpp:3578</code></strong></p>
+<div class="code-block">						Parameters.PassData = FUintVector4(RasterizerPass.RasterBin, 0u, 0u, 0u);
+
+						const TShaderRef&lt;FMicropolyRasterizeCS&gt;* ComputeShader = bPatches ? &amp;RasterizerPass.PatchComputeShader : &amp;RasterizerPass.ClusterComputeShader;
+
+						FRHIBuffer* IndirectArgsBuffer = Parameters.IndirectArgs-&gt;GetIndirectRHICallBuffer();
+						FRHIComputeShader* ShaderRHI = ComputeShader-&gt;GetComputeShader();
+
+						// TODO: Implement support for testing precache and skipping if needed
+
+						FComputeShaderUtils::ValidateIndirectArgsBuffer(IndirectArgsBuffer-&gt;GetSize(), RasterizerPass.IndirectOffset);
+
+						SetComputePipelineState(RHICmdList, ShaderRHI);
+
+					#if PSO_PRECACHING_VALIDATE
+						EPSOPrecacheResult PSOPrecacheResult = PipelineStateCache::CheckPipelineStateInCache(ShaderRHI);
+						PSOCollectorStats::CheckComputePipelineStateInCache(*ShaderRHI, PSOPrecacheResult, RasterizerPass.ComputeMaterialProxy, PSOCollectorIndex);
+					#endif
+
+						if (GRHISupportsShaderRootConstants)
+						{
+							RHICmdList.SetComputeShaderRootConstants(Parameters.PassData);
+						}
+
+						SetShaderParametersMixedCS(
+							RHICmdList,
+							*ComputeShader,
+							Parameters,
+							ViewInfo,
+							RasterizerPass.ComputeMaterialProxy,
+							*RasterizerPass.ComputeMaterial
+						);
+
+						RHICmdList.DispatchIndirectComputeShader(IndirectArgsBuffer, RasterizerPass.IndirectOffset);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 컴퓨트 디스패치 끝단<br>&bull;&nbsp;<strong><code>Parameters.PassData</code></strong> = 이번 패스가 어떤 raster bin을 처리하는지 넘기는 작은 상자.<br>&bull;&nbsp;<strong><code>TShaderRef&lt;FMicropolyRasterizeCS&gt;</code></strong> = 소프트웨어 래스터 컴퓨트 셰이더를 가리키는 참조.<br>&bull;&nbsp;<strong><code>bPatches ? ... : ...</code></strong> = 패치 래스터면 patch shader, 아니면 cluster shader를 고르는 짧은 if.<br>&bull;&nbsp;<strong><code>IndirectArgsBuffer</code></strong> = GPU가 만들어 둔 실행 인자 버퍼. 몇 그룹을 돌릴지 여기에 있다.<br>&bull;&nbsp;<strong><code>FRHIComputeShader</code></strong> = RHI가 보는 컴퓨트 셰이더 핸들.<br>&bull;&nbsp;<strong><code>SetComputePipelineState</code></strong> = 지금부터 이 컴퓨트 셰이더를 실행할 준비를 한다.<br>&bull;&nbsp;<strong><code>SetShaderParametersMixedCS</code></strong> = 셰이더가 읽을 버퍼, 머티리얼, 뷰 정보를 바인딩한다.<br>&bull;&nbsp;<strong><code>DispatchIndirectComputeShader</code></strong> = CPU가 그룹 수를 직접 넣지 않고, GPU 버퍼에 적힌 인자로 컴퓨트 셰이더를 실행한다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>FMicropolyRasterizeCS</code>를 고르고, <code>IndirectArgsBuffer</code>를 꺼내고, compute pipeline을 맞춘 뒤, <code>DispatchIndirectComputeShader</code>로 실행한다. 그룹 수는 CPU가 다시 세지 않아. 앞 단계 GPU 컬링/비닝이 써 둔 인자를 보고 GPU가 자기 일을 이어서 한다.</div>
+<p>이 줄이 중요해.</p>
+<p>CPU가 "클러스터가 183개니까 x=3 그룹" 하고 계산해서 직접 넣는 그림이 아니야.</p>
+<p>GPU가 만든 indirect args를 GPU가 다시 소비한다.</p>
+<p>서버로 치면 워커가 만든 큐 길이를 메인 스레드가 매번 풀스캔하지 않고, 다음 워커 단계가 그 큐 메타데이터를 그대로 읽는 구조야.</p>
+<p>그래서 Nanite는 GPU-driven이라고 부를 만해.</p>
+<hr>
+</div>
+<div class="conversation"><h2>7. 소프트웨어 래스터가 실제로 칠하는 방식</h2>
+<p><code>FMicropolyRasterizeCS</code>의 엔트리 포인트는 <code>NaniteRasterizer.usf</code>의 <code>MicropolyRasterize</code>야.</p>
+<p>그 안쪽에서는 클러스터 래스터와 패치 래스터로 갈라지고, 클러스터 쪽은 삼각형을 만들고 <code>RasterizeTri_Adaptive</code> 같은 소프트웨어 래스터 함수를 부른다.</p>
+<p>이 장에서는 C++ 경로가 목표라 셰이더 내부를 깊게 파지는 않을게.</p>
+<p>그래도 감은 잡자.</p>
+<p>고정 기능 rasterizer가 삼각형을 픽셀로 바꾸는 대신, compute shader 코드가 삼각형 범위를 훑고 UAV에 depth/visibility 값을 써 넣는 구조야.</p>
+<p>물류센터 비유로 돌아가면 이렇다.</p>
+<p>컨베이어 벨트는 박스를 자동으로 스캔해서 출고한다.</p>
+<p>작은 봉투 라인은 직원들이 봉투 하나씩 집어서 칸에 직접 꽂는다.</p>
+<p>둘 다 GPU 안에서 일하지만, 쓰는 길이 다르다.</p>
+<p>Nanite는 이 두 길을 같은 프레임 안에 같이 쓴다.</p>
+</div>
+<div class="conversation"><h2>콜/데이터 흐름 한눈에</h2>
+<div class="code-block">FRenderer::Draw / Raster 준비
+  -&gt; InitRasterContext                         (NaniteCullRaster.cpp:6121)
+       RasterScheduling = HardwareOnly / HardwareThenSoftware / HardwareAndSoftwareOverlap
+
+  -&gt; PrepareRasterizerPasses                  (NaniteCullRaster.cpp:6543)
+       Raster bin별 HW shader / SW compute shader 준비
+
+  -&gt; AddPass_InstanceHierarchyAndClusterCull  (NaniteCullRaster.cpp:6573)
+       InstanceCull -&gt; NodeCull -&gt; ClusterCull
+       EmitVisibleCluster                     (NaniteClusterCulling.usf:709)
+          SW cluster: OutVisibleClustersSWHW 앞쪽
+          HW cluster: OutVisibleClustersSWHW 뒤쪽
+
+  -&gt; AddPass_Rasterize                        (NaniteCullRaster.cpp:6575)
+       HWTrianglesPass -&gt; DispatchHW
+       SWTrianglesPass -&gt; DispatchSW
+
+  -&gt; DispatchSW                               (NaniteCullRaster.cpp:3578)
+       FMicropolyRasterizeCS
+       DispatchIndirectComputeShader
+
+  -&gt; NaniteRasterizer.usf / MicropolyRasterize
+       Cluster/Patch를 compute shader로 rasterize</div>
+<p>이 흐름에서 CPU가 하는 일은 "물류센터 설비를 RDG에 등록"하는 쪽이야.</p>
+<p>어떤 상자가 보이는지, 몇 개를 어느 줄로 보낼지는 GPU 버퍼와 셰이더가 계속 이어받는다.</p>
+</div>
+<div class="conversation"><h2>우리 서버·DirectX 랑 비교</h2>
+<p>우리 서버의 AOI와 비교하면 꽤 닮았어.</p>
+<p>AOI 후보를 줄이고, 보낼 패킷을 큐에 쌓고, 큐 길이에 따라 워커가 처리하지.</p>
+<p>Nanite도 인스턴스/노드/클러스터 후보를 줄이고, visible 클러스터를 <code>OutVisibleClustersSWHW</code>에 쌓고, SW/HW 인자 버퍼로 다음 패스를 돌린다.</p>
+<p>차이는 실행 위치야.</p>
+<p>서버는 CPU 스레드와 락, 큐가 중심이지만, Nanite는 GPU wave, UAV, indirect args가 중심이야.</p>
+<p>DirectX 기본 파이프라인과 비교하면 더 선명해.</p>
+<p>전통 흐름은 draw call이 정점 셰이더를 지나 고정 기능 래스터라이저로 간다.</p>
+<p>Nanite HW 라인은 그 감각과 가까워.</p>
+<p>하지만 SW 라인은 compute shader가 직접 raster work를 먹는다.</p>
+<p>그래서 <code>ERDGPassFlags::Raster</code>와 <code>FRHIComputeCommandList</code>가 한 함수 안에 같이 보이는 거야.</p>
+<p>큰 박스 컨베이어와 작은 봉투 분류대가 같은 출고판을 쓰는 셈이지.</p>
+</div>
+<div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
+<ol><li>Nanite의 "software raster"는 CPU 렌더러가 아니라 GPU 컴퓨트 셰이더 길이다.</li><li><code>InitRasterContext</code>가 HW only, HW then SW, HW/SW overlap 스케줄을 정한다.</li><li>컬링 셰이더는 visible 클러스터를 <code>OutVisibleClustersSWHW</code>에 SW/HW 양쪽으로 나눠 쌓는다.</li><li><code>AddPass_Rasterize</code>는 HW triangle pass와 SW triangle pass를 RDG에 같이 올린다.</li><li>SW 패스 끝은 <code>FMicropolyRasterizeCS</code>와 <code>DispatchIndirectComputeShader</code>다.</li></ol>
+<p>이 다섯 개면 이번 장은 통과야.</p>
+<p>작은 삼각형을 왜 따로 보내는지, 그 길이 어디서 켜지고 어디서 실행되는지 설명할 수 있어야 해.</p>
+<hr>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>Nanite는 GPU에서 visible 클러스터를 고른 뒤, 큰 삼각형은 하드웨어 래스터 길로, 작은 삼각형은 <code>FMicropolyRasterizeCS</code> 컴퓨트 셰이더 길로 보내 같은 visibility/depth 결과판을 채우는 GPU 주도 물류센터다.</strong></p>
+<hr>
+<div class="note">막히면 → <a class="xref" href="ch-28-nanite-overview.html">nanite-overview</a> · <a class="xref" href="ch-11-rdg.html">rdg</a> · <a class="xref" href="ch-08-shader-basics.html">shader-basics</a> · <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a><br>다음 → <a class="xref" href="ch-30-lumen-overview.html">lumen-overview</a></div></div><nav class="booknav"><a href="ch-28-nanite-overview.html"><span class="lbl">← 이전</span>Nanite — 삼각형 수 제한을 깨다</a><a class="nx" href="ch-30-lumen-overview.html"><span class="lbl">다음 →</span>Lumen — 실시간 전역 조명</a></nav></div></body></html>

@@ -1,0 +1,264 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PrimitiveSceneProxy — 게임↔렌더 경계 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>PrimitiveSceneProxy — 게임↔렌더 경계</h1><p>언리얼 렌더링 · 13 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "<code>UPrimitiveComponent</code> 원본을 렌더 스레드가 직접 만지지 않고, <code>FPrimitiveSceneProxy</code>라는 렌더용 대리 사본을 넘기는 이유"가 잡힌다.</div>
+<hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>서버를 짜봤으면 이 감각은 이미 있어. IOCP 워커가 받은 패킷을 바로 게임 객체 여기저기에 꽂지 않고, 게임 로직 스레드로 넘길 작은 메시지나 스냅샷을 만들잖아. 락 없이 원본 객체를 여러 스레드가 동시에 만지면 언젠가 터지니까.</p>
+<p>렌더링도 똑같아. 게임 스레드에는 <code>UPrimitiveComponent</code>가 있어. 이건 액터 소유, 월드 소속, UObject 생명주기, 에디터 상태, 게임 로직 상태까지 품고 있는 원본이야. 반면 렌더 스레드는 매 프레임 컬링하고, 메시를 모으고, GPU 리소스를 건드려야 해. 렌더 스레드가 그때마다 <code>UPrimitiveComponent</code> 원본을 뒤지면 어떻게 될까? 한쪽에서는 컴포넌트 위치를 바꾸고, 다른 쪽에서는 예전 bounds로 그림자를 만들고, 또 다른 순간에는 컴포넌트가 unregister 되면서 포인터가 풀릴 수 있어. 이건 서버에서 유저 객체를 워커 스레드와 게임 스레드가 동시에 만지는 거랑 같은 사고야.</p>
+<p>그래서 언리얼도 같은 문제를 만났고, 답이 <code>FPrimitiveSceneProxy</code>야. 이건 게임 객체 그 자체가 아니라 <strong>렌더 스레드가 봐도 되는 그림자 사본</strong>이야. 게임 스레드가 원본에서 렌더에 필요한 값을 뽑아 프록시를 만들고, 렌더 스레드는 그 프록시와 <code>FPrimitiveSceneInfo</code>만 보고 일한다. 원본 배우를 무대감독 책상에 앉히는 게 아니라, 공연용 대리 카드를 만들어 넘기는 거야.</p>
+<p>지금 이걸 배우는 이유도 분명해. 앞 장 <a class="xref" href="ch-12-fscene.html">fscene</a>에서 <code>FScene</code>이라는 렌더러 장부를 봤어. 이번 장은 그 장부에 들어가는 핵심 인물, <code>FPrimitiveSceneProxy</code>가 어디서 만들어지고, 어떻게 렌더 스레드로 넘어가고, 갱신과 삭제 때 어떤 안전선이 지켜지는지 보는 장이야. 다음 <a class="xref" href="ch-14-view-family.html">view-family</a>와 <a class="xref" href="ch-15-frustum-culling.html">frustum-culling</a>은 이 프록시들이 모인 뒤 카메라가 무엇을 볼지 고르는 이야기로 이어진다.</p>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 배우 원본 대신 무대감독용 대리 카드</h2>
+<p>공연장을 떠올려봐. 배우 원본은 대기실에 있어. 의상 갈아입고, 물 마시고, 휴대폰 보고, 감독이랑 얘기하고, 공연 중에도 여러 사람이 계속 상태를 바꿔.</p>
+<p>그런데 무대감독은 공연 중에 배우 원본 전체가 필요하지 않아. 필요한 건 딱 이런 대리 카드야.</p>
+<ul><li>무대에 올라오는가</li><li>어느 위치에 서는가</li><li>어떤 의상과 소품을 쓰는가</li><li>조명을 받는가</li><li>그림자를 만들까</li><li>무대에서 내려갈 때 어떤 자원을 치워야 하나</li></ul>
+<p>이 대리 카드가 <code>FPrimitiveSceneProxy</code>라고 보면 돼. 배우 원본이 <code>UPrimitiveComponent</code>라면, 프록시는 무대감독, 즉 렌더 스레드가 들고 보는 공연용 카드야.</p>
+<p>중요한 건 카드가 원본과 같은 사람이 아니라는 점이야. 카드는 원본에서 뽑은 렌더용 정보만 담아. 그래서 무대감독은 대기실을 뒤지지 않아도 공연을 진행할 수 있고, 대기실에서 배우 상태가 바뀌어도 정해진 통로로 새 카드나 수정 메모만 받으면 된다.</p>
+<p>이번 장의 질문은 하나야. <strong>언리얼은 이 대리 카드를 어느 순간 만들고, 어느 순간부터 렌더 스레드 소유로 넘길까?</strong></p>
+<div class="note"><strong>소스 위치</strong> (아래 코드는 전부 이 클론의 실제 파일에서 그대로 뽑음)<br>&bull;&nbsp;등록·갱신·해제: <code>Engine/Source/Runtime/Renderer/Private/RendererScene.cpp</code><br>&bull;&nbsp;렌더 장부 항목: <code>Engine/Source/Runtime/Renderer/Public/PrimitiveSceneInfo.h</code></div>
+<hr>
+</div>
+<div class="conversation"><h2>1. 프록시는 게임 스레드에서 태어난다</h2>
+<p>프리미티브가 씬에 들어올 때 시작점은 <code>FScene::BatchAddPrimitivesInternal</code>이야. 여기는 이름 그대로 여러 프리미티브를 한 번에 장부에 넣는 길목이지.</p>
+<p>처음 하는 일은 원본 <code>Primitive</code>에서 <code>FPrimitiveSceneProxy</code>를 얻는 거야. 컴포넌트 인터페이스가 있으면 <code>CreateSceneProxy()</code>를 호출하고, 이미 만들어진 경로라면 <code>GetSceneProxy()</code>를 가져온다. 프록시가 없으면 렌더러 입장에서는 볼 일이 없는 물건이라 건너뛰어.</p>
+<p><strong><code>RendererScene.cpp:1402</code></strong></p>
+<div class="code-block">		FPrimitiveSceneProxy* PrimitiveSceneProxy  = nullptr;
+
+		if (Primitive-&gt;GetPrimitiveComponentInterface())
+		{
+			checkf(!Primitive-&gt;GetSceneProxy(), TEXT("Primitive has already been added to the scene!"));
+			PrimitiveSceneProxy = Primitive-&gt;GetPrimitiveComponentInterface()-&gt;CreateSceneProxy();
+			check(SceneData.SceneProxy == PrimitiveSceneProxy); // CreateSceneProxy has access to the shared SceneData and should set it properly
+		}
+		else
+		{
+			check(!Primitive-&gt;ShouldRecreateProxyOnUpdateTransform()); // recreating proxies when updating the transform requires a IPrimitiveComponentInterface
+			PrimitiveSceneProxy = Primitive-&gt;GetSceneProxy();
+		}
+	
+		if(!PrimitiveSceneProxy)
+		{
+			// Primitives which don't have a proxy are irrelevant to the scene manager.
+			continue;
+		}
+
+		// Create the primitive scene info.
+		FPrimitiveSceneInfo* PrimitiveSceneInfo = new FPrimitiveSceneInfo(Primitive, this);
+		PrimitiveSceneProxy-&gt;PrimitiveSceneInfo = PrimitiveSceneInfo;
+
+		// Cache the primitives initial transform.
+		FMatrix RenderMatrix = Primitive-&gt;GetRenderMatrix();
+		FVector AttachmentRootPosition = Primitive-&gt;GetActorPositionForRenderer();
+		FBoxSphereBounds WorldBounds = Primitive-&gt;Bounds;
+
+		CheckAndSanitizePrimitiveBounds(WorldBounds, Primitive);
+
+		CreateCommands.Emplace(
+			PrimitiveSceneInfo,
+			PrimitiveSceneProxy,
+			// If this primitive has a simulated previous transform, ensure that the velocity data for the scene representation is correct.
+			FMotionVectorSimulation::Get().GetPreviousTransform(ToUObject(Primitive)),
+			RenderMatrix,
+			WorldBounds,
+			AttachmentRootPosition,
+			Primitive-&gt;GetLocalBounds()
+		);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 프록시 생성과 첫 스냅샷<br>&bull;&nbsp;<strong><code>FPrimitiveSceneProxy*</code></strong> = 렌더용 대리 카드를 가리키는 포인터야. 실물 원본 컴포넌트가 아니라 렌더용 카드 주소야.<br>&bull;&nbsp;<strong><code>Primitive-&gt;GetPrimitiveComponentInterface()</code></strong> = 원본 프리미티브에게 "컴포넌트 인터페이스 있니?" 하고 물어보는 호출이야.<br>&bull;&nbsp;<strong><code>CreateSceneProxy()</code></strong> = 렌더 스레드가 볼 대리 카드를 새로 만드는 함수야.<br>&bull;&nbsp;<strong><code>checkf</code> / <code>check</code></strong> = 조건이 깨지면 개발 중 바로 터뜨리는 안전 검사야.<br>&bull;&nbsp;<strong><code>if(!PrimitiveSceneProxy)</code></strong> = 대리 카드가 없으면 씬 매니저가 볼 일이 없다는 뜻이야. <code>!</code>는 참거짓을 뒤집어.<br>&bull;&nbsp;<strong><code>new FPrimitiveSceneInfo(Primitive, this)</code></strong> = 렌더 장부의 한 줄을 새로 만든다. <code>this</code>는 지금 이 <code>FScene</code>이야.<br>&bull;&nbsp;<strong><code>PrimitiveSceneProxy-&gt;PrimitiveSceneInfo</code></strong> = 대리 카드가 자기 장부 줄을 알게 연결하는 화살표야.<br>&bull;&nbsp;<strong><code>FMatrix RenderMatrix</code></strong> = 렌더용 위치·회전·스케일 표야.<br>&bull;&nbsp;<strong><code>FBoxSphereBounds</code></strong> = 박스와 구를 합친 빠른 범위 정보야. 컬링할 때 먼저 보는 울타리라고 생각하면 돼.<br>&bull;&nbsp;<strong><code>CreateCommands.Emplace(...)</code></strong> = 나중에 렌더 스레드로 보낼 등록 명령 상자에 값을 바로 넣는 거야.</div>
+<p>여기서 첫 번째 핵심이 보여. <code>UPrimitiveComponent</code> 원본을 그대로 렌더 스레드에 던지지 않아. 먼저 <code>PrimitiveSceneProxy</code>를 만들고, 그 프록시에 대응하는 <code>PrimitiveSceneInfo</code>를 만들고, 초기 <code>RenderMatrix</code>, <code>WorldBounds</code>, <code>LocalBounds</code> 같은 값도 같이 뽑아 <code>CreateCommands</code>에 담아.</p>
+<p>공연장 비유로 읽으면 이렇다. 배우 원본을 무대감독에게 보내지 않고, 배우의 공연용 대리 카드와 첫 위치표를 만든 다음, "이 카드 등록해줘"라는 봉투에 넣는 거야.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>CreateSceneProxy()</code>는 배우 원본에서 대리 카드를 만들고 → <code>new FPrimitiveSceneInfo</code>는 무대감독 장부 한 줄을 만들고 → <code>PrimitiveSceneProxy-&gt;PrimitiveSceneInfo</code>는 카드와 장부 줄을 묶고 → <code>CreateCommands.Emplace</code>는 렌더 스레드로 넘길 봉투를 만든다. 아까는 포인터 덩어리였는데 이제 "원본 대신 카드 만들기"로 읽히지?</div>
+</div>
+<div class="conversation"><h2>2. 경계선은 <code>ENQUEUE_RENDER_COMMAND</code>다</h2>
+<p>방금 만든 <code>CreateCommands</code>는 아직 게임 스레드 쪽 준비물이야. 렌더 스레드에서 GPU 리소스를 만들고 씬 장부에 꽂으려면 명령 큐를 타야 해. 그 경계선이 <code>ENQUEUE_RENDER_COMMAND</code>야.</p>
+<p><strong><code>RendererScene.cpp:1459</code></strong></p>
+<div class="code-block">	if (!CreateCommands.IsEmpty())
+	{
+		// Must enqueue RT commands to ensure SetTransform &amp; CreateRenderThreadResources are executed in-order.
+		ENQUEUE_RENDER_COMMAND(AddPrimitiveCommand)(
+			[this, CreateCommands = MoveTemp(CreateCommands)](FRHICommandListBase&amp; RHICmdList)
+		{
+			for (const FCreateCommand&amp; Command : CreateCommands)
+			{
+				FScopeCycleCounter Context(Command.PrimitiveSceneProxy-&gt;GetStatId());
+				Command.PrimitiveSceneProxy-&gt;SetTransform(RHICmdList, Command.RenderMatrix, Command.WorldBounds, Command.LocalBounds, Command.AttachmentRootPosition);
+				Command.PrimitiveSceneProxy-&gt;CreateRenderThreadResources(RHICmdList);
+
+				AddPrimitiveSceneInfo_RenderThread(Command.PrimitiveSceneInfo, Command.PreviousTransform);
+			}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 렌더 스레드로 넘기는 문<br>&bull;&nbsp;<strong><code>CreateCommands.IsEmpty()</code></strong> = 보낼 등록 명령이 하나도 없는지 확인해.<br>&bull;&nbsp;<strong><code>ENQUEUE_RENDER_COMMAND(AddPrimitiveCommand)</code></strong> = 렌더 스레드가 나중에 실행할 명령을 큐에 넣는 언리얼 매크로야.<br>&bull;&nbsp;<strong><code>[this, CreateCommands = MoveTemp(CreateCommands)]</code></strong> = 람다가 쓸 값을 잡아가는 부분이야. <code>MoveTemp</code>는 봉투 내용물을 복사하지 말고 옮겨 담는 느낌이야.<br>&bull;&nbsp;<strong><code>FRHICommandListBase&amp; RHICmdList</code></strong> = 렌더 스레드 쪽에서 GPU 명령을 쌓을 때 쓰는 명령 리스트야. <code>&amp;</code>는 참조, 즉 같은 물건을 별명으로 받는다는 뜻이야.<br>&bull;&nbsp;<strong><code>FScopeCycleCounter</code></strong> = 이 구간 시간이 얼마나 걸리는지 재는 계측 도구야.<br>&bull;&nbsp;<strong><code>SetTransform(...)</code></strong> = 대리 카드에 렌더용 위치와 bounds를 박는 호출이야.<br>&bull;&nbsp;<strong><code>CreateRenderThreadResources(...)</code></strong> = 렌더 스레드에서 필요한 GPU/렌더 리소스를 만드는 호출이야.<br>&bull;&nbsp;<strong><code>AddPrimitiveSceneInfo_RenderThread(...)</code></strong> = 장부 줄을 렌더 스레드의 씬 업데이트 큐에 추가하는 호출이야.</div>
+<p>주석이 아주 노골적이야. <code>SetTransform</code>과 <code>CreateRenderThreadResources</code>가 순서대로 실행되도록 RT 명령을 큐에 넣어야 한다고 말하지. 여기서 RT는 Render Thread야.</p>
+<p>이 한 토막이 게임↔렌더 경계의 정체야. 게임 스레드는 대리 카드와 첫 위치표를 만든다. 렌더 스레드는 그 카드에 transform을 세팅하고, 렌더 스레드 리소스를 만들고, <code>FScene</code> 장부에 등록한다.</p>
+<p>서버로 치면 IOCP 워커가 패킷 바이트를 직접 플레이어 객체에 꽂지 않고, 게임 스레드 큐에 <code>CM_MOVE</code> 같은 명령을 넣는 것과 비슷해. 큐를 타는 순간 소유권과 실행 스레드가 바뀐다.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>ENQUEUE_RENDER_COMMAND</code>는 무대감독 책상으로 가는 전달함이고 → 람다는 전달함 안의 작업지시서고 → <code>SetTransform</code>은 대리 카드에 위치를 쓰고 → <code>CreateRenderThreadResources</code>는 무대용 장비를 준비하고 → <code>AddPrimitiveSceneInfo_RenderThread</code>는 장부에 꽂는다. 프록시는 이 지점부터 렌더 쪽 세계의 물건으로 굴러간다.</div>
+</div>
+<div class="conversation"><h2>3. 렌더 스레드는 원본 컴포넌트를 뒤지면 안 된다</h2>
+<p>여기서 제일 중요한 안전선이 나온다. <code>FPrimitiveSceneInfo</code> 안에는 디버깅용으로 컴포넌트 인터페이스 포인터가 있긴 해. 하지만 렌더 스레드에서 그걸 역참조하지 말라고 소스 주석이 못을 박아놨다.</p>
+<p><strong><code>PrimitiveSceneInfo.h:588</code></strong></p>
+<div class="code-block">	/** 
+	 * The IPrimitiveComponentInterface this scene info is for, useful for quickly inspecting properties on the corresponding component while debugging.
+	 * This should not be dereferenced on the rendering thread.  The game thread can be modifying UObject members at any time.
+	 * Use PrimitiveComponentId instead when a component identifier is needed.
+	 * 	
+	 */	
+	IPrimitiveComponent* PrimitiveComponentInterfaceForDebuggingOnly;
+
+	/** 
+	 * Ptr to the FPrimitiveSceneInfoData for this prim, this is used for shared data between the primitive and the component that created the primitive. 
+	 */
+	FPrimitiveSceneInfoData* SceneData;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 원본을 건드리지 말라는 경고<br>&bull;&nbsp;<strong><code>/** ... */</code></strong> = 여러 줄짜리 주석이야. 실행은 안 되지만 개발자에게 규칙을 알려줘.<br>&bull;&nbsp;<strong><code>IPrimitiveComponentInterface*</code></strong> = 원본 컴포넌트 쪽 인터페이스를 가리키는 포인터야.<br>&bull;&nbsp;<strong><code>ForDebuggingOnly</code></strong> = 이름 그대로 디버깅용이라는 경고표지야.<br>&bull;&nbsp;<strong><code>should not be dereferenced</code></strong> = 포인터가 가리키는 원본을 따라 들어가서 읽지 말라는 뜻이야.<br>&bull;&nbsp;<strong><code>rendering thread</code></strong> = 렌더 스레드야. 게임 스레드와 따로 돈다.<br>&bull;&nbsp;<strong><code>UObject members</code></strong> = 게임 객체 안의 멤버들이야. 게임 스레드가 언제든 바꿀 수 있어.<br>&bull;&nbsp;<strong><code>PrimitiveComponentId</code></strong> = 포인터 대신 쓰는 안정적인 식별자야. 주민번호처럼 "누구인지"만 나타낸다.<br>&bull;&nbsp;<strong><code>FPrimitiveSceneInfoData* SceneData</code></strong> = 프리미티브와 만든 쪽이 공유하는 별도 데이터 손잡이야.</div>
+<p>이 주석은 이 장의 중심 문장이야. "렌더 스레드에서 컴포넌트 포인터를 따라가지 마라. 게임 스레드가 언제든 UObject 멤버를 바꿀 수 있다."</p>
+<p>그러니까 프록시는 성능 최적화만이 아니야. 스레드 안전을 위한 경계선이야. 렌더 스레드가 원본 배우 대기실을 마음대로 열고 들어가면 안 된다. 무대감독은 자기 책상 위의 대리 카드와 장부 번호만 봐야 한다.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>PrimitiveComponentInterfaceForDebuggingOnly</code>는 "원본 배우로 가는 문"처럼 보이지만 → 주석은 렌더 스레드에서 그 문을 열지 말라고 해 → 대신 <code>PrimitiveComponentId</code> 같은 식별자를 쓰라고 한다. 그래서 프록시가 필요한 이유가 "편해서"가 아니라 "원본을 동시에 만지면 위험해서"라는 게 보인다.</div>
+</div>
+<div class="conversation"><h2>4. 위치가 바뀌면 원본을 다시 뒤지지 않고 수정 메모를 보낸다</h2>
+<p>배우가 무대 위에서 이동하면 어떻게 할까? 무대감독이 대기실까지 뛰어가서 배우 원본을 다시 훑으면 안 돼. 게임 스레드가 새 위치표를 만들어 렌더 스레드에 수정 메모를 보내야 해.</p>
+<p><code>UpdatePrimitiveTransformInternal</code>이 그 길목이야. 이미 프록시가 있으면 새 bounds, 새 render matrix, attachment root, previous transform을 <code>UpdateParams</code>에 담는다. 그 다음 렌더 명령으로 넘겨서 렌더 스레드가 프록시를 갱신하게 한다.</p>
+<p><strong><code>RendererScene.cpp:1643</code></strong></p>
+<div class="code-block">				if (bNeedsTransformCommand)
+				{
+					ENQUEUE_RENDER_COMMAND(UpdateTransformCommand)(
+						[UpdateParams](FRHICommandListBase&amp;)
+						{
+							FScopeCycleCounter Context(UpdateParams.PrimitiveSceneProxy-&gt;GetStatId());
+							UpdateParams.Scene-&gt;UpdatePrimitiveTransform_RenderThread(
+								UpdateParams.PrimitiveSceneProxy,
+								UpdateParams.WorldBounds,
+								UpdateParams.LocalBounds,
+								UpdateParams.LocalToWorld,
+								UpdateParams.AttachmentRootPosition,
+								UpdateParams.PreviousTransform
+							);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — transform 수정 메모<br>&bull;&nbsp;<strong><code>bNeedsTransformCommand</code></strong> = 렌더 스레드에 transform 갱신 명령을 따로 보내야 하는지 나타내는 참거짓 값이야.<br>&bull;&nbsp;<strong><code>UpdateTransformCommand</code></strong> = 위치 수정용 렌더 명령 이름이야.<br>&bull;&nbsp;<strong><code>[UpdateParams]</code></strong> = 위치 수정에 필요한 값을 람다 안으로 복사해 들고 간다는 뜻이야.<br>&bull;&nbsp;<strong><code>UpdateParams.PrimitiveSceneProxy</code></strong> = 갱신할 대리 카드야. 원본 컴포넌트가 아니라 프록시다.<br>&bull;&nbsp;<strong><code>WorldBounds</code> / <code>LocalBounds</code></strong> = 월드 기준 울타리와 로컬 기준 울타리야.<br>&bull;&nbsp;<strong><code>LocalToWorld</code></strong> = 로컬 좌표를 월드 좌표로 바꾸는 행렬이야.<br>&bull;&nbsp;<strong><code>AttachmentRootPosition</code></strong> = 붙어 있는 루트의 위치야. 조명이나 attachment 계산에 필요해.<br>&bull;&nbsp;<strong><code>PreviousTransform</code></strong> = 이전 transform이야. 모션 벡터 같은 "얼마나 움직였나" 계산에 쓰인다.</div>
+<p>여기서 다시 원칙이 보여. 갱신 명령은 <code>PrimitiveSceneProxy</code>와 숫자 데이터만 들고 간다. 렌더 스레드가 <code>UPrimitiveComponent</code> 원본을 다시 열어보지 않아도 되게, 게임 스레드가 필요한 값을 <code>UpdateParams</code>에 싸서 보낸다.</p>
+<p>서버로 치면 <code>CPlayer</code> 포인터를 워커에게 넘기는 게 아니라, <code>{ playerId, x, y, dir, tick }</code> 같은 작은 갱신 메시지를 큐에 넣는 거야. 워커나 렌더 쪽은 그 메시지를 보고 자기 쪽 상태만 바꾼다.</p>
+</div>
+<div class="conversation"><h2>5. 삭제도 두 단계다</h2>
+<p>등록과 갱신만 경계가 있는 게 아니야. 삭제도 똑같이 조심스럽게 나뉜다.</p>
+<p>게임 스레드 쪽에서는 먼저 원본 프리미티브에서 씬 프록시 연결을 끊어. 그 다음 렌더 스레드 명령으로 장부 줄 제거와 렌더 리소스 파괴를 보낸다. 즉 "배우 카드 회수"와 "무대 장비 철거"가 같은 스레드에서 막 섞이지 않는다.</p>
+<p><strong><code>RendererScene.cpp:2024</code></strong></p>
+<div class="code-block">		FPrimitiveSceneProxy* PrimitiveSceneProxy = Primitive-&gt;GetSceneProxy();
+		if (PrimitiveSceneProxy)
+		{
+			if (FSimpleStreamableAssetManager::IsEnabled())
+			{
+				FSimpleStreamableAssetManager::Unregister(FSimpleStreamableAssetManager::FUnregister{ PrimitiveSceneProxy });
+			}
+			
+			FPrimitiveSceneInfo* PrimitiveSceneInfo = PrimitiveSceneProxy-&gt;GetPrimitiveSceneInfo();
+
+			// Disassociate the primitive's scene proxy.
+			Primitive-&gt;ReleaseSceneProxy();
+			DestroyCommands.Add({ PrimitiveSceneInfo, PrimitiveSceneProxy, Primitive-&gt;GetAttachmentCounter() });
+		}
+	}
+
+	if (!DestroyCommands.IsEmpty())
+	{
+		// must run RT cmds in order here too
+		ENQUEUE_RENDER_COMMAND(FRemovePrimitiveCommand)(
+			[this, DestroyCommands = MoveTemp(DestroyCommands)](FRHICommandListBase&amp;)
+		{
+			for (const FDetachCommand&amp; Command : DestroyCommands)
+			{
+				RemovePrimitiveSceneInfo_RenderThread(Command.PrimitiveSceneInfo);
+				Command.PrimitiveSceneProxy-&gt;DestroyRenderThreadResources();
+				if(Command.AttachmentCounter)
+				{
+					Command.AttachmentCounter-&gt;Decrement();
+				}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 프록시 해제와 렌더 리소스 파괴<br>&bull;&nbsp;<strong><code>Primitive-&gt;GetSceneProxy()</code></strong> = 원본 프리미티브에 붙어 있는 대리 카드를 가져온다.<br>&bull;&nbsp;<strong><code>FSimpleStreamableAssetManager::Unregister(...)</code></strong> = 스트리밍 관리에서 이 프록시를 빼는 호출이야.<br>&bull;&nbsp;<strong><code>PrimitiveSceneProxy-&gt;GetPrimitiveSceneInfo()</code></strong> = 대리 카드가 연결된 장부 줄을 꺼낸다.<br>&bull;&nbsp;<strong><code>Primitive-&gt;ReleaseSceneProxy()</code></strong> = 원본 프리미티브와 대리 카드의 연결을 끊는다.<br>&bull;&nbsp;<strong><code>DestroyCommands.Add(...)</code></strong> = 렌더 스레드에서 처리할 철거 명령을 모은다.<br>&bull;&nbsp;<strong><code>FRemovePrimitiveCommand</code></strong> = 프리미티브 제거용 렌더 명령이야.<br>&bull;&nbsp;<strong><code>RemovePrimitiveSceneInfo_RenderThread(...)</code></strong> = 렌더 스레드 장부에서 프리미티브 줄을 제거 큐에 넣는다.<br>&bull;&nbsp;<strong><code>DestroyRenderThreadResources()</code></strong> = 렌더 스레드에서 만든 리소스를 파괴한다.<br>&bull;&nbsp;<strong><code>AttachmentCounter-&gt;Decrement()</code></strong> = scene에 붙어 있는 카운터를 하나 줄인다.</div>
+<p>삭제에서도 같은 패턴이 반복돼. 게임 스레드는 원본에서 프록시 연결을 끊고, 렌더 스레드는 자기 장부와 자기 리소스를 정리한다. 원본 컴포넌트를 렌더 스레드가 붙잡고 있다가 직접 지우는 모양이 아니야.</p>
+<p>공연장으로 보면, 배우가 퇴장하면 대기실 쪽에서는 "이 배우 카드는 이제 회수됨"이라고 표시하고, 무대감독 쪽에서는 조명 큐, 소품, 장부 줄을 순서대로 치운다. 퇴장 중에 대기실 문을 열고 배우 상태를 다시 캐묻지 않는다.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>GetSceneProxy()</code>로 회수할 대리 카드를 찾고 → <code>ReleaseSceneProxy()</code>로 원본과 카드 연결을 끊고 → <code>DestroyCommands</code>에 철거 봉투를 넣고 → 렌더 명령 안에서 <code>RemovePrimitiveSceneInfo_RenderThread</code>와 <code>DestroyRenderThreadResources</code>를 실행한다. 태어날 때도 큐, 죽을 때도 큐야.</div>
+<hr>
+</div>
+<div class="conversation"><h2>6. 전체 흐름 한눈에</h2>
+<p>프록시의 삶을 한 줄로 그리면 이거야.</p>
+<div class="code-block">게임 스레드
+  UPrimitiveComponent / FPrimitiveSceneDesc
+      │
+      │  CreateSceneProxy()
+      ▼
+  FPrimitiveSceneProxy  ─────┐
+  FPrimitiveSceneInfo   ─────┤
+  RenderMatrix/Bounds   ─────┤  CreateCommands
+                             ▼
+                  ENQUEUE_RENDER_COMMAND(AddPrimitiveCommand)
+                             ▼
+렌더 스레드
+  Proxy.SetTransform()
+  Proxy.CreateRenderThreadResources()
+  FScene.AddPrimitiveSceneInfo_RenderThread()
+      │
+      ├─ 위치 변경: ENQUEUE_RENDER_COMMAND(UpdateTransformCommand)
+      │              → UpdatePrimitiveTransform_RenderThread(proxy, bounds, matrix)
+      │
+      └─ 삭제: ReleaseSceneProxy()는 GT
+               → ENQUEUE_RENDER_COMMAND(FRemovePrimitiveCommand)
+               → RemovePrimitiveSceneInfo_RenderThread()
+               → Proxy.DestroyRenderThreadResources()</div>
+<p>여기서 세 단어만 외우면 돼.</p>
+<ul><li><strong>Proxy</strong> = 렌더 스레드가 보는 대리 카드</li><li><strong>SceneInfo</strong> = <code>FScene</code> 장부의 한 줄</li><li><strong>ENQUEUE</strong> = 게임 스레드에서 렌더 스레드로 넘어가는 전달함</li></ul>
+<p><code>FScene</code>은 배우 원본을 들고 있지 않아. 무대감독 장부에는 대리 카드와 카드 번호, 위치표, bounds, 리소스 상태가 들어간다. 이게 앞 장 <a class="xref" href="ch-12-fscene.html">fscene</a>에서 봤던 프리미티브 packed array와 이어지는 지점이야.</p>
+</div>
+<div class="conversation"><h2>7. 우리 서버·DirectX랑 비교</h2>
+<p>게임 서버 기준으로 보면 <code>FPrimitiveSceneProxy</code>는 <strong>송신용 DTO</strong>에 가깝다. 원본 <code>CPlayer</code> 객체에는 퀘스트, 인벤토리, DB dirty flag, AI 상태까지 많아. 하지만 클라에 보낼 이동 패킷에는 <code>id</code>, <code>pos</code>, <code>rot</code>, <code>state</code>만 뽑아 담지. 그 패킷을 IOCP 워커가 들고 있어도 원본 <code>CPlayer</code>를 직접 만지지 않아도 돼.</p>
+<p><code>UPrimitiveComponent</code>와 <code>FPrimitiveSceneProxy</code>도 비슷해. 컴포넌트 원본에는 UObject 생명주기와 게임 상태가 있고, 프록시에는 렌더링에 필요한 상태가 있다. 렌더 스레드는 프록시를 보고 메시, 머티리얼, transform, bounds, visibility를 판단한다.</p>
+<p>DirectX 경험으로 보면 더 직관적이야. 게임 로직의 <code>TransformComponent</code>를 GPU가 직접 읽지 않잖아. CPU가 월드 행렬을 상수 버퍼나 인스턴스 버퍼에 복사해서 올리고, GPU는 그 렌더용 복사본을 읽어. 프록시는 그 CPU 렌더러 버전의 복사본이라고 보면 된다.</p>
+<p>차이도 있어. 단순 DirectX 샘플에서는 네가 한 스레드에서 전부 처리할 수 있어. 그러면 원본 구조체를 바로 읽어도 큰 문제가 안 보일 수 있지. 하지만 UE는 게임 스레드와 렌더 스레드가 파이프라인처럼 겹쳐 돈다. 그래서 "원본 바로 읽기"가 아니라 "프록시와 렌더 명령으로 넘기기"가 기본 구조가 된다.</p>
+<p>서버에서 락을 잔뜩 걸고 원본 객체를 공유하면 일단 돌아갈 수는 있어. 하지만 성능과 복잡도가 망가지지. 언리얼 렌더러도 같은 선택을 피해 간다. 락으로 원본을 공유하는 대신, 프록시와 명령 큐로 소유권 경계를 만든다.</p>
+</div>
+<div class="conversation"><h2>8. 이 챕터에서 딱 이것만</h2>
+<ul><li><code>FPrimitiveSceneProxy</code>는 <code>UPrimitiveComponent</code> 원본이 아니라 렌더 스레드용 대리 카드야.</li><li>등록 때 게임 스레드는 <code>CreateSceneProxy()</code>로 프록시를 만들고 <code>FPrimitiveSceneInfo</code>와 묶는다.</li><li>렌더 스레드로 넘어가는 문은 <code>ENQUEUE_RENDER_COMMAND</code>야.</li><li>렌더 스레드는 원본 컴포넌트 포인터를 역참조하면 안 된다. 소스 주석이 직접 경고한다.</li><li>위치 변경과 삭제도 원본 직접 접근이 아니라 수정/철거 명령으로 전달된다.</li></ul>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong><code>FPrimitiveSceneProxy</code>는 게임 객체 원본을 렌더 스레드에 공유하지 않기 위한 "렌더용 대리 카드"다 — 생성, 갱신, 삭제 모두 명령 큐를 타고 넘어가며 원본 UObject와 렌더 장부 사이의 스레드 안전 경계를 만든다.</strong></p>
+<hr>
+<div class="note">막히면(선행 개념) → <a class="xref" href="ch-12-fscene.html">fscene</a> · <a class="xref" href="ch-02-render-thread.html">render-thread</a><br>다음(카메라가 이 프록시들을 어떻게 보나) → <a class="xref" href="ch-14-view-family.html">view-family</a></div></div><nav class="booknav"><a href="ch-12-fscene.html"><span class="lbl">← 이전</span>FScene — 렌더러가 보는 세계</a><a class="nx" href="ch-14-view-family.html"><span class="lbl">다음 →</span>View / ViewFamily - 카메라 한 대의 모든 것</a></nav></div></body></html>

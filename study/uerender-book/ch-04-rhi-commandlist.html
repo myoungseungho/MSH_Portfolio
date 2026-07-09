@@ -1,0 +1,310 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>RHICommandList — 명령을 쌓고 제출하기 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>RHICommandList — 명령을 쌓고 제출하기</h1><p>언리얼 렌더링 · 04 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "RHI 호출이 왜 바로 GPU로 가지 않고, 명령으로 기록됐다가 제출되는가"가 잡힌다.</div>
+<hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>DirectX를 조금 써봤으면 이런 코드를 떠올릴 거야. <code>DrawIndexedInstanced</code> 부르고, <code>ResourceBarrier</code> 치고, <code>ExecuteCommandLists</code>로 제출하지. 게임 서버 쪽으로 치면 워커가 패킷을 받았다고 그 자리에서 바로 게임 로직을 다 실행하지 않고, 큐에 넣었다가 메인 로직 스레드가 순서대로 처리하는 구조랑 비슷해.</p>
+<p>그런데 렌더러가 수천 개 드로우콜을 매 프레임 즉석에서 다 처리하면 어떻게 될까. 렌더 스레드 하나가 "상태 세팅 → 드로우 → 배리어 → 복사"를 전부 직접 때리느라 막혀. 60fps면 한 프레임에 16.6ms뿐인데, 그중 몇 ms를 명령 포장에만 태우면 GPU는 놀고 CPU는 줄 서는 이상한 상황이 나온다.</p>
+<p>그래서 언리얼도 같은 문제를 만났고, 답이 <code>RHICommandList</code>야. RHI 함수를 부르면 대부분 바로 실행하지 않고 <strong>명령 객체를 리스트에 쌓아둔다.</strong> 나중에 그 리스트를 실행하면서 RHI context로 번역하고, 마지막에 플랫폼 GPU command list로 제출한다.</p>
+<p>왜 지금 배우냐면, 앞 장 <code>RHI</code>가 "CPU가 GPU에게 말 거는 공용 언어"였다면, 이번 장은 그 말을 <strong>어떤 종이에 적고, 누가 들고 가고, 언제 주방에 넘기는지</strong>를 보는 장이야. 다음 장 <code>D3D12RHI</code>는 이 종이가 진짜 D3D12 명령으로 내려가는 지점이다. → <a class="xref" href="ch-03-rhi-overview.html">rhi-overview</a> → <a class="xref" href="ch-05-d3d12-backend.html">d3d12-backend</a></p>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 주방에 바로 소리치지 말고 주문서를 쌓아라</h2>
+<p>식당에서 웨이터가 손님 주문을 받는다고 치자.</p>
+<p>손님이 "파스타 하나"라고 말할 때마다 웨이터가 주방으로 뛰어가서 "파스타!" 하고 외치고, 다시 와서 "샐러드 하나" 받고, 또 뛰어가면 어떻게 될까.</p>
+<p>걷는 시간만 낭비야. 주방도 정신없어. 누가 먼저 들어온 주문인지 헷갈리고, 여러 웨이터가 동시에 외치면 순서도 꼬인다.</p>
+<p>그래서 보통은 이렇게 해:</p>
+<ol><li>웨이터가 손님 주문을 <strong>주문서에 적는다</strong>.</li><li>여러 주문서를 모아 <strong>접수대에 넘긴다</strong>.</li><li>접수대는 순서를 맞추고, 필요한 건 주방 파트별로 나눈다.</li><li>주방은 자기 도구에 맞게 조리하고, 마지막에 음식이 나간다.</li></ol>
+<p><code>RHICommandList</code>가 바로 그 주문서야.</p>
+<p><code>DrawPrimitive</code>는 "파스타 하나" 같은 주문이고, <code>ALLOC_COMMAND</code>는 그 주문을 종이에 적는 동작이야. <code>Execute()</code>는 주문서를 처음부터 끝까지 읽는 동작이고, <code>Submit()</code>은 주방 접수대에 넘기는 동작이다. 병렬 translate는 웨이터 여러 명이 주문서를 나눠 정리하는 장면으로 보면 돼.</p>
+<p>이번 장 내내 이 비유를 끌고 갈게. <strong>바로 소리치지 않는다. 적고, 모으고, 번역하고, 제출한다.</strong></p>
+</div>
+<div class="conversation"><h2>1. 전체 지도 — 기록, 완료, 번역, 제출</h2>
+<p>먼저 큰 흐름부터 잡자.</p>
+<p><code>RHICommandList</code> 흐름은 이렇게 생겼다.</p>
+<div class="code-block">렌더 코드가 RHI 함수 호출
+        │
+        ▼
+FRHICommandList에 명령 객체 기록
+        │
+        ▼
+FinishRecording()으로 "주문서 작성 끝" 신호
+        │
+        ▼
+Submit()이 command list들을 dispatch task로 넘김
+        │
+        ▼
+translate task가 Execute()로 기록 명령을 RHI context에 재생
+        │
+        ▼
+Finalize 후 RHISubmitCommandLists()로 플랫폼 RHI에 제출</div>
+<p>여기서 헷갈리면 안 되는 말이 두 개 있어.</p>
+<ul><li><strong>recording</strong> = 명령을 리스트에 쌓는 단계.</li><li><strong>execute/translate</strong> = 쌓아둔 명령을 꺼내서 RHI context에 실제 호출로 재생하는 단계.</li><li><strong>submit</strong> = 그렇게 만들어진 플랫폼 command list를 GPU 쪽으로 넘기는 단계.</li></ul>
+<p>DirectX 12로 치면 command list에 <code>DrawIndexedInstanced</code>를 기록하고, close하고, queue에 submit하는 흐름과 닮았다. 언리얼은 그 위에 "엔진 공용 RHI 명령 리스트"를 하나 더 둔 셈이야.</p>
+</div>
+<div class="conversation"><h2>2. 기록의 핵심 — 명령 하나는 링크드 리스트에 꽂힌다</h2>
+<p>먼저 주문서에 줄 하나를 쓰는 코드부터 보자. <code>AllocCommand</code>는 새 명령 객체가 들어갈 메모리를 잡고, 현재 리스트 뒤에 붙인다.</p>
+<p><strong><code>RHICommandList.h:567</code></strong></p>
+<div class="code-block">	inline void* AllocCommand(int32 AllocSize, int32 Alignment)
+	{
+		checkSlow(!IsExecuting());
+		checkfSlow(!Bypass(), TEXT("Invalid attempt to record commands in bypass mode."));
+		FRHICommandBase* Result = (FRHICommandBase*) MemManager.Alloc(AllocSize, Alignment);
+		++NumCommands;
+		*CommandLink = Result;
+		CommandLink = &amp;Result-&gt;Next;
+		return Result;
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 명령을 리스트에 꽂는 코드<br>&bull;&nbsp;<strong><code>void*</code></strong> = 어떤 타입이든 가리킬 수 있는 아주 날것의 포인터야.<br>&bull;&nbsp;<strong><code>int32</code></strong> = 32비트 정수. 크기나 정렬 값을 담는다.<br>&bull;&nbsp;<strong><code>checkSlow(...)</code></strong> = 느린 검사지만 디버그 때 잡아내려고 넣은 안전장치야.<br>&bull;&nbsp;<strong><code>Bypass()</code></strong> = 명령 기록을 건너뛰고 바로 실행하는 특수 모드인지 묻는 함수야.<br>&bull;&nbsp;<strong><code>FRHICommandBase* Result</code></strong> = 새로 만든 명령 객체를 가리키는 손잡이야.<br>&bull;&nbsp;<strong><code>MemManager.Alloc(...)</code></strong> = 명령을 넣을 메모리 조각을 빌리는 동작이야.<br>&bull;&nbsp;<strong><code>++NumCommands</code></strong> = 명령 개수를 하나 늘린다. 주문서 줄 수를 세는 거야.<br>&bull;&nbsp;<strong><code>*CommandLink = Result</code></strong> = 지금 리스트의 빈 꼬리 칸에 새 명령을 꽂는다.<br>&bull;&nbsp;<strong><code>CommandLink = &amp;Result-&gt;Next</code></strong> = 다음 명령이 붙을 자리를 새 명령의 <code>Next</code> 칸으로 옮긴다.</div>
+<p>이 코드의 핵심은 <code>*CommandLink = Result</code>와 <code>CommandLink = &amp;Result-&gt;Next</code>야.</p>
+<p>주문서 맨 아래에 새 줄을 쓰고, 펜 끝을 다음 빈 줄로 내려놓는 장면이라고 보면 된다.</p>
+<p>여기서 GPU 호출이 일어나지 않는다. <code>RHIDrawPrimitive</code>도, D3D12도 아직 안 나와. 그냥 "나중에 실행할 명령 객체"를 메모리에 만들고 리스트에 이어 붙인다.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>MemManager.Alloc</code>으로 명령 종이 한 칸을 얻고 → <code>++NumCommands</code>로 줄 수를 세고 → <code>*CommandLink = Result</code>로 리스트 꼬리에 붙이고 → <code>CommandLink = &amp;Result-&gt;Next</code>로 다음 빈칸을 준비한다. 읽으면 "명령을 실행했다"가 아니라 "명령을 적었다"야.</div>
+<p>이게 이 장의 첫 번째 못이야.</p>
+<p><strong>RHICommandList는 기본적으로 실행기가 아니라 기록장이다.</strong></p>
+</div>
+<div class="conversation"><h2>3. DrawPrimitive도 바로 그리지 않는다</h2>
+<p>그럼 실제 드로우 호출은 어떻게 기록될까. <code>DrawPrimitive</code>를 보자.</p>
+<p><strong><code>RHICommandList.h:3962</code></strong></p>
+<div class="code-block">	inline void DrawPrimitive(uint32 BaseVertexIndex, uint32 NumPrimitives, uint32 NumInstances)
+	{
+		//check(IsOutsideRenderPass());
+		if (Bypass())
+		{
+			GetContext().RHIDrawPrimitive(BaseVertexIndex, NumPrimitives, NumInstances);
+			return;
+		}
+		ALLOC_COMMAND(FRHICommandDrawPrimitive)(BaseVertexIndex, NumPrimitives, NumInstances);
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 드로우 호출 기록 코드<br>&bull;&nbsp;<strong><code>inline</code></strong> = 함수 호출 비용을 줄이려고 본문을 가까이 펼칠 수 있다는 힌트야.<br>&bull;&nbsp;<strong><code>uint32</code></strong> = 32비트 양수 정수. 정점 시작 위치, 삼각형 개수 같은 숫자에 쓴다.<br>&bull;&nbsp;<strong><code>if (Bypass())</code></strong> = 특수 모드면 기록하지 않고 바로 실행하겠다는 갈림길이야.<br>&bull;&nbsp;<strong><code>GetContext().RHIDrawPrimitive(...)</code></strong> = 실제 RHI context에 드로우를 바로 호출하는 길이야.<br>&bull;&nbsp;<strong><code>return</code></strong> = 여기서 함수 끝. 아래 기록 코드는 안 간다.<br>&bull;&nbsp;<strong><code>ALLOC_COMMAND(...)</code></strong> = 방금 본 <code>AllocCommand</code>를 써서 명령 객체를 리스트에 쌓는 매크로야.<br>&bull;&nbsp;<strong><code>FRHICommandDrawPrimitive</code></strong> = "나중에 DrawPrimitive를 실행해"라는 주문서 줄의 타입이야.</div>
+<p>이 코드가 진짜 중요해.</p>
+<p><code>Bypass()</code>가 켜져 있으면 바로 <code>GetContext().RHIDrawPrimitive(...)</code>로 간다. 그런데 평소 경로는 아래 한 줄이야.</p>
+<p><code>ALLOC_COMMAND(FRHICommandDrawPrimitive)(...)</code></p>
+<p>즉 <code>DrawPrimitive()</code>라는 이름 때문에 바로 그릴 것 같지만, 실제로는 <code>FRHICommandDrawPrimitive</code>라는 명령 객체를 쌓는다.</p>
+<p>웨이터가 주방에 바로 뛰어가는 모드가 <code>Bypass()</code>고, 정상 영업 모드는 주문서에 적는 모드야.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>DrawPrimitive</code>는 먼저 <code>Bypass()</code>인지 보고, 맞으면 즉시 <code>RHIDrawPrimitive</code>를 때린다. 아니면 <code>ALLOC_COMMAND(FRHICommandDrawPrimitive)</code>로 주문서에 드로우 명령을 쓴다. 그러니까 이름은 "그려"지만, 보통 의미는 "나중에 그릴 명령을 기록해"야.</div>
+<p>이 차이를 못 잡으면 앞으로 렌더러 코드가 이상해 보여.</p>
+<p>"분명 <code>RHICmdList.DrawPrimitive()</code>를 불렀는데 왜 GPU가 바로 움직이지 않지?"</p>
+<p>답은 간단해. 아직 주문서에 적은 단계라서 그래.</p>
+</div>
+<div class="conversation"><h2>4. 기록 완료 — 주문서 작성 끝 신호</h2>
+<p>명령을 쌓았으면 어느 순간 "이 주문서 이제 다 썼다"는 신호가 필요해. 언리얼은 <code>FinishRecording()</code>에서 그 신호를 준다.</p>
+<p><strong><code>RHICommandList.cpp:286</code></strong></p>
+<div class="code-block">	// "Complete" the dispatch event.
+	DispatchEvent-&gt;DispatchSubsequents();
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 기록 완료 코드<br>&bull;&nbsp;<strong><code>//</code></strong> = 사람한테 남기는 주석이야. 실행되는 명령은 아니다.<br>&bull;&nbsp;<strong><code>DispatchEvent-&gt;DispatchSubsequents()</code></strong> = 이 이벤트를 기다리던 다음 작업들을 깨운다.<br>&bull;&nbsp;<strong><code>-&gt;</code></strong> = 포인터가 가리키는 물건의 함수를 부르는 화살표야.</div>
+<p>이게 "주문서 작성 끝났어. 이제 접수대가 가져가도 돼"라는 호출이다. <code>FinishRecording()</code>의 앞부분은 fence scope와 pending upload를 검사하고, 마지막에 이 dispatch event를 완료시킨다.</p>
+<p>서버로 치면 패킷을 큐에 넣기 전에 길이, 상태, 세션 생존 여부를 확인하고, 마지막에 큐 이벤트를 깨우는 장면이랑 닮았다.</p>
+</div>
+<div class="conversation"><h2>5. 실행 — 기록된 명령을 처음부터 끝까지 재생한다</h2>
+<p>이제 주문서가 접수대로 넘어갔다고 치자. 누군가는 주문서 줄들을 처음부터 끝까지 읽어야 해.</p>
+<p>그 역할이 <code>FRHICommandListBase::Execute()</code>다.</p>
+<p><strong><code>RHICommandList.cpp:518</code></strong></p>
+<div class="code-block">void FRHICommandListBase::Execute()
+{
+	check(!IsExecuting());
+	bExecuting = true;
+
+	PersistentState.CurrentGPUMask = PersistentState.InitialGPUMask;
+
+#if WITH_RHI_BREADCRUMBS &amp;&amp; WITH_ADDITIONAL_CRASH_CONTEXTS
+	FScopedAdditionalCrashContextProvider CrashContext(
+	[
+		this,
+		ThreadName = 
+			  IsInRHIThread()             ? TEXT("RHIThread")
+			: IsInActualRenderingThread() ? TEXT("RenderingThread")
+			: IsInGameThread()            ? TEXT("GameThread")
+			:                               TEXT("Parallel")
+	](FCrashContextExtendedWriter&amp; Writer)
+	{
+		if (PersistentState.LocalBreadcrumb)
+		{
+			PersistentState.LocalBreadcrumb-&gt;WriteCrashData(Writer, ThreadName);
+		}
+	});
+#endif // WITH_ADDITIONAL_CRASH_CONTEXTS
+
+	FRHICommandListIterator Iter(*this);
+	while (Iter.HasCommandsLeft())
+	{
+		FRHICommandBase* Cmd = Iter.NextCommand();
+		Cmd-&gt;ExecuteAndDestruct(*this);
+	}
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 명령 재생 코드<br>&bull;&nbsp;<strong><code>check(!IsExecuting())</code></strong> = 이미 실행 중이면 또 실행하면 안 된다는 검사야. <code>!</code>는 참/거짓 뒤집기야.<br>&bull;&nbsp;<strong><code>bExecuting = true</code></strong> = 지금부터 실행 중이라고 표시한다. <code>b</code>로 시작하면 보통 bool이야.<br>&bull;&nbsp;<strong><code>#if ... #endif</code></strong> = 빌드 옵션에 따라 들어가거나 빠지는 컴파일 조건문이야.<br>&bull;&nbsp;<strong><code>FScopedAdditionalCrashContextProvider</code></strong> = 크래시가 났을 때 추가 정보를 남기기 위한 범위 객체야.<br>&bull;&nbsp;<strong><code>FRHICommandListIterator Iter(*this)</code></strong> = 지금 command list를 훑는 반복자를 만든다.<br>&bull;&nbsp;<strong><code>while (Iter.HasCommandsLeft())</code></strong> = 남은 명령이 있는 동안 계속 돈다.<br>&bull;&nbsp;<strong><code>FRHICommandBase* Cmd</code></strong> = 현재 꺼낸 명령을 가리키는 포인터야.<br>&bull;&nbsp;<strong><code>Cmd-&gt;ExecuteAndDestruct(*this)</code></strong> = 명령을 실행하고, 끝나면 그 명령 객체를 파괴한다.</div>
+<p>여기가 주문서를 실제로 읽는 장면이야.</p>
+<p><code>FRHICommandListIterator</code>가 첫 줄부터 따라가고, 각 줄마다 <code>ExecuteAndDestruct</code>를 부른다.</p>
+<p>아까 <code>DrawPrimitive</code>에서 쌓았던 <code>FRHICommandDrawPrimitive</code>도 결국 이 루프 안에서 자기 차례가 오면 실행된다.</p>
+<p>그리고 이름에 <code>Destruct</code>가 붙어 있지. 실행하고 버린다는 뜻이야. 주문서 줄을 처리했으면 그 줄은 다시 쓸 필요가 없다.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Execute()</code>는 실행 중 플래그를 세우고 → iterator로 command list를 훑고 → <code>NextCommand()</code>로 명령 하나를 꺼내고 → <code>ExecuteAndDestruct(*this)</code>로 실행 후 파괴한다. 아까 기록한 주문이 여기서 주방 말로 읽히는 거야.</div>
+<p>여기까지 보면 기록과 실행이 분리된 이유가 보인다.</p>
+<p>기록은 여러 곳에서 빠르게 할 수 있다. 실행은 정해진 순서로 밀어 넣을 수 있다. 이 분리가 있어야 병렬 기록과 순서 보장이 같이 가능해진다.</p>
+</div>
+<div class="conversation"><h2>6. 병렬 번역 — 어떤 스레드가 주문서를 정리할까</h2>
+<p>이제 핵심 질문으로 가자.</p>
+<p>왜 굳이 이렇게 복잡하게 쌓고 나중에 실행할까?</p>
+<p>답은 병렬성 때문이야.</p>
+<p>렌더러는 어떤 command list는 병렬로 RHI context에 번역해도 되고, 어떤 command list는 RHI thread에서 한 줄로 처리해야 한다. 언리얼은 translate task를 어느 pipe에 넣을지 고른다.</p>
+<p><strong><code>RHICommandList.cpp:785</code></strong></p>
+<div class="code-block">FRHICommandListExecutor::FTaskPipe* FRHICommandListExecutor::FTranslateState::GetTranslateTaskPipe(ENamedThreads::Type&amp; NamedThread)
+{
+	NamedThread = ENamedThreads::AnyHiPriThreadHiPriTask;
+	FTaskPipe* Pipe = &amp;TranslatePipe;
+
+	if (!GRHICommandList.AllowParallel())
+	{
+		NamedThread = ENamedThreads::GetRenderThread_Local();
+		Pipe = &amp;GRHICommandList.RHIThreadPipe;
+	}
+	else if (!bParallel)
+	{
+		NamedThread = ENamedThreads::RHIThread;
+		Pipe = &amp;GRHICommandList.RHIThreadPipe;
+	}
+	
+	return Pipe;
+}
+
+FRHICommandListExecutor::FTaskPipe* FRHICommandListExecutor::FTranslateState::EnqueueTranslateTask(FGraphEventArray&amp;&amp; Prereqs, TFunction&lt;void()&gt;&amp;&amp; Lambda)
+{
+	// This is called on the dispatch thread
+	ENamedThreads::Type NamedThread = ENamedThreads::AnyHiPriThreadHiPriTask;
+	FTaskPipe* Pipe = GetTranslateTaskPipe(NamedThread);
+
+	Pipe-&gt;Enqueue(NamedThread, MoveTemp(Prereqs), MoveTemp(Lambda));
+	return Pipe;
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 병렬 translate 선택 코드<br>&bull;&nbsp;<strong><code>FTaskPipe*</code></strong> = task를 순서대로 흘려보내는 pipe를 가리키는 포인터야.<br>&bull;&nbsp;<strong><code>ENamedThreads::Type&amp; NamedThread</code></strong> = 어떤 이름 붙은 스레드에서 돌릴지 결과를 받아갈 변수야. <code>&amp;</code>는 참조야.<br>&bull;&nbsp;<strong><code>AnyHiPriThreadHiPriTask</code></strong> = 아무 고우선순위 작업 스레드에 넣을 수 있다는 뜻이야.<br>&bull;&nbsp;<strong><code>TranslatePipe</code></strong> = 병렬 translate용 작업 pipe야.<br>&bull;&nbsp;<strong><code>GRHICommandList.AllowParallel()</code></strong> = RHI 작업을 병렬로 돌려도 되는지 묻는다.<br>&bull;&nbsp;<strong><code>RHIThreadPipe</code></strong> = RHI thread 쪽으로 보내는 pipe야.<br>&bull;&nbsp;<strong><code>else if (!bParallel)</code></strong> = 병렬 실행 대상이 아니면 RHI thread로 보내겠다는 갈림길이야.<br>&bull;&nbsp;<strong><code>MoveTemp(Prereqs)</code></strong> = 선행 조건 목록을 복사하지 말고 옮겨 넣는다.<br>&bull;&nbsp;<strong><code>Lambda</code></strong> = 나중에 실행할 작은 함수 덩어리야.</div>
+<p>이 코드는 세 갈래야.</p>
+<ol><li>병렬 자체가 안 되면 render thread local queue로 간다.</li><li>병렬은 되지만 이 job이 병렬 대상이 아니면 RHI thread로 간다.</li><li>병렬 가능하고 병렬 대상이면 <code>AnyHiPriThreadHiPriTask</code>와 <code>TranslatePipe</code>를 쓴다.</li></ol>
+<p>웨이터 비유로 돌아가면, 주문서를 접수대 한 명이 다 정리할 수도 있고, 파트별 담당자가 병렬로 정리할 수도 있다. 단, 순서가 중요한 주문은 한 줄 접수대로 보내야 해.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>GetTranslateTaskPipe</code>는 기본값을 병렬 작업 스레드와 <code>TranslatePipe</code>로 잡고 → 병렬이 금지되면 render thread/RHI pipe로 바꾸고 → 이 job만 병렬 불가면 RHI thread로 바꾼다. 즉 command list를 기록해뒀기 때문에, 나중에 상황을 보고 "누가 번역할지" 고를 수 있는 거야.</div>
+<p>이게 이번 장의 핵심 답이다.</p>
+<p><strong>즉시 실행이면 호출한 그 스레드가 그 자리에서 묶인다. 기록 후 제출이면 나중에 더 좋은 스레드 배치로 처리할 수 있다.</strong></p>
+</div>
+<div class="conversation"><h2>7. 최종 제출 — 플랫폼 command list를 RHI로 넘긴다</h2>
+<p>마지막 단계는 진짜 제출이야.</p>
+<p>여기서는 translate가 끝난 플랫폼 command list들을 모아서 <code>GDynamicRHI-&gt;RHISubmitCommandLists(...)</code>로 넘긴다.</p>
+<p><strong><code>RHICommandList.cpp:1238</code></strong></p>
+<div class="code-block">				FinalizedCmdLists.Add(TranslateState.FinalizedCmdList);
+			}
+		}
+
+		GRHICommandList.FrameDrawStats.Accumulate(Job-&gt;DrawStats);
+	}
+
+	if (GDynamicRHI)
+	{
+		GDynamicRHI-&gt;RHISubmitCommandLists({ MoveTemp(FinalizedCmdLists) });
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 최종 제출 코드<br>&bull;&nbsp;<strong><code>FinalizedCmdLists.Add(...)</code></strong> = 최종 제출 배열에 완성된 command list를 넣는다.<br>&bull;&nbsp;<strong><code>FrameDrawStats.Accumulate(...)</code></strong> = 여러 translate job의 드로우 통계를 한 프레임 통계로 합친다.<br>&bull;&nbsp;<strong><code>GDynamicRHI</code></strong> = 현재 플랫폼 RHI 구현체로 가는 전역 손잡이야.<br>&bull;&nbsp;<strong><code>RHISubmitCommandLists(...)</code></strong> = 이제 진짜 플랫폼 RHI로 command list들을 넘기는 호출이야.</div>
+<p>이 줄이 종착지야. RHICommandList 안에 쌓였던 엔진 공용 명령들은 translate를 거쳐 플랫폼 command list가 됐고, 이제 <code>DynamicRHI</code> 아래 구현체로 내려간다.</p>
+<p>D3D12라면 다음 장에서 이 아래가 D3D12 command queue와 command list 쪽으로 이어진다. Vulkan이면 Vulkan식으로 이어지고. RHI가 추상화 계층인 이유가 여기서 다시 나온다.</p>
+</div>
+<div class="conversation"><h2>8. 콜/데이터 흐름 한눈에</h2>
+<p>이제 전체를 주문서 흐름으로 다시 그려보자.</p>
+<div class="code-block">렌더 코드
+  │
+  │ RHICmdList.DrawPrimitive(...)
+  ▼
+RHICommandList.h:3962
+  │
+  ├─ Bypass() true  → GetContext().RHIDrawPrimitive(...)  즉시 실행
+  │
+  └─ Bypass() false → ALLOC_COMMAND(FRHICommandDrawPrimitive)
+                       │
+                       ▼
+                    RHICommandList.h:567
+                    AllocCommand()
+                    Root / CommandLink / Next 로 명령 연결
+                       │
+                       ▼
+                    FinishRecording() :245
+                    DispatchEvent 완료
+                       │
+                       ▼
+                    Submit() :1302
+                    command list 묶음 수집
+                       │
+                       ▼
+                    GetTranslateTaskPipe() :785
+                    병렬이면 TranslatePipe, 아니면 RHIThreadPipe
+                       │
+                       ▼
+                    Execute() :518
+                    Iterator가 Cmd-&gt;ExecuteAndDestruct()
+                       │
+                       ▼
+                    FSubmitState::Submit() :1197
+                    FinalizedCmdLists 모음
+                       │
+                       ▼
+                    GDynamicRHI-&gt;RHISubmitCommandLists()</div>
+<p>이 흐름에서 <code>DrawPrimitive</code>가 직접 GPU로 가는 길은 <code>Bypass()</code>일 때뿐이야.</p>
+<p>일반 경로는 <code>ALLOC_COMMAND</code>에서 주문서를 쓰고, <code>Execute()</code>에서 읽고, <code>RHISubmitCommandLists()</code>에서 최종 제출한다.</p>
+<p>그래서 코드 이름만 보고 "DrawPrimitive니까 바로 그리겠네"라고 읽으면 틀려. <code>RHICommandList</code> 안에서는 대부분 "나중에 그릴 명령을 기록하겠네"라고 읽어야 한다.</p>
+</div>
+<div class="conversation"><h2>9. 우리 서버·DirectX랑 비교</h2>
+<p>우리 조선 서버 관점으로 보면 <code>RHICommandList</code>는 작업 큐에 가깝다.</p>
+<p>IOCP 워커가 클라 패킷을 받자마자 게임 로직을 다 실행하면 락도 많아지고 순서도 꼬이지. 그래서 세션별 버퍼, 패킷 큐, 싱글스레드 액터 큐 같은 구조를 둔다. 기록과 처리 시점을 분리하면, 받은 스레드와 처리 스레드를 나눌 수 있어.</p>
+<p>렌더링도 마찬가지야.</p>
+<p>렌더 코드가 <code>DrawPrimitive</code>를 부른 스레드에서 바로 하드웨어 API까지 내려가면, 병렬 기록이 어렵고 순서 보장이 힘들어진다. 그래서 <code>RHICommandList</code>가 중간 주문서가 된다.</p>
+<p>DirectX 12 경험으로 보면 더 직관적이야.</p>
+<table class="compare-table"><thead><tr><th>DirectX 12 감각</th><th>언리얼 RHICommandList 감각</th></tr></thead><tbody><tr><td>command list에 draw/barrier 기록</td><td><code>ALLOC_COMMAND</code>로 <code>FRHICommand...</code> 기록</td></tr><tr><td>command list close</td><td><code>FinishRecording()</code>으로 dispatch event 완료</td></tr><tr><td>여러 command list를 worker에서 만들 수 있음</td><td>parallel translate task로 여러 RHI context 정리</td></tr><tr><td>command queue execute</td><td><code>GDynamicRHI-&gt;RHISubmitCommandLists(...)</code></td></tr><tr><td>즉시 context식 사고는 병목</td><td><code>Bypass()</code>는 특수 경로</td></tr></tbody></table>
+<p>서버의 큐와 DirectX의 command list를 합쳐서 생각하면 된다.</p>
+<p><strong>패킷을 받는 것과 처리하는 것을 분리하듯, RHI 호출도 기록과 제출을 분리한다.</strong></p>
+</div>
+<div class="conversation"><h2>10. 이 챕터에서 딱 이것만</h2>
+<ul><li><code>RHICommandList</code>는 RHI 호출을 바로 실행하는 물건이 아니라, 보통 명령 객체를 쌓는 주문서야.</li><li><code>ALLOC_COMMAND</code>는 명령 객체를 만들고 <code>CommandLink</code>/<code>Next</code>로 리스트에 붙인다.</li><li><code>Bypass()</code>가 켜지면 바로 <code>GetContext().RHI...</code>로 가지만, 정상 경로는 기록이다.</li><li><code>Execute()</code>는 기록된 명령을 iterator로 훑으며 <code>ExecuteAndDestruct</code>를 부른다.</li><li>제출 끝에는 <code>GDynamicRHI-&gt;RHISubmitCommandLists(...)</code>가 있고, 그 아래가 D3D12/Vulkan 같은 실제 백엔드다.</li></ul>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong><code>RHICommandList</code>는 "GPU에게 바로 소리치는 코드"가 아니라, 렌더 명령을 주문서처럼 쌓고 병렬로 정리한 뒤 플랫폼 RHI에 제출하게 해주는 기록·번역·제출 파이프라인이다.</strong></p>
+<hr>
+<div class="note">막히면 → <a class="xref" href="ch-03-rhi-overview.html">rhi-overview</a> · <a class="xref" href="ch-02-render-thread.html">render-thread</a><br>다음 → <a class="xref" href="ch-05-d3d12-backend.html">d3d12-backend</a></div></div><nav class="booknav"><a href="ch-03-rhi-overview.html"><span class="lbl">← 이전</span>RHI — CPU가 GPU에게 말 거는 법</a><a class="nx" href="ch-05-d3d12-backend.html"><span class="lbl">다음 →</span>D3D12RHI — 진짜 하드웨어로 내려가는 지점</a></nav></div></body></html>

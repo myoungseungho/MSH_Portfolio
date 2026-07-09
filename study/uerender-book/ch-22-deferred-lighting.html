@@ -1,0 +1,415 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>라이팅 — GBuffer에 빛을 얹다 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>라이팅 — GBuffer에 빛을 얹다</h1><p>언리얼 렌더링 · 22 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "디퍼드 라이팅이 왜 라이트마다 화면을 다시 훑고, 그래도 라이트가 많을 때 유리한지"가 잡힌다.</div>
+<hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>DirectX를 조금 만져봤으면 이런 식으로 생각하기 쉬워.</p>
+<p>"물체를 그릴 때 픽셀 셰이더에서 조명까지 계산하면 되잖아?"</p>
+<p>맞아.</p>
+<p>라이트가 하나면 그게 제일 직관적이야.</p>
+<p>메시 하나 그리고, 재질 보고, 노멀 보고, 라이트 방향 넣고, 최종 색을 바로 찍으면 돼.</p>
+<p>그런데 도시 밤 장면처럼 라이트가 300개쯤 있으면 문제가 터져.</p>
+<p>포워드 방식으로 단순하게 가면 물체를 그릴 때마다 "이 물체에 닿는 라이트가 몇 개인지"를 계속 데리고 다녀야 해.</p>
+<p>더 나쁘게 생각하면 라이트마다 메시를 다시 그리는 꼴이 돼.</p>
+<p>메시 10만 개, 픽셀 수백만 개, 라이트 수백 개가 서로 곱해지면 GPU가 같은 재질 질문을 너무 많이 반복해.</p>
+<p>서버로 치면 <code>CM_ATTACK</code> 하나 처리할 때마다 캐릭터 인벤토리, 장비, 버프, 길드 정보를 DB에서 매번 다시 조인하는 느낌이야.</p>
+<p>언리얼도 같은 문제를 만났고, 답이 <strong>디퍼드 라이팅</strong>이야.</p>
+<p>앞 장 <a class="xref" href="ch-20-basepass-gbuffer.html">basepass-gbuffer</a>와 <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>에서 이미 표면 정보를 GBuffer에 눕혀놨어.</p>
+<p>이제 라이팅 패스는 메시를 다시 묻지 않고, 화면 픽셀의 GBuffer를 읽어서 "이 픽셀에 이 라이트 하나를 더하면 얼마냐"만 계산해.</p>
+<p>왜 지금 배우냐면 순서가 딱 여기야.</p>
+<p><a class="xref" href="ch-19-prepass-depth.html">prepass-depth</a>에서 깊이를 깔고, <a class="xref" href="ch-20-basepass-gbuffer.html">basepass-gbuffer</a>에서 재질 신분증을 깔고, <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>에서 그 신분증을 실제로 포장하는 걸 봤어.</p>
+<p>이제 그 신분증 위에 빛을 얹는 차례야.</p>
+<p>다음 장 <a class="xref" href="ch-23-shadow-maps.html">shadow-maps</a>에서는 라이트가 "가려졌는가"를 따로 볼 거고, 이번 장은 그 직전의 본체 흐름을 잡는다.</p>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 투명 셀로판을 한 장씩 얹는 색칠놀이</h2>
+<p>이번 비유는 투명 셀로판이야.</p>
+<p>밑그림 종이가 하나 있어.</p>
+<p>그 종이에는 이미 물체의 모양, 방향, 재질, 거칠기 같은 메모가 적혀 있어.</p>
+<p>이 밑그림이 GBuffer야.</p>
+<p>그 위에 빨간 조명 셀로판을 한 장 얹어.</p>
+<p>그러면 빨간 조명이 닿는 부분만 색이 더해져.</p>
+<p>다음엔 파란 조명 셀로판을 얹어.</p>
+<p>그다음엔 노란 조명 셀로판을 얹어.</p>
+<p>셀로판을 얹을 때마다 밑그림을 다시 그리지는 않아.</p>
+<p>밑그림에 적힌 "여긴 금속", "여긴 위쪽을 보는 노멀", "여긴 거친 표면" 같은 메모를 읽고 빛 색만 더해.</p>
+<p>디퍼드 라이팅이 딱 이거야.</p>
+<p><strong>BasePass = 밑그림 만들기.</strong></p>
+<p><strong>Lighting = 셀로판을 한 장씩 얹기.</strong></p>
+<p>방향광은 화면 전체를 덮는 큰 셀로판이야.</p>
+<p>포인트 라이트나 스폿 라이트는 동그라미나 원뿔 모양 셀로판이야.</p>
+<p>라이트가 닿지 않는 픽셀까지 칠하면 낭비니까, 언리얼은 구나 원뿔 같은 기하를 그려서 영향권 안쪽만 픽셀 셰이더가 돌게 해.</p>
+<p>이제 실제 코드에서 이 셀로판 공장이 어떻게 돌아가는지 보자.</p>
+<hr>
+</div>
+<div class="conversation"><h2>1. 라이트를 먼저 줄 세운다 — 어떤 셀로판부터 얹을까</h2>
+<p>렌더러는 바로 <code>RenderLight</code>를 부르지 않아.</p>
+<p>먼저 씬에 있는 라이트들을 훑고, 이 뷰에서 정말 그릴 라이트인지 확인해.</p>
+<p>그리고 그림자, 라이트 함수, IES, 라이팅 채널 같은 특징을 <code>SortKey</code>에 적어둬.</p>
+<p>밑그림 위에 셀로판을 얹기 전에, 셀로판 더미를 분류하는 장면이야.</p>
+<p><strong><code>LightRendering.cpp:1351</code></strong></p>
+<div class="code-block">		if (LightSceneInfo-&gt;ShouldRenderLightViewIndependent()
+			// Reflection override skips direct specular because it tends to be blindingly bright with a perfectly smooth surface
+			&amp;&amp; !ViewFamily.EngineShowFlags.ReflectionOverride)
+		{
+			// Check if the light is visible in any of the views.
+			for (int32 ViewIndex = 0; ViewIndex &lt; Views.Num(); ViewIndex++)
+			{
+				if (LightSceneInfo-&gt;ShouldRenderLight(Views[ViewIndex]))
+				{
+					FSortedLightSceneInfo* SortedLightInfo = new(SortedLights) FSortedLightSceneInfo(LightSceneInfo);
+
+					// Check for shadows and light functions.
+					SortedLightInfo-&gt;SortKey.Fields.LightType = LightSceneInfoCompact.LightType;
+					SortedLightInfo-&gt;SortKey.Fields.bIESProfile = ViewFamily.EngineShowFlags.TexturedLightProfiles &amp;&amp; (LightSceneInfo-&gt;Proxy-&gt;GetIESTextureResource() != 0);
+					SortedLightInfo-&gt;SortKey.Fields.bShadowed = bDynamicShadows &amp;&amp; CheckForProjectedShadows(LightSceneInfo);
+					SortedLightInfo-&gt;SortKey.Fields.bLightFunction = ViewFamily.EngineShowFlags.LightFunctions &amp;&amp; CheckForLightFunction(LightSceneInfo);
+					SortedLightInfo-&gt;SortKey.Fields.bUsesLightingChannels = LightSceneInfo-&gt;Proxy-&gt;GetLightingChannelMask() != GetDefaultLightingChannelMask();</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 라이트 줄 세우기<br>&bull;&nbsp;<strong><code>ShouldRenderLightViewIndependent()</code></strong> = 뷰와 상관없이 이 라이트가 기본적으로 그릴 만한지 묻는 검사야.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = "그리고"야. 앞 조건도 맞고 뒤 조건도 맞아야 안으로 들어가.<br>&bull;&nbsp;<strong><code>for (int32 ViewIndex = 0; ... )</code></strong> = 뷰가 여러 개면 하나씩 돌아보는 반복문이야.<br>&bull;&nbsp;<strong><code>new(SortedLights)</code></strong> = 일반 <code>new</code>가 아니라 배열 안에 바로 자리를 잡아 객체를 만드는 언리얼식 배치 생성이야.<br>&bull;&nbsp;<strong><code>SortKey.Fields</code></strong> = 정렬용 꼬리표 묶음이야. 라이트 타입, 그림자 여부, 라이트 함수 여부를 적어둬.<br>&bull;&nbsp;<strong><code>bShadowed</code></strong> = <code>b</code>로 시작하니 참/거짓 값이야. 그림자를 그려야 하는 라이트인지 표시해.<br>&bull;&nbsp;<strong><code>Proxy-&gt;</code></strong> = 렌더 스레드용 라이트 대리자한테 물어보는 화살표야.</div>
+<p>여기서 중요한 건 라이트를 그냥 리스트에 넣는 게 아니라는 점이야.</p>
+<p>언리얼은 "이 셀로판은 그림자가 있나?", "특수 무늬가 있나?", "특정 라이팅 채널만 칠하나?"를 먼저 적어.</p>
+<p>왜냐면 이 꼬리표가 뒤에서 경로를 나누거든.</p>
+<p>어떤 라이트는 clustered로 묶어서 처리하고, 어떤 라이트는 표준 디퍼드로 하나씩 처리하고, 어떤 라이트는 그림자 때문에 따로 간다.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>ShouldRenderLightViewIndependent()</code>로 라이트 자체를 거르고 → 각 <code>View</code>에서 <code>ShouldRenderLight</code>를 확인하고 → <code>FSortedLightSceneInfo</code>를 만들고 → <code>SortKey.Fields</code>에 특징을 적어. 이어 읽으면 "라이트를 바로 칠하지 않고, 먼저 셀로판 더미에 이름표를 붙인다"야.</div>
+</div>
+<div class="conversation"><h2>2. 큰 갈림길 — 묶어서 칠할까, 하나씩 칠할까</h2>
+<p>이제 <code>RenderLights</code>로 들어와.</p>
+<p>여기서 핵심 질문은 이거야.</p>
+<p>"여러 작은 셀로판을 격자에 넣고 한 번에 처리할 수 있나?"</p>
+<p>그게 가능하면 clustered deferred로 간다.</p>
+<p>안 되면 표준 디퍼드, 즉 라이트마다 화면을 다시 훑는 길로 간다.</p>
+<p><strong><code>LightRendering.cpp:1572</code></strong></p>
+<div class="code-block">			// Currently they have a special path anyway in case of standard deferred so always skip the simple lights
+			int32 StandardDeferredStart = SortedLightSet.SimpleLightsEnd;
+
+			bool bRenderSimpleLightsStandardDeferred = SortedLightSet.SimpleLights.InstanceData.Num() &gt; 0;
+
+			UE_CLOG(ShouldUseClusteredDeferredShading(ViewFamily.GetShaderPlatform()) &amp;&amp; !AreLightsInLightGrid(), LogRenderer, Warning,
+				TEXT("Clustered deferred shading is enabled, but lights were not injected in grid, falling back to other methods (hint 'r.LightCulling.Quality' may cause this)."));
+
+			// True if the clustered shading is enabled and the feature level is there, and that the light grid had lights injected.
+			if (ShouldUseClusteredDeferredShading(ViewFamily.GetShaderPlatform()) &amp;&amp; AreLightsInLightGrid())
+			{
+				// Tell the trad. deferred that the clustered deferred capable lights are taken care of.
+				// This includes the simple lights
+				StandardDeferredStart = SortedLightSet.ClusteredSupportedEnd;
+				// Tell the trad. deferred that the simple lights are spoken for.
+				bRenderSimpleLightsStandardDeferred = false;
+
+				AddClusteredDeferredShadingPass(GraphBuilder, SceneTextures, SortedLightSet, ShadowSceneRenderer.VirtualShadowMapMaskBits, ShadowSceneRenderer.VirtualShadowMapMaskBitsHairStrands, LightingChannelsTexture);
+			}
+
+			if (bRenderSimpleLightsStandardDeferred)
+			{
+				RenderSimpleLightsStandardDeferred(GraphBuilder, SceneTextures, SortedLightSet);
+			}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — clustered와 standard 갈림길<br>&bull;&nbsp;<strong><code>StandardDeferredStart</code></strong> = 표준 디퍼드로 하나씩 칠하기 시작할 라이트 인덱스야.<br>&bull;&nbsp;<strong><code>SimpleLightsEnd</code></strong> = simple light 구간의 끝이야. 여기 전까지는 작은 라이트 묶음이라고 보면 돼.<br>&bull;&nbsp;<strong><code>UE_CLOG</code></strong> = 조건이 참일 때만 로그를 찍는 매크로야.<br>&bull;&nbsp;<strong><code>ShouldUseClusteredDeferredShading(...)</code></strong> = clustered deferred를 쓸 설정과 플랫폼 조건이 되는지 묻는 함수야.<br>&bull;&nbsp;<strong><code>AreLightsInLightGrid()</code></strong> = 라이트들이 격자에 제대로 주입됐는지 확인해.<br>&bull;&nbsp;<strong><code>AddClusteredDeferredShadingPass(...)</code></strong> = 가능한 라이트들을 한 번에 처리하는 clustered 패스를 추가해.<br>&bull;&nbsp;<strong><code>RenderSimpleLightsStandardDeferred(...)</code></strong> = simple light를 표준 디퍼드 방식으로 따로 그리는 함수야.</div>
+<p>여기서 clustered는 "작은 셀로판들을 격자 상자에 미리 꽂아두고, 픽셀마다 필요한 것만 꺼내는 방식"이야.</p>
+<p>그게 되면 <code>StandardDeferredStart</code>를 앞으로 당겨서 이미 처리된 라이트는 표준 디퍼드가 다시 건드리지 않게 해.</p>
+<p>반대로 격자에 못 넣었거나 특수 조건이 있으면 표준 디퍼드 길로 남겨둬.</p>
+<p>디퍼드 라이팅을 공부할 때 헷갈리기 쉬운 점이 여기야.</p>
+<p>"디퍼드 = 무조건 라이트마다 한 번"은 현대 UE에서는 절반만 맞아.</p>
+<p>작고 조건이 단순한 라이트는 clustered/tiled로 묶을 수 있어.</p>
+<p>하지만 그림자, 라이트 함수, 방향광, 특수 경로 같은 라이트는 여전히 표준 디퍼드의 셀로판 한 장씩 얹는 흐름을 탄다.</p>
+</div>
+<div class="conversation"><h2>3. 표준 디퍼드의 본체 — 라이트마다 <code>RenderLight</code></h2>
+<p>이제 진짜 오늘의 문장으로 내려가자.</p>
+<p>표준 디퍼드 경로에서는 라이트 인덱스를 돌면서 <code>RenderLight</code>를 부른다.</p>
+<p>이게 "라이트마다 화면을 한 번 더"의 C++ 형태야.</p>
+<p><strong><code>LightRendering.cpp:1632</code></strong></p>
+<div class="code-block">					for (int32 LightIndex = StandardDeferredStart; LightIndex &lt; UnbatchedLightStart; LightIndex++)
+					{
+						// Render the light to the scene color buffer, using a 1x1 white texture as input
+						const FSortedLightSceneInfo&amp; SortedLightInfo = SortedLights[LightIndex];
+						const FLightSceneInfo* LightSceneInfo = SortedLightInfo.LightSceneInfo;
+						RenderLight(GraphBuilder, Scene, View, SceneTextures, LightSceneInfo, nullptr, LightingChannelsTexture,
+							false /*bRenderOverlap*/, false /*bCloudShadow*/, SortedLightInfo.bIsCompatibleWithLightFunctionAtlas);
+					}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 라이트마다 한 번<br>&bull;&nbsp;<strong><code>for (int32 LightIndex = ... )</code></strong> = 라이트 배열을 시작부터 끝 직전까지 하나씩 돈다는 뜻이야.<br>&bull;&nbsp;<strong><code>StandardDeferredStart</code></strong> = 표준 디퍼드가 맡을 첫 라이트야.<br>&bull;&nbsp;<strong><code>UnbatchedLightStart</code></strong> = 묶어서 처리하지 않는 특수 라이트 구간이 시작되는 지점이야.<br>&bull;&nbsp;<strong><code>const FSortedLightSceneInfo&amp;</code></strong> = 정렬된 라이트 정보를 복사하지 않고 별명으로 읽겠다는 뜻이야.<br>&bull;&nbsp;<strong><code>FLightSceneInfo*</code></strong> = 렌더러가 쓰는 실제 라이트 정보 포인터야.<br>&bull;&nbsp;<strong><code>nullptr</code></strong> = 여기서는 별도 shadow mask 텍스처가 없다는 빈칸 표시야.<br>&bull;&nbsp;<strong><code>false /*bCloudShadow*/</code></strong> = 값은 <code>false</code>인데, 주석으로 어떤 인자인지 붙여놓은 거야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>LightIndex</code>를 하나씩 올리면서 → <code>SortedLights[LightIndex]</code>에서 라이트 정보를 꺼내고 → 그 안의 <code>LightSceneInfo</code>를 뽑고 → <code>RenderLight(...)</code>를 호출해. 이어 읽으면 "표준 디퍼드는 셀로판 한 장마다 <code>RenderLight</code> 한 번"이야.</div>
+<p>여기서 메시를 다시 그리는 코드는 없어.</p>
+<p><code>SceneTextures</code>가 같이 넘어가고 있지?</p>
+<p>그 안에 SceneColor, Depth, GBuffer uniform buffer가 들어 있어.</p>
+<p>즉 라이트 패스는 "메시 목록"이 아니라 "이미 깔린 화면 텍스처들"을 들고 들어간다.</p>
+<p>이게 디퍼드가 라이트 많을 때 버티는 핵심이야.</p>
+<p>재질 셰이더를 라이트마다 다시 돌리는 게 아니라, GBuffer를 재사용한다.</p>
+</div>
+<div class="conversation"><h2>4. 픽셀 셰이더에게 식판을 넘긴다</h2>
+<p><code>RenderLight</code> 안쪽에서는 픽셀 셰이더 파라미터를 만든다.</p>
+<p>여기서 SceneTextures, shadow mask, lighting channel, deferred light uniform이 한데 묶여.</p>
+<p>셀로판 한 장을 얹기 위해 필요한 도구 꾸러미를 싸는 장면이야.</p>
+<p><strong><code>LightRendering.cpp:2572</code></strong></p>
+<div class="code-block">	// PS - General parameters
+	const FVolumetricCloudRenderSceneInfo* CloudInfo = bCloudShadow ? Scene-&gt;GetVolumetricCloudSceneInfo() : nullptr;
+	Out.SceneTextures = SceneTexturesUniformBuffer;
+	Out.HairStrands = HairStrandsUniformBuffer;
+	Out.ForwardLightStruct = View.ForwardLightingResources.ForwardLightUniformBuffer;
+	Out.Substrate = Substrate::BindSubstrateGlobalUniformParameters(View);
+	Out.LightingChannelsTexture = LightingChannelsTexture ? LightingChannelsTexture : WhiteDummy;
+	Out.LightingChannelsSampler = TStaticSamplerState&lt;SF_Point, AM_Clamp, AM_Clamp, AM_Clamp&gt;::GetRHI();
+	Out.CloudShadowAO = GetCloudShadowAOParameters(GraphBuilder, View, CloudInfo);
+	Out.CloudShadowEnabled = SetupLightCloudTransmittanceParameters(GraphBuilder, Scene, View, LightSceneInfo, Out.CloudShadow) ? 1 : 0;
+	Out.LightAttenuationTexture = ShadowMaskTexture ? ShadowMaskTexture : WhiteDummy;
+	Out.LightAttenuationTextureSampler = TStaticSamplerState&lt;SF_Point, AM_Wrap, AM_Wrap, AM_Wrap&gt;::GetRHI();
+	Out.View = View.ViewUniformBuffer;
+	Out.DeferredLight = CreateDeferredLightUniformBuffer(GraphBuilder, View, *LightSceneInfo);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 픽셀 셰이더 파라미터<br>&bull;&nbsp;<strong><code>Out.SceneTextures</code></strong> = 픽셀 셰이더가 읽을 장면 텍스처 묶음이야. GBuffer도 이 길로 들어가.<br>&bull;&nbsp;<strong><code>SceneTexturesUniformBuffer</code></strong> = 여러 텍스처와 샘플러를 한 묶음으로 셰이더에 넘기는 상자야.<br>&bull;&nbsp;<strong><code>? ... : ...</code></strong> = 조건이 맞으면 앞 값, 아니면 뒤 값을 고르는 짧은 if야.<br>&bull;&nbsp;<strong><code>WhiteDummy</code></strong> = 진짜 텍스처가 없을 때 대신 쓰는 흰색 기본 텍스처야.<br>&bull;&nbsp;<strong><code>TStaticSamplerState&lt;...&gt;::GetRHI()</code></strong> = GPU 샘플러 상태를 가져오는 코드야. 점 샘플링, 클램프 같은 규칙을 담아.<br>&bull;&nbsp;<strong><code>Out.DeferredLight</code></strong> = 지금 칠할 라이트 하나의 색, 방향, 반경 같은 정보를 담은 uniform buffer야.<br>&bull;&nbsp;<strong><code>*LightSceneInfo</code></strong> = 포인터가 가리키는 실제 라이트 정보를 꺼내 함수에 넘긴다는 뜻이야.</div>
+<p>이 토막을 보면 디퍼드 라이팅의 입력물이 보인다.</p>
+<p>하나는 <code>SceneTextures</code>야.</p>
+<p>이건 밑그림 종이야.</p>
+<p>다른 하나는 <code>DeferredLight</code>야.</p>
+<p>이건 지금 얹을 셀로판 한 장의 색과 모양이야.</p>
+<p>그리고 <code>LightAttenuationTexture</code>는 그림자나 감쇠 마스크 쪽 입력이야.</p>
+<p>아직 <a class="xref" href="ch-23-shadow-maps.html">shadow-maps</a>를 안 봤으니 여기서는 "빛이 얼마나 막혔는지 적힌 마스크" 정도로만 잡자.</p>
+</div>
+<div class="conversation"><h2>5. 방향광은 전체 화면, 로컬 라이트는 구나 원뿔</h2>
+<p>이제 <code>InternalRenderLight</code>가 실제 그리기 명령을 만든다.</p>
+<p>방향광은 태양처럼 화면 전체에 영향을 준다고 봐.</p>
+<p>그래서 큰 셀로판 한 장을 화면 전체에 덮는다.</p>
+<p>반대로 포인트, 스폿, 렉트 라이트는 영향권이 있으니 구나 원뿔 모양을 그려.</p>
+<p>그 기하 안에 들어온 픽셀만 픽셀 셰이더가 돈다.</p>
+<p><strong><code>LightRendering.cpp:2749</code></strong></p>
+<div class="code-block">				FDeferredLightVS::FParameters VSParameters2 = FDeferredLightVS::GetParameters(View);
+				SetShaderParameters(RHICmdList, VertexShader, VertexShader.GetVertexShader(), VSParameters2);
+
+				// Apply the directional light as a full screen quad
+				DrawRectangle(
+					RHICmdList,
+					0, 0,
+					View.ViewRect.Width(), View.ViewRect.Height(),
+					View.ViewRect.Min.X, View.ViewRect.Min.Y,	
+					View.ViewRect.Width(), View.ViewRect.Height(),
+					View.ViewRect.Size(),
+					View.GetSceneTexturesConfig().Extent,
+					VertexShader,
+					EDRF_UseTriangleOptimization);
+			}
+		}
+		else // Radial light (LightType_Point, LightType_Spot, LightType_Rect)
+		{	
+			FDeferredLightVS::FPermutationDomain PermutationVectorVS;
+			PermutationVectorVS.Set&lt;FDeferredLightVS::FRadialLight&gt;(true);
+			TShaderMapRef&lt;FDeferredLightVS&gt; VertexShader(View.ShaderMap, PermutationVectorVS);
+
+			GraphicsPSOInit.BoundShaderState.VertexShaderRHI = VertexShader.GetVertexShader();
+			GraphicsPSOInit.BoundShaderState.PixelShaderRHI = PixelShader.GetPixelShader();
+
+#if PSO_PRECACHING_VALIDATE
+			if (PSOCollectorStats::IsFullPrecachingValidationEnabled())
+			{
+				static const int32 GlobalPSOCollectorIndex = FGlobalPSOCollectorManager::GetIndex(DeferredLightGlobalPSOCollectorName);
+				PSOCollectorStats::CheckGlobalGraphicsPipelineStateInCache(GraphicsPSOInit, GlobalPSOCollectorIndex);
+			}
+#endif // PSO_PRECACHING_VALIDATE
+
+			SetGraphicsPipelineState(RHICmdList, GraphicsPSOInit, StencilRef);
+			SetShaderParameters(RHICmdList, PixelShader, PixelShader.GetPixelShader(), PassParameters-&gt;PS);
+
+			FDeferredLightVS::FParameters VSParameters2 = FDeferredLightVS::GetParameters(View, LightSceneInfo);
+			SetShaderParameters(RHICmdList, VertexShader, VertexShader.GetVertexShader(), VSParameters2);
+
+			// Use DBT to allow work culling on shadow lights
+			if (GraphicsPSOInit.bDepthBounds)
+			{
+				// Can use the depth bounds test to skip work for pixels which won't be touched by the light (i.e outside the depth range)
+				float NearDepth = 1.f;
+				float FarDepth = 0.f;
+				CalculateLightNearFarDepthFromBounds(View,LightBounds,NearDepth,FarDepth);
+				if (NearDepth &lt;= FarDepth)
+				{
+					NearDepth = 1.0f;
+					FarDepth = 0.0f;
+				}
+
+				// UE uses reversed depth, so far &lt; near
+				RHICmdList.SetDepthBounds(FarDepth, NearDepth);
+			}
+
+			if( LightType == LightType_Point || LightType == LightType_Rect )
+			{
+				// Apply the point or spot light with some approximate bounding geometry,
+				// So we can get speedups from depth testing and not processing pixels outside of the light's influence.
+				StencilingGeometry::DrawSphere(RHICmdList);
+			}
+			else if (LightType == LightType_Spot)
+			{
+				StencilingGeometry::DrawCone(RHICmdList);
+			}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 전체 화면과 라이트 기하<br>&bull;&nbsp;<strong><code>DrawRectangle(...)</code></strong> = 화면 사각형을 그려서 픽셀 셰이더를 화면 전체에 돌리는 호출이야.<br>&bull;&nbsp;<strong><code>View.ViewRect.Width()</code></strong> = 지금 뷰의 가로 크기야.<br>&bull;&nbsp;<strong><code>EDRF_UseTriangleOptimization</code></strong> = 사각형을 효율적으로 그리기 위한 옵션이야.<br>&bull;&nbsp;<strong><code>else // Radial light</code></strong> = 방향광이 아니면 포인트, 스폿, 렉트 같은 로컬 라이트라는 뜻이야.<br>&bull;&nbsp;<strong><code>PermutationVectorVS.Set&lt;...&gt;(true)</code></strong> = 셰이더 변형 중 "radial light용"을 켠다는 뜻이야.<br>&bull;&nbsp;<strong><code>SetGraphicsPipelineState</code></strong> = GPU 파이프라인 상태를 실제로 묶어 설정하는 호출이야.<br>&bull;&nbsp;<strong><code>SetDepthBounds</code></strong> = 깊이 범위 밖 픽셀을 덜 돌리게 하는 장치야.<br>&bull;&nbsp;<strong><code>DrawSphere</code> / <code>DrawCone</code></strong> = 포인트/렉트는 구, 스폿은 원뿔로 영향권을 그린다는 뜻이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 방향광이면 <code>DrawRectangle</code>로 화면 전체 셀로판을 덮고 → 로컬 라이트면 radial 셰이더 변형을 고르고 → 깊이 범위를 줄이고 → 포인트/렉트는 <code>DrawSphere</code>, 스폿은 <code>DrawCone</code>을 그려. 이어 읽으면 "라이트마다 화면을 훑되, 로컬 라이트는 영향권 모양으로 훑는다"야.</div>
+<p>여기서 "화면을 한 번 더"라는 말이 더 정확해져.</p>
+<p>방향광은 정말 화면 전체야.</p>
+<p>하지만 포인트 라이트는 화면 전체가 아니라 구가 덮는 픽셀만이야.</p>
+<p>스폿 라이트는 원뿔이 덮는 픽셀만이야.</p>
+<p>그래서 디퍼드 라이팅은 라이트 수가 많아도 무조건 <code>전체화면 * 라이트수</code>로만 터지지 않아.</p>
+<p>작은 라이트는 작은 셀로판만 얹는다.</p>
+<p>그리고 더 많은 작은 라이트는 clustered path가 먼저 먹을 수도 있어.</p>
+</div>
+<div class="conversation"><h2>6. 픽셀 셰이더 — GBuffer를 읽고 빛을 더한다</h2>
+<p>마지막은 셰이더야.</p>
+<p>여기서 진짜로 "GBuffer에 빛을 얹는다"가 나온다.</p>
+<p>픽셀 위치에서 <code>GetScreenSpaceData</code>로 GBuffer를 읽고, 그 픽셀이 조명을 받을 수 있으면 라이트 데이터를 만들고, 감쇠와 그림자까지 반영해서 <code>GetDynamicLighting</code>을 부른다.</p>
+<p>결과는 <code>OutColor += Radiance</code>.</p>
+<p>더하기다.</p>
+<p>셀로판을 여러 장 얹는다는 비유가 여기서 정확히 맞아.</p>
+<p><strong><code>DeferredLightPixelShaders.usf:368</code></strong></p>
+<div class="code-block">	FScreenSpaceData ScreenSpaceData = GetScreenSpaceData(InputParams.ScreenUV);
+	// Only light pixels marked as using deferred shading
+	BRANCH if (ScreenSpaceData.GBuffer.ShadingModelID &gt; 0
+#if USE_LIGHTING_CHANNELS
+		&amp;&amp; (GetLightingChannelMask(InputParams.ScreenUV) &amp; DeferredLightUniforms.LightingChannelMask)
+#endif
+		)
+	{
+		const float SceneDepth = CalcSceneDepth(InputParams.ScreenUV);
+		const FDerivedParams DerivedParams = GetDerivedParams(InputParams, SceneDepth);
+
+		FDeferredLightData LightData = InitDeferredLightFromUniforms(CURRENT_LIGHT_TYPE);
+		UpdateLightDataColor(LightData.Color, InputParams, DerivedParams);
+
+	 #if USE_HAIR_COMPLEX_TRANSMITTANCE
+		if (ScreenSpaceData.GBuffer.ShadingModelID == SHADINGMODELID_HAIR &amp;&amp; ShouldUseHairComplexTransmittance(ScreenSpaceData.GBuffer))
+		{
+			LightData.HairTransmittance = EvaluateDualScattering(ScreenSpaceData.GBuffer, DerivedParams.CameraVector, -DeferredLightUniforms.Direction);
+		}
+	#endif
+
+		float Dither = InterleavedGradientNoise(InputParams.PixelPos, View.StateFrameIndexMod8);
+
+		float SurfaceShadow = 1.0f;
+		
+		float4 LightAttenuation = GetLightAttenuationFromShadow(InputParams, SceneDepth, DerivedParams.TranslatedWorldPosition);
+		float4 Radiance = GetDynamicLighting(DerivedParams.TranslatedWorldPosition, DerivedParams.CameraVector, ScreenSpaceData.GBuffer, ScreenSpaceData.AmbientOcclusion, LightData, LightAttenuation, Dither, uint2(InputParams.PixelPos), SurfaceShadow);
+
+		OutColor += Radiance;
+	}
+
+#endif // SUBSTRATE_ENABLED==1
+
+	// RGB:SceneColor Specular and Diffuse
+	// A:Non Specular SceneColor Luminance
+	// So we need PreExposure for both color and alpha
+	OutColor.rgba *= GetExposure();</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — GBuffer에 빛 더하기<br>&bull;&nbsp;<strong><code>FScreenSpaceData</code></strong> = 화면 픽셀에서 읽은 재질 정보와 AO를 담는 상자야.<br>&bull;&nbsp;<strong><code>GetScreenSpaceData(InputParams.ScreenUV)</code></strong> = GBuffer 텍스처들을 읽어서 한 픽셀의 신분증을 복원하는 함수야.<br>&bull;&nbsp;<strong><code>ScreenSpaceData.GBuffer.ShadingModelID &gt; 0</code></strong> = 조명을 받을 표면인지 확인해. unlit이나 하늘 같은 픽셀은 건너뛰는 문이야.<br>&bull;&nbsp;<strong><code>#if USE_LIGHTING_CHANNELS</code></strong> = 컴파일할 때 이 기능을 넣을지 말지 고르는 셰이더 전처리 조건이야.<br>&bull;&nbsp;<strong><code>&amp;</code></strong> = 비트끼리 겹치는 부분을 보는 연산이야. 여기서는 라이트 채널이 맞는지 본다.<br>&bull;&nbsp;<strong><code>FDeferredLightData</code></strong> = 지금 얹을 라이트 한 장의 셰이더용 데이터야.<br>&bull;&nbsp;<strong><code>GetLightAttenuationFromShadow</code></strong> = 그림자나 감쇠로 빛이 얼마나 줄었는지 계산해.<br>&bull;&nbsp;<strong><code>GetDynamicLighting(...)</code></strong> = GBuffer 재질 정보와 라이트 정보를 섞어서 실제 빛 색을 계산해.<br>&bull;&nbsp;<strong><code>OutColor += Radiance</code></strong> = 기존 SceneColor에 이번 라이트 결과를 더한다는 뜻이야.<br>&bull;&nbsp;<strong><code>GetExposure()</code></strong> = 엔진의 pre-exposure 값을 곱해서 HDR 노출 기준에 맞춘다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>GetScreenSpaceData</code>로 밑그림 메모를 읽고 → <code>ShadingModelID &gt; 0</code>인 픽셀만 통과시키고 → <code>LightData</code>와 <code>LightAttenuation</code>을 만들고 → <code>GetDynamicLighting</code>으로 이번 라이트 색을 구하고 → <code>OutColor += Radiance</code>로 누적해. 아까는 HLSL 외계어였는데 이제 "셀로판 한 장의 색을 SceneColor에 더한다"로 읽히지?</div>
+<p>이제 전체 그림이 잡혀.</p>
+<p>BasePass가 재질 정보를 눕혔으니, 라이팅 패스는 물체를 다시 묻지 않는다.</p>
+<p>픽셀마다 GBuffer를 읽는다.</p>
+<p>라이트 하나의 정보를 읽는다.</p>
+<p>둘을 섞어 나온 빛을 SceneColor에 더한다.</p>
+<p>그리고 다음 라이트가 또 들어와서 같은 일을 한다.</p>
+<p>이게 디퍼드 라이팅의 핵심 반복문이야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>콜/데이터 흐름 한눈에</h2>
+<div class="code-block">BasePass / BasePassPixelShader
+   └─ GBufferA/B/C/D/E/F + Depth 기록                         → [basepass-gbuffer]
+
+FSceneRenderer::GatherAndSortLights (:1301)
+   └─ ShouldRenderLight + SortKey.Fields
+      └─ Simple / Clustered 가능 / Standard Deferred 필요 구간 계산
+
+FDeferredShadingSceneRenderer::RenderLights (:1520)
+   ├─ AddClusteredDeferredShadingPass (:1589)     가능한 라이트는 격자 묶음 처리
+   ├─ RenderSimpleLightsStandardDeferred (:1594)  simple light 별도 경로
+   └─ for LightIndex (:1632)
+        └─ RenderLight (:2839)
+             ├─ GetDeferredLightPSParameters (:2547)
+             │    ├─ SceneTextures uniform buffer
+             │    ├─ LightAttenuationTexture
+             │    └─ DeferredLight uniform buffer
+             └─ InternalRenderLight (:2669)
+                  ├─ Directional → DrawRectangle (:2753)
+                  └─ Point/Rect/Spot → DrawSphere/DrawCone (:2809/:2813)
+
+DeferredLightPixelMain (:233)
+   ├─ GetScreenSpaceData (:368)
+   ├─ GetDynamicLighting (:394)
+   └─ OutColor += Radiance (:396)</div>
+<p>데이터 흐름으로 다시 쓰면 더 짧아.</p>
+<div class="code-block">GBuffer 신분증 + Light 하나 + Shadow/Attenuation
+        ↓
+DeferredLightPixelMain
+        ↓
+Radiance
+        ↓
+SceneColor에 더하기
+        ↓
+다음 Light도 반복</div>
+</div>
+<div class="conversation"><h2>우리 서버·DirectX 랑 비교</h2>
+<p>서버 쪽으로 치면 GBuffer는 "캐릭터 스냅샷 캐시"야.</p>
+<p>매 패킷마다 DB를 다시 긁지 않고, 이미 메모리에 펴둔 캐릭터 상태를 읽는 거지.</p>
+<p>라이팅 패스는 <code>SP_*</code> 처리처럼 그 스냅샷에 이벤트 하나를 얹는 느낌이야.</p>
+<p>라이트 하나가 들어오면 "이 픽셀 상태에 이 라이트 효과를 더하면 얼마냐"만 계산해.</p>
+<p>DirectX 경험으로 치면 더 직접적이야.</p>
+<p>포워드는 메시를 그리는 픽셀 셰이더 안에서 라이트까지 끝낸다.</p>
+<p>디퍼드는 MRT에 재질 정보를 먼저 쓰고, 나중에 fullscreen quad나 sphere/cone draw로 SceneColor에 additive blending을 한다.</p>
+<p>이때 중요한 차이는 셰이더 입력이야.</p>
+<p>포워드 픽셀 셰이더의 입력은 보통 정점에서 보간된 재질/노멀/UV야.</p>
+<p>디퍼드 라이팅 픽셀 셰이더의 입력은 화면 좌표와 GBuffer야.</p>
+<p>그래서 라이트가 많을수록 이득이 난다.</p>
+<p>재질을 다시 평가하지 않으니까.</p>
+<p>다만 공짜는 아니야.</p>
+<p>GBuffer를 저장하는 메모리 대역폭이 든다.</p>
+<p>반투명은 GBuffer에 잘 눕히기 어려워서 별도 경로가 필요하다. → <a class="xref" href="ch-25-translucency.html">translucency</a></p>
+<p>라이트가 화면 전체를 많이 덮으면 라이트 패스 비용도 커진다.</p>
+<p>그러니까 디퍼드는 "항상 빠름"이 아니라, <strong>복잡한 재질과 많은 라이트를 분리해서 반복 질문을 줄이는 구조</strong>야.</p>
+</div>
+<div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
+<ol><li>BasePass는 최종 조명을 끝내지 않고 GBuffer 신분증을 먼저 만든다.</li></ol>
+<ol><li><code>RenderLights</code>는 라이트를 clustered/simple/standard deferred 경로로 나눈다.</li></ol>
+<ol><li>표준 디퍼드 경로는 <code>for LightIndex</code>로 라이트마다 <code>RenderLight</code>를 호출한다.</li></ol>
+<ol><li>방향광은 <code>DrawRectangle</code>로 화면 전체를 훑고, 포인트/스폿/렉트는 <code>DrawSphere</code>나 <code>DrawCone</code>으로 영향권만 훑는다.</li></ol>
+<ol><li>픽셀 셰이더는 <code>GetScreenSpaceData</code>로 GBuffer를 읽고 <code>OutColor += Radiance</code>로 이번 라이트를 SceneColor에 더한다.</li></ol>
+<hr>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>디퍼드 라이팅은 BasePass가 남긴 GBuffer 신분증을 재사용해서, 라이트마다 메시를 다시 그리지 않고 화면 픽셀 위에 빛 셀로판을 한 장씩 더하는 구조다.</strong></p>
+<hr>
+<div class="note">막히면(선행 개념) → <a class="xref" href="ch-18-deferred-overview.html">deferred-overview</a> · <a class="xref" href="ch-20-basepass-gbuffer.html">basepass-gbuffer</a> · <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a><br>다음(빛이 막히는 법) → <a class="xref" href="ch-23-shadow-maps.html">shadow-maps</a></div></div><nav class="booknav"><a href="ch-21-basepass-shader.html"><span class="lbl">← 이전</span>BasePassPixelShader.usf 안으로</a><a class="nx" href="ch-23-shadow-maps.html"><span class="lbl">다음 →</span>그림자 — 빛의 눈으로 한 번 더 그린다</a></nav></div></body></html>

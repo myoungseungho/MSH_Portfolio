@@ -1,0 +1,332 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>셰이더 컴파일 파이프라인 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>셰이더 컴파일 파이프라인</h1><p>언리얼 렌더링 · 09 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "언리얼이 <code>.usf</code>를 어떻게 전처리하고, 백엔드로 넘기고, 캐시에 저장해 다시 안 하려 하는가"가 잡힌다.</div>
+<hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>DirectX를 만져봤으면 셰이더 컴파일은 낯설지 않아. HLSL을 쓰고, DXC 같은 컴파일러를 태우고, 나온 바이트코드를 PSO에 꽂지.</p>
+<p>그런데 언리얼은 그 단순한 그림보다 훨씬 커. 같은 <code>.usf</code>라도 플랫폼, 엔트리 함수, 머티리얼 옵션, 레이 트레이싱, bindless, 개발용 디버그 플래그가 다르면 결과가 갈라져.</p>
+<p>이걸 매번 생으로 컴파일하면 에디터 켜자마자 "Compiling Shaders 6000" 같은 숫자가 뜨고, 작은 머티리얼 수정 하나에도 몇 분씩 멈춘다.</p>
+<p>서버로 치면 클라 하나 들어올 때마다 <code>CM_*</code> 디스패치 테이블과 <code>SP_*</code> 메타데이터를 전부 새로 만드는 꼴이야.</p>
+<p><strong>언리얼도 같은 문제를 만났고, 답이 셰이더 컴파일 파이프라인과 캐시야.</strong></p>
+<p><code>.usf</code>를 바로 GPU에 던지는 게 아니라, 컴파일 환경을 붙이고, 전처리하고, 플랫폼 백엔드가 최종 코드를 만들고, 결과를 해시와 DDC에 넣어 다음엔 다시 안 하려 해.</p>
+<p>앞 장 <a class="xref" href="ch-08-shader-basics.html">shader-basics</a>에서는 "셰이더는 GPU에서 도는 작은 프로그램"까지만 봤어.</p>
+<p>다음 장 <a class="xref" href="ch-10-shader-parameters.html">shader-parameters</a>에서는 C++ 값이 셰이더 변수에 꽂히는 길을 볼 거야.</p>
+<p>그 사이에 "그 작은 프로그램이 애초에 어떻게 만들어지고 캐시에 박히는가"를 잡아야 뒤가 읽힌다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 식당 주방의 레시피 인쇄소</h2>
+<p>이번 장의 비유는 <strong>식당 주방의 레시피 인쇄소</strong>야.</p>
+<p>원본 레시피가 하나 있어도 주문 옵션은 계속 달라져.</p>
+<p>김치볶음밥 하나도 매운맛, 안 매운맛, 치즈 추가, 포장용, 홀용이 갈라지잖아.</p>
+<p>주방은 이렇게 돈다고 치자.</p>
+<ol><li><strong>레시피 원본</strong> — <code>.usf/.ush</code> 파일.</li><li><strong>주문 옵션 붙이기</strong> — 컴파일 환경, define, 플랫폼 설정.</li><li><strong>작업지시서 정리</strong> — include와 조건문이 정리된 전처리 결과.</li><li><strong>매장별 기계로 인쇄</strong> — D3D, Vulkan, Metal 백엔드 컴파일.</li><li><strong>완성 카드 보관</strong> — 캐시/DDC.</li></ol>
+<p>셰이더 컴파일도 이거야.</p>
+<p>원본 레시피만으로는 부족하고, 주문 옵션까지 합쳐야 진짜 결과가 나온다.</p>
+<p>그리고 같은 주문이 다시 오면 창고에서 완성 카드를 꺼내야지, 매번 새로 인쇄하면 장사가 안 된다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>1. 먼저 주문 옵션을 붙인다</h2>
+<p>주요 소스인 <code>Shader.cpp</code>에서 먼저 볼 곳은 <code>FShaderType::ModifyCompilationEnvironment</code>야.</p>
+<p>셰이더 타입마다 "이번 컴파일에 어떤 define과 바인딩 정보를 넣을지"를 여기서 환경에 적어 넣는다.</p>
+<p>레시피 원본에 "치즈 추가, 포장용, 3번 매장 기계용" 같은 주문 메모를 붙이는 단계야.</p>
+<p><strong><code>Shader.cpp:480</code></strong></p>
+<div class="code-block">void FShaderType::ModifyCompilationEnvironment(const FShaderPermutationParameters&amp; Parameters, FShaderCompilerEnvironment&amp; OutEnvironment) const
+{
+	(*ModifyCompilationEnvironmentRef)(Parameters, OutEnvironment);
+	
+	OutEnvironment.ShaderBindingLayout = GetShaderBindingLayout(Parameters);
+	if (OutEnvironment.ShaderBindingLayout)
+	{
+		// Store copy of RHI version of the shader binding layout in the environment so it can be serialized for the shader compiler workers
+		OutEnvironment.RHIShaderBindingLayout = OutEnvironment.ShaderBindingLayout-&gt;RHILayout;
+	}
+
+	if (Frequency == SF_RayHitGroup)
+	{
+		// TODO: add a define for each of the 3 possible entry points?
+		// See UE::ShaderCompilerCommon::ParseRayTracingEntryPoint for how to parse them
+	}
+	else
+	{
+		// define the function name as itself so one can use #ifdef to isolate the shader being compiled within a larger .usf file
+		OutEnvironment.SetDefine(FunctionName, FunctionName);
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 컴파일 환경 만들기<br>&bull;&nbsp;<strong><code>FShaderType::</code></strong> = <code>FShaderType</code> 안에 있는 함수라는 뜻이야.<br>&bull;&nbsp;<strong><code>const</code></strong> = 이 함수가 자기 상태를 함부로 바꾸지 않겠다는 약속이야.<br>&bull;&nbsp;<strong><code>&amp; OutEnvironment</code></strong> = 환경 상자를 복사하지 않고 원본에 바로 적겠다는 뜻이야.<br>&bull;&nbsp;<strong><code>(*ModifyCompilationEnvironmentRef)(...)</code></strong> = 타입별 환경 설정 함수를 함수 포인터로 부르는 거야.<br>&bull;&nbsp;<strong><code>ShaderBindingLayout</code></strong> = 셰이더가 리소스를 어떤 모양으로 받을지 적은 배치표야.<br>&bull;&nbsp;<strong><code>-&gt;RHILayout</code></strong> = 포인터가 가리키는 물건 안의 <code>RHILayout</code>을 꺼내는 화살표야.<br>&bull;&nbsp;<strong><code>Frequency == SF_RayHitGroup</code></strong> = 레이 트레이싱 hit group 셰이더인지 확인하는 조건이야.<br>&bull;&nbsp;<strong><code>SetDefine(FunctionName, FunctionName)</code></strong> = 셰이더 안에서 <code>#ifdef 함수이름</code>으로 갈라탈 수 있게 define을 박는 거야.</div>
+<p>같은 <code>.usf</code>라도 이 환경이 달라지면 다른 주문이 된다.</p>
+<p>서버에서 같은 패킷 ID라도 시즌 플래그나 지역 설정이 다르면 다른 처리로 가는 것과 비슷해.</p>
+<p>여기서부터 캐시 키가 달라질 씨앗이 생긴다.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 타입별 설정 함수가 환경을 채우고 → 바인딩 레이아웃이 있으면 RHI용 레이아웃을 넣고 → 일반 셰이더면 함수 이름을 define으로 박아. 이어 읽으면 "원본 레시피에 이번 주문 옵션을 붙인다"는 뜻이야.</div>
+<hr>
+</div>
+<div class="conversation"><h2>2. <code>.usf</code>를 바로 굽지 않고 전처리한다</h2>
+<p>이제 <code>ShaderCore.cpp</code>의 실제 파이프라인으로 내려가자.</p>
+<p>전처리는 include를 펼치고, define을 적용하고, 조건부 코드를 정리해서 백엔드가 먹기 좋은 작업지시서로 만드는 단계야.</p>
+<p>언리얼 C++ 코드에서 보이는 대표 중간 산출물은 <code>FShaderPreprocessOutput</code>이다.</p>
+<p><strong><code>ShaderCore.cpp:1804</code></strong></p>
+<div class="code-block">	static void PreprocessShaderInternal(
+		const IShaderFormat* Backend, 
+		FShaderCompileJob&amp; Job, 
+		const FShaderCompilerEnvironment&amp; Environment)
+	{
+		if (!GBreakOnPreprocessJob.IsEmpty())
+		{
+			if (Job.Input.DebugGroupName.Contains(GBreakOnPreprocessJob, ESearchCase::IgnoreCase))
+			{
+				UE_DEBUG_BREAK();
+			}
+		}
+		double PreprocessStartTime = FPlatformTime::Seconds();
+		Job.PreprocessOutput.bSucceeded = Backend-&gt;PreprocessShader(Job.Input, Environment, Job.PreprocessOutput);
+		Job.PreprocessOutput.PreprocessTime = FPlatformTime::Seconds() - PreprocessStartTime;
+
+		if (Job.PreprocessOutput.bSucceeded &amp;&amp; Backend-&gt;RequiresSecondaryCompile(Job.Input, Environment, Job.PreprocessOutput))
+		{
+			PreprocessStartTime = FPlatformTime::Seconds();
+			Job.SecondaryPreprocessOutput = MakeUnique&lt;FShaderPreprocessOutput&gt;();
+			Job.SecondaryPreprocessOutput-&gt;bIsSecondary = true;
+			Job.SecondaryPreprocessOutput-&gt;bSucceeded = Backend-&gt;PreprocessShader(Job.Input, Environment, *Job.SecondaryPreprocessOutput);
+			Job.SecondaryPreprocessOutput-&gt;PreprocessTime = FPlatformTime::Seconds() - PreprocessStartTime;
+
+			// Mark the main job preprocess output as failed if the secondary preprocess fails, even if the primary succeeds
+			// This means the job submission code only needs to check one flag to determine whether to actually submit the job 
+			// (no point in trying to compile if either of the two preprocess steps fail)
+			Job.PreprocessOutput.bSucceeded &amp;= Job.SecondaryPreprocessOutput-&gt;bSucceeded;
+		}
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 전처리 단계<br>&bull;&nbsp;<strong><code>static void</code></strong> = 객체 없이 부를 수 있고 돌려주는 값은 없는 함수야.<br>&bull;&nbsp;<strong><code>const IShaderFormat* Backend</code></strong> = 플랫폼별 셰이더 컴파일러 손잡이야.<br>&bull;&nbsp;<strong><code>FShaderCompileJob&amp; Job</code></strong> = 컴파일 일감 하나야. 입력, 전처리 결과, 최종 출력이 이 안에 들어 있어.<br>&bull;&nbsp;<strong><code>FPlatformTime::Seconds()</code></strong> = 현재 시간을 재서 걸린 시간을 계산하려는 거야.<br>&bull;&nbsp;<strong><code>Backend-&gt;PreprocessShader(...)</code></strong> = 백엔드에게 "먼저 전처리해줘"라고 시키는 호출이야.<br>&bull;&nbsp;<strong><code>Job.PreprocessOutput</code></strong> = 전처리된 작업지시서 상자야.<br>&bull;&nbsp;<strong><code>RequiresSecondaryCompile</code></strong> = 보조 전처리/컴파일이 더 필요한지 묻는 함수야.<br>&bull;&nbsp;<strong><code>MakeUnique&lt;FShaderPreprocessOutput&gt;()</code></strong> = 보조 전처리 결과 상자를 새로 만드는 거야.<br>&bull;&nbsp;<strong><code>&amp;=</code></strong> = 왼쪽 값과 오른쪽 값을 AND 해서 다시 왼쪽에 저장하는 표기야.</div>
+<p>여기서 "중간표현"을 너무 거창하게 잡지 말자.</p>
+<p>이 파일에서 직접 보이는 중간 결과는 <code>Job.PreprocessOutput</code>이야.</p>
+<p>원본 <code>.usf</code>도 아니고 최종 GPU 바이트코드도 아닌, 백엔드로 넘길 준비가 된 작업지시서다.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 시간을 재고 → <code>Backend-&gt;PreprocessShader</code>로 전처리하고 → 결과를 <code>Job.PreprocessOutput</code>에 넣고 → 필요하면 보조 전처리도 한다. 이어 읽으면 "레시피 원본을 매장 기계가 읽기 좋은 작업지시서로 정리한다"야.</div>
+<hr>
+</div>
+<div class="conversation"><h2>3. 백엔드가 최종 코드를 만든다</h2>
+<p>전처리가 끝나면 이제 진짜 컴파일이야.</p>
+<p>렌더코어가 모든 플랫폼 컴파일러를 직접 품고 있지는 않아.</p>
+<p><code>IShaderFormat</code>이라는 백엔드 인터페이스를 통해 D3D, Vulkan, Metal 같은 쪽으로 넘긴다.</p>
+<p><strong><code>ShaderCore.cpp:1950</code></strong></p>
+<div class="code-block">	static void InvokeCompile(const IShaderFormat* Compiler, FShaderCompileJob&amp; Job, const FString&amp; WorkingDirectory, FString&amp; OutExceptionMsg, FString&amp; OutExceptionCallstack)
+	{
+#if PLATFORM_WINDOWS
+		__try
+#endif
+		{
+			// decompress if necessary; this is a no-op if source is not compressed.
+			Job.PreprocessOutput.DecompressCode();
+
+			if (Job.SecondaryOutput.IsValid())
+			{
+				check(Job.SecondaryPreprocessOutput.IsValid());
+				Job.SecondaryPreprocessOutput-&gt;DecompressCode();
+				Compiler-&gt;CompilePreprocessedShader(Job.Input, Job.PreprocessOutput, *Job.SecondaryPreprocessOutput, Job.Output, *Job.SecondaryOutput, WorkingDirectory);
+			}
+			else
+			{
+				Compiler-&gt;CompilePreprocessedShader(Job.Input, Job.PreprocessOutput, Job.Output, WorkingDirectory);
+			}
+		}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 백엔드 컴파일 단계<br>&bull;&nbsp;<strong><code>InvokeCompile</code></strong> = 실제 백엔드 컴파일 호출을 감싸는 함수야.<br>&bull;&nbsp;<strong><code>IShaderFormat* Compiler</code></strong> = 플랫폼별 셰이더 컴파일러 인터페이스야.<br>&bull;&nbsp;<strong><code>FString&amp; WorkingDirectory</code></strong> = 작업 폴더 문자열을 원본 참조로 받는 거야.<br>&bull;&nbsp;<strong><code>#if PLATFORM_WINDOWS</code></strong> = 윈도우 빌드일 때만 아래 코드를 넣는 전처리 조건이야.<br>&bull;&nbsp;<strong><code>__try</code></strong> = 윈도우 예외를 잡기 위한 특수 구문이야.<br>&bull;&nbsp;<strong><code>DecompressCode()</code></strong> = 전처리 결과가 압축돼 있으면 풀고, 아니면 아무 일도 안 해.<br>&bull;&nbsp;<strong><code>IsValid()</code></strong> = 보조 출력 상자가 있는지 확인하는 함수야.<br>&bull;&nbsp;<strong><code>CompilePreprocessedShader</code></strong> = 전처리된 셰이더를 최종 출력으로 바꾸는 백엔드 호출이야.</div>
+<p>핵심 줄은 <code>Compiler-&gt;CompilePreprocessedShader(...)</code>야.</p>
+<p>언리얼은 "무엇을 어떤 환경으로 컴파일할지"를 정리하고, 최종 언어 변환은 백엔드 기계에 맡긴다.</p>
+<p>서버로 치면 공통 패킷 프레임워크가 <code>CM_LOGIN</code>을 로그인 모듈로 넘기고, 실제 처리는 그 모듈이 하는 구조랑 비슷해.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 전처리 결과 압축을 풀고 → 보조 출력이 있으면 보조 결과도 풀고 → <code>CompilePreprocessedShader</code>로 백엔드에 넣는다. 이어 읽으면 ".usf 원본이 아니라 전처리된 결과를 플랫폼 컴파일러에 넘긴다"는 말이 보인다.</div>
+<hr>
+</div>
+<div class="conversation"><h2>4. 캐시 키는 원본 파일명이 아니라 입력 지문이다</h2>
+<p>셰이더 컴파일이 느린 가장 큰 이유는 조합이 많기 때문이야.</p>
+<p>원본, 엔트리 포인트, 타깃, 포맷, define, 공유 환경, 전처리 결과가 전부 결과를 바꿀 수 있어.</p>
+<p>그래서 언리얼은 입력 전체를 해시로 만든다.</p>
+<p>이 해시가 같아야 "같은 레시피 카드"라고 믿을 수 있다.</p>
+<p><strong><code>ShaderCore.cpp:4363</code></strong></p>
+<div class="code-block">FShaderCompilerInputHash FShaderCompileJob::GetInputHash()
+{
+	if (bInputHashSet)
+	{
+		return InputHash;
+	}
+
+	FMemoryHasherBlake3 Hasher;
+
+	FGuid ShaderCacheVersionLocal = UE_SHADER_CACHE_VERSION;
+	Hasher &lt;&lt; ShaderCacheVersionLocal;
+
+	uint32 FormatVersion = GetTargetPlatformManagerRef().ShaderFormatVersion(Input.ShaderFormat);
+	Hasher &lt;&lt; FormatVersion;
+
+	Hasher &lt;&lt; Input.PreferredShaderCodeFormat;
+	
+	FShaderTarget Target = Input.Target;
+	Hasher &lt;&lt; Target;
+	Hasher &lt;&lt; Input.EntryPointName;
+
+	// Include this flag, so shader pipeline jobs get a different hash from single shader jobs, even if the preprocessed shader is otherwise the same.
+	Hasher &lt;&lt; Input.bCompilingForShaderPipeline;
+
+	Hasher &lt;&lt; Input.bBindlessEnabled;
+
+	FShaderCompilerEnvironment MergedEnvironment = Input.Environment;
+	if (Input.SharedEnvironment)
+	{
+		MergedEnvironment.Merge(*Input.SharedEnvironment);
+	}
+	MergedEnvironment.SerializeCompilationDependencies(Hasher);
+	
+	auto HashDirectives = [&amp;Hasher](const FString* Directive)
+	{
+		check(Directive &amp;&amp; !Directive-&gt;IsEmpty());
+		// const_cast due to serialization API requiring non-const. better than not having const correctness in the API.
+		Hasher &lt;&lt; const_cast&lt;FString&amp;&gt;(*Directive);
+	};
+	// Hash all UESHADERMETADATA_ directives encountered during preprocessing (assume these may be used to modify compilation behaviour)
+	PreprocessOutput.VisitDirectives(HashDirectives);
+
+	Hasher &lt;&lt; PreprocessOutput.EditSource();
+	if (SecondaryPreprocessOutput.IsValid())
+	{
+		Hasher &lt;&lt; SecondaryPreprocessOutput-&gt;EditSource();
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 입력 해시 만들기<br>&bull;&nbsp;<strong><code>FShaderCompilerInputHash</code></strong> = 컴파일 입력을 대표하는 지문 같은 값이야.<br>&bull;&nbsp;<strong><code>bInputHashSet</code></strong> = 이미 해시를 계산했는지 보는 bool 플래그야.<br>&bull;&nbsp;<strong><code>FMemoryHasherBlake3</code></strong> = 여러 값을 넣어 강한 해시를 만드는 도구야.<br>&bull;&nbsp;<strong><code>Hasher &lt;&lt; 값</code></strong> = 값을 해시 재료로 밀어 넣는 표기야.<br>&bull;&nbsp;<strong><code>UE_SHADER_CACHE_VERSION</code></strong> = 셰이더 캐시 전체 버전이야.<br>&bull;&nbsp;<strong><code>Input.ShaderFormat</code></strong> = D3D, Vulkan, Metal 같은 목표 포맷 이름이야.<br>&bull;&nbsp;<strong><code>Input.EntryPointName</code></strong> = 셰이더 안에서 시작할 함수 이름이야.<br>&bull;&nbsp;<strong><code>Input.bBindlessEnabled</code></strong> = bindless 설정이 켜졌는지 보는 값이야.<br>&bull;&nbsp;<strong><code>MergedEnvironment.Merge(...)</code></strong> = 개인 환경과 공유 환경을 합치는 작업이야.<br>&bull;&nbsp;<strong><code>auto HashDirectives = [...]</code></strong> = 그 자리에서 작은 익명 함수를 만드는 람다야.<br>&bull;&nbsp;<strong><code>PreprocessOutput.EditSource()</code></strong> = 전처리된 소스 본문을 해시 재료로 넣는 거야.</div>
+<p>이 코드가 "작은 define 하나 바꿨는데 왜 다시 컴파일하지?"의 답이야.</p>
+<p>해시 재료가 하나라도 바뀌면 도장 번호가 달라진다.</p>
+<p>도장 번호가 달라지면 창고에서 예전 카드를 못 꺼내고 새로 인쇄해야 한다.</p>
+<p>틀린 셰이더를 재사용하면 화면이 깨지니까, 정확성을 위해 비싼 길을 다시 타는 거야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>5. DDC에는 최종 카드가 들어간다</h2>
+<p>캐시 키가 맞으면 언리얼은 이미 만든 결과를 다시 쓰고 싶어 한다.</p>
+<p>그 결과가 DDC 레코드로 저장되는 모습도 실제 코드에 있다.</p>
+<p>여기서는 셰이더 객체 데이터와 코드 버퍼, 심볼 버퍼를 한 박스에 넣는다.</p>
+<p><strong><code>ShaderSerialization.cpp:63</code></strong></p>
+<div class="code-block">UE::DerivedData::FCacheRecord FShaderCacheSaveContext::BuildCacheRecord(const UE::DerivedData::FCacheKey&amp; Key)
+{
+	Finalize();
+
+	UE::DerivedData::FCacheRecordBuilder RecordBuilder(Key);
+	RecordBuilder.AddValue(ShaderObjectDataValue, ShaderObjectData);
+	int32 CodeIndex = 0;
+	// Code buffers are already compressed, don't waste cycles attempting (and failing) to recompress them
+	const ECompressedBufferCompressor CodeComp = ECompressedBufferCompressor::NotSet;
+	const ECompressedBufferCompressionLevel CodeCompLevel = ECompressedBufferCompressionLevel::None;
+
+	// Use a meta field to indicate whether we are adding symbol values to this record; we do so to prevent per-value overhead of symbol buffers if they are empty
+	// (each value in a cache record has a 64 byte overhead, which can be significant when we're pushing millions of individual shader cache records)
+	bool bHasSymbols = false;
+	for (FCompressedBuffer&amp; SymbolsBuf : ShaderSymbols)
+	{
+		bHasSymbols |= (SymbolsBuf.GetRawSize() &gt; 0);
+	}
+
+	for (FCompositeBuffer&amp; CodeBuf : ShaderCode)
+	{
+		RecordBuilder.AddValue(ShaderCodeDataValue.MakeIndexed(CodeIndex), UE::DerivedData::FValue(FCompressedBuffer::Compress(CodeBuf, CodeComp, CodeCompLevel)));
+		if (bHasSymbols)
+		{
+			RecordBuilder.AddValue(ShaderSymbolsDataValue.MakeIndexed(CodeIndex), UE::DerivedData::FValue(ShaderSymbols[CodeIndex]));
+		}
+		CodeIndex++;
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — DDC 레코드 저장<br>&bull;&nbsp;<strong><code>UE::DerivedData::FCacheRecord</code></strong> = DDC에 넣을 한 박스 같은 레코드야.<br>&bull;&nbsp;<strong><code>FCacheKey&amp; Key</code></strong> = 이 박스를 찾을 때 쓸 키야.<br>&bull;&nbsp;<strong><code>Finalize()</code></strong> = 저장 전에 내부 데이터를 마무리하는 호출이야.<br>&bull;&nbsp;<strong><code>FCacheRecordBuilder RecordBuilder(Key)</code></strong> = 이 키로 캐시 레코드를 조립할 빌더를 만드는 거야.<br>&bull;&nbsp;<strong><code>AddValue(...)</code></strong> = 레코드 안에 이름 붙은 값을 추가하는 함수야.<br>&bull;&nbsp;<strong><code>ShaderObjectDataValue</code></strong> = 셰이더 맵/객체 쪽 데이터 칸 이름이야.<br>&bull;&nbsp;<strong><code>ShaderCodeDataValue.MakeIndexed(CodeIndex)</code></strong> = 여러 코드 버퍼 중 몇 번째인지 붙여 저장하는 거야.<br>&bull;&nbsp;<strong><code>FCompressedBuffer::Compress(...)</code></strong> = 버퍼를 압축된 형태의 값으로 감싸는 호출이야.<br>&bull;&nbsp;<strong><code>bHasSymbols |= ...</code></strong> = 심볼 버퍼가 하나라도 있으면 true로 유지하는 표기야.<br>&bull;&nbsp;<strong><code>CodeIndex++</code></strong> = 다음 코드 버퍼 번호로 하나 올리는 거야.</div>
+<p>주석에 힌트가 있어.</p>
+<p>"millions of individual shader cache records"라고 적혀 있지.</p>
+<p>수백 개 수준이 아니라 수백만 개 레코드까지 생각하고 저장 구조를 만든다는 뜻이야.</p>
+<p>그래서 캐시가 없으면 느리고, 캐시가 있으면 살 만해진다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>콜/데이터 흐름 한눈에</h2>
+<div class="code-block">.usf / .ush 원본
+   |
+   | Shader.cpp:480
+   v
+FShaderCompilerEnvironment
+   |
+   | ShaderCore.cpp:1804
+   v
+FShaderPreprocessOutput
+   |
+   | ShaderCore.cpp:1950
+   v
+FShaderCompilerOutput
+   |
+   | ShaderCore.cpp:4363
+   v
+FShaderCompilerInputHash
+   |
+   | ShaderSerialization.cpp:63
+   v
+DDC cache record</div>
+<p>이 흐름을 비유로 다시 말하면,</p>
+<p>원본 레시피에 주문 옵션을 붙이고,</p>
+<p>작업지시서로 정리하고,</p>
+<p>매장별 프린터가 최종 카드를 뽑고,</p>
+<p>카드 번호를 만들어 창고에 넣는 거야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>우리 서버·DirectX 랑 비교</h2>
+<p>DirectX 기초 감각으로는 "HLSL 넣고 DXIL 나오면 끝"처럼 보인다.</p>
+<p>언리얼은 그 앞뒤가 더 커.</p>
+<p>원본은 <code>.usf/.ush</code>와 include 묶음이고,</p>
+<p>옵션은 <code>FShaderCompilerEnvironment</code> 전체고,</p>
+<p>중간 결과는 <code>FShaderPreprocessOutput</code>이고,</p>
+<p>최종 컴파일은 <code>IShaderFormat</code> 백엔드가 맡고,</p>
+<p>결과는 해시와 DDC에 저장된다.</p>
+<p>우리 서버랑도 닮았어.</p>
+<p>패킷 핸들러를 매번 문자열 검색으로 찾으면 느리니까 서버 시작 때 디스패치 테이블을 만들잖아.</p>
+<p>DB 메타도 자주 쓰는 건 캐시하고, 같은 요청은 가능하면 재사용하지.</p>
+<p>셰이더 컴파일도 마찬가지야.</p>
+<p>다만 비용 단위가 훨씬 커서, 캐시 미스가 나면 전처리와 백엔드 컴파일이라는 비싼 길로 내려간다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
+<ul><li><code>.usf</code>는 바로 GPU 코드가 되지 않는다. 먼저 컴파일 환경이 붙고 전처리된다.</li><li>C++ 레벨에서 보이는 핵심 중간 산출물은 <code>FShaderPreprocessOutput</code>이다.</li><li>최종 컴파일은 <code>IShaderFormat::CompilePreprocessedShader</code> 백엔드가 맡는다.</li><li>캐시 키는 원본 파일명이 아니라 버전, 포맷, 엔트리, 환경, 전처리 소스까지 포함한 입력 지문이다.</li><li>DDC는 최종 셰이더 코드와 메타데이터를 저장해 다음 비싼 컴파일을 피하게 해준다.</li></ul>
+<hr>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>언리얼 셰이더 컴파일은 <code>.usf</code> 원본을 "주문 옵션 붙인 작업지시서"로 전처리한 뒤 플랫폼 백엔드에 맡기고, 그 입력 지문과 최종 코드를 캐시에 넣어 다음 컴파일을 피하는 파이프라인이다.</strong></p>
+<hr>
+<div class="note">막히면 → <a class="xref" href="ch-08-shader-basics.html">shader-basics</a> · <a class="xref" href="ch-07-pso.html">pso</a><br>다음 → <a class="xref" href="ch-10-shader-parameters.html">shader-parameters</a></div></div><nav class="booknav"><a href="ch-08-shader-basics.html"><span class="lbl">← 이전</span>셰이더 — GPU에서 도는 작은 프로그램</a><a class="nx" href="ch-10-shader-parameters.html"><span class="lbl">다음 →</span>셰이더 파라미터 · 유니폼 버퍼 바인딩</a></nav></div></body></html>

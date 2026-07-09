@@ -1,0 +1,319 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>셰이더 파라미터 · 유니폼 버퍼 바인딩 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>셰이더 파라미터 · 유니폼 버퍼 바인딩</h1><p>언리얼 렌더링 · 10 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버를 만들다가 렌더링을 처음 파는 사람.<br>끝나면 "<code>FParameters</code>에 넣은 C++ 값이 어떻게 셰이더 변수 칸에 꽂히나"를 손으로 따라갈 수 있어.</div>
+<hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>앞에서 셰이더는 GPU에서 도는 작은 프로그램이라고 했어. <a class="xref" href="ch-08-shader-basics.html">shader-basics</a> 그리고 그 셰이더가 컴파일될 때, 어떤 파라미터 이름을 쓰는지도 같이 정리된다고 봤지. <a class="xref" href="ch-09-shader-compile.html">shader-compile</a></p>
+<p>근데 아직 제일 실전 질문이 남아. <code>Parameters.TexelSize = ...</code>로 C++ 값을 넣으면, 그 값은 어떻게 HLSL의 <code>TexelSize</code> 자리까지 갈까?</p>
+<p>이걸 모르면 렌더링 코드를 읽을 때 <code>FParameters</code> 구조체가 전부 마술처럼 보여. 텍스처 SRV, UAV, 샘플러, 유니폼 버퍼가 C++ 멤버처럼 생겼는데, GPU 입장에서는 슬롯 번호와 리소스 핸들이 필요하잖아.</p>
+<p>문제는 이름, 타입, 위치야. 셰이더는 <code>TexelSize</code>라는 이름을 요구하고, C++ 구조체는 어떤 바이트 오프셋에 <code>TexelSize</code> 값을 들고 있어. 둘이 이름도 맞아야 하고, 크기도 맞아야 하고, 읽는 위치도 맞아야 해.</p>
+<p>우리 서버로 치면 <code>SP_LOGIN</code>이 <code>AccountID</code>를 원했는데, 패킷 구조체 오프셋이 밀려서 월드 ID를 읽는 상황이야. 패킷도 필드 이름과 위치가 맞아야 하듯, 셰이더 파라미터도 C++ 필드와 HLSL 변수의 약속이 맞아야 해.</p>
+<p>그래서 이번 챕터는 그 약속표를 만든다. <code>SHADER_PARAMETER</code> 매크로가 멤버 선언을 넘어 메타데이터를 만들고, <code>ShaderParameterStruct.cpp</code>가 그 메타데이터를 셰이더 컴파일 결과와 맞춘 뒤, 마지막에 RHI 커맨드 리스트에 실제 값을 붙이는 흐름을 본다.</p>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 급식판과 배식표</h2>
+<p>이번 장은 급식판 비유로 가자.</p>
+<p>C++의 <code>FParameters</code> 구조체는 급식판이야. <code>TexelSize</code> 칸, <code>MipInSRV</code> 칸, <code>MipOutUAV</code> 칸, <code>MipSampler</code> 칸이 있어.</p>
+<p><code>SHADER_PARAMETER</code>는 칸 이름표야. "이 칸은 <code>TexelSize</code>, 타입은 <code>FVector2f</code>, 식판 시작점에서 몇 바이트 떨어짐"까지 적어 둔다.</p>
+<p>셰이더 컴파일러가 만든 <code>FShaderParameterMap</code>은 오늘의 배식표야. GPU 셰이더가 "나는 <code>TexelSize</code>를 몇 번 버퍼 몇 번째 자리에서 먹을 거야"라고 적은 표지.</p>
+<p><code>FShaderParameterBindings</code>는 배식 동선표야. C++ 식판의 어느 칸을 읽어서 셰이더의 어느 슬롯에 줄지 적어 둔다.</p>
+<p>마지막 <code>SetShaderParameters</code>는 배식원이야. 동선표를 보고 C++ 메모리에서 값을 꺼내 <code>FRHIBatchedShaderParameters</code>에 담고, RHI 커맨드 리스트에 "이 셰이더 실행할 때 이 반찬들 같이 내보내"라고 넘긴다.</p>
+</div>
+<div class="conversation"><h2>1. 사용자는 이렇게 쓴다 — <code>FParameters</code> 식판</h2>
+<p>먼저 실제 사용 예시부터 보자. <code>GenerateMips.cpp</code>의 컴퓨트 셰이더가 파라미터 구조체를 이렇게 선언해.</p>
+<p><strong><code>GenerateMips.cpp:25</code></strong></p>
+<div class="code-block">	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER(FVector2f, TexelSize)
+		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, MipInSRV)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, MipOutUAV)
+		SHADER_PARAMETER_SAMPLER(SamplerState, MipSampler)
+	END_SHADER_PARAMETER_STRUCT()</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 코드 인용<br>&bull;&nbsp;<strong><code>BEGIN_SHADER_PARAMETER_STRUCT</code></strong> = 셰이더에 줄 식판 구조체를 시작해.<br>&bull;&nbsp;<strong><code>FParameters</code></strong> = 이 식판의 C++ 타입 이름이야.<br>&bull;&nbsp;<strong><code>SHADER_PARAMETER(FVector2f, TexelSize)</code></strong> = <code>TexelSize</code>라는 일반 값 칸이야.<br>&bull;&nbsp;<strong><code>SHADER_PARAMETER_RDG_TEXTURE_SRV</code></strong> = RDG 텍스처를 읽기용 SRV로 넘기는 칸이야.<br>&bull;&nbsp;<strong><code>SHADER_PARAMETER_RDG_TEXTURE_UAV</code></strong> = RDG 텍스처를 쓰기용 UAV로 넘기는 칸이야.<br>&bull;&nbsp;<strong><code>SHADER_PARAMETER_SAMPLER</code></strong> = 텍스처 샘플링 방식을 넘기는 칸이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 위 코드는 그냥 C++ 멤버 선언처럼 보여도, 실제로는 "셰이더가 먹을 식판의 칸 목록"이야. 숫자, 읽기 리소스, 쓰기 리소스, 샘플러가 한 판에 모이고, 각 칸 이름이 나중에 HLSL 변수 이름과 맞춰진다.</div>
+<p>첫 번째 핵심은 이거야. <code>SHADER_PARAMETER</code>는 멤버를 만들 뿐 아니라, 나중에 바인딩할 수 있도록 이름표와 좌표표도 만든다.</p>
+</div>
+<div class="conversation"><h2>2. 구조체 전체 설명서 — <code>FShaderParametersMetadata</code></h2>
+<p><code>BEGIN_SHADER_PARAMETER_STRUCT</code>가 펼쳐지면 구조체 전체 설명서를 만들 수 있어. 진짜 정의는 <code>ShaderParameterMacros.h</code>에 있다.</p>
+<p><strong><code>ShaderParameterMacros.h:1379</code></strong></p>
+<div class="code-block">#define INTERNAL_SHADER_PARAMETER_GET_STRUCT_METADATA(StructTypeName) \
+	{ \
+		static FShaderParametersMetadata StaticStructMetadata(\
+			FShaderParametersMetadata::EUseCase::ShaderParameterStruct, \
+			EUniformBufferBindingFlags::Shader, \
+			TEXT(#StructTypeName), \
+			TEXT(#StructTypeName), \
+			nullptr, \
+			nullptr, \
+			FTypeInfo::FileName, \
+			FTypeInfo::FileLine, \
+			sizeof(StructTypeName), \
+			StructTypeName::zzGetMembers()); \
+		return &amp;StaticStructMetadata; \
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 코드 인용<br>&bull;&nbsp;<strong><code>static FShaderParametersMetadata</code></strong> = 한 번 만들어 오래 들고 있는 구조체 설명서야.<br>&bull;&nbsp;<strong><code>ShaderParameterStruct</code></strong> = 이 설명서의 용도가 셰이더 파라미터 구조체라는 뜻이야.<br>&bull;&nbsp;<strong><code>EUniformBufferBindingFlags::Shader</code></strong> = 셰이더 바인딩에 쓰인다고 표시해.<br>&bull;&nbsp;<strong><code>TEXT(#StructTypeName)</code></strong> = <code>FParameters</code> 같은 타입 이름을 문자열로 바꿔 넣어.<br>&bull;&nbsp;<strong><code>sizeof(StructTypeName)</code></strong> = 식판 전체 크기를 바이트로 잰 값이야.<br>&bull;&nbsp;<strong><code>zzGetMembers()</code></strong> = 식판 안 칸 목록을 가져오는 함수야.</div>
+<p><code>FShaderParametersMetadata</code>는 실제 값이 아니야. 식판 전체 설계도야. 이름, 용도, 파일 위치, 전체 크기, 멤버 목록을 들고 있다.</p>
+<p>왜 전체 크기가 필요할까? 나중에 <code>void* InParametersData</code> 하나가 들어왔을 때, 어디까지가 이 파라미터 구조체 데이터인지 알아야 하니까.</p>
+</div>
+<div class="conversation"><h2>3. <code>SHADER_PARAMETER</code> 한 줄이 칸 설명서가 된다</h2>
+<p>이번엔 칸 하나를 보자. <code>SHADER_PARAMETER(FVector2f, TexelSize)</code> 같은 한 줄은 내부적으로 멤버와 <code>FMember</code> 설명서를 같이 만든다.</p>
+<p><strong><code>ShaderParameterMacros.h:1433</code></strong></p>
+<div class="code-block">#define INTERNAL_SHADER_PARAMETER_EXPLICIT(BaseType,TypeInfo,MemberType,MemberName,ArrayDecl,DefaultValue,Precision,OptionalShaderType,IsMemberStruct) \
+		zzMemberId##MemberName; \
+	public: \
+		alignas(TypeInfo::Alignment) TypeInfo::TAlignedType MemberName DefaultValue; \
+		static_assert(BaseType != UBMT_INVALID, "Invalid type " #MemberType " of member " #MemberName "."); \
+	private: \
+		struct zzNextMemberId##MemberName { enum { HasDeclaredResource = zzMemberId##MemberName::HasDeclaredResource || !TypeInfo::bIsStoredInConstantBuffer }; }; \
+		static zzFuncPtr zzAppendMemberGetPrev(zzNextMemberId##MemberName, TArray&lt;FShaderParametersMetadata::FMember&gt;* Members) \
+		{ \
+			static_assert(TypeInfo::bIsStoredInConstantBuffer || TIsArrayOrRefOfTypeByPredicate&lt;decltype(OptionalShaderType), TIsCharEncodingCompatibleWithTCHAR&gt;::Value, "No shader type for " #MemberName "."); \
+			static_assert(\
+				(STRUCT_OFFSET(zzTThisStruct, MemberName) &amp; (TypeInfo::Alignment - 1)) == 0, \
+				"Misaligned uniform buffer struct member " #MemberName "."); \
+			Members-&gt;Add(FShaderParametersMetadata::FMember( \
+				TEXT(#MemberName), \
+				(const TCHAR*)OptionalShaderType, \
+				__LINE__, \
+				STRUCT_OFFSET(zzTThisStruct,MemberName), \
+				EUniformBufferBaseType(BaseType), \
+				Precision, \
+				TypeInfo::NumRows, \
+				TypeInfo::NumColumns, \
+				TypeInfo::NumElements, \
+				TypeInfo::GetStructMetadata() \
+				)); \
+			zzFuncPtr(*PrevFunc)(zzMemberId##MemberName, TArray&lt;FShaderParametersMetadata::FMember&gt;*); \
+			PrevFunc = zzAppendMemberGetPrev; \
+			return (zzFuncPtr)PrevFunc; \
+		} \
+		typedef zzNextMemberId##MemberName</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 코드 인용<br>&bull;&nbsp;<strong><code>MemberName</code></strong> = <code>TexelSize</code>, <code>MipInSRV</code> 같은 칸 이름이 들어와.<br>&bull;&nbsp;<strong><code>alignas(TypeInfo::Alignment)</code></strong> = GPU가 기대하는 정렬에 맞춰 멤버를 놓아.<br>&bull;&nbsp;<strong><code>TypeInfo::TAlignedType MemberName</code></strong> = 실제 C++ 멤버를 선언하는 줄이야.<br>&bull;&nbsp;<strong><code>static_assert</code></strong> = 컴파일할 때 틀리면 바로 멈추는 검사야.<br>&bull;&nbsp;<strong><code>STRUCT_OFFSET</code></strong> = 구조체 시작점에서 이 칸까지 몇 바이트인지 재.<br>&bull;&nbsp;<strong><code>FShaderParametersMetadata::FMember</code></strong> = 칸 하나의 이름, 타입, 오프셋, 배열 정보를 담는 설명서야.<br>&bull;&nbsp;<strong><code>BaseType</code></strong> = 숫자, 텍스처, SRV, UAV, 샘플러 같은 큰 타입 분류야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>SHADER_PARAMETER</code> 한 줄은 두 일을 해. <code>Parameters.TexelSize</code>처럼 쓸 C++ 멤버를 만들고, 동시에 <code>TexelSize</code>의 이름·타입·오프셋을 <code>FMember</code>로 저장한다.</div>
+<p>여기서 <code>STRUCT_OFFSET</code>이 중요해. 제출 단계에서는 구조체 시작 주소 하나만 들어오니까, 각 멤버 값을 읽으려면 "시작 주소 + 멤버 오프셋"이 필요해.</p>
+<p>서버 패킷으로 치면 <code>LoginPacket</code>에서 <code>AccountID</code>가 몇 바이트째인지 자동으로 적어 두는 셈이야.</p>
+</div>
+<div class="conversation"><h2>4. C++ 설명서와 셰이더 배식표를 맞춘다</h2>
+<p>이제 <code>ShaderParameterStruct.cpp</code>의 <code>Bind</code>가 나온다. 이 함수는 C++ 구조체 멤버를 순회하면서 셰이더에서 찾을 이름과 C++ 메모리 오프셋을 만든다.</p>
+<p><strong><code>ShaderParameterStruct.cpp:46</code></strong></p>
+<div class="code-block">	void Bind(
+		const FShaderParametersMetadata&amp; StructMetaData,
+		const TCHAR* MemberPrefix,
+		uint32 GeneralByteOffset)
+	{
+		const TArray&lt;FShaderParametersMetadata::FMember&gt;&amp; StructMembers = StructMetaData.GetMembers();
+
+		for (const FShaderParametersMetadata::FMember&amp; Member : StructMembers)
+		{
+			EUniformBufferBaseType BaseType = Member.GetBaseType();
+
+			FString CppName = FString::Printf(TEXT("%s::%s"), StructMetaData.GetStructTypeName(), Member.GetName());
+
+			// Ignore rasterizer binding slots entirely since this actually have nothing to do with a shader.
+			if (BaseType == UBMT_RENDER_TARGET_BINDING_SLOTS)
+			{
+				if (!RenderTargetBindingSlotCppName.IsEmpty())
+				{
+					UE_LOG(LogShaders, Fatal, TEXT("Render target binding slots collision: %s &amp; %s"),
+						*RenderTargetBindingSlotCppName, *CppName);
+				}
+				RenderTargetBindingSlotCppName = CppName;
+				continue;
+			}
+
+			// Ignore RDG access types when binding to shaders.
+			if (IsRDGResourceAccessType(BaseType))
+			{
+				continue;
+			}
+
+			// Compute the shader member name to look for according to nesting.
+			FString ShaderBindingName = FString::Printf(TEXT("%s%s"), MemberPrefix, Member.GetName());
+
+			uint16 ByteOffset = uint16(GeneralByteOffset + Member.GetOffset());
+			check(uint32(ByteOffset) == GeneralByteOffset + Member.GetOffset());</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 코드 인용<br>&bull;&nbsp;<strong><code>Bind(...)</code></strong> = 식판 설명서와 셰이더 배식표를 맞추는 함수야.<br>&bull;&nbsp;<strong><code>StructMetaData.GetMembers()</code></strong> = <code>SHADER_PARAMETER</code>들이 만든 칸 목록을 꺼내.<br>&bull;&nbsp;<strong><code>BaseType</code></strong> = 이 칸의 큰 타입 분류야.<br>&bull;&nbsp;<strong><code>CppName</code></strong> = <code>FParameters::TexelSize</code> 같은 C++ 쪽 이름이야.<br>&bull;&nbsp;<strong><code>continue</code></strong> = 이 칸은 셰이더 바인딩 대상이 아니니 다음 칸으로 넘어가.<br>&bull;&nbsp;<strong><code>ShaderBindingName</code></strong> = 셰이더 파라미터 맵에서 찾을 이름이야.<br>&bull;&nbsp;<strong><code>ByteOffset</code></strong> = 실제 C++ 구조체 메모리 안에서 이 칸을 읽을 위치야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Bind</code>는 멤버마다 이름표를 읽고, 셰이더에서 찾을 이름을 만들고, C++ 메모리 좌표를 계산한다. 급식판으로 말하면 "이 칸 이름이 뭐고, 식판 어디에 있고, 배식 대상이 맞나"를 확인하는 단계야.</div>
+<p>렌더 타겟 바인딩 슬롯은 셰이더 변수 자체가 아니니까 건너뛴다. RDG access 타입도 직접 바인딩 값이 아니라 의존성 표시 쪽이라 건너뛴다. 중첩 구조체면 접두어를 붙여서 이름을 펼친다.</p>
+</div>
+<div class="conversation"><h2>5. 이름을 찾으면 <code>Bindings</code>에 적는다</h2>
+<p>이제 셰이더 컴파일 결과에서 그 이름을 찾는다. <code>ParametersMap-&gt;FindParameterAllocation(...)</code>이 셰이더 배식표 조회야.</p>
+<p>찾으면 타입별로 <code>Bindings</code> 목록에 넣는다. 숫자 값은 <code>Parameters</code>, 일반 유니폼 버퍼 참조는 <code>ParameterReferences</code>, RDG 유니폼 버퍼는 <code>GraphUniformBuffers</code>로 간다.</p>
+<p><strong><code>ShaderParameterStruct.cpp:164</code></strong></p>
+<div class="code-block">				TOptional&lt;FParameterAllocation&gt; ParameterAllocation = ParametersMap-&gt;FindParameterAllocation(ElementShaderBindingName);
+				if (!ParameterAllocation.IsSet())
+				{
+					continue;
+				}
+
+				ShaderGlobalScopeBindings.Add(ElementShaderBindingName, CppName);
+
+				if (bIsVariableNativeType)
+				{
+					checkf(ArrayElementId == 0, TEXT("The entire array should be bound instead for RHI parameter submission performance."));
+					uint32 ByteSize = Member.GetMemberSize();
+
+					FShaderParameterBindings::FParameter Parameter;
+					Parameter.BufferIndex = ParameterAllocation-&gt;BufferIndex;
+					Parameter.BaseIndex = ParameterAllocation-&gt;BaseIndex;
+					Parameter.ByteOffset = ByteOffset;
+					Parameter.ByteSize = ParameterAllocation-&gt;Size;
+
+					if (uint32(ParameterAllocation-&gt;Size) &gt; ByteSize)
+					{
+						UE_LOG(LogShaders, Fatal, TEXT("The size required to bind shader %s's (Permutation Id %d) struct %s parameter %s is %i bytes, smaller than %s's %i bytes."),
+							Shader-&gt;GetTypeUnfrozen()-&gt;GetName(), PermutationId, StructMetaData.GetStructTypeName(),
+							*ElementShaderBindingName, ParameterAllocation-&gt;Size, *CppName, ByteSize);
+					}
+
+					Bindings-&gt;Parameters.Add(Parameter);
+				}
+				else if (BaseType == UBMT_REFERENCED_STRUCT || BaseType == UBMT_RDG_UNIFORM_BUFFER)
+				{
+					check(!bIsArray);
+					FShaderParameterBindings::FParameterStructReference Parameter;
+					Parameter.BufferIndex = ParameterAllocation-&gt;BufferIndex;
+					Parameter.ByteOffset = ByteOffset;
+
+					if (BaseType == UBMT_REFERENCED_STRUCT)
+					{
+						Bindings-&gt;ParameterReferences.Add(Parameter);
+					}
+					else
+					{
+						Bindings-&gt;GraphUniformBuffers.Add(Parameter);
+					}
+				}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 코드 인용<br>&bull;&nbsp;<strong><code>FindParameterAllocation</code></strong> = 셰이더 배식표에서 이 이름이 어디에 배정됐는지 찾아.<br>&bull;&nbsp;<strong><code>TOptional</code></strong> = 값이 있을 수도 없을 수도 있는 상자야.<br>&bull;&nbsp;<strong><code>IsSet()</code></strong> = 상자 안에 값이 있는지 묻는 말이야.<br>&bull;&nbsp;<strong><code>FParameter</code></strong> = 상수 버퍼에 들어갈 일반 값의 바인딩 정보야.<br>&bull;&nbsp;<strong><code>BufferIndex</code></strong> = 어느 버퍼에 들어가는지 보는 번호야.<br>&bull;&nbsp;<strong><code>BaseIndex</code></strong> = 셰이더 쪽 기본 위치 번호야.<br>&bull;&nbsp;<strong><code>ByteOffset</code></strong> = C++ 식판에서 값을 읽을 위치야.<br>&bull;&nbsp;<strong><code>ByteSize</code></strong> = 몇 바이트를 복사할지야.<br>&bull;&nbsp;<strong><code>FParameterStructReference</code></strong> = 유니폼 버퍼 구조체 참조 바인딩 정보야.<br>&bull;&nbsp;<strong><code>GraphUniformBuffers</code></strong> = RDG 유니폼 버퍼 목록이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Bindings</code>에는 실제 값이 들어가는 게 아니야. "구조체 메모리의 어느 오프셋을 읽어서, 셰이더의 어느 버퍼 위치에 넣을지"라는 동선표가 들어간다.</div>
+<p>여기가 핵심이야. 같은 셰이더 타입은 바인딩 지도를 한 번 만들어 두고, 매 프레임 다른 <code>FParameters</code> 인스턴스만 읽어서 제출할 수 있다.</p>
+<p>서버에서 패킷 디스크립터를 한 번 만들고, 실제 패킷 바이트는 매번 다르게 읽는 것과 비슷해.</p>
+</div>
+<div class="conversation"><h2>6. 마지막 제출 — 식판에서 값을 읽어 RHI에 꽂는다</h2>
+<p>이제 진짜 값 제출이다. <code>SetShaderParameters</code>는 <code>Bindings</code> 지도를 보고 C++ 구조체 메모리를 바이트 배열처럼 읽는다.</p>
+<p><strong><code>ShaderParameterStruct.cpp:860</code></strong></p>
+<div class="code-block">		for (const FShaderParameterBindings::FParameterStructReference&amp; Parameter : Bindings.GraphUniformBuffers)
+		{
+			const FRDGUniformBufferBinding&amp; UniformBufferBinding = Reader.Read&lt;FRDGUniformBufferBinding&gt;(Parameter);
+			if (EnumHasAnyFlags(UniformBufferBinding.GetBindingFlags(), UniformBufferBindingFlags))
+			{
+				UniformBufferBinding-&gt;MarkResourceAsUsed();
+
+				BatchedParameters.AddResourceParameter(UniformBufferBinding-&gt;GetRHI(), GetParameterIndex(Parameter));
+			}
+		}
+
+		for (const FShaderParameterBindings::FParameterStructReference&amp; Parameter : Bindings.ParameterReferences)
+		{
+			const FUniformBufferBinding&amp; UniformBufferBinding = Reader.Read&lt;FUniformBufferBinding&gt;(Parameter);
+			if (EnumHasAnyFlags(UniformBufferBinding.GetBindingFlags(), UniformBufferBindingFlags))
+			{
+				BatchedParameters.AddResourceParameter(UniformBufferBinding.GetUniformBuffer(), GetParameterIndex(Parameter));
+			}
+		}
+	}
+}
+
+/** Set batched parameters from a parameters struct. */
+void SetShaderParameters(
+	FRHIBatchedShaderParameters&amp; BatchedParameters,
+	const FShaderParameterBindings&amp; Bindings,
+	const FShaderParametersMetadata* ParametersMetadata,
+	const void* InParametersData)
+{
+	TConstArrayView&lt;uint8&gt; FullParametersData((const uint8*)InParametersData, ParametersMetadata-&gt;GetSize());
+
+	for (const FShaderParameterBindings::FParameter&amp; Parameter : Bindings.Parameters)
+	{
+		BatchedParameters.SetShaderParameter(Parameter.BufferIndex, Parameter.BaseIndex, Parameter.ByteSize, FullParametersData.GetData() + Parameter.ByteOffset);
+	}
+
+	ExtractShaderParameterResources(BatchedParameters, Bindings, FullParametersData, EUniformBufferBindingFlags::Shader);
+}
+
+/** Set shader's parameters from its parameters struct. */
+template&lt;typename TRHICmdList, typename TShaderRHI&gt;
+inline void SetShaderParametersInternal(
+	TRHICmdList&amp; RHICmdList,
+	TShaderRHI* ShaderRHI,
+	const FShaderParameterBindings&amp; Bindings,
+	const FShaderParametersMetadata* ParametersMetadata,
+	const void* InParametersData)
+{
+	checkf(Bindings.RootParameterBufferIndex == FShaderParameterBindings::kInvalidBufferIndex, TEXT("Can't use SetShaderParameters() for root parameter buffer index."));
+	checkf(!IsRayTracingShaderFrequency(ShaderRHI-&gt;GetFrequency()), TEXT("Can't use SetShaderParameters() with RHICmdList parameter for ray tracing shaders."));
+
+	FRHIBatchedShaderParameters&amp; ShaderParameters = RHICmdList.GetScratchShaderParameters();
+	SetShaderParameters(ShaderParameters, Bindings, ParametersMetadata, InParametersData);
+	RHICmdList.SetBatchedShaderParameters(ShaderRHI, ShaderParameters);
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 코드 인용<br>&bull;&nbsp;<strong><code>Reader.Read&lt;...&gt;(Parameter)</code></strong> = <code>ByteOffset</code>을 보고 구조체 메모리에서 해당 타입으로 읽어.<br>&bull;&nbsp;<strong><code>FRDGUniformBufferBinding</code></strong> = RDG가 들고 있는 유니폼 버퍼 바인딩이야.<br>&bull;&nbsp;<strong><code>MarkResourceAsUsed()</code></strong> = RDG에게 이 리소스가 실제로 쓰였다고 표시해.<br>&bull;&nbsp;<strong><code>GetRHI()</code></strong> = RDG 껍데기에서 실제 RHI 리소스를 꺼내.<br>&bull;&nbsp;<strong><code>FUniformBufferBinding</code></strong> = 일반 유니폼 버퍼 바인딩이야.<br>&bull;&nbsp;<strong><code>TConstArrayView&lt;uint8&gt;</code></strong> = 구조체를 바이트 배열처럼 보는 읽기 전용 창이야.<br>&bull;&nbsp;<strong><code>FullParametersData.GetData() + Parameter.ByteOffset</code></strong> = 식판 시작 주소에서 해당 칸 위치로 이동해.<br>&bull;&nbsp;<strong><code>SetShaderParameter</code></strong> = 상수 값을 배치 파라미터에 복사해.<br>&bull;&nbsp;<strong><code>GetScratchShaderParameters()</code></strong> = 커맨드 리스트에서 잠깐 쓸 파라미터 바구니를 빌려.<br>&bull;&nbsp;<strong><code>SetBatchedShaderParameters</code></strong> = 모아 둔 상수와 리소스를 실제 셰이더 RHI에 붙여.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Bindings</code> 지도에는 값이 아니라 읽는 방법이 있었다. 여기서 <code>InParametersData</code>를 바이트 배열로 보고, 상수는 <code>SetShaderParameter</code>로 복사하고, 유니폼 버퍼와 리소스는 <code>AddResourceParameter</code> 쪽으로 모은 뒤, 마지막에 <code>SetBatchedShaderParameters</code>로 RHI에 붙인다.</div>
+<p>상수 값 흐름은 이래. <code>InParametersData</code> 시작 주소 → <code>Parameter.ByteOffset</code> → <code>Parameter.ByteSize</code>만큼 복사 → <code>BufferIndex</code>, <code>BaseIndex</code> 위치로 제출.</p>
+<p>유니폼 버퍼 흐름은 이래. 구조체 안의 <code>FRDGUniformBufferBinding</code>이나 <code>FUniformBufferBinding</code>을 읽음 → 실제 RHI 유니폼 버퍼를 꺼냄 → <code>GetParameterIndex(Parameter)</code> 슬롯에 붙임.</p>
+<p>RDG 유니폼 버퍼는 중간에 <code>MarkResourceAsUsed()</code>가 붙는다. 그래프가 "이 패스가 이 리소스를 썼다"는 사실을 알아야 하니까.</p>
+</div>
+<div class="conversation"><h2>코드 데이터 흐름 한눈에</h2>
+<p><code>GenerateMips.cpp:25</code> 사용자가 <code>FParameters</code> 식판을 선언한다.</p>
+<p><code>ShaderParameterMacros.h:1379</code> 식판 전체가 <code>FShaderParametersMetadata</code> 설계도가 된다.</p>
+<p><code>ShaderParameterMacros.h:1433</code> 각 칸은 C++ 멤버이면서 <code>FMember</code> 이름표가 된다.</p>
+<p><code>ShaderParameterStruct.cpp:46</code> <code>Bind</code>가 이름과 바이트 오프셋을 만든다.</p>
+<p><code>ShaderParameterStruct.cpp:164</code> 셰이더 컴파일 결과와 이름을 맞춰 <code>Bindings</code> 지도를 만든다.</p>
+<p><code>ShaderParameterStruct.cpp:860</code> 그 지도대로 실제 C++ 값을 읽어 RHI 셰이더 슬롯에 꽂는다.</p>
+</div>
+<div class="conversation"><h2>우리 서버·DirectX랑 빗대기</h2>
+<p>렌더링에서는 패킷 대신 셰이더 파라미터 구조체가 있어. 셰이더 컴파일 결과가 "필요한 필드 목록"이고, <code>FShaderParameterBindings</code>가 패킷 디스패치 테이블 같은 역할을 한다.</p>
+<p>차이는 실행 장소야. 서버 패킷은 CPU 함수가 읽지만, 셰이더 파라미터는 GPU 셰이더가 읽을 수 있도록 RHI 슬롯에 꽂아야 해.</p>
+<p>DirectX로 보면 <code>SetPipelineState</code>, <code>SetGraphicsRoot...</code>, <code>DrawInstanced</code> 사이에 들어가는 바인딩 작업과 닮았어. 언리얼은 그 플랫폼별 세부 작업을 RHI 뒤에 숨기고, 앞에서는 <code>FParameters</code> 구조체 하나로 다루게 해 준다.</p>
+</div>
+<div class="conversation"><h2>이번 챕터에서 헷갈린 말</h2>
+<ol><li><code>SHADER_PARAMETER</code>는 런타임 함수 호출이 아니라 컴파일 전 매크로야.</li><li><code>FShaderParametersMetadata</code>는 실제 값이 아니라 구조체 설명서야.</li><li><code>FShaderParameterMap</code>은 셰이더 컴파일 결과에서 온 이름·슬롯 표야.</li><li><code>FShaderParameterBindings</code>는 값 보관함이 아니라 읽는 방법과 제출 위치를 담은 지도야.</li><li><code>ByteOffset</code>은 C++ 구조체 안에서 멤버를 찾는 좌표야.</li><li>유니폼 버퍼는 숫자 복사가 아니라 RHI 유니폼 버퍼 객체를 슬롯에 붙이는 참조로 봐야 해.</li></ol>
+</div>
+<div class="conversation"><h2>머리 속 한 줄 요약</h2>
+<p><strong><code>SHADER_PARAMETER</code>는 C++ 식판의 칸 이름표를 만들고, <code>ShaderParameterStruct.cpp</code>는 그 이름표를 셰이더 컴파일 배식표와 맞춰 <code>Bindings</code> 지도를 만든 다음, <code>SetShaderParameters</code>가 그 지도대로 C++ 메모리의 값과 유니폼 버퍼를 RHI 셰이더 슬롯에 꽂는다.</strong></p>
+<hr>
+<div class="note">막혔으면 이전: <a class="xref" href="ch-08-shader-basics.html">shader-basics</a> · <a class="xref" href="ch-09-shader-compile.html">shader-compile</a><br>다음: <a class="xref" href="ch-11-rdg.html">rdg</a></div></div><nav class="booknav"><a href="ch-09-shader-compile.html"><span class="lbl">← 이전</span>셰이더 컴파일 파이프라인</a><a class="nx" href="ch-11-rdg.html"><span class="lbl">다음 →</span>RDG(RenderGraph) — 왜 그래프로 짜나</a></nav></div></body></html>
