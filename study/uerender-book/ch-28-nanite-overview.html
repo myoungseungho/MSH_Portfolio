@@ -66,6 +66,7 @@ a.xref:hover { background:#e1bee7; }
 <p>LOD는 "멀리 있으면 큰 묶음으로 충분하고, 가까우면 더 잘게 보자"는 규칙이야.</p>
 <p>GPU 주도는 "입구 직원(CPU)이 모든 손님을 한 명씩 판정하지 말고, 자동 게이트(GPU)가 직접 후보를 세고 줄을 나누자"는 뜻이야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 클러스터 LOD</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 메시 하나에 LOD0, LOD1, LOD2 같은 큰 단체 표를 몇 장 만들어 두고, CPU가 거리 보고 하나 골라.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 천만 손님 놀이공원에서 멀리 보이는 단체까지 한 명씩 자세히 세우면 입구가 터져. 화면에 쌀알만 한 바위도 큰 덩어리로 처리하면 너무 낭비야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 메시를 작은 클러스터 단체로 쪼개고, 화면 크기와 오차로 지금 필요한 단계만 고르는 규칙이 필요해. 그게 클러스터 LOD야.</div>
 </div>
 <div class="conversation"><h2>1. LOD는 감이 아니라 화면 크기 계산이야</h2>
 <p>Nanite의 LOD를 "가까우면 고해상도, 멀면 저해상도"라고 말하면 맞긴 한데 너무 흐릿해.</p>
@@ -133,6 +134,7 @@ bool SmallEnoughToDraw(
 <p>GPU 안에서 노드와 클러스터를 보며 더 내려갈지, 멈출지, 그릴지를 판단한다.</p>
 <p>기존 StaticMesh LOD처럼 메시 단위로 큰 덩어리 하나를 고르는 방식과 감각이 달라.</p>
 <p>Nanite는 훨씬 작은 클러스터 단위로 "이번 화면에 필요한 컷"을 만든다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — SW/HW 래스터 경로</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 삼각형은 전부 GPU의 하드웨어 래스터라이저 한 줄로 보내면 돼. 큰 놀이기구 줄 하나만 있는 셈이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 픽셀보다 작은 삼각형이 모래알처럼 쏟아지면, 그 큰 줄에 전부 태우는 준비가 더 부담돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 큰 삼각형은 하드웨어 길로, 작은 삼각형은 compute 셰이더 길로 나눠 보내야 해. 그래서 SW/HW 래스터 경로가 필요해.</div>
 </div>
 <div class="conversation"><h2>2. 왜 하드웨어 래스터만으로는 부족해?</h2>
 <p>기존 파이프라인은 대충 이래.</p>
@@ -157,6 +159,7 @@ bool SmallEnoughToDraw(
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 여기서 "software"는 CPU 소프트웨어가 아니야. compute shader로 도는 GPU 쪽 소프트웨어 래스터야. 그러니까 Nanite는 GPU 안에서도 고정 기능 길과 compute 길을 나눠서 쓴다. 큰 차는 고속도로, 킥보드는 골목길로 보내는 식이야.</div>
 <p>이 줄 하나만 봐도 "Nanite = 그냥 삼각형을 많이 넣는 기술"이 아니라는 게 보인다.</p>
 <p>삼각형이 작아질수록 파이프라인의 병목 모양이 바뀌니까, 래스터 경로 자체를 나눈다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — GPU 작업판</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: CPU가 "이 클러스터 그려, 저 클러스터 버려"를 전부 정해서 GPU에 목록을 넘겨.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 후보가 산더미가 되면 입구 직원 혼자 손님 이름표를 다 쓰는 꼴이야. 자동 게이트는 빠른데, 게이트 앞 종이가 늦게 와서 놀게 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: GPU가 직접 후보 큐를 읽고, 새 후보와 visible 결과를 써 넣을 작업판이 필요해. <code>CandidateNodes</code>, <code>CandidateClusters</code>, <code>OutVisibleClustersSWHW</code>가 그런 판이야.</div>
 </div>
 <div class="conversation"><h2>3. CPU가 넘기는 건 삼각형 목록이 아니라 작업판이야</h2>
 <p>Nanite C++ 쪽은 GPU 셰이더가 일할 버퍼를 준비한다.</p>
@@ -192,6 +195,7 @@ bool SmallEnoughToDraw(
 <p>Nanite 메시가 그냥 납작한 삼각형 배열이면 GPU가 똑똑하게 내려갈 수 없어.</p>
 <p>계층이 있어야 "부모가 충분하면 멈추고, 부족하면 자식으로 내려간다"가 가능해.</p>
 <p>그래서 클러스터 LOD는 데이터 구조와 셰이더가 한 몸이야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Main/Post 패스</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 한 번 검사해서 "보임/가려짐"을 정하고 바로 끝내면 제일 단순해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 놀이공원 줄이 움직이듯 카메라도 움직여. 지난 프레임엔 기둥 뒤라 안 보이던 단체가 이번 프레임엔 옆으로 삐져나올 수 있어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 먼저 MainPass로 큰 줄을 처리하고, HZB 같은 깊이 표를 만든 뒤 PostPass에서 의심스러운 애들을 다시 봐야 해. 이름도 그대로 먼저/나중 패스야.</div>
 </div>
 <div class="conversation"><h2>4. 한 번만 그리는 게 아니라 Main/Post로 다시 본다</h2>
 <p>Nanite는 보이는 후보를 한 번에 끝내지 않아.</p>

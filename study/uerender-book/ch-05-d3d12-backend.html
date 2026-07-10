@@ -66,6 +66,7 @@ a.xref:hover { background:#e1bee7; }
 <p>이 챕터에서 계속 이렇게 부를게.</p>
 <ul><li><code>RHICommandList</code> = 손님 주문서.</li><li><code>FD3D12CommandContext</code> = 주문서를 읽고 주방 기계를 누르는 사람.</li><li><code>FD3D12StateCache</code> = 지금 켜진 화구, 팬, 접시 상태를 기억하는 칠판.</li><li><code>ID3D12GraphicsCommandList</code> = 진짜 주방 기계 버튼판.</li><li><code>DrawInstanced</code> / <code>Dispatch</code> / <code>ClearRenderTargetView</code> = 실제 버튼 이름.</li></ul>
 <p>중요한 건 하나야. 언리얼 렌더러 대부분은 "D3D12 버튼 이름"을 직접 부르지 않아. 대신 <code>RHI</code>로 말하고, D3D12RHI가 마지막에 버튼을 눌러.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — D3D12RHI 백엔드</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 엔진 코드가 그냥 D3D12 버튼을 직접 누르면 제일 단순해. 주문서 없이 주방 기계 앞에서 바로 <code>DrawInstanced</code>를 누르는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그러면 윈도우/D3D12 말이 렌더러 전체에 퍼져. 다른 그래픽 API나 플랫폼으로 가려면 주문서를 전부 다시 써야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 위쪽은 공용 <code>RHI</code> 말만 쓰고, 맨 아래에서만 D3D12 말로 번역하는 층이 필요해. 그 D3D12 전용 뒷문이 <code>D3D12RHI</code> 백엔드야.</div>
 </div>
 <div class="conversation"><h2>1. 전체 지도 — 추상 명령에서 네이티브 호출까지</h2>
 <p>큰 길은 이렇게 생겼어.</p>
@@ -90,6 +91,7 @@ ID3D12GraphicsCommandList</div>
 <p>예를 들면 이런 식이야.</p>
 <table class="compare-table"><thead><tr><th>RHI 쪽 말</th><th>D3D12RHI 안쪽</th><th>마지막 D3D12 버튼</th></tr></thead><tbody><tr><td><code>RHISetGraphicsPipelineState</code></td><td><code>StateCache.SetGraphicsPipelineState</code></td><td><code>SetPipelineState</code></td></tr><tr><td><code>RHIDispatchComputeShader</code></td><td><code>SetupDispatch</code> 후 실행</td><td><code>Dispatch</code></td></tr><tr><td><code>RHIDrawPrimitive</code></td><td><code>SetupDraw</code> 후 실행</td><td><code>DrawInstanced</code></td></tr><tr><td><code>RHIClearMRTImpl</code></td><td>RTV/DSV 찾고 실행</td><td><code>ClearRenderTargetView</code> / <code>ClearDepthStencilView</code></td></tr><tr><td>텍스처/버퍼 전송</td><td>copy context 선택</td><td><code>CopyResource</code> / <code>CopyTextureRegion</code></td></tr></tbody></table>
 <p>여기서 조심할 점이 있어. 모든 함수가 <code>D3D12CommandContext.cpp</code> 한 파일에 있진 않아. 이 클론에서는 명령별 몸통이 <code>D3D12Commands.cpp</code>, 상태 캐시는 <code>D3D12StateCache.cpp</code>, 복사 일부와 명령 리스트 관리는 <code>D3D12CommandContext.cpp</code>에 나뉘어 있어. 그래도 전부 같은 <code>D3D12RHI/Private</code> 주방 안쪽 코드야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 리소스 배리어(Resource Barrier)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 텍스처나 버퍼를 그냥 물건 이름으로 쓰면 편해. 방금 접시로 썼던 걸 바로 재료통으로 읽는 식이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: D3D12는 "지금 이 리소스가 렌더 타깃인지, 셰이더가 읽는지, 복사용인지"를 GPU에게 알려줘야 해. 표지판 없이 바꾸면 validation이 화내거나 화면이 깨져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 쓰임새가 바뀌는 경계마다 "이제 상태 바뀜" 표지판을 명령 리스트에 꽂아야 해. 그 표지판이 리소스 배리어고, 모아뒀다 밀어내는 게 <code>FlushResourceBarriers()</code>야.</div>
 </div>
 <div class="conversation"><h2>2. 명령 리스트 닫기 — 주방에 넘기기 전 배리어부터 비운다</h2>
 <p>먼저 주요 소스인 <code>D3D12CommandContext.cpp</code>에서 명령 리스트를 닫는 장면을 보자. 주문서가 다 실행됐다고 바로 닫지 않아. 닫기 직전에 "아직 밀린 배리어가 있나?"부터 털어.</p>
@@ -117,6 +119,7 @@ ID3D12GraphicsCommandList</div>
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>CloseCommandList()</code>는 먼저 빈 명령 리스트가 아닌지 확인하고 → <code>FlushResourceBarriers()</code>로 밀린 안전 표지판을 붙이고 → 실제 <code>CommandList-&gt;Close()</code>를 부른다. 주방 비유로 치면 주문서를 주방장에게 넘기기 전에 "이 재료는 냉장, 이 팬은 뜨거움" 같은 표시를 마지막으로 붙이는 거야.</div>
 <p>여기서 <code>CommandList-&gt;Close()</code>는 DirectX 12에서 익숙한 그 닫기 단계야. 언리얼의 RHI 주문서가 D3D12 명령 리스트에 다 기록된 다음, 제출 가능한 상태로 바뀌는 관문이지.</p>
 <p>다만 초보가 자주 놓치는 건 <code>FlushResourceBarriers()</code>야. D3D12는 리소스 상태를 개발자가 직접 맞춰야 해. "이 텍스처를 방금 렌더 타깃으로 썼는데 이제 셰이더에서 읽을 거야" 같은 말을 빼먹으면 GPU validation이 바로 화낸다. 그래서 D3D12RHI는 배리어를 모아뒀다가 적당한 순간에 명령 리스트로 흘려보내.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 상태 캐시와 PSO</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 드로우할 때마다 셰이더, 블렌드, 깊이, 래스터라이저 버튼을 전부 다시 눌러도 돼. 주문마다 주방 세팅을 처음부터 맞추는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 한 프레임에 드로우콜이 수천 번이면 같은 버튼을 수천 번 다시 누르게 돼. 그래픽/컴퓨트 전환 때 세팅이 틀리면 엉뚱한 화구로 요리해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 지금 버튼판에 꽂힌 세팅을 칠판에 적어두고, 바뀔 때만 <code>SetPipelineState</code>를 눌러야 해. 그 기억장이 <code>FD3D12StateCache</code>고, 묶인 파이프라인 상태 객체가 PSO야.</div>
 </div>
 <div class="conversation"><h2>3. PSO 세팅 — 상태 캐시가 <code>SetPipelineState</code> 버튼을 누른다</h2>
 <p>DirectX 12에서는 드로우 전에 PSO가 맞아야 해. 셰이더, 블렌드, 깊이, 래스터라이저 상태가 묶인 그 덩어리 말이야.</p>
@@ -183,6 +186,7 @@ ID3D12GraphicsCommandList</div>
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>RHIDrawPrimitive</code>는 primitive 개수를 정점 개수로 바꾸고 → 인스턴스 수를 최소 1로 맞추고 → <code>SetupDraw</code>로 상태와 리소스를 준비하고 → <code>DrawInstanced</code>를 찍는다. 주문서에는 "기본 도형 그려"라고 적혀 있었는데, 주방 안쪽 버튼판에서는 <code>DrawInstanced</code>라는 정확한 버튼을 누르는 거야.</div>
 <p><code>SetupDraw</code>가 별거 아닌 것처럼 보이면 안 돼. 그 안에서 그래픽스 리소스 테이블을 commit하고, 상수 버퍼를 commit하고, 인덱스 버퍼가 있으면 <code>StateCache.SetIndexBuffer</code>까지 해. 마지막엔 <code>StateCache.ApplyState(...Graphics)</code>로 PSO, root signature, descriptor table 같은 걸 실제 D3D12 상태로 맞춘다.</p>
 <p>indexed draw는 같은 파일 <code>D3D12Commands.cpp:1270</code>의 <code>RHIDrawIndexedPrimitive</code>로 가고, 마지막 줄에서 <code>DrawIndexedInstanced</code>를 호출해. 이번 챕터에선 하나만 기억하면 돼. RHI의 드로우 함수는 마지막에 D3D12의 draw 계열 함수로 떨어진다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — RTV/DSV 디스크립터 핸들</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 렌더 타깃 텍스처를 지울 때 "이 텍스처 지워"라고 객체만 넘기면 단순해. 접시 이름만 부르는 거지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: D3D12 버튼판은 그냥 텍스처보다 "어떤 방식으로 볼 건지"가 적힌 손잡이를 원해. 색 접시인지 깊이 접시인지 모르면 어떤 버튼을 눌러야 할지 애매해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 리소스를 D3D12가 읽을 수 있는 뷰로 포장한 표찰이 필요해. 색은 RTV, 깊이/스텐실은 DSV고, 그 표찰 주소가 descriptor handle이야.</div>
 </div>
 <div class="conversation"><h2>6. 클리어 — 렌더 타깃과 깊이 버퍼도 D3D12 뷰 핸들로 지운다</h2>
 <p>화면을 그리기 전에 렌더 타깃을 특정 색으로 지우거나 깊이 버퍼를 1로 초기화하는 건 흔한 일이야. RHI에서는 "MRT를 clear해"라고 말하지만, D3D12에서는 RTV/DSV 핸들을 들고 <code>ClearRenderTargetView</code>, <code>ClearDepthStencilView</code>를 호출해야 해.</p>

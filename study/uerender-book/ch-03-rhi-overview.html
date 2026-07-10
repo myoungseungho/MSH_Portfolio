@@ -66,6 +66,7 @@ a.xref:hover { background:#e1bee7; }
 <p>왜 지금 배우냐면, 앞 장 <a class="xref" href="ch-02-render-thread.html">render-thread</a>에서 렌더 스레드가 분리되는 이유를 봤어.</p>
 <p>이제 그 렌더 스레드가 GPU에게 명령을 내릴 <strong>문</strong>을 알아야 해.</p>
 <p>다음 장 <a class="xref" href="ch-04-rhi-commandlist.html">rhi-commandlist</a>는 그 문으로 들어갈 명령을 어떻게 쌓는지 보고, <a class="xref" href="ch-05-d3d12-backend.html">d3d12-backend</a>는 공용 말이 진짜 D3D12 호출로 바뀌는 지점까지 내려갈 거야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — RHI(Render Hardware Interface)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 렌더러가 D3D12면 D3D12 창구, Vulkan이면 Vulkan 창구로 직접 뛰어가서 GPU에게 말하면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 텍스처 하나, 셰이더 하나 만들 때마다 나라별 말이 갈라져. 기능 1개 고쳐도 D3D12/Vulkan/Metal 줄을 전부 만지면 버그가 나라 수만큼 늘어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 앞에는 공용 출국 창구 하나를 세우고, 뒤 직원이 각 나라 말로 번역하게 하자. Render Hardware Interface, 줄여서 RHI야. 렌더러가 하드웨어 쪽과 말하는 인터페이스라는 뜻이야.</div>
 </div>
 <div class="conversation"><h2>0. 비유부터 — 공항의 공용 출국 창구</h2>
 <p>공항을 생각해보자.</p>
@@ -81,6 +82,7 @@ a.xref:hover { background:#e1bee7; }
 <p>중요한 건 렌더러가 항공사 창고까지 직접 뛰어다니지 않는다는 거야.</p>
 <div class="note"><strong>소스 위치</strong> (아래 코드는 전부 이 클론의 실제 파일에서 그대로 뽑음)<br>&bull;&nbsp;공통 구현: <code>Engine/Source/Runtime/RHI/Private/DynamicRHI.cpp</code><br>&bull;&nbsp;공통 인터페이스: <code>Engine/Source/Runtime/RHI/Public/DynamicRHI.h</code><br>&bull;&nbsp;Windows 백엔드 선택: <code>Engine/Source/Runtime/RHI/Private/Windows/WindowsDynamicRHI.cpp</code></div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — <code>FDynamicRHI</code></strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 공용 창구가 있다면 렌더러가 "열어", "닫아", "셰이더 만들어" 같은 말을 아무렇게나 던져도 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: D3D12 직원은 <code>Init</code>이 있는데 Vulkan 직원은 이름이 다르면, 홀 직원이 매번 "너는 뭐라고 불러?"부터 물어야 해. 창구가 3개만 돼도 호출 규칙이 엉켜.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 모든 직원이 반드시 지킬 메뉴판이 필요해. 그 설계도가 <code>FDynamicRHI</code>야. <code>virtual</code> 함수들은 "뒤 직원이 자기 방식으로 채워라"라는 빈칸이야.</div>
 </div>
 <div class="conversation"><h2>1. RHI 창구의 모양 — <code>FDynamicRHI</code></h2>
 <p>먼저 공용 창구의 간판부터 보자.</p>
@@ -112,6 +114,7 @@ public:
 <p>서버로 치면 <code>INetworkTransport</code> 아래에 <code>TcpTransport</code>, <code>UdpTransport</code>, <code>LoopbackTransport</code>를 꽂는 구조와 비슷해.</p>
 <p>게임 로직은 <code>Send()</code>만 부른다.</p>
 <p>RHI도 렌더러에게 그런 공용 언어를 준다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — <code>GDynamicRHI</code></strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 창구 설계도가 있어도, 렌더러가 매번 "오늘은 D3D12 창구? Vulkan 창구?"를 찾아다니면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: BasePass, Shadow, Lumen 같은 코드가 전부 같은 질문을 반복하면, 공항 안내판이 수백 장으로 흩어진 꼴이야. 하나만 바뀌어도 전부 확인해야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "오늘 열린 창구는 여기야"라고 가리키는 전역 손잡이 하나가 필요해. 그게 <code>GDynamicRHI</code>야. 렌더러는 그 손잡이만 잡고 말하면 돼.</div>
 </div>
 <div class="conversation"><h2>2. 창구 손잡이 — <code>GDynamicRHI</code></h2>
 <p>공항에는 여러 항공사가 있어도 승객은 안내판에 적힌 "오늘 여기로 오세요" 창구 하나를 찾아가.</p>
@@ -125,6 +128,7 @@ bool bDriverDenylistMessageShown = false;</div>
 <p>렌더러 곳곳은 "D3D12 객체 어디 있어?"라고 묻지 않는다.</p>
 <p>대부분은 <code>GDynamicRHI</code>를 통해 공용 함수로 간다.</p>
 <p>창구 뒤 직원이 D3D12인지 Vulkan인지는 이 손잡이 안쪽 문제야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — <code>RHIInit</code></strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 프로그램 시작하자마자 렌더러가 알아서 창구를 하나 잡고 쓰면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 어떤 PC는 렌더링을 못 하고, 어떤 설정은 Vulkan을 원하고, Windows와 Linux는 고르는 방법도 달라. 첫 주문이 오기 전에 창구가 비어 있으면 바로 터져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 엔진 시작 때 "렌더링 가능해?", "어느 플랫폼이야?", "어느 창구 열까?"를 한 번 정하는 입구가 필요해. 그게 <code>RHIInit</code>이야.</div>
 </div>
 <div class="conversation"><h2>3. 시작할 때 창구를 고른다 — <code>RHIInit</code></h2>
 <p><code>GDynamicRHI</code>는 엔진 시작 중 <code>RHIInit</code>에서 채워진다.</p>

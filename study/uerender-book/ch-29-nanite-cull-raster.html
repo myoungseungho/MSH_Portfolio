@@ -68,6 +68,7 @@ a.xref:hover { background:#e1bee7; }
 <p>GPU 안에서 도는 컴퓨트 셰이더 직원이야.</p>
 <p>Nanite는 트럭 안의 모든 삼각형을 CPU가 만지는 구조가 아니라, GPU 물류센터가 직접 후보를 줄이고 줄을 나누는 구조야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 래스터 스케줄러</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 보이는 삼각형은 그냥 한 줄 컨베이어에 다 올리면 돼. GPU의 하드웨어 래스터가 알아서 픽셀로 바꿔 주는 구조야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: Nanite 상자는 너무 잘게 쪼개져 있어. 1픽셀도 안 되는 작은 봉투까지 같은 컨베이어에 태우면, 큰 박스엔 빠른 설비가 작은 봉투 앞에서 버벅여.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 큰 박스는 HW 줄, 작은 봉투는 SW 줄로 보낼지 정하는 센터장 다이얼이 필요해. 그게 래스터 스케줄러야.</div>
 </div>
 <div class="conversation"><h2>1. 먼저 스케줄러부터 — HW만 쓸지, SW도 쓸지</h2>
 <p>물류센터에 작은 봉투 분류 라인을 켤지 말지부터 정해야 해.</p>
@@ -97,6 +98,7 @@ a.xref:hover { background:#e1bee7; }
 <p>이 장에서 계속 나오는 SW는 GPU 컴퓨트 파이프 쪽이야.</p>
 <p>서버로 치면 메인 게임 루프가 다 하는 게 아니라, 워커 큐를 따로 열어 병렬로 처리하는 느낌에 더 가까워.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 소프트웨어 래스터</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 삼각형을 픽셀로 바꾸는 일은 GPU의 고정 기능 래스터 장치가 맡아. 우리는 draw만 던지고 컨베이어가 알아서 찍어.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 아주 작은 삼각형이 화면에 먼지처럼 많아지면, 컨베이어에 올리고 내리는 준비 비용이 더 크게 느껴져. 작은 봉투를 큰 박스 설비에 태우는 셈이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: GPU 컴퓨트 셰이더가 직접 작은 봉투를 집어 칸에 꽂는 길이 필요해. 고정 장치 대신 프로그램이 래스터를 하니까 소프트웨어 래스터라고 부르는 거야.</div>
 </div>
 <div class="conversation"><h2>2. SW 라인의 정체 — <code>FMicropolyRasterizeCS</code></h2>
 <p>작은 봉투 라인이 실제로 어떤 프로그램으로 도는지 보자.</p>
@@ -178,6 +180,7 @@ IMPLEMENT_MATERIAL_SHADER_TYPE(, FMicropolyRasterizeCS, TEXT("/Engine/Private/Na
 <p>끝의 <code>SWHW</code>가 이번 장의 핵심 힌트야.</p>
 <p>하나의 패스 결과가 소프트웨어 래스터용 인자와 하드웨어 래스터용 인자를 같이 들고 간다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — SW/HW visible 결과판</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 컬링이 끝나면 "보이는 클러스터 목록" 하나만 만들고, CPU나 다음 단계가 다시 훑어서 어느 줄로 보낼지 나누면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 보이는 상자가 수천, 수만 개면 다시 훑는 것도 일이야. 물류센터가 분류해 놓고 사무실에 다시 들고 가서 재분류하는 꼴이 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 보인다고 판정하는 순간, SW 줄과 HW 줄의 자리까지 바로 잡는 결과판이 필요해. 그래서 <code>OutVisibleClustersSWHW</code>에 양쪽 끝에서 쌓는 거야.</div>
 </div>
 <div class="conversation"><h2>4. visible 결과판 — SW는 앞에서, HW는 뒤에서 쌓는다</h2>
 <p>컬링 셰이더가 "이 클러스터는 보인다"라고 결정하면, 그 클러스터를 visible 목록에 넣어야 해.</p>
@@ -279,6 +282,7 @@ IMPLEMENT_MATERIAL_SHADER_TYPE(, FMicropolyRasterizeCS, TEXT("/Engine/Private/Na
 <p>그래서 Nanite를 읽을 때는 <code>Cull</code>과 <code>Raster</code>를 따로 외우면 안 돼.</p>
 <p>컬링 결과가 래스터 인자로 바로 이어진다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 간접 컴퓨트 디스패치</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: CPU가 "이번엔 클러스터 183개니까 컴퓨트 그룹 몇 개" 하고 세어서 GPU에 실행 수를 넣어 주면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: Nanite는 GPU가 이미 컬링하고 비닝했어. 그걸 CPU가 다시 읽어 오면 왕복 시간이 생기고, 물류센터 자동 분류기를 멈춰 세우는 꼴이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: GPU가 만든 실행 인자를 GPU가 바로 먹는 방식이 필요해. CPU가 직접 숫자를 넣지 않아서 indirect, 그래서 간접 컴퓨트 디스패치야.</div>
 </div>
 <div class="conversation"><h2>6. SW 라인의 마지막 — 간접 컴퓨트 디스패치</h2>
 <p>마지막으로 <code>DispatchSW</code> 안쪽을 보자.</p>

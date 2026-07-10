@@ -65,6 +65,7 @@ a.xref:hover { background:#e1bee7; }
 <ul><li>같은 포장 용기끼리 모으기</li><li>같은 소스끼리 모으기</li><li>같은 메뉴가 여러 개면 한 번에 볶기</li></ul>
 <p><code>FMeshDrawCommand</code>가 바로 이 조리표야. 버텍스 스트림, 인덱스 버퍼, PSO, 셰이더 바인딩, 몇 개 그릴지 같은 걸 미리 담아둔다. <code>FVisibleMeshDrawCommand</code>는 오늘 실제로 주문 들어온 조리표 스티커야. <code>StateBucketId</code>는 "같은 메뉴라서 한 팬에 같이 볶아도 됨"이라는 묶음 번호야.</p>
 <p>이 비유를 끝까지 끌고 가자. 캐싱은 조리표를 미리 인쇄해두는 거고, 정렬은 주방 동선대로 줄 세우는 거고, 머지는 같은 메뉴 여러 개를 한 팬에 볶는 거야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — MeshDrawCommand 캐싱</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 메시가 보일 때마다 주방장이 "버텍스 버퍼는 어디, 인덱스 버퍼는 어디, PSO는 뭐지?"를 그 자리에서 새로 적는 식이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 스태틱 메시 5만 개 중 2만 개가 보이면, 같은 조리표를 2만 번 다시 쓰느라 CPU가 먼저 줄 서. GPU 주방은 주문표가 늦어서 손 놓고 기다려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 잘 안 바뀌는 조리표는 씬에 들어올 때 미리 구워두자. 그 한 장짜리 draw 주문표가 <code>FMeshDrawCommand</code>야.</div>
 </div>
 <div class="conversation"><h2>1. <code>FMeshDrawCommand</code>는 RHI 바로 위의 주문표다</h2>
 <p>먼저 주문표 자체가 뭘 담는지 보자. 정의는 <code>MeshPassProcessor.h</code>에 있고, 주석이 대놓고 말해준다. 이건 "draw call을 완전히 설명하는 데이터"이고, 지원되는 경우 프리미티브가 씬에 들어올 때 캐시된다.</p>
@@ -122,6 +123,7 @@ public:
 <div class="note gloss">🔤 <strong>기호 사전</strong> — 조리표 굽는 순간<br>&bull;&nbsp;<strong><code>AddMeshBatch</code></strong> = 메시 배치를 처리하라는 호출. 주석대로 내부에서 <code>FinalizeCommand</code>까지 이어져.<br>&bull;&nbsp;<strong><code>FCachedMeshDrawCommandInfo</code></strong> = 진짜 명령이 어디 저장됐는지 알려주는 작은 영수증이야.<br>&bull;&nbsp;<strong><code>CommandIndex</code></strong> = 일반 캐시 리스트 안의 위치야.<br>&bull;&nbsp;<strong><code>StateBucketId</code></strong> = 같은 상태끼리 묶는 버킷 번호야. 이게 있으면 나중에 머지 후보가 된다.<br>&bull;&nbsp;<strong><code>StaticMeshCommandInfos</code></strong> = 이 스태틱 메시가 패스별로 가진 캐시 영수증 배열이야.</div>
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 패스가 <code>CachedMeshCommands</code>를 지원하면 → <code>CreateMeshPassProcessor</code>로 그 패스 전용 요리사를 만들고 → <code>AddMeshBatch</code>로 조리표를 굽고 → <code>GetCommandInfoAndReset()</code>으로 저장 위치 영수증을 받는다. 마지막에 <code>StaticMeshCommandInfos</code>에 꽂으니, 다음 프레임부터는 같은 메시가 레시피를 다시 쓰지 않아도 돼.</div>
 <p>이게 캐싱의 첫 번째 절반이야. 스태틱 메시가 렌더 씬에 들어오는 순간, "이 메시를 BasePass에서 어떻게 그릴지", "DepthPass에서는 어떻게 그릴지" 같은 주문표가 패스별로 준비된다. 매 프레임 시야 계산은 따로 하지만, 레시피 자체는 이미 창고에 있다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — FVisibleMeshDrawCommand</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 미리 구운 조리표 <code>FMeshDrawCommand</code>에 "오늘 보임, 정렬값, 컬링 정보"까지 그냥 덧붙이면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 같은 제육 조리표라도 오늘 몇 번 손님이 주문했는지, 카메라에 보이는지, primitive id가 어디인지는 매 프레임 바뀌어. 원본 조리표에 덧칠하면 다음 프레임 창고 조리표가 꼬여.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 레시피 원본은 그대로 두고, 오늘 주문 스티커만 따로 붙이자. 그 한 프레임짜리 스티커가 <code>FVisibleMeshDrawCommand</code>야.</div>
 </div>
 <div class="conversation"><h2>3. 프레임에는 보이는 조리표만 꺼낸다</h2>
 <p>앞 장에서 프러스텀 컬링과 오클루전 컬링을 봤지. 그 결과 "이번 뷰에서 이 프리미티브가 보인다"가 나오면, 언리얼은 캐시된 주문표를 꺼내서 <code>FVisibleMeshDrawCommand</code>로 만든다. 레시피 원본은 <code>FMeshDrawCommand</code>고, 오늘 주문 스티커가 <code>FVisibleMeshDrawCommand</code>야.</p>
@@ -185,6 +187,7 @@ public:
 				CollectMeshDrawCommandPassStats(Context.MeshDrawCommands, Context.InstanceCullingContext);</div>
 <div class="note gloss">🔤 <strong>기호 사전</strong> — 정렬 뒤 인스턴싱 준비<br>&bull;&nbsp;<strong><code>QUICK_SCOPE_CYCLE_COUNTER</code></strong> = 이 구간 시간이 얼마나 걸리는지 재는 성능 표식이야.<br>&bull;&nbsp;<strong><code>Context.MeshDrawCommands</code></strong> = 이번 패스에서 보이는 주문표 목록이야.<br>&bull;&nbsp;<strong><code>.Sort(...)</code></strong> = 목록을 특정 기준대로 줄 세운다는 뜻이야.<br>&bull;&nbsp;<strong><code>FCompareFMeshDrawCommands()</code></strong> = draw command 정렬 기준 객체야.<br>&bull;&nbsp;<strong><code>Context.bUseGPUScene</code></strong> = GPU Scene 경로를 쓰는지 보는 참/거짓 값이야.<br>&bull;&nbsp;<strong><code>SetupDrawCommands</code></strong> = 인스턴스 컬링과 GPU 제출용 보조 데이터를 준비하는 함수야.<br>&bull;&nbsp;<strong><code>MaxInstances</code></strong> = 머지되거나 인스턴싱될 때 한 명령이 가질 수 있는 최대 인스턴스 수야.</div>
 <p>이 정렬은 그냥 보기 좋으라고 하는 게 아니야. 주문표를 비슷한 것끼리 붙여놔야 PSO 변경이 줄고, 같은 <code>StateBucketId</code>가 이웃으로 붙어서 머지할 수 있다. 도시락 가게에서 제육, 돈가스, 제육, 돈가스 순서로 만들면 팬을 계속 바꿔야 해. 제육끼리 모아두면 소스를 한 번 잡고 여러 개를 처리한다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 동적 인스턴싱(StateBucketId)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 보이는 조리표를 하나씩 draw call로 내면 돼. 도시락 하나 주문 들어올 때마다 팬 올리고, 소스 잡고, 한 개 만들고 끝.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 같은 메시 100개가 같은 PSO와 셰이더 바인딩을 쓰는데도 100번 따로 그리면, 주방은 같은 팬을 100번 들었다 놔. CPU도 상태 확인을 100번 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 같은 상태는 <code>StateBucketId</code>로 같은 버킷에 넣고, 주문표 하나의 <code>NumInstances</code>만 늘려 한 번에 볶자. 그게 동적 인스턴싱이야.</div>
 </div>
 <div class="conversation"><h2>5. 같은 상태면 여러 주문을 한 팬에 볶는다</h2>
 <p>정렬만 해도 상태 변경 비용은 줄어. 하지만 더 욕심낼 수 있어. 같은 메시 상태, 같은 버텍스 스트림, 같은 셰이더 바인딩이면 draw call 여러 개를 <strong>하나의 instanced draw</strong>로 합칠 수 있다. 이게 동적 인스턴싱이야.</p>
@@ -224,6 +227,7 @@ public:
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 같은 <code>StateBucketId</code>가 이어지면 → 이미 인스턴싱 중인 명령의 <code>NumInstances</code>를 하나 늘리고 → 새 버킷을 처음 만나면 다음 명령도 같은 버킷인지 확인한 뒤 → 기존 <code>FMeshDrawCommand</code>를 복사해서 <code>NewCommand</code>를 만들고 그 인스턴스 수를 늘릴 준비를 한다. 이어 읽으면 "같은 조리표 여러 장을 한 장으로 합치고, 몇 인분인지 숫자만 키운다"가 된다.</div>
 <p>왜 굳이 새 <code>FMeshDrawCommand</code>를 복사할까? 캐시된 원본 명령은 여러 프레임, 여러 프리미티브가 공유할 수 있어. 그 원본의 <code>NumInstances</code>를 바로 바꾸면 창고 조리표 자체가 변해버린다. 그래서 한 프레임짜리 저장소 <code>MeshDrawCommandStorage</code>에 복사본을 만들고, 그 복사본만 "이번 팬에서 3인분"처럼 바꾼다.</p>
 <p>여기서 <code>PrimitiveIdBufferOffset</code>도 같이 움직인다. 한 draw call로 여러 프리미티브를 그리려면 셰이더가 "나는 지금 몇 번째 프리미티브를 그리고 있지?"를 알아야 해. 그 답을 primitive id 버퍼에 적어두고, 명령에는 그 시작 위치를 붙인다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — StateCache</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 주문표 하나 낼 때마다 "PSO 꽂고, 버텍스 스트림 꽂고, 셰이더 바인딩 꽂아"를 매번 다시 말해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 정렬 덕분에 같은 제육 주문 50개가 이어져도, 똑같은 포장대와 소스통을 50번 다시 세팅하면 바뀐 게 없는데 CPU 시간이 새.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 방금 RHI에 꽂은 상태를 작은 메모장에 적어두고, 다를 때만 바꾸자. 그 메모장이 <code>StateCache</code>야.</div>
 </div>
 <div class="conversation"><h2>6. 제출할 때는 구워둔 상태를 RHI에 꽂는다</h2>
 <p>마지막으로, 이 주문표가 진짜 draw로 바뀌는 순간을 보자. <code>FMeshDrawCommand::SubmitDrawBegin</code>은 캐시된 pipeline id로 PSO를 찾고, 필요할 때만 새 PSO를 적용하고, 버텍스 스트림과 셰이더 바인딩을 RHI 커맨드 리스트에 꽂는다.</p>

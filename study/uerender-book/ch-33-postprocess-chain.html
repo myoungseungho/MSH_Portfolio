@@ -64,6 +64,7 @@ a.xref:hover { background:#e1bee7; }
 <p>그래서 사진관에는 보정 라인이 있어.</p>
 <ol><li><strong>원본 사진 받기</strong> — 아직 HDR 같은 넓은 밝기 사진.</li><li><strong>작업표 만들기</strong> — 어떤 보정대를 켤지 고른다.</li><li><strong>빛 번짐 만들기</strong> — 밝은 부분만 작게 줄여 흐린 뒤 다시 섞는다. 이게 블룸.</li><li><strong>인화용 밝기로 눌러 담기</strong> — 넓은 밝기를 종이/모니터 범위로 압축한다. 이게 톤매핑.</li><li><strong>마지막 손질</strong> — FXAA/SMAA, 디버그, 업스케일 같은 꼬리 작업.</li></ol>
 <p>언리얼의 <code>PostProcessing.cpp</code>는 이 사진관 작업표야. 특히 <code>AddPostProcessingPasses</code>가 큰 라인 하나를 지휘해. 여기서 <code>SceneColor</code>라는 사진이 계속 다음 작업대로 넘어가. <code>PassSequence</code>는 작업표고, <code>Bloom</code>은 빛 번짐 레이어고, <code>AddTonemapPass</code>는 인화기야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — SceneColor</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 장면을 다 그렸으면 그 색을 바로 화면에 보내면 될 것 같아. 사진관이면 RAW를 그대로 손님에게 주는 셈이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: HDR 사진에는 창밖 20 같은 밝기와 방 안 0.02 같은 어둠이 같이 들어 있어. 8비트 화면에 바로 누르면 밝은 곳은 하얗게 터지고 어두운 곳은 뭉개져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "지금 보정 중인 사진" 손잡이가 필요해. 원본은 따로 두고 작업대가 새 사진을 만들 때마다 이 손잡이를 갈아끼워. 그게 <code>SceneColor</code>야.</div>
 </div>
 <div class="conversation"><h2>1. 출발점 — SceneColor는 계속 갈아끼우는 사진이다</h2>
 <p>후처리의 시작은 "장면을 다 그린 색"이야. 언리얼 코드에서는 이걸 <code>SceneColor</code>로 잡아. 중요한 건 이 변수가 <strong>한 번 만들고 끝나는 원본</strong>이 아니라는 점이야. 패스를 지나면서 새 텍스처로 계속 바뀌는 손잡이야.</p>
@@ -87,6 +88,7 @@ a.xref:hover { background:#e1bee7; }
 <p><code>Scene color is updated incrementally through the post process pipeline.</code></p>
 <p>말 그대로야. 후처리 체인은 <code>SceneColor</code>를 하나씩 바꿔 끼우며 진행돼. 서버 코드로 치면 패킷 버퍼가 복호화 → 압축해제 → 파싱 → 핸들러 dispatch 를 지나면서 "지금 단계의 버퍼"로 계속 바뀌는 느낌이야.</p>
 <p>원본도 따로 보관해. <code>OriginalSceneColor</code>가 그 역할이야. 사진관으로 치면 RAW 원본은 서랍에 넣어두고, 작업대 위 사진만 계속 바꾸는 거지.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — PassSequence(작업표)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 모든 사진을 같은 순서로 모션블러, 블룸, 톤매핑, AA까지 전부 통과시키면 단순해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 블룸 강도 0인 뷰도 있고, FXAA 대신 SMAA인 뷰도 있어. 꺼진 작업대까지 매 프레임 1920x1080 사진을 들고 지나가면 돈만 써.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 이번 사진에 필요한 작업대만 켜는 체크리스트가 필요해. 서버 미들웨어 켜고 끄듯이 후처리 패스를 고르는 표가 <code>PassSequence</code>야.</div>
 </div>
 <div class="conversation"><h2>2. 작업표 켜기 — 설정을 보고 패스를 활성화한다</h2>
 <p>패스 이름만 있다고 실행되는 건 아니야. 이번 뷰에서 실제로 쓸지 골라야 해. 예를 들어 FXAA를 쓰기로 한 뷰면 <code>FXAA</code>를 켜고, SMAA가 아니면 <code>SMAA</code>는 꺼. 톤매핑도 디버그 시각화 상황에 따라 꺼질 수 있어. 이번 챕터에서 볼 핵심 이름은 <code>PostProcessMaterialBeforeBloom</code>, <code>Tonemap</code>, <code>PostProcessMaterialAfterTonemapping</code>이야.</p>
@@ -106,6 +108,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 블룸 전/톤매핑 후 머티리얼 줄을 먼저 가져오고 → 각 줄이 비어 있지 않으면 해당 패스를 켜고 → 톤매핑, FXAA, SMAA도 뷰 설정대로 켠다. 작업표가 "이 사진은 2번 작업대 건너뛰고, 3번 작업대는 켜고, 4번은 FXAA로" 같은 체크리스트가 되는 거야.</div>
 <p>이게 체인 구조의 핵심이야. 언리얼은 "함수 하나가 모든 효과를 한 번에 처리"하지 않아. 작업표를 만들고, 각 작업대가 켜졌는지 보고, 켜진 작업대만 통과시켜.</p>
 <p>서버로 치면 미들웨어 체인과 비슷해. 어떤 연결은 암호화 핸들러가 켜지고, 어떤 연결은 압축 핸들러가 꺼지고, 어떤 연결은 로깅 필터가 붙는 식이지. 후처리도 똑같이 "이번 뷰에 필요한 필터만 줄 세우기"야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 블룸용 낮은 해상도 체인</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 밝은 번짐을 만들려면 원본 4K 사진에서 주변 픽셀을 크게 읽어 흐리면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 3840x2160 전체를 큰 반경으로 여러 번 흐리면 픽셀을 수천만 번 더 읽어. 후반 작업대가 갑자기 막혀.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 작은 복사본을 half, quarter, eighth로 뽑아 거기서 흐리고 다시 섞자. downsample은 픽셀 수를 줄인다는 말이고, 그 줄이 낮은 해상도 체인이야.</div>
 </div>
 <div class="conversation"><h2>3. 블룸을 할지 말지 — 밝은 번짐 레이어가 필요한가</h2>
 <p>이제 블룸 쪽으로 내려가자. 블룸은 밝은 부분을 뽑아 흐리는 작업이야. 언리얼은 먼저 블룸을 실제로 만들 조건을 본다. 강도가 0이면 할 필요가 없어. TSR 시각화 같은 특수 모드면 피하기도 해. FFT 블룸인지 가우시안 블룸인지도 여기서 갈라진다.</p>
@@ -183,6 +186,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 품질이 높으면 더 많은 작은 사진 단계를 쓰고 → 각 단계에서 크기와 틴트를 꺼내고 → <code>SceneDownsampleChain-&gt;GetTexture(SourceIndex)</code>로 작은 사진을 가져와 → <code>AddGaussianBlurPass</code>로 흐린 뒤 <code>PassOutputs</code>에 누적해. 이게 사진관의 "작은 복사본 여러 장을 흐려서 빛 번짐 레이어를 만든다"는 작업이야.</div>
 <p>여기서 "블룸은 화면 전체에 그냥 흰색을 얹는 것"이 아니라는 게 중요해. 블룸은 별도 텍스처로 만들어져. 그리고 톤매퍼에 들어갈 때 <code>Bloom</code> 입력으로 합쳐진다.</p>
 <p>사진관 말로 하면, 원본 사진 위에 바로 붓질하지 않고, 빛 번짐만 따로 투명 필름에 만든 뒤, 인화기에 같이 넣는 거야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 톤매핑(Tonemap)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 셰이더가 만든 HDR 색을 그대로 화면 색으로 쓰면 제일 쉽지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 사진에는 태양 반사 10.0, 실내 그림자 0.03 같은 값이 같이 있어. 모니터 범위에 그냥 자르면 창밖은 하얀 종이, 방 안은 검은 뭉치가 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 넓은 밝기를 화면이 먹을 수 있는 좁은 범위로 눌러 담는 인화 규칙이 필요해. 밝기 톤을 화면 값에 매핑해서 <code>Tonemap</code>이야.</div>
 </div>
 <div class="conversation"><h2>5. 톤매핑 — HDR 사진과 블룸 레이어를 같이 인화한다</h2>
 <p>이제 핵심 관문이다. 톤매핑은 HDR <code>SceneColor</code>를 화면에 낼 수 있는 범위로 바꾸는 작업이야. 하지만 혼자 하지 않아. 여기서 블룸, 로컬 노출, 아이 어댑테이션, 컬러 그레이딩 LUT가 같이 들어간다.</p>

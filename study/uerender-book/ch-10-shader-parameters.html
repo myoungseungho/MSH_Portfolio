@@ -66,6 +66,7 @@ a.xref:hover { background:#e1bee7; }
 <p>셰이더 컴파일러가 만든 <code>FShaderParameterMap</code>은 오늘의 배식표야. GPU 셰이더가 "나는 <code>TexelSize</code>를 몇 번 버퍼 몇 번째 자리에서 먹을 거야"라고 적은 표지.</p>
 <p><code>FShaderParameterBindings</code>는 배식 동선표야. C++ 식판의 어느 칸을 읽어서 셰이더의 어느 슬롯에 줄지 적어 둔다.</p>
 <p>마지막 <code>SetShaderParameters</code>는 배식원이야. 동선표를 보고 C++ 메모리에서 값을 꺼내 <code>FRHIBatchedShaderParameters</code>에 담고, RHI 커맨드 리스트에 "이 셰이더 실행할 때 이 반찬들 같이 내보내"라고 넘긴다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 셰이더 파라미터 구조체(FParameters)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 셰이더에 줄 값을 함수 인자처럼 하나씩 넘기면 될 것 같아. <code>TexelSize</code> 따로, 텍스처 따로, 샘플러 따로.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 셰이더 하나가 값 10개, 텍스처 4개, 샘플러 2개를 원하면 배식원이 매번 "몇 번째 칸?"을 외워야 해. 칸 하나 밀리면 국 자리에 반찬이 들어가.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 값들을 한 급식판에 담고, 칸 이름까지 같이 붙이는 구조가 필요해. 그 식판이 <code>FParameters</code>야.</div>
 </div>
 <div class="conversation"><h2>1. 사용자는 이렇게 쓴다 — <code>FParameters</code> 식판</h2>
 <p>먼저 실제 사용 예시부터 보자. <code>GenerateMips.cpp</code>의 컴퓨트 셰이더가 파라미터 구조체를 이렇게 선언해.</p>
@@ -79,6 +80,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note gloss">🔤 <strong>기호 사전</strong> — 위 코드 인용<br>&bull;&nbsp;<strong><code>BEGIN_SHADER_PARAMETER_STRUCT</code></strong> = 셰이더에 줄 식판 구조체를 시작해.<br>&bull;&nbsp;<strong><code>FParameters</code></strong> = 이 식판의 C++ 타입 이름이야.<br>&bull;&nbsp;<strong><code>SHADER_PARAMETER(FVector2f, TexelSize)</code></strong> = <code>TexelSize</code>라는 일반 값 칸이야.<br>&bull;&nbsp;<strong><code>SHADER_PARAMETER_RDG_TEXTURE_SRV</code></strong> = RDG 텍스처를 읽기용 SRV로 넘기는 칸이야.<br>&bull;&nbsp;<strong><code>SHADER_PARAMETER_RDG_TEXTURE_UAV</code></strong> = RDG 텍스처를 쓰기용 UAV로 넘기는 칸이야.<br>&bull;&nbsp;<strong><code>SHADER_PARAMETER_SAMPLER</code></strong> = 텍스처 샘플링 방식을 넘기는 칸이야.</div>
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 위 코드는 그냥 C++ 멤버 선언처럼 보여도, 실제로는 "셰이더가 먹을 식판의 칸 목록"이야. 숫자, 읽기 리소스, 쓰기 리소스, 샘플러가 한 판에 모이고, 각 칸 이름이 나중에 HLSL 변수 이름과 맞춰진다.</div>
 <p>첫 번째 핵심은 이거야. <code>SHADER_PARAMETER</code>는 멤버를 만들 뿐 아니라, 나중에 바인딩할 수 있도록 이름표와 좌표표도 만든다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — FShaderParametersMetadata</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: <code>FParameters</code> 메모리만 있으면 C++은 값을 다 알 것 같아. 그냥 식판 시작 주소를 들고 가면 되겠지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 마지막 제출 때는 <code>void*</code> 시작 주소 하나만 남아. <code>TexelSize</code>가 0바이트째인지 16바이트째인지 모르면 배식원이 눈감고 칸을 찍는 거야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 식판 전체 크기와 칸 목록을 적은 설계도가 필요해. 값 자체가 아니라 설명서라서 <code>FShaderParametersMetadata</code>야.</div>
 </div>
 <div class="conversation"><h2>2. 구조체 전체 설명서 — <code>FShaderParametersMetadata</code></h2>
 <p><code>BEGIN_SHADER_PARAMETER_STRUCT</code>가 펼쳐지면 구조체 전체 설명서를 만들 수 있어. 진짜 정의는 <code>ShaderParameterMacros.h</code>에 있다.</p>
@@ -182,6 +184,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note gloss">🔤 <strong>기호 사전</strong> — 위 코드 인용<br>&bull;&nbsp;<strong><code>Bind(...)</code></strong> = 식판 설명서와 셰이더 배식표를 맞추는 함수야.<br>&bull;&nbsp;<strong><code>StructMetaData.GetMembers()</code></strong> = <code>SHADER_PARAMETER</code>들이 만든 칸 목록을 꺼내.<br>&bull;&nbsp;<strong><code>BaseType</code></strong> = 이 칸의 큰 타입 분류야.<br>&bull;&nbsp;<strong><code>CppName</code></strong> = <code>FParameters::TexelSize</code> 같은 C++ 쪽 이름이야.<br>&bull;&nbsp;<strong><code>continue</code></strong> = 이 칸은 셰이더 바인딩 대상이 아니니 다음 칸으로 넘어가.<br>&bull;&nbsp;<strong><code>ShaderBindingName</code></strong> = 셰이더 파라미터 맵에서 찾을 이름이야.<br>&bull;&nbsp;<strong><code>ByteOffset</code></strong> = 실제 C++ 구조체 메모리 안에서 이 칸을 읽을 위치야.</div>
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Bind</code>는 멤버마다 이름표를 읽고, 셰이더에서 찾을 이름을 만들고, C++ 메모리 좌표를 계산한다. 급식판으로 말하면 "이 칸 이름이 뭐고, 식판 어디에 있고, 배식 대상이 맞나"를 확인하는 단계야.</div>
 <p>렌더 타겟 바인딩 슬롯은 셰이더 변수 자체가 아니니까 건너뛴다. RDG access 타입도 직접 바인딩 값이 아니라 의존성 표시 쪽이라 건너뛴다. 중첩 구조체면 접두어를 붙여서 이름을 펼친다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — FShaderParameterBindings</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 매번 제출할 때 C++ 칸 이름을 보고 셰이더 배식표에서 다시 찾으면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 프레임마다 패스가 수십 개씩 돌고, 셰이더마다 칸도 여러 개야. 배식 때마다 이름표를 전부 다시 뒤지면 밥 나가기 전에 줄이 막혀.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 한 번 찾은 "C++ 몇 바이트째 → 셰이더 몇 번 슬롯" 동선을 적어 둬야 해. 그 동선표가 <code>FShaderParameterBindings</code>야.</div>
 </div>
 <div class="conversation"><h2>5. 이름을 찾으면 <code>Bindings</code>에 적는다</h2>
 <p>이제 셰이더 컴파일 결과에서 그 이름을 찾는다. <code>ParametersMap-&gt;FindParameterAllocation(...)</code>이 셰이더 배식표 조회야.</p>
@@ -235,6 +238,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Bindings</code>에는 실제 값이 들어가는 게 아니야. "구조체 메모리의 어느 오프셋을 읽어서, 셰이더의 어느 버퍼 위치에 넣을지"라는 동선표가 들어간다.</div>
 <p>여기가 핵심이야. 같은 셰이더 타입은 바인딩 지도를 한 번 만들어 두고, 매 프레임 다른 <code>FParameters</code> 인스턴스만 읽어서 제출할 수 있다.</p>
 <p>서버에서 패킷 디스크립터를 한 번 만들고, 실제 패킷 바이트는 매번 다르게 읽는 것과 비슷해.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 유니폼 버퍼 바인딩</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 숫자 값은 그냥 몇 바이트 복사하면 돼. 그러면 텍스처나 큰 공용 값 묶음도 똑같이 복사하면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 4KB짜리 공용 상수 묶음을 패스마다 통째로 복사하고, 텍스처까지 값처럼 옮기려 하면 식판이 아니라 창고를 들고 뛰는 꼴이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 큰 묶음은 GPU가 볼 수 있는 버퍼 객체로 두고, 셰이더 슬롯에는 그 손잡이만 꽂아야 해. 그래서 유니폼 버퍼를 바인딩해.</div>
 </div>
 <div class="conversation"><h2>6. 마지막 제출 — 식판에서 값을 읽어 RHI에 꽂는다</h2>
 <p>이제 진짜 값 제출이다. <code>SetShaderParameters</code>는 <code>Bindings</code> 지도를 보고 C++ 구조체 메모리를 바이트 배열처럼 읽는다.</p>

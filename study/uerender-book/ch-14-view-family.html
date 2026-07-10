@@ -62,6 +62,7 @@ a.xref:hover { background:#e1bee7; }
 <p>그런데 관객석은 여러 개일 수 있어. 정면 좌석, 왼쪽 분할화면 좌석, 오른쪽 분할화면 좌석, 미니맵처럼 위에서 내려다보는 좌석, 거울 안에서 보는 좌석이 있다.</p>
 <p>각 좌석이 <code>View</code>야. 좌석마다 보는 방향, 렌즈, 화면 사각형, 이전 프레임 기억이 다르다.</p>
 <p>좌석 묶음 장부가 <code>ViewFamily</code>야. 같은 상영관을 보는 좌석들을 한 번에 운영하려면, 좌석 하나가 아니라 좌석 묶음을 들고 다녀야 한다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — View</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 카메라 위치랑 방향 하나만 들고 "여기서 보이는 대로 그려" 하면 될 것 같아. 상영관에 좌석이 하나뿐이면 이게 제일 단순해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 분할화면 1P와 2P는 같은 Scene을 봐도 좌석, 화면 칸, 이전 프레임 기억이 달라. 전역 카메라 하나로 밀면 왼쪽 좌석 정보가 오른쪽 좌석 정보를 덮어써.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 좌석 하나의 렌즈, 화면 사각형, 이전 기억, GPU에 줄 신분증을 한 가방에 묶어야 해. 그 "보는 자리"가 바로 <strong>View</strong>야.</div>
 </div>
 <div class="conversation"><h2>1. View는 렌더러용 카메라다</h2>
 <p><code>FViewInfo</code>는 렌더러 내부에서 쓰는 View다. 바깥에서 온 <code>FSceneView</code>의 카메라 정보를 부모로 깔고, 렌더러가 필요한 쿼리와 캐시를 붙인다.</p>
@@ -98,6 +99,7 @@ void FViewInfo::Init()
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 코드는 좌석 하나를 만드는 장면이야. 카메라 기본 정보만 받는 게 아니라 오클루전 쿼리, 화면 사각형, 유니폼버퍼 캐시까지 붙인다. 그래서 View는 위치값 하나가 아니라 렌더링 작업용 가방을 든 카메라야.</div>
 <p>서버로 치면 소켓 핸들만 들고 있는 객체가 아니야. 그 소켓의 세션 상태와 송수신 버퍼까지 같이 든 객체다.</p>
 <p>여기서 첫 핵심은 <code>ViewRect</code>다. 카메라가 같은 월드를 봐도, 화면 어디에 그릴지는 View마다 다를 수 있어.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — ViewFamily</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 좌석이 하나면 <code>View</code> 하나만 들고 렌더러로 들어가면 돼. 상영관도 하나, 관객도 하나라 장부가 필요 없어 보여.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 분할화면이면 좌석이 2개, VR이면 양눈 2개, 씬캡처까지 끼면 같은 Scene을 여러 눈이 본다. 따로따로 처리하면 렌더 타깃 크기나 쇼플래그가 서로 안 맞기 쉬워.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 같은 렌더 흐름에서 같이 봐야 하는 좌석들을 한 장부에 묶어야 해. 그래서 이름도 <strong>Family</strong>, View들의 가족 장부야.</div>
 </div>
 <div class="conversation"><h2>2. Family는 View들을 렌더러 내부 ViewInfo로 바꾼다</h2>
 <p>게임 쪽에서 만들어 온 <code>InViewFamily-&gt;Views</code>가 렌더러 생성자 안으로 들어온다.</p>
@@ -166,6 +168,7 @@ void FViewInfo::Init()
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 현재 행렬, 이전 행렬, ViewRect가 한 상자에 접힌다. GPU는 이 상자를 보고 "나는 어느 카메라 기준으로, 어느 화면 조각에, 이전 프레임 어디에서 왔는지"를 안다.</div>
 <p>렌즈만 있으면 부족해. 최종 픽셀이 렌더 타깃의 어느 사각형에 들어갈지도 알아야 한다.</p>
 <p>서버로 치면 패킷 내용만 있는 게 아니라, 어느 세션의 어느 채널로 갈지도 같이 들어 있어야 하는 것과 같아.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — View 유니폼버퍼</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: CPU가 셰이더한테 행렬, 화면 크기, 노출값을 그때그때 하나씩 말해주면 될 것 같아. 좌석 하나면 대충 맞아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: GPU는 픽셀 수백만 개를 한꺼번에 처리해. 분할화면에서 왼쪽 좌석 값과 오른쪽 좌석 값이 섞이면 같은 머티리얼도 엉뚱한 카메라 기준으로 계산해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 한 View에서 모두 똑같이 읽을 값들을 한 상자에 찍어 GPU에 묶어야 해. <strong>Uniform</strong>은 모두에게 같은 값, <strong>Buffer</strong>는 그 값을 담는 상자야.</div>
 </div>
 <div class="conversation"><h2>4. 유니폼버퍼는 View의 GPU용 신분증이다</h2>
 <p>파라미터를 채우는 것과 GPU 리소스를 만드는 것은 다른 단계야.</p>
@@ -211,6 +214,7 @@ void FViewInfo::CreateViewUniformBuffers(const FViewUniformShaderParameters&amp;
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>SetupUniformBufferParameters</code>는 장부를 채우는 단계고, <code>CreateUniformBufferImmediate</code>는 그 장부를 GPU 신분증으로 찍어내는 단계야. 그래서 View 하나마다 자기 <code>ViewUniformBuffer</code>가 생긴다.</div>
 <p>이 버퍼는 화면 전체 전역값이 아니야. 분할화면이면 왼쪽 View와 오른쪽 View가 서로 다른 유니폼버퍼를 가진다.</p>
 <p>같은 머티리얼 코드라도 어떤 ViewUniformBuffer가 묶였는지에 따라 다른 카메라 기준으로 계산된다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — FamilySize</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 렌더 타깃 크기는 카메라 하나의 <code>ViewRect</code>만 보고 만들면 될 것 같아. 좌석 하나만 있으면 그 사각형만 담으면 되니까.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 1920x1080 화면을 좌우로 나누면 1P는 왼쪽 960칸, 2P는 오른쪽 960칸을 써. 왼쪽 View만 보고 폭 960짜리 판을 만들면 오른쪽 좌석은 잘려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: Family 안의 모든 <code>ViewRect</code> 바깥 끝을 모아 "가족 전체가 들어갈 판"을 정해야 해. 그 최종 판 크기가 <strong>FamilySize</strong>야.</div>
 </div>
 <div class="conversation"><h2>5. Family 크기는 ViewRect 여러 개를 합쳐 정한다</h2>
 <p>분할화면이 왜 Family인지 가장 잘 보이는 곳은 <code>ComputeFamilySize</code>야.</p>

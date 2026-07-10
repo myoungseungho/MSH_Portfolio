@@ -66,6 +66,7 @@ a.xref:hover { background:#e1bee7; }
 <p>언리얼에서 이 셋이 이렇게 대응돼:</p>
 <ul><li>이름표 = <code>SCOPED_GPU_STAT</code>, <code>RDG_GPU_STAT_SCOPE</code>, breadcrumb/event</li><li>초시계 = GPU timestamp render query</li><li>CCTV = <code>ProfileGPU</code>, Unreal Insights, RenderDoc/PIX 캡처</li></ul>
 <p>이 비유를 끝까지 끌고 갈 거야. 우리는 지금 "공장 라인 어디가 막혔는지 찾는 법"을 배우는 중이야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — GPU 프로파일링 이름표</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 그냥 GPU 전체 시간이 24ms라고만 알면 돼 보였어. 공장 전체 퇴근 시간이 늦었다는 숫자 하나만 보는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 작업대가 6개인데 숫자 하나만 있으면 누가 늦었는지 몰라. 서버 로그에 <code>CM_ATTACK</code> 이름 없이 "0.21ms"만 찍힌 느낌이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 각 패스가 자기 앞에 "나는 Prepass야" 같은 간판을 붙여야 해. 그게 <code>SCOPED_GPU_STAT</code> 같은 GPU 프로파일링 이름표야.</div>
 </div>
 <div class="conversation"><h2>1. 먼저 이름표가 붙는다 — 패스 코드가 직접 "나 Prepass야"라고 말함</h2>
 <p>프로파일러가 렌더러 안을 저절로 읽는 게 아니야. 각 패스 코드가 자기 구간에 이름표를 붙여준다. 예를 들어 깊이 프리패스 쪽 코드를 보면, GPU stat과 breadcrumb가 같이 박혀 있어.</p>
@@ -133,6 +134,7 @@ FScopedGPUStatEvent::~FScopedGPUStatEvent()
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 생성자에서 <code>StartQuery</code>와 <code>EndQuery</code>를 둘 다 할당하고 → 결과 칸은 <code>InvalidQueryResult</code>로 비워두고 → 마지막에 두 query가 유효한지 검사한다. 이벤트 하나가 입구 도장과 출구 도장을 한 쌍으로 들고 태어나는 장면이야.</div>
 <p>아까 비유로 돌아가자. 작업대에 작업자가 들어올 때 카드 찍고, 나갈 때 카드 찍는 거야. <code>Begin</code>이 입구 카드, <code>End</code>가 출구 카드야.</p>
 <p>여기서는 아직 시간이 나온 게 아니야. "찍을 쿼리 객체"만 준비한 거고, 실제로 GPU 명령줄에 쿼리를 끼워 넣는 건 다음 단계야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — GPU 타임스탬프 쿼리</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: CPU처럼 작업 시작할 때 <code>Now()</code>, 끝날 때 <code>Now()</code>를 바로 읽으면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: GPU는 뒤쪽 공장 라인에서 나중에 일해. CPU가 지금 시간을 읽어도 GPU가 그 작업대를 아직 지나가지 않았을 수 있어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: GPU 명령줄에 "여기 지나갈 때 시간 찍어줘"라는 도장 카드를 꽂아야 해. 그게 timestamp query야. query는 나중에 답을 받는 질문표라고 보면 돼.</div>
 </div>
 <div class="conversation"><h2>4. 쿼리는 RHI 명령 리스트에 제출된다</h2>
 <p>준비한 쿼리는 <code>Submit</code>에서 RHI 명령 리스트에 들어간다. 코드를 보면 이상하게도 시작과 끝 둘 다 <code>EndRenderQuery</code>를 호출해. 이 이름은 헷갈릴 수 있는데, 여기서는 "timestamp query를 명령 스트림에 기록한다"는 쪽으로 보면 돼.</p>
@@ -158,6 +160,7 @@ FScopedGPUStatEvent::~FScopedGPUStatEvent()
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Submit</code>은 query가 있으면 → GPU 마스크를 맞추고 → <code>EndRenderQuery(Query)</code>로 명령 리스트에 타임스탬프를 찍고 → <code>bBegin</code>이면 시작 완료, 아니면 종료 완료 표시를 남긴다. 공장 라인에 "여기서 카드 찍어"라는 명령을 실제로 꽂는 장면이야.</div>
 <p>여기서 CPU/GPU 분리를 다시 떠올려야 해. CPU는 명령 리스트에 "여기서 시간 찍어"라고 적어. GPU는 나중에 그 명령을 실행하다가 실제 시간을 찍어. 그래서 결과를 바로 읽으면 아직 없을 수 있어.</p>
 <p>이게 서버의 async IO랑 닮았어. IOCP에서 <code>WSARecv</code>를 걸었다고 그 순간 패킷이 온 게 아니잖아. 완료 통지가 나중에 오지. GPU timestamp query도 비슷해. 명령을 걸어두고, 나중에 결과가 준비됐을 때 읽는다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — inclusive/exclusive 시간</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 작업대 하나가 8ms 걸렸다고 표에 쓰면 끝인 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그 8ms 안에 TAA 3ms, Bloom 1ms처럼 작은 작업대들이 들어 있으면 누가 진짜 늦었는지 헷갈려. 부모 작업대를 억울하게 범인으로 찍을 수 있어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 자식까지 포함한 시간과 자기 혼자 먹은 시간을 나눠 봐야 해. 포함한 게 inclusive, 자기 몫만 남긴 게 exclusive야.</div>
 </div>
 <div class="conversation"><h2>5. 프레임 끝에서 결과를 모으고, inclusive/exclusive 시간을 만든다</h2>
 <p>프레임이 끝나면 이제 결과를 모아야 해. 언리얼은 pending event들을 돌면서 query 결과가 준비됐는지 확인한다. 아직 안 됐으면 이번 프레임 stat 업데이트를 미루고, 준비됐으면 inclusive/exclusive 시간을 계산한다.</p>
@@ -200,6 +203,7 @@ FScopedGPUStatEvent::~FScopedGPUStatEvent()
 <p>서버에서도 똑같아. <code>ProcessPacket()</code>이 10ms라고 해서 그 함수 자체가 느린 게 아닐 수 있어. 안에서 <code>DBQuery()</code>가 9ms면 병목은 DB지, 패킷 디스패처가 아니잖아.</p>
 <p>GPU stat 표를 볼 때도 그래서 물어야 해.</p>
 <ul><li>inclusive가 큰가?</li><li>exclusive가 큰가?</li><li>자식 중 하나가 독식하나?</li><li><code>[unaccounted]</code> 같은 빈 시간이 큰가?</li><li>VSync나 캡처 오버헤드가 섞였나?</li></ul>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — RenderDoc/PIX 캡처</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: <code>stat gpu</code> 표만 보고 제일 큰 숫자부터 줄이면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: TAA 4ms라는 숫자는 "늦다"만 말해. 텍스처가 큰지, dispatch가 많은지, 배리어에서 막혔는지는 안 보여.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 프레임 하나를 CCTV처럼 열어서 draw/dispatch와 리소스를 직접 봐야 해. 그 역할을 하는 캡처 도구가 RenderDoc/PIX야.</div>
 </div>
 <div class="conversation"><h2>6. RenderDoc/PIX는 CCTV다 — 캡처 모드에서는 이벤트 이름을 더 잘 보이게 켠다</h2>
 <p>숫자만으로 안 풀리는 문제가 있어. 예를 들어 TAA가 4ms인데 왜 4ms인지 알고 싶어. 샘플 수 때문인지, 해상도 때문인지, 리소스 배리어 때문인지, 특정 텍스처가 비정상인지, 숫자 표만으로는 부족해.</p>

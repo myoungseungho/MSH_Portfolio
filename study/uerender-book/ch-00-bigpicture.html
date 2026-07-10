@@ -113,6 +113,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 렌더러마다 <code>AddRenderer</code>로 촬영표에 올리고, 등록된 람다 안에서 <code>RenderViewFamily_RenderThread</code>가 호출돼. 영화로 치면 "오늘 감독이 찍을 장면을 촬영표에 올리는 장면"이야.</div>
 <p>여기서 아직 GPU 명령이 나간 게 아니야. 먼저 "무엇을 어떤 순서로 찍을지"를 적는 중이야. 서버에서 IOCP 워커가 바로 캐릭터를 때리지 않고, 패킷을 큐와 핸들러 흐름에 태우는 것과 비슷해.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 디퍼드 렌더러</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 제일 단순한 촬영장은 물체 하나를 볼 때마다 색도 칠하고, 빛도 바로 계산해서 사진을 끝내.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 조명이 10개, 50개로 늘면 같은 배우를 볼 때마다 조명 계산을 계속 다시 해. 감독이 카메라 앞에서 옷감 확인, 조명 확인, 색보정을 한 번에 다 하느라 줄이 막혀.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 먼저 배우의 재료표를 화면에 적어두고, 빛은 나중에 몰아서 얹자. 이렇게 일을 뒤로 미룬다고 해서 <strong>디퍼드(deferred)</strong> 렌더러야.</div>
 </div>
 <div class="conversation"><h2>3. 디퍼드 감독이냐 모바일 감독이냐</h2>
 <p>플랫폼과 기능 레벨에 따라 촬영 방식이 달라. PC/콘솔의 큰 줄기는 보통 디퍼드 렌더러고, 모바일은 별도 렌더러가 맡는다.</p>
@@ -176,6 +177,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>AddClearDepthStencilPass</code>로 깊이 칠판을 지우고 → <code>bNeedsPrePass</code>면 <code>RenderPrePass</code>로 깊이를 채워. 이게 끝나야 뒤 촬영팀이 "어느 픽셀이 앞에 있는지"를 알고 낭비를 줄인다.</div>
 <p>자세한 건 → <a class="xref" href="ch-19-prepass-depth.html">prepass-depth</a>에서 다시 본다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — GBuffer</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 조명팀이 배우를 비출 때마다 "이 옷 색 뭐야? 표면 방향은? 금속이야?"를 그 자리에서 다시 물어봐.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 픽셀이 200만 개고 조명이 여러 개면 같은 질문을 계속 반복해. 촬영장이 재료 확인만 하다가 하루가 끝나는 꼴이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 픽셀마다 색, 노멀, 거칠기 같은 재료표를 먼저 적어둔 공용 장부가 필요해. 그 장부가 <strong>GBuffer</strong>야. Geometry 정보를 모아둔 버퍼라고 보면 돼.</div>
 </div>
 <div class="conversation"><h2>6. 재질 정보를 화면에 눕힌다</h2>
 <p>깊이가 준비되면 화면 픽셀마다 "이 물체는 무슨 재질인가"를 적는다. 디퍼드 렌더링에서는 이 정보가 <code>GBuffer</code>에 들어간다. 색, 노멀, 거칠기, 금속성 같은 재료표를 먼저 적어두고, 빛은 나중에 따로 얹는다.</p>
@@ -200,6 +202,7 @@ a.xref:hover { background:#e1bee7; }
 <table class="compare-table"><thead><tr><th>촬영장 단계</th><th>실제 호출 예</th><th>뒤 챕터</th></tr></thead><tbody><tr><td>조명 켜기</td><td><code>RenderLights</code> (<code>DeferredShadingRenderer.cpp:3314</code>)</td><td><a class="xref" href="ch-22-deferred-lighting.html">deferred-lighting</a></td></tr><tr><td>간접광/AO</td><td><code>RenderDiffuseIndirectAndAmbientOcclusion</code> (<code>DeferredShadingRenderer.cpp:3329</code>)</td><td><a class="xref" href="ch-31-lumen-diffuse.html">lumen-diffuse</a></td></tr><tr><td>반사/하늘빛</td><td><code>RenderDeferredReflectionsAndSkyLighting</code> (<code>DeferredShadingRenderer.cpp:3339</code>)</td><td><a class="xref" href="ch-30-lumen-overview.html">lumen-overview</a></td></tr><tr><td>후처리</td><td><code>AddPostProcessingPasses</code> (<code>DeferredShadingRenderer.cpp:3943</code>)</td><td><a class="xref" href="ch-33-postprocess-chain.html">postprocess-chain</a></td></tr><tr><td>마무리</td><td><code>OnRenderFinish</code> (<code>DeferredShadingRenderer.cpp:4000</code>)</td><td><a class="xref" href="ch-35-finale.html">finale</a></td></tr></tbody></table>
 <p>큰 함수 하나가 GPU를 한 번 때리고 끝나는 구조가 아니야. 작은 촬영팀들이 패스를 추가하고, RDG가 그 순서를 관리한다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — RDG</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 촬영팀들이 "깊이 찍고, 재질 찍고, 조명 켜고"를 그냥 순서대로 손으로 적어 내려가.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 패스가 수십 개가 되면 누가 어떤 텍스처를 먼저 만들고 누가 읽는지 헷갈려. 조명팀이 재료표가 나오기도 전에 들이닥치면 촬영이 깨져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 패스들 사이의 의존 관계를 그래프로 잡고, 순서와 배리어를 자동으로 챙기는 진행표가 필요해. 그게 <strong>RDG(Render Dependency Graph)</strong>야.</div>
 </div>
 <div class="conversation"><h2>8. RDG가 패스를 실제 실행으로 바꾼다</h2>
 <p>앞에서 계속 <code>GraphBuilder</code>가 나왔지. 이건 "지금 당장 GPU에게 명령한다"가 아니라, "이 패스를 촬영표에 올린다"에 가까워. RDG는 패스들의 의존성을 보고, 필요한 배리어를 넣고, 실행 순서를 잡고, 실제 RHI 커맨드 리스트에 넘긴다.</p>
@@ -222,6 +225,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> RDG는 <code>SwitchPipeline</code>으로 장비를 맞추고 → <code>ExecutePassPrologue</code>로 준비하고 → <code>Pass-&gt;Execute</code>로 촬영하고 → <code>ExecutePassEpilogue</code>로 정리해. 패스 몸통만 부르는 게 아니라 앞뒤 안전 절차까지 붙이는 촬영 진행표야.</div>
 <p>이게 → <a class="xref" href="ch-11-rdg.html">rdg</a>의 핵심이고, 여기서 내려간 <code>RHICmdListPass</code>가 → <a class="xref" href="ch-04-rhi-commandlist.html">rhi-commandlist</a>의 세계로 이어진다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — RHI</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 감독이 장비팀을 거치지 않고 D3D12 카메라, Vulkan 카메라에 각각 다른 말로 직접 지시해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 플랫폼이 둘만 돼도 코드가 갈라져. "삼각형 그려" 같은 같은 주문을 장비마다 다른 문장으로 다시 써야 하니까 실수도 늘어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 위쪽 렌더러는 공통 장비 언어로 말하고, 끝에서 D3D12RHI 같은 담당자가 실제 호출로 번역해야 해. 그 공통 인터페이스가 <strong>RHI</strong>야.</div>
 </div>
 <div class="conversation"><h2>9. 더 아래에는 RHI와 D3D12RHI가 있다</h2>
 <p>RDG가 패스를 실행하면 그 안의 드로우나 디스패치가 RHI 명령으로 쌓인다. RHI는 "D3D12냐 Vulkan이냐"를 숨긴 공통 언어야. Windows D3D12 환경이면 끝단에서 <code>D3D12RHI</code>가 실제 DirectX 12 호출로 바꾼다.</p>

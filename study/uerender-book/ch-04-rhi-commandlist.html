@@ -66,6 +66,7 @@ a.xref:hover { background:#e1bee7; }
 <p><code>RHICommandList</code>가 바로 그 주문서야.</p>
 <p><code>DrawPrimitive</code>는 "파스타 하나" 같은 주문이고, <code>ALLOC_COMMAND</code>는 그 주문을 종이에 적는 동작이야. <code>Execute()</code>는 주문서를 처음부터 끝까지 읽는 동작이고, <code>Submit()</code>은 주방 접수대에 넘기는 동작이다. 병렬 translate는 웨이터 여러 명이 주문서를 나눠 정리하는 장면으로 보면 돼.</p>
 <p>이번 장 내내 이 비유를 끌고 갈게. <strong>바로 소리치지 않는다. 적고, 모으고, 번역하고, 제출한다.</strong></p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — RHICommandList</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 렌더 코드가 <code>DrawPrimitive</code> 같은 RHI 함수를 부르면 그 자리에서 바로 GPU 쪽으로 소리치는 거야. 웨이터가 주문 받을 때마다 주방 문 앞까지 뛰어가는 구조지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 한 프레임에 드로우, 배리어, 복사가 수천 줄이면 웨이터가 계속 뛰어다녀. 16.6ms 안에 주문도 받고 전달도 해야 하는데, CPU는 발이 묶이고 GPU는 주문이 늦게 와서 놀 수 있어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 먼저 주문서를 쌓아두고, 나중에 읽고, 번역하고, 제출하는 기록장이 필요해. 명령(Command)을 줄줄이 담은 목록(List)이라서 <code>RHICommandList</code>야.</div>
 </div>
 <div class="conversation"><h2>1. 전체 지도 — 기록, 완료, 번역, 제출</h2>
 <p>먼저 큰 흐름부터 잡자.</p>
@@ -110,6 +111,7 @@ Finalize 후 RHISubmitCommandLists()로 플랫폼 RHI에 제출</div>
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>MemManager.Alloc</code>으로 명령 종이 한 칸을 얻고 → <code>++NumCommands</code>로 줄 수를 세고 → <code>*CommandLink = Result</code>로 리스트 꼬리에 붙이고 → <code>CommandLink = &amp;Result-&gt;Next</code>로 다음 빈칸을 준비한다. 읽으면 "명령을 실행했다"가 아니라 "명령을 적었다"야.</div>
 <p>이게 이 장의 첫 번째 못이야.</p>
 <p><strong>RHICommandList는 기본적으로 실행기가 아니라 기록장이다.</strong></p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 명령 객체와 링크드 리스트</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 주문을 그냥 함수 호출로 바로 처리하거나, 커다란 배열에 차례대로 넣으면 단순해 보여. 주문서 줄을 한 칸씩 쓰는 느낌이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: RHI 명령은 드로우, 복사, 배리어처럼 종류도 크기도 달라. 매 프레임 수천 줄을 빠르게 붙여야 하는데, 중간마다 큰 배열을 옮기면 접수대가 종이 정리만 하다 끝나.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 명령마다 자기 크기만큼 메모리를 받고, <code>Next</code>로 다음 줄을 가리키게 잇는 구조가 필요해. <code>ALLOC_COMMAND</code>는 새 주문 줄을 만들고 리스트 꼬리에 꽂는 동작이야.</div>
 </div>
 <div class="conversation"><h2>3. DrawPrimitive도 바로 그리지 않는다</h2>
 <p>그럼 실제 드로우 호출은 어떻게 기록될까. <code>DrawPrimitive</code>를 보자.</p>
@@ -189,6 +191,7 @@ Finalize 후 RHISubmitCommandLists()로 플랫폼 RHI에 제출</div>
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Execute()</code>는 실행 중 플래그를 세우고 → iterator로 command list를 훑고 → <code>NextCommand()</code>로 명령 하나를 꺼내고 → <code>ExecuteAndDestruct(*this)</code>로 실행 후 파괴한다. 아까 기록한 주문이 여기서 주방 말로 읽히는 거야.</div>
 <p>여기까지 보면 기록과 실행이 분리된 이유가 보인다.</p>
 <p>기록은 여러 곳에서 빠르게 할 수 있다. 실행은 정해진 순서로 밀어 넣을 수 있다. 이 분리가 있어야 병렬 기록과 순서 보장이 같이 가능해진다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 병렬 번역(translate task)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 주문서를 한 접수대 직원이 처음부터 끝까지 읽고, 주방 말로 바꿔서 넘기면 돼. 한 줄이라서 순서는 확실해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 드로우콜이 수천 개면 그 한 명이 병목이 돼. CPU 코어가 여러 개 있어도 접수대 한 명만 일하면 나머지는 구경하고, GPU는 번역 끝나길 기다려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 기록은 이미 끝났으니, 나중에 안전한 주문서는 여러 작업 스레드가 나눠 번역하면 돼. 이게 병렬 번역이고, <code>TranslatePipe</code>는 그 주문서를 흘려보내는 접수대 레일이야.</div>
 </div>
 <div class="conversation"><h2>6. 병렬 번역 — 어떤 스레드가 주문서를 정리할까</h2>
 <p>이제 핵심 질문으로 가자.</p>
@@ -231,6 +234,7 @@ FRHICommandListExecutor::FTaskPipe* FRHICommandListExecutor::FTranslateState::En
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>GetTranslateTaskPipe</code>는 기본값을 병렬 작업 스레드와 <code>TranslatePipe</code>로 잡고 → 병렬이 금지되면 render thread/RHI pipe로 바꾸고 → 이 job만 병렬 불가면 RHI thread로 바꾼다. 즉 command list를 기록해뒀기 때문에, 나중에 상황을 보고 "누가 번역할지" 고를 수 있는 거야.</div>
 <p>이게 이번 장의 핵심 답이다.</p>
 <p><strong>즉시 실행이면 호출한 그 스레드가 그 자리에서 묶인다. 기록 후 제출이면 나중에 더 좋은 스레드 배치로 처리할 수 있다.</strong></p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 최종 제출(Submit)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 주문서를 읽고 주방 말로 번역했으면 끝난 것처럼 보여. 접수대 직원이 "파스타, 샐러드"로 정리해둔 상태야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 정리만 해놓고 주방장에게 안 넘기면 음식은 안 나와. 엔진 공용 명령을 플랫폼 command list로 만들었어도, 마지막 제출이 없으면 D3D12나 Vulkan 쪽 큐는 일을 못 받아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 완성된 command list들을 모아서 실제 플랫폼 RHI에 넘기는 마지막 손길이 필요해. 그래서 <code>Submit</code>, 말 그대로 "접수대에 제출"하는 단계가 있어.</div>
 </div>
 <div class="conversation"><h2>7. 최종 제출 — 플랫폼 command list를 RHI로 넘긴다</h2>
 <p>마지막 단계는 진짜 제출이야.</p>

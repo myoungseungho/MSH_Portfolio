@@ -63,6 +63,7 @@ a.xref:hover { background:#e1bee7; }
 <p>중요한 건 하나야. RDG는 패스를 <strong>등록할 때 바로 실행하지 않는다.</strong> 먼저 보드에 다 적고, 전체를 본 뒤 순서와 barrier와 반납 시점을 정한다.</p>
 <div class="note"><strong>소스 위치</strong> (이 챕터 코드는 전부 이 파일에서 그대로 뽑음)<br>&bull;&nbsp;구현: <code>Engine/Source/Runtime/RenderCore/Private/RenderGraphBuilder.cpp</code></div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — RDG(RenderGraph)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 작은 DirectX 예제처럼 패스 A 실행하고, 패스 B 실행하고, 마지막에 Present 하면 돼. 팬과 접시는 개발자가 손으로 챙기는 구조야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: UE 한 프레임은 요리가 수십 개고 임시 접시가 수백 개야. 8번 요리가 만든 접시를 12번이 읽는데 10번에서 반납하면 바로 깨져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 한 프레임 주문을 먼저 보드에 다 붙이고, 누가 누구 뒤에 와야 하는지 전체를 본 뒤 실행해야 해. 그래서 <strong>Render Dependency Graph</strong>, 줄여서 RDG야.</div>
 </div>
 <div class="conversation"><h2>1. 패스 등록 — 주문을 바로 만들지 않고 보드에 붙인다</h2>
 <p>렌더러 코드에서 <code>GraphBuilder</code>에 패스를 추가하면 GPU 명령이 바로 나가지 않아. <code>RenderGraphBuilder.cpp</code> 쪽 핵심 관문인 <code>SetupParameterPass</code>에서 패스 내부 정보와 리소스 분석이 붙는다.</p>
@@ -145,6 +146,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note gloss">🔤 <strong>기호 사전</strong> — 텍스처 접근 분석<br>&bull;&nbsp;<strong><code>EnumerateTextureAccess(...)</code></strong> = 패스 파라미터 안의 텍스처 접근을 하나씩 꺼내보는 순회 함수야.<br>&bull;&nbsp;<strong><code>[&amp;](...)</code></strong> = 람다야. 주변 변수를 빌려 쓰면서, 각 텍스처마다 이 안쪽 코드를 실행한다.<br>&bull;&nbsp;<strong><code>ERHIAccess Access</code></strong> = 이 리소스를 읽는지, 쓰는지, UAV인지, 렌더타깃인지 같은 GPU 접근 상태야.<br>&bull;&nbsp;<strong><code>Texture-&gt;LastPasses[PassPipeline]</code></strong> = 이 텍스처를 이 파이프라인에서 마지막으로 만진 패스 번호야.<br>&bull;&nbsp;<strong><code>PassState-&gt;ReferenceCount++</code></strong> = 이 패스가 이 텍스처를 한 번 더 붙잡는다고 카운트를 올린다.<br>&bull;&nbsp;<strong><code>State-&gt;Access = MakeValidAccess(...)</code></strong> = 여러 접근 상태를 RDG가 이해할 수 있는 유효한 상태로 합친다.<br>&bull;&nbsp;<strong><code>State-&gt;Flags |= TransitionFlags</code></strong> = 기존 플래그에 transition 관련 표시를 덧붙인다. <code>|=</code>는 "합쳐서 다시 넣기"야.</div>
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>EnumerateTextureAccess</code>가 주문표의 텍스처 칸을 하나씩 읽고 → <code>PassState</code>에 이 패스의 사용 기록을 만들고 → <code>ReferenceCount</code>를 올리고 → subresource마다 <code>Access</code>와 <code>PassHandle</code>을 박는다. 이게 있어야 나중에 "누가 먼저고 누가 나중인지" 계산할 수 있어.</div>
 <p><code>PassParameters</code>는 그냥 C++ 인자 묶음이 아니야. 주방장이 보는 주문표야. DirectX 12에서 직접 상태 전환을 넣던 일을 RDG는 이 주문표의 "읽음/씀" 기록으로 계산한다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 의존성 그래프와 culling</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 주문 보드에 적힌 요리를 그냥 전부 순서대로 만들면 돼. 안 쓰일지도 모르지만 일단 다 해보는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 마지막 화면에 안 올라가는 중간 요리까지 만들면 GPU 시간이 새고, 임시 접시도 계속 붙잡혀. 손님에게 안 나갈 소스를 20그릇 끓이는 셈이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "이 접시는 누가 만들고 누가 먹나"를 선으로 잇고, 최종 접시에서 거꾸로 따라가 필요한 주문만 살려야 해. 안 쓰는 주문을 잘라내는 게 <strong>culling</strong>이야.</div>
 </div>
 <div class="conversation"><h2>3. 의존성 그래프와 culling — 안 필요한 주문은 만들지 않는다</h2>
 <p>패스마다 리소스 사용 기록이 생기면 RDG는 "누가 누구 뒤에 와야 하는지"를 계산한다. 어떤 패스가 텍스처를 쓰고 다음 패스가 그 텍스처를 읽으면, 뒤 패스는 앞 패스 뒤에 와야 해. <code>SetupPassDependencies</code>는 텍스처/버퍼 상태를 보면서 reference count를 더하고 producer와 consumer를 잇는다.</p>
@@ -196,6 +198,7 @@ a.xref:hover { background:#e1bee7; }
 <p><code>Compile()</code>은 reference count, culling, render pass merge, async compute fork/join을 정리한다. 주방장이 주문 접수를 마감하고 "취소할 요리, 이어서 쓸 팬, 씻을 타이밍"을 계산하는 단계야.</p>
 <p>등록 단계: AddPass, CreateTexture, RegisterExternalTexture, QueueExtraction 컴파일 단계: dependency, culling, lifetime, barrier 계산 실행 단계: 살아남은 pass의 lambda 실행</p>
 <p>이걸 모르면 "왜 텍스처를 만들었는데 아직 RHI texture가 없지?" 같은 질문에서 막힌다. 답은 간단해. 아직 보드에 적는 중이기 때문이야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 리소스 수명(lifetime)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 텍스처나 버퍼를 만들면 프레임 끝까지 들고 있으면 돼. 접시를 한 번 빌리면 장사 끝날 때까지 안 돌려주는 식이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 임시 텍스처가 수백 개면 GPU 메모리가 금방 찬다. 반대로 7번 요리가 아직 읽는 접시를 6번 끝났다고 반납하면 다음 요리가 빈 접시를 읽게 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 각 접시가 몇 번 요리부터 몇 번 요리까지 필요한지 세는 대여표가 필요해. 그 필요한 기간이 바로 <strong>lifetime</strong>, 리소스 수명이야.</div>
 </div>
 <div class="conversation"><h2>5. 리소스 수명 — 접시는 필요한 동안만 빌린다</h2>
 <p>RDG의 큰 이득 중 하나가 임시 리소스 수명이야. <code>CreateTexture</code>로 RDG 텍스처를 만들었다고 즉시 GPU 메모리가 잡히는 게 아니다. 일단 설명서와 이름이 그래프에 들어간다. 실제 allocation은 "이 패스부터 필요하다"가 확정될 때 이뤄진다. 마지막 참조가 끝나면 deallocation 후보로 들어간다.</p>
@@ -230,6 +233,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>ReferenceCount</code>를 줄이고 → 0이 되면 deallocate 작업표를 만들고 → transient면 transient 장부에, 아니면 pooled texture 장부에 넣고 → 마지막에 이미 반납된 상태로 표시한다. 접시를 마지막 요리가 다 쓰자마자 반납 목록에 올리는 거야.</div>
 <p>이게 사람이 직접 하면 정말 잘 터지는 부분이다. 렌더러 개발자가 "이 텍스처는 8번 패스까지만 쓰이니까 9번에서 풀어도 됨"을 매번 손으로 세면, 기능 하나 추가될 때마다 수명이 바뀐다. RDG는 pass parameter를 보고 reference count를 세니까, 패스가 추가되거나 빠져도 수명 장부를 다시 계산할 수 있어.</p>
 <p>DirectX 12에서 aliasing heap을 직접 굴려봤다면 더 와닿을 거야. 메모리를 재사용하려면 이전 리소스가 끝난 걸 확실히 알아야 한다. RDG는 그 "끝난 시점"을 <code>LastPasses</code>, <code>ReferenceCount</code>, barrier 정보로 잡는다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 자동 barrier</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 개발자가 패스 사이마다 "이 팬은 이제 렌더타깃에서 셰이더 읽기용으로 바꿔"라고 손으로 표지판을 세우면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 패스가 수십 개로 늘면 표지판 하나만 빠져도 GPU는 아직 더러운 팬을 읽어. 반대로 너무 많이 세우면 주방 동선이 막혀서 프레임 시간이 늘어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 주문표의 읽음/씀 기록을 보고 RDG가 필요한 위치에 표지판을 붙여야 해. 그게 사람이 박던 barrier를 자동으로 계산하는 <strong>자동 barrier</strong>야.</div>
 </div>
 <div class="conversation"><h2>6. 자동 barrier — 팬을 씻는 표지판을 붙인다</h2>
 <p>리소스 수명만큼 중요한 게 barrier야. GPU 리소스는 방금 렌더타깃으로 쓴 상태와, 다음 패스에서 셰이더 리소스로 읽는 상태가 다르다. 상태가 다르면 transition이 필요하다.</p>

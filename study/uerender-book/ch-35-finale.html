@@ -64,11 +64,13 @@ a.xref:hover { background:#e1bee7; }
 <p>언리얼 한 프레임도 이 순서야.</p>
 <p>촬영표 등록 = <code>FSceneRenderBuilder</code>에 렌더러 등록 카메라/배우 확인 = <code>InitViews</code>와 visibility 바닥 표시 = <code>PrePass</code> 의상표 기록 = <code>BasePass</code>와 <code>GBuffer</code> 조명 켜기 = <code>RenderLights</code> 색보정 = <code>AddPostProcessingPasses</code> 장비 실행 = <code>FRDGBuilder::Execute</code></p>
 <p>이번 장에서는 새 지식을 많이 넣지 않는다. 대신 앞에서 배운 조각들을 이 촬영장 마감표에 꽂아 넣을 거야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 한 프레임 트리</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 화면 한 장을 그냥 "그린다" 한 단어로 봐도 돼. 감독이 카메라 켜고, 배우 세우고, 조명 켜고, 끝.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 프레임이 33ms로 튀면 어디가 막혔는지 몰라. 배우가 많은 건지, 조명이 많은 건지, 색보정실이 느린 건지 한 덩어리라서 못 찾아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 하루 촬영을 부서별 가지로 쪼갠 지도야. 그래서 <strong>트리</strong>처럼 입구에서 가지가 갈라지고, 마지막에 다시 장비 실행으로 모인다고 보는 거야.</div>
 </div>
 <div class="conversation"><h2>1. 00장 트리로 돌아가기</h2>
 <p>먼저 전체 트리를 다시 보자. 각 줄은 이미 앞 챕터에서 한 번 이상 본 부서야.</p>
 <p>한 프레임 │ ├─ 입구: 게임 쪽이 렌더러를 촬영표에 올림 │  └─ <code>BeginRenderingViewFamilies</code> → <code>FSceneRenderBuilder</code> │ ├─ 렌더러: 이번 카메라 묶음을 실제 패스로 쪼갬 │  └─ <code>FDeferredShadingSceneRenderer::Render</code> │ ├─ 무엇을 그릴지 고름 │  └─ <code>BeginInitViews</code> / visibility task / mesh pass setup │ ├─ 실제로 그림 │  ├─ <code>PrePass</code> │  ├─ <code>BasePass</code> │  ├─ <code>RenderLights</code> │  ├─ translucency / Nanite / Lumen / shadow 계열 │  └─ <code>AddPostProcessingPasses</code> │ └─ 실행과 하드웨어 └─ <code>FRDGBuilder::Execute</code> → RHI command list → D3D12RHI</p>
 <p>서버식으로 말하면 이거야. 패킷 하나가 들어와서 곧장 캐릭터 HP를 깎지 않듯이, 화면 한 장도 곧장 <code>DrawIndexedInstanced</code>로 가지 않아. 중간에 소유권, 순서, 버퍼 수명, 병렬 작업, 플랫폼 차이를 처리하는 층이 있어.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — FSceneRenderBuilder(촬영표)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 렌더 요청이 오면 그 자리에서 바로 <code>RenderViewFamily_RenderThread</code>를 불러서 쭉 그리면 단순해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 뷰 패밀리가 여러 개고, 히트 프록시 같은 특수 촬영도 섞이면 "누가 오늘 촬영할 감독인지"를 한곳에 모아야 해. 안 그러면 순서표가 흩어져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 이번 프레임에 돌 렌더러들을 먼저 촬영표에 올리는 상자야. 이름 그대로 Scene Render를 <strong>Build</strong>하는 사람, <code>FSceneRenderBuilder</code>야.</div>
 </div>
 <div class="conversation"><h2>2. 입구 — 촬영표에 감독을 올린다</h2>
 <p>프레임의 시작점은 "이 뷰 패밀리를 렌더링해"라는 요청이야. 여기서 이미 만들어진 <code>SceneRenderer</code>들을 <code>FSceneRenderBuilder</code>에 등록한다. 등록된 람다는 나중에 렌더 스레드에서 실행돼.</p>
@@ -87,6 +89,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note gloss">🔤 <strong>기호 사전</strong> — 촬영표 등록 코드<br>&bull;&nbsp;<strong><code>for</code></strong> = 여러 렌더러를 하나씩 돌면서 같은 일을 한다.<br>&bull;&nbsp;<strong><code>FSceneRenderer*</code></strong> = 렌더러 실물을 가리키는 손잡이. <code>*</code>는 포인터야.<br>&bull;&nbsp;<strong><code>-&gt;</code></strong> = 포인터가 가리키는 물건 안으로 들어가 기능이나 값을 꺼낸다.<br>&bull;&nbsp;<strong><code>AddRenderer(...)</code></strong> = 이번 프레임 촬영표에 렌더러 일을 등록한다.<br>&bull;&nbsp;<strong><code>[] (...) { ... }</code></strong> = 나중에 실행할 작은 함수 덩어리, 람다야.<br>&bull;&nbsp;<strong><code>FRDGBuilder&amp;</code></strong> = RDG 순서표를 만드는 객체를 원본 그대로 받는다. <code>&amp;</code>는 참조야.<br>&bull;&nbsp;<strong><code>return true</code></strong> = 이 등록 함수가 일을 했다고 알려준다.</div>
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>SceneRenderers</code>를 하나씩 꺼내고 → <code>ViewFamily</code> 내부 표시 데이터를 세팅하고 → <code>SceneRenderBuilder.AddRenderer</code>로 촬영표에 올리고 → 나중에 <code>RenderViewFamily_RenderThread</code>를 부르게 해. 아까 말한 "감독을 오늘 촬영표에 올리는 장면"이 이 코드야.</div>
 <p>여기서 중요한 건 아직 GPU가 움직이지 않았다는 거야. 우리는 주문표를 만든 거지, 주방 불판을 켠 게 아니야. 서버로 치면 IOCP 완료 통지를 받자마자 월드 상태를 바꾸는 게 아니라, 게임 로직 큐로 넘길 작업을 등록하는 느낌이야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — InitViews와 visibility</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 월드에 있는 배우를 전부 다 그리면 돼. 카메라 밖에 있든 벽 뒤에 있든 일단 의상팀과 조명팀으로 보내는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 배우가 10만 명인데 화면엔 2천 명만 보이면 9만 8천 명한테도 옷 입히고 조명 쏘는 셈이야. 한 프레임 16.6ms 예산이 바로 터져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 먼저 카메라와 뷰를 준비하고, 보일 가능성이 있는 배우만 추리는 관문이 필요해. 그래서 <code>InitViews</code>가 판을 깔고, <strong>visibility</strong>가 "보이는가"를 따지는 거야.</div>
 </div>
 <div class="conversation"><h2>3. 카메라와 배우 확인 — InitViews와 visibility</h2>
 <p>촬영표에 오른 뒤에는 카메라가 보는 배우만 골라야 해. 안 보이는 배우까지 전부 의상 입히고 조명 비추면 비용이 터진다. 그래서 visibility 단계가 있어.</p>

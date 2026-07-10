@@ -70,6 +70,7 @@ a.xref:hover { background:#e1bee7; }
 <p><strong>컴파일 결과 = 실제로 말아둔 김밥 한 줄.</strong></p>
 <p>문제는 도장이 늘수록 주문번호가 곱셈으로 폭발한다는 점이고, 언리얼은 그걸 세고, 접고, 거르고, 도장 찍어서 주방에 넘긴다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 순열 차원</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 셰이더 원본 하나에 <code>#if</code>를 몇 개 두고, 컴파일할 때 매크로를 손으로 켜고 끄면 될 것 같아. 분식집이면 주문표에 도장 하나씩 찍는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: <code>ALPHA</code>, <code>TONEMAP</code>, <code>ST2084</code>처럼 도장이 3개만 돼도 8장이고, 도장 이름을 손으로 맞추면 C++ 주문표와 <code>.usf</code> 레시피가 쉽게 엇갈려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 각 도장을 C++에서 <strong>차원</strong>으로 선언해두는 틀이 필요해. <code>SHADER_PERMUTATION_BOOL</code>은 "이 도장은 켜짐/꺼짐 두 칸짜리야"라고 장부에 올리는 이름표야.</div>
 </div>
 <div class="conversation"><h2>1. 실제 예시 — bool 3개면 8벌이다</h2>
 <p>작은 예시부터 보자. <code>BinkShaders.h</code>의 Bink 동영상 픽셀 셰이더는 <code>ALPHA</code>, <code>TONEMAP</code>, <code>ST2084</code> 세 도장을 선언한다.</p>
@@ -118,6 +119,7 @@ a.xref:hover { background:#e1bee7; }
 <p>세 도장을 찍는 모든 경우를 만들면 주문표는 8장이 된다.</p>
 <p>렌더러 본체로 가면 차원이 훨씬 많아져서 이 숫자가 바로 컴파일 시간으로 돌아온다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — PermutationId</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 도장 조합을 매번 "알파 켜짐, 톤매핑 꺼짐, ST2084 켜짐"처럼 주문표 그대로 들고 다니면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 컴파일 큐, 캐시, 로그가 수천 장을 돌면 긴 주문표를 계속 비교하고 저장해야 해. 주문이 16000장이면 이름표만 봐도 정신없어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 도장 조합을 <strong>주문번호 하나</strong>로 접어두는 방식이 필요해. 그 번호가 <code>PermutationId</code>야. 숫자 하나면 큐에 넣고, 저장하고, 다시 펼치기 쉬워.</div>
 </div>
 <div class="conversation"><h2>2. <code>PermutationId</code> — 여러 도장을 주문번호 하나로 접는다</h2>
 <p>옵션 세 개를 매번 구조체째로 들고 다니면 번거롭다.</p>
@@ -192,6 +194,7 @@ a.xref:hover { background:#e1bee7; }
 <p>정수 하나로 접으면 저장, 캐시, 로그가 쉬워진다.</p>
 <p>대신 숫자를 도장 조합으로 푸는 규칙은 반드시 정확해야 한다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 컴파일 환경 define</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: C++이 주문번호만 주면 HLSL도 알아서 5번 주문이 뭔지 알 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: <code>.usf</code> 레시피는 <code>PermutationId</code> 숫자를 몰라. <code>#if TONEMAP</code>처럼 도장 이름만 보니까, 번호 5번만 던지면 어느 줄을 켤지 못 정해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 주문번호를 다시 도장으로 펼쳐서 <code>TONEMAP=0/1</code> 같은 define 메모로 붙여줘야 해. 그 메모판이 <code>FShaderCompilerEnvironment</code> 쪽 컴파일 환경이야.</div>
 </div>
 <div class="conversation"><h2>3. 주문번호가 define으로 내려간다</h2>
 <p><code>PermutationId</code>는 정수 하나일 뿐이야.</p>
@@ -220,6 +223,7 @@ a.xref:hover { background:#e1bee7; }
 <p>요리사는 그 메모를 보고 레시피의 어느 줄을 읽을지 결정한다.</p>
 <p>HLSL 전처리기가 하는 일이 딱 그거야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — ShouldCompilePermutation</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 만들 수 있는 김밥 주문표는 전부 굽자. bool 3개면 8장이라 아직 참을 만해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: bool 10개면 1024장이고, 품질 4단계와 플랫폼 5개가 붙으면 2만 장이 넘어가. 필요 없는 조합까지 구우면 에디터가 몇 분씩 멈춰.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 주방 입구에서 "이 주문 진짜 만들까?"를 자르는 문지기가 필요해. 그게 <code>ShouldCompilePermutation</code>이야. 너무 넓으면 낭비고, 너무 좁으면 필요한 김밥이 없어져.</div>
 </div>
 <div class="conversation"><h2>4. <code>Shader.cpp</code>의 문지기 — 컴파일할 조합만 통과</h2>
 <p>이제 주요 소스인 <code>Shader.cpp</code>로 내려가자.</p>

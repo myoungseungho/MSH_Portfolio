@@ -67,6 +67,7 @@ a.xref:hover { background:#e1bee7; }
 <p>이번 장은 이 장부가 어떤 칸을 갖는지, 배우가 어떻게 장부에 들어오는지, 퇴장할 때 어떤 칸들이 같이 지워지는지를 보는 장이야.</p>
 <div class="note"><strong>소스 위치</strong> (아래 코드는 전부 이 클론의 실제 파일에서 그대로 뽑음)<br>&bull;&nbsp;장부 구조: <code>Engine/Source/Runtime/Renderer/Private/ScenePrivate.h</code><br>&bull;&nbsp;등록/해제 구현: <code>Engine/Source/Runtime/Renderer/Private/RendererScene.cpp</code></div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — FScene</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 그냥 <code>UWorld</code> 하나를 렌더러도 같이 보면 될 것 같아. 무대감독이 공연장 전체 지도와 배우 대기실까지 다 뒤지는 식이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 배우가 10만 명이면 매 프레임 대기실 문까지 다 열어봐야 해. 한쪽에서 배우를 내보내는 중인데 렌더 스레드가 같은 배우를 읽으면 장부가 찢어져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 렌더러가 볼 것만 따로 적은 <strong>공연용 장부</strong>가 필요해. 그게 <code>FScene</code>이야. 월드가 아니라 "그릴 세계"만 압축해서 들고 있는 장부야.</div>
 </div>
 <div class="conversation"><h2>1. FScene은 월드가 아니라 렌더러의 압축 장부야</h2>
 <p>먼저 <code>FScene</code> 안에 어떤 칸들이 있는지 봐야 해. 중요한 건 <code>TArray</code>가 하나가 아니라 여러 개라는 점이야. 프리미티브 하나가 들어오면 <code>Primitives</code>, <code>PrimitiveTransforms</code>, <code>PrimitiveSceneProxies</code>, <code>PrimitiveBounds</code> 같은 배열의 같은 index에 관련 정보가 나란히 들어간다.</p>
@@ -86,6 +87,7 @@ a.xref:hover { background:#e1bee7; }
 <p>왜 배열일까? 컬링은 수천, 수만 개 bounds를 훑어야 해. BasePass는 보이는 mesh를 계속 모아야 해. MeshDrawCommand 캐시는 프리미티브별 상태를 index로 잡아야 해 → <a class="xref" href="ch-17-mesh-draw-command.html">mesh-draw-command</a>. 이런 곳에서는 포인터 따라 복잡한 UObject 트리를 걷는 것보다 packed array가 훨씬 유리해.</p>
 <p>공연장 비유로 다시 말하면, 무대감독은 배우 주민등록등본을 들고 있지 않아. 공연 중 필요한 "무대 위치표, 조명표, 퇴장표"만 얇은 장부에 따로 뽑아 들고 있는 거야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — FPrimitiveSceneProxy / FPrimitiveSceneInfo</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 배우 본인(<code>UPrimitiveComponent</code>)을 장부에 바로 꽂으면 쉬워 보여. 무대감독이 배우에게 직접 "어디 서?" 하고 묻는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 배우는 게임플레이, 에디터, 수명 관리까지 들고 있어. 렌더 스레드가 그걸 매번 만지면 락이 걸리고, 삭제 중 포인터를 잡으면 바로 사고야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 렌더용 대리 카드와 관리 줄을 따로 만든다. <code>Proxy</code>는 배우의 공연용 모습, <code>SceneInfo</code>는 장부에서 몇 번 칸인지 적는 운영표야.</div>
 </div>
 <div class="conversation"><h2>2. 등록 입구 — 게임 객체에서 렌더용 proxy를 만든다</h2>
 <p>프리미티브 등록은 <code>FScene::AddPrimitive</code>에서 시작해. 하지만 <code>AddPrimitive</code> 자체는 얇고, 실제 일은 <code>BatchAddPrimitivesInternal</code> 안에서 한다.</p>
@@ -150,6 +152,7 @@ a.xref:hover { background:#e1bee7; }
 <p><code>AddPrimitiveSceneInfo_RenderThread</code> 안에서는 바로 모든 배열을 다 채우는 게 아니라, <code>PrimitiveUpdates.EnqueueAdd(...)</code> 쪽으로 밀어 넣는다. 그리고 한 프레임의 적당한 지점에서 <code>UpdateAllPrimitiveSceneInfos</code>가 add/remove/update를 한꺼번에 처리한다.</p>
 <p>공연장으로 치면, 배우가 대기실에서 "저 올라갑니다"라고 말하면, 무대감독이 즉시 조명표 전체를 뒤집는 게 아니야. 먼저 큐시트에 "등장 예정"으로 적고, 씬 전환 타이밍에 실제 무대 배치표를 한꺼번에 갱신한다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — PackedIndex / PersistentIndex</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 장부에 배우 정보를 한 줄씩 넣고, 그 줄 번호만 믿으면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 중간 배우가 퇴장하면 빈칸이 생겨. 10만 칸을 훑는데 구멍이 많으면 느리고, 뒤 배우를 당겨오면 예전 줄 번호가 갑자기 다른 배우를 가리켜.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 빠르게 훑는 현재 칸 번호(<code>PackedIndex</code>)와 오래 추적하는 번호(<code>PersistentIndex</code>)를 나눠. 촘촘한 장부와 안정적인 손잡이를 둘 다 잡는 거야.</div>
 </div>
 <div class="conversation"><h2>4. 진짜 등록 — packed array의 같은 index에 꽂힌다</h2>
 <p>이제 실제로 <code>FScene</code>의 packed array에 들어가는 장면을 보자. <code>UpdateAllPrimitiveSceneInfos</code> 안에서 추가될 프리미티브들을 모아 처리하다가, 아래처럼 여러 배열에 같은 순서로 <code>Add</code>한다.</p>

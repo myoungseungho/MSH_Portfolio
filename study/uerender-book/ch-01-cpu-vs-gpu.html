@@ -64,6 +64,7 @@ a.xref:hover { background:#e1bee7; }
 <p>문제는 둘이 같은 책상에 앉아 있지 않다는 거야. 선생님이 운동장 전체에 대고 매초 수백만 번 소리칠 수는 없어. 그래서 선생님은 <strong>작업 지시서</strong>를 만든다. 어떤 반이 뭘 칠할지, 물감은 어디 있는지, 먼저 칠할 구역은 어디인지 적어서 넘겨.</p>
 <p>언리얼에서 이 작업 지시서가 커맨드 리스트고, 그 지시서를 실제 그래픽 API 말로 바꾸는 경계가 RHI야. 오늘은 그 경계의 입구를 볼 거야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — RHI(<code>FDynamicRHI</code>)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 선생님(CPU)이 작업반마다 말투를 따로 외워. D3D12 작업반이면 D3D12 말, Vulkan이면 Vulkan 말로 바로 지시하는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: PC, 콘솔, 모바일마다 작업반이 바뀌면 렌더러 코드 곳곳에 "이 작업반이면 이렇게"가 퍼져. 벽화 한 장 칠하려고 규칙표가 3~4벌로 갈라지는 셈이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 선생님이 보는 <strong>공통 계약서</strong>가 필요해. 실제 작업반은 뒤에서 바뀌어도, 앞에서는 같은 문으로 말하게 하는 경계가 RHI고 그 계약서가 <code>FDynamicRHI</code>야.</div>
 </div>
 <div class="conversation"><h2>1. 먼저 경계선부터 — <code>FDynamicRHI</code>는 계약서다</h2>
 <p>CPU 쪽 C++ 코드는 GPU를 직접 붙잡고 일하지 않아. 언리얼은 먼저 "그래픽 하드웨어에게 말 거는 공통 계약서"를 세워. 그 계약서가 <code>FDynamicRHI</code>야.</p>
@@ -176,6 +177,7 @@ public:
 <div class="note gloss">🔤 <strong>기호 사전</strong> — Windows RHI 모듈 선택<br>&bull;&nbsp;<strong><code>bTryWithNewConfig</code></strong> = 다시 다른 설정으로 시도할지 나타내는 참/거짓 값이야.<br>&bull;&nbsp;<strong><code>do { ... }</code></strong> = 최소 한 번은 실행하고 조건에 따라 반복하는 반복문이야.<br>&bull;&nbsp;<strong><code>FApp::SetGraphicsRHI(RHIName)</code></strong> = 앱 전역 상태에 "우리는 이 그래픽 RHI를 쓴다"고 기록해.<br>&bull;&nbsp;<strong><code>FModuleManager::LoadModulePtr</code></strong> = 엔진 모듈을 찾아서 로드하고 포인터를 돌려주는 호출이야.<br>&bull;&nbsp;<strong><code>DynamicRHIModule &amp;&amp; DynamicRHIModule-&gt;IsSupported(...)</code></strong> = 모듈이 있고, 이 PC에서 지원되면 통과한다는 조건이야.<br>&bull;&nbsp;<strong><code>return DynamicRHIModule</code></strong> = 지원되는 작업반을 찾았으니 호출한 쪽으로 돌려준다.</div>
 <p>이 코드는 왜 CPU/GPU 분리 이야기와 연결될까? CPU 쪽 언리얼 코드는 "D3D12 작업반", "Vulkan 작업반"을 런타임에 고를 수 있어야 해. GPU마다, OS마다, 기능 레벨마다 가능한 말투가 다르거든. 그래서 공통 계약서 <code>FDynamicRHI</code>가 있고, Windows에서는 그 계약서를 채울 모듈을 골라서 로드한다.</p>
 <p>말하자면 선생님이 벽화 작업 전에 "오늘은 분필팀이야? 물감팀이야? 스프레이팀이야?" 확인하는 과정이야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 커맨드 리스트</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 선생님이 운동장에 바로 소리쳐. "1번 칸 빨강, 2번 칸 파랑" 하고 말할 때마다 학생들이 즉시 움직이는 구조야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 207만 픽셀 화면에서 이런 말을 매번 즉시 보내면 선생님은 외치느라 묶이고, 학생들은 다음 말을 기다리느라 멈칫해. 서버에서 패킷 하나마다 락 잡고 기다리는 꼴이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 지시를 <strong>작업표에 쌓아두고 한 번에 넘기는 종이</strong>가 필요해. 그게 커맨드 리스트야. CPU는 적고, RHI/GPU는 자기 줄에서 읽어.</div>
 </div>
 <div class="conversation"><h2>4. 명령은 말로 바로 실행되지 않는다 — 큐에 넣고 fence를 친다</h2>
 <p>이제 제일 중요한 병목 감각으로 가자. CPU와 GPU가 따로 일한다는 말은, CPU가 지시를 적는 시간과 GPU가 실행하는 시간이 서로 어긋날 수 있다는 뜻이야. 잘 짜면 둘이 동시에 달린다. 못 짜면 한쪽이 다른 쪽을 기다린다.</p>
@@ -201,6 +203,7 @@ public:
 <p>이 토막이 정말 중요해. CPU가 모든 일을 즉시 실행하면 단순해 보이지만 느려져. 그래서 언리얼은 명령을 큐에 넣고, RHI 스레드와 GPU 쪽이 자기 순서대로 처리하게 만든다.</p>
 <p>하지만 fence는 공짜가 아니야. fence는 선생님이 작업지시서를 넘긴 뒤, "잠깐, 이거 끝났는지 확인하고 다음 말 할게" 하고 멈추는 거야. 꼭 필요할 때는 써야 하지만, 매 픽셀, 매 리소스마다 걸면 병목이 된다.</p>
 <p>서버로 치면 IOCP 워커에게 일을 던져놓고, 매 패킷마다 <code>WaitForSingleObject</code>로 완료를 기다리는 꼴이야. 큐를 둔 의미가 사라지지.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — readback</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 선생님이 학생들에게 칠하라고 시킨 뒤, 필요하면 바로 "그 칸 무슨 색이야?" 하고 물어보면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 학생들이 아직 칠하는 중이면 전부 흐름이 멈춰. 183번째 칸 색 하나 확인하려고 GPU가 하던 일을 끝낼 때까지 CPU가 기다릴 수 있어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: GPU 결과를 CPU로 <strong>되가져오는 특별한 길</strong>을 따로 조심해서 써야 해. 이 되읽기가 readback이고, 필요하면 staging/fence/한 프레임 지연으로 충격을 줄여.</div>
 </div>
 <div class="conversation"><h2>5. 반대 방향이 더 비싸다 — GPU에서 CPU로 읽어오기</h2>
 <p>CPU가 GPU에게 지시를 보내는 것도 비용이 있지만, GPU가 계산한 결과를 CPU가 다시 읽어오는 건 더 조심해야 해. 왜냐하면 GPU가 아직 칠하는 중일 수 있거든. CPU가 "그 픽셀 값 지금 줘"라고 하면, GPU 작업이 끝날 때까지 기다려야 할 수 있어.</p>

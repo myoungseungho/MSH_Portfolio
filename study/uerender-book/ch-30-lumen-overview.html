@@ -95,6 +95,7 @@ static TAutoConsoleVariable&lt;int32&gt; CVarLumenAsyncCompute(
 <p>여기서 중요한 건 설명 문자열이야. Lumen을 끄면 shader compile과 load time overhead도 피할 수 있다고 적혀 있지. 즉 Lumen은 후처리 필터 하나가 아니라, 셰이더와 장면 데이터와 추적 리소스가 줄줄이 따라오는 큰 기능 묶음이야.</p>
 <p>서버로 치면 기능 플래그 하나 켰더니 DB 테이블, 메모리 캐시, 백그라운드 잡, 패킷 핸들러가 같이 붙는 상황이야. 그래서 입구에 큰 차단기가 있어야 해.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 뷰별 허가증</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 관제센터 전원이 켜졌으면 모든 카메라 화면에 간접광 배달을 해주면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 플레이어 화면 말고도 평면 반사, 리플렉션 캡처, 보조 뷰가 있어. CCTV마다 배달 경로를 다 짜면 16.6ms 안에 주문이 터져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "이 뷰가 진짜 배달 대상인가?"를 먼저 거르는 허가증이 필요해. 그래서 ViewFamily, View.State, reflection 여부를 확인해.</div>
 </div>
 <div class="conversation"><h2>2. 뷰 하나가 Lumen을 받을 자격이 있나</h2>
 <p>프로젝트가 허용해도 모든 카메라 뷰가 Lumen을 받는 건 아니야. 평면 반사용 뷰, 리플렉션 캡처용 뷰, 뷰 상태가 없는 특수 뷰는 빠진다. 관제센터가 모든 CCTV에 배달 경로를 계산하지 않는 거야.</p>
@@ -128,6 +129,7 @@ bool Lumen::IsLumenFeatureAllowedForView(const FScene* Scene, const FSceneView&a
 <p>이 토막이 Lumen 입구의 핵심이야. <code>PostProcessSettings</code>에서 Lumen을 골랐다고 무조건 도는 게 아니다. Scene에 <code>DefaultLumenSceneData</code>가 있어야 하고, 플랫폼이 지원해야 하고, View가 적절해야 하고, 마지막으로 tracing data가 있어야 해.</p>
 <p>여기서 <code>bSkipTracingDataCheck</code>는 뒤의 경고 코드에서 다시 나온다. "설정상 켜고 싶었는데 추적 데이터가 없어서 실제론 못 켜는 상황"을 구분하려고 일부 조건을 잠깐 건너뛰는 검사 스위치야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Diffuse GI</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 빛은 태양이나 램프가 표면을 바로 때리는 것만 계산하면 편해. 배달도 가게에서 집까지 직배송만 하면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 실제 장면에선 빨간 벽에 튄 빛이 바닥과 얼굴을 물들여. 이걸 bake로만 잡으면 문이 열리거나 시간이 바뀌는 순간 지도가 낡아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 여기저기 퍼지는 간접광을 실시간으로 갱신하는 접수대가 필요해. 그게 diffuse global illumination, 줄여서 Diffuse GI야.</div>
 </div>
 <div class="conversation"><h2>3. 간접광 접수대 — Diffuse GI가 켜지는 조건</h2>
 <p>이제 Lumen 공통 문을 통과했으니 진짜 간접광 접수대로 내려가 보자. 파일은 <code>LumenDiffuseIndirect.cpp</code>야. 여기서 "이 뷰에 Lumen diffuse global illumination을 렌더할까?"를 결정한다.</p>
@@ -148,6 +150,7 @@ bool Lumen::IsLumenFeatureAllowedForView(const FScene* Scene, const FSceneView&a
 <p><code>DynamicGlobalIlluminationMethod</code>라는 이름 자체가 bake와의 차이를 보여준다. 정적인 라이트맵을 읽는 게 아니라, 동적으로 GI를 만드는 경로 중 하나로 Lumen을 고르는 거야.</p>
 <p>물론 매번 완전 정답을 계산하진 못해. 그래서 screen probe, radiance cache, surface cache, distance field, hardware ray tracing 같은 장치를 섞는다. 이번 챕터에서는 이름만 잡고, 다음 <a class="xref" href="ch-31-lumen-diffuse.html">lumen-diffuse</a>에서 실제 diffuse indirect 경로를 더 본다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Software Distance Field</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 하드웨어 레이 트레이싱 차량이 있으면 실제 도로를 레이로 훑으면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그 차량이 없거나 모든 길에 쓰기엔 비싸면, 배달원이 도시 모양을 모른 채 출발해. 벽이 10cm 앞인지 10m 앞인지 모르면 빛 길도 못 잡아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 메시를 "여기서 표면까지 거리"로 압축한 지도야. 하드웨어 길이 부족할 때 software로 추적하려고 쓰는 게 distance field야.</div>
 </div>
 <div class="conversation"><h2>4. 움직이는 지도 재료 — Software Distance Field</h2>
 <p>실시간 간접광은 장면을 추적할 재료가 필요해. 벽이 어디 있는지, 메시가 어디 있는지, 빛이 어느 방향으로 막히는지 모르면 배달 경로를 못 짜.</p>
@@ -178,6 +181,7 @@ bool Lumen::IsLumenFeatureAllowedForView(const FScene* Scene, const FSceneView&a
 <p>이게 bake와 결정적으로 달라. bake는 정해진 지도를 한 번 만들고 끝내는 쪽에 가깝다. Lumen은 런타임에 쓸 장면 표현을 계속 보며, hardware 경로가 충분하면 그쪽을 쓰고, 아니면 software용 압축 지도를 유지한다.</p>
 <p>우리 서버로 치면 bake는 서버 시작 전에 몬스터 스폰 테이블을 전부 파일로 저장하는 방식이고, Lumen은 라이브 서버에서 필드 상황을 보고 필요한 지역 캐시를 갱신하는 방식에 가깝다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 추적 데이터</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 옵션에서 Lumen을 켜면 관제센터가 알아서 예쁜 간접광을 만들 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 지도도 차량도 없으면 배달원이 출발을 못 해. hardware ray tracing scene도 없고 distance field도 없으면 "켜짐"은 표지판뿐이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 빛길을 실제로 따라갈 재료가 필요해. 그래서 Lumen은 추적 데이터가 없으면 경고문까지 띄워.</div>
 </div>
 <div class="conversation"><h2>5. 데이터가 없으면 못 한다 — 경고까지 코드에 있다</h2>
 <p>사용자 입장에서는 "프로젝트에서 Lumen 켰는데 왜 화면이 이상하지?"가 흔해. 언리얼은 이 상황도 코드로 구분한다. 설정상으로는 Lumen을 원하지만 하드웨어 레이 트레이싱도 없고 software distance field도 없으면, 관제센터는 배달 지도가 없는 상태야.</p>

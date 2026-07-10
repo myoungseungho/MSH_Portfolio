@@ -70,6 +70,7 @@ a.xref:hover { background:#e1bee7; }
 <p>그리고 다음 장 <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>에서는 픽셀 셰이더 안으로 들어가서 실제 재질 값이 어떻게 포장되는지 볼 거야.</p>
 <p>이번 장은 그 직전.</p>
 <p><strong>C++ 렌더러가 GBuffer 식판을 준비하고, BasePass가 그 식판에 메시를 그리게 연결하는 장면</strong>을 잡는다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — GBuffer</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 픽셀 셰이더가 바로 최종 색 하나를 만들어서 화면 한 장에 찍으면 제일 단순해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 도시 밤 장면처럼 라이트가 1024개면, 라이트마다 "이 픽셀 노멀이 뭐야? 러프니스는?"을 다시 물어봐야 해. 같은 밥을 매번 새로 푸는 꼴이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 보이는 픽셀의 재질 신분증을 먼저 식판 칸에 눕혀두자. Geometry 정보를 담는 Buffer라서 <strong>GBuffer</strong>야.</div>
 </div>
 <div class="conversation"><h2>0. 비유부터 — 급식 식판에 반찬을 칸별로 눕히기</h2>
 <p>오늘 비유는 급식 식판이야.</p>
@@ -88,6 +89,7 @@ a.xref:hover { background:#e1bee7; }
 <p><strong>BasePass = 급식 배식 시간.</strong></p>
 <p><strong>GBuffer = 칸 나뉜 식판.</strong></p>
 <p><strong>Deferred Lighting = 나중에 식판을 보고 소스를 뿌리는 시간.</strong></p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — GBUFFER_LAYOUT</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 식판 칸 번호를 C++과 셰이더가 그냥 약속해. "1번은 노멀, 2번은 재질" 하고 머릿속에 고정하는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 어떤 플랫폼은 Velocity 칸이 붙고, 어떤 경로는 Substrate가 칸을 더 써. 한쪽만 번호를 다르게 알면 김치를 국칸에 붓는 사고가 나.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 이번 프레임 식판 배치표를 컴파일 주문서에 박아야 해. 그 배치표 이름이 <strong>GBUFFER_LAYOUT</strong>이야.</div>
 </div>
 <div class="conversation"><h2>1. 먼저 셰이더에게 식판 규격을 알려준다</h2>
 <p>BasePass는 아무 렌더타깃에나 마구 쓰지 않아.</p>
@@ -217,6 +219,7 @@ a.xref:hover { background:#e1bee7; }
 <p>즉 이름과 슬롯 번호가 완전히 고정된 상수처럼 보이지만, 실제로는 플랫폼과 레이아웃 설정이 끼어들 수 있어.</p>
 <p>그래서 앞 절의 <code>GBUFFER_LAYOUT</code>이 필요했던 거야.</p>
 <p>셰이더와 C++이 같은 식판 배치표를 봐야 하니까.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 렌더타깃 바인딩</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 그림 그릴 종이가 하나면 "여기에 그려"라고 텍스처 하나만 넘기면 끝이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: BasePass 식판은 SceneColor, GBufferA~E, Velocity, Depth까지 여러 칸이야. 드로우 중간에 칸 묶음이 흔들리면 메시마다 다른 식판에 배식해버려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 오늘 쓸 칸들을 한 묶음으로 잠가서 패스에 넘기는 손잡이가 필요해. 그게 <strong>렌더타깃 바인딩</strong>이야.</div>
 </div>
 <div class="conversation"><h2>4. 렌더타깃 바인딩을 만들고 BasePass 내부로 넘긴다</h2>
 <p>식판 칸들을 모았으면 이제 "이 칸들에 그려라"라고 패스에 묶어야 해.</p>
@@ -300,6 +303,7 @@ a.xref:hover { background:#e1bee7; }
 <p>DirectX의 MRT, 즉 Multiple Render Targets야.</p>
 <p>우리 서버 감각으로 말하면, 같은 패킷 파싱 결과를 DB 테이블 하나에만 쓰는 게 아니라 <code>Character</code>, <code>InventoryLog</code>, <code>CombatState</code> 여러 테이블에 한 트랜잭션으로 나눠 쓰는 느낌이야.</p>
 <p>한 번의 사실을 여러 칸에 정리해두면, 뒤에서 읽기가 쉬워져.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — MRT</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 픽셀 셰이더 한 번은 색 하나만 뱉고, 텍스처 하나에만 적는다고 생각하면 쉬워.<br>&bull;&nbsp;<strong>그런데 문제</strong>: GBufferA, B, C, D를 따로 채우려고 메시를 네 번 그리면 BasePass 배식 줄이 네 배로 길어져. 같은 학생을 네 번 줄 세우는 거야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 픽셀 셰이더 한 번으로 여러 식판 칸에 동시에 쓰는 출구가 필요해. Multiple Render Targets, 줄여서 <strong>MRT</strong>야.</div>
 </div>
 <div class="conversation"><h2>6. 픽셀 셰이더는 GBuffer를 MRT 배열에 흩뿌린다</h2>
 <p>C++은 식판을 준비하고, 셰이더를 그 식판에 연결했어.</p>
