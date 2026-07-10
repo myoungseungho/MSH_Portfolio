@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -50,7 +53,8 @@ a.xref:hover { background:#e1bee7; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>버퍼·텍스처·뷰 — GPU 메모리에 올리기</h1><p>언리얼 렌더링 · 06 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "CPU 메모리의 데이터를 GPU 리소스로 올리고, SRV/UAV/RTV 같은 뷰로 쓰게 만드는 흐름"이 잡힌다.</div>
-<hr></div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 물건과 이름표</strong><br>&bull;&nbsp;<strong>물건</strong>: 실제로 만질 대상과 그 대상을 부르는 이름은 서로 다르다.<br>&bull;&nbsp;<strong>이름표</strong>: 같은 물건에도 "읽기만", "고치기 가능", "여기에 담기"처럼 다른 이름표를 붙일 수 있다.<br>&bull;&nbsp;<strong>허락</strong>: 이름표가 다르면 할 수 있는 행동도 달라진다.<br>이게 잡히면 아래 설명이 얹힌다.</div></div>
 <div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p>지난 장에서 RHI 명령이 D3D12 백엔드로 내려가는 걸 봤어. 이제 질문은 이거야. "GPU가 그릴 <strong>데이터</strong>는 어디 있어?" 서버로 치면 <code>CM_ATTACK</code> 패킷 핸들러만 있어서는 아무것도 못 해. 플레이어 위치, 인벤토리, 몬스터 테이블 같은 <strong>상태 저장소</strong>가 있어야 로직이 돌잖아. 렌더링도 똑같아. Draw 명령만 있다고 삼각형이 생기는 게 아니야. 정점 버퍼, 인덱스 버퍼, 텍스처, 렌더타깃이 먼저 GPU 쪽에 있어야 해.</p>
 <p>이게 없으면 뭐가 터질까? 매 프레임 CPU 배열을 들고 있다가 Draw 직전에 GPU로 100MB씩 밀어 넣는다고 생각해봐. PCIe 전송이 병목이 되고, RHI 스레드가 기다리고, GPU는 "밥이 아직 안 왔는데 뭘 그려?" 하고 멈춘다. 텍스처 한 장을 잘못된 크기로 업데이트하면 out-of-bounds 검사에 걸리고, 렌더타깃 플래그 없이 만든 텍스처를 화면에 쓰려 하면 RTV가 없어서 백엔드에서 막힌다.</p>
@@ -67,6 +71,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note"><strong>소스 위치</strong> (이 클론에 실제로 있음, 아래 코드는 전부 원문 그대로 뽑음)<br>&bull;&nbsp;주요 파일: <code>Engine/Source/Runtime/RHI/Public/RHICommandList.h</code><br>&bull;&nbsp;리소스 설명자: <code>Engine/Source/Runtime/RHI/Public/RHIResources.h</code><br>&bull;&nbsp;D3D12 RTV 실물: <code>Engine/Source/Runtime/D3D12RHI/Private/D3D12View.cpp</code></div>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 버퍼</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 작은 그림이면 CPU 배열을 들고 있다가 그릴 때마다 GPU에 던지면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 정점 100만 개짜리 맵을 매 프레임 다시 배달하면 창고 앞에 트럭 줄이 생겨. 60FPS면 16.6ms 안에 로직, 배달, 그림까지 다 해야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 자주 읽을 줄 세운 데이터를 GPU 창고에 박스로 미리 넣어두자. 그 긴 박스가 <strong>버퍼</strong>야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 크기와 처음 내용</strong><br>&bull;&nbsp;<strong>크기</strong>: 상자나 공책은 얼마나 큰지 정해야 안에 넣을 양을 알 수 있다.<br>&bull;&nbsp;<strong>처음 내용</strong>: 새 공책은 빈칸일 수도 있고, 0으로 채워져 있을 수도 있고, 처음부터 글이 적혀 있을 수도 있다.<br>&bull;&nbsp;<strong>주문서</strong>: 만들 사람에게는 "얼마나 크게, 처음엔 무엇이 들어 있게"를 한꺼번에 알려줘야 한다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>1. 버퍼 만들기 — 창고에 긴 박스 하나 들여놓기</h2>
 <p>버퍼는 GPU가 읽을 "길게 이어진 데이터"야. 정점 버퍼, 인덱스 버퍼, 구조화 버퍼, 유니폼 버퍼가 전부 이 계열이야.</p>
@@ -110,6 +115,7 @@ a.xref:hover { background:#e1bee7; }
 <p>이 enum이 바로 "배달 방식" 표야. 냉장고에 박스만 놓을지, 빈 박스를 0으로 닦을지, CPU 트럭에서 물건을 싣고 올지, 직접 포장대에서 채울지를 고르는 거지.</p>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — lock/unlock</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: CPU가 버퍼 포인터를 그냥 들고 아무 때나 고치면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: GPU가 그 박스를 읽는 중에 CPU가 내용을 갈아 끼우면, 주방 요리사가 재료 쓰는 중에 창고 직원이 박스를 바꿔치기하는 꼴이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "잠깐 열게, 다 쓰면 닫을게"라는 출입 절차가 필요해. 그게 <strong>lock/unlock</strong>이야. 서버 recv buffer도 누가 쓰는 중인지 안 보고 덮으면 터지잖아.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 같이 쓰는 물건의 차례</strong><br>&bull;&nbsp;<strong>차례</strong>: 한 사람이 공책을 읽는 동안 다른 사람이 같은 줄을 지우면 내용이 꼬인다.<br>&bull;&nbsp;<strong>열기와 닫기</strong>: 고칠 때는 "지금 내가 쓸게" 하고 열고, 끝나면 "다 썼어" 하고 닫아야 한다.<br>&bull;&nbsp;<strong>약속</strong>: 누가 언제 만질 수 있는지 정해 두면 서로 덮어쓰는 일을 막을 수 있다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>2. 버퍼를 잠그고 풀기 — CPU가 박스 안에 손 넣는 순간</h2>
 <p>버퍼를 이미 만들었는데 CPU가 내용을 고쳐야 할 때가 있어. 동적 vertex buffer, staging buffer, readback buffer 같은 상황이지.</p>
@@ -169,6 +175,7 @@ a.xref:hover { background:#e1bee7; }
 <p>여기서 <code>InitialState</code>가 왜 중요하냐면 GPU는 리소스를 아무 상태로나 못 써. 방금 렌더타깃으로 썼던 텍스처를 곧바로 셰이더에서 읽으려면 상태 전환이 필요해. 이 장에서는 깊게 안 파지만, "처음 태어날 때 어느 상태냐"가 이후 barrier 비용의 출발점이 된다.</p>
 <p>텍스처는 보통 정적 리소스면 생성 시 bulk data를 같이 올리고, 동적 리소스면 이후 update나 copy 명령으로 갱신한다. 여기서도 배달비를 생각해야 해.</p>
 <hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 칸 안의 사각형 범위</strong><br>&bull;&nbsp;<strong>자리</strong>: 바둑판에서 어느 칸부터 시작하는지 알아야 바꿀 곳을 찾을 수 있다.<br>&bull;&nbsp;<strong>가로와 세로</strong>: 시작 칸에서 몇 칸 넓이와 몇 칸 높이를 바꿀지 정하면 작은 사각형이 된다.<br>&bull;&nbsp;<strong>줄 길이</strong>: 한 줄에 몇 칸이 있는지 알아야 다음 줄의 시작 자리를 헷갈리지 않는다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>4. 텍스처 업데이트 — CPU 트럭이 일부 칸만 갈아 끼우기</h2>
 <p>이미 만든 텍스처의 일부 영역만 바꾸는 함수가 <code>UpdateTexture2D</code>야. UI atlas, 동적 데이터 텍스처, 스트리밍 mip 업데이트 같은 데서 감이 온다.</p>

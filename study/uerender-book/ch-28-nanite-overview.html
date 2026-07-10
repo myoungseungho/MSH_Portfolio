@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -50,7 +53,8 @@ a.xref:hover { background:#e1bee7; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Nanite — 삼각형 수 제한을 깨다</h1><p>언리얼 렌더링 · 28 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "Nanite가 삼각형을 몽땅 CPU로 보내서 그리는 기술이 아니라, 클러스터 후보를 GPU에서 고르고 작은 조각만 래스터라이즈하는 흐름"이라는 큰 그림이 잡힌다.</div>
-<hr></div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 물체는 삼각형 껍데기, 그걸 화면 칸에 칠하기</strong><br>&bull;&nbsp;<strong>3D 물체 = 삼각형 덩어리</strong>: 게임 속 바위나 사람은 속이 꽉 찬 게 아니라, 수천~수백만 개의 작은 삼각형을 이어 붙여 만든 껍데기야. 삼각형이 많을수록 매끈하고, 적으면 각져 보여.<br>&bull;&nbsp;<strong>화면에 칠하기(래스터화)</strong>: 그 삼각형 하나하나를, 화면을 잘게 나눈 작은 네모칸(픽셀)들 중 어느 칸을 덮는지 따져서 그 칸에 색을 써넣는 일이야. 삼각형이 많으면 이 칠하기 일도 그만큼 늘어나.<br>이게 잡히면 "삼각형 수가 터진다"는 아래 이야기가 얹힌다.</div></div>
 <div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p><strong>1. 네가 아는 것에서 출발하자.</strong> 서버에서 유저 1만 명이 접속했는데, 매 틱마다 모든 유저의 모든 아이템, 모든 몬스터, 모든 로그를 처음부터 끝까지 훑으면 서버가 버티겠어? 당연히 안 버틴다. 그래서 우리는 공간 분할, 관심 영역, 더티 플래그, 큐, 배치 같은 걸 써. "지금 필요한 것만" 고르는 장치가 있어야 해.</p>
 <p><strong>2. 렌더링도 똑같이 터진다.</strong> 영화급 메시 하나가 수천만 삼각형을 들고 오면, 전통 파이프라인처럼 CPU가 메시 섹션을 나누고, 드로우콜을 쌓고, 정점 셰이더가 삼각형을 다 밀어 넣는 방식으로는 금방 벽에 닿아. 화면에 쌀알보다 작게 보이는 삼각형까지 똑같은 손님처럼 줄 세우면, GPU도 "이걸 왜 다 세지?"가 된다.</p>
@@ -67,6 +71,7 @@ a.xref:hover { background:#e1bee7; }
 <p>GPU 주도는 "입구 직원(CPU)이 모든 손님을 한 명씩 판정하지 말고, 자동 게이트(GPU)가 직접 후보를 세고 줄을 나누자"는 뜻이야.</p>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 클러스터 LOD</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 메시 하나에 LOD0, LOD1, LOD2 같은 큰 단체 표를 몇 장 만들어 두고, CPU가 거리 보고 하나 골라.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 천만 손님 놀이공원에서 멀리 보이는 단체까지 한 명씩 자세히 세우면 입구가 터져. 화면에 쌀알만 한 바위도 큰 덩어리로 처리하면 너무 낭비야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 메시를 작은 클러스터 단체로 쪼개고, 화면 크기와 오차로 지금 필요한 단계만 고르는 규칙이 필요해. 그게 클러스터 LOD야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 멀면 대충, 가까우면 자세히(LOD)</strong><br>&bull;&nbsp;<strong>거리에 따라 정성을 다르게</strong>: 멀리 있는 물건은 눈에 작게 보이니 대충 만들어도 티가 안 나고, 가까이 오면 자세히 보여야 해. 종이지도를 축소하면 골목은 사라지고 큰길만 남듯, 멀수록 덜어내는 게 이득이야.<br>&bull;&nbsp;<strong>LOD</strong>: 그래서 같은 물체를 "자세한 판 / 적당한 판 / 대충한 판"으로 여러 개 두고, 지금 거리에 맞는 걸 고르는 걸 LOD(자세함 단계)라고 불러.<br>이게 잡히면 아래 화면 크기로 단계를 고르는 계산이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>1. LOD는 감이 아니라 화면 크기 계산이야</h2>
 <p>Nanite의 LOD를 "가까우면 고해상도, 멀면 저해상도"라고 말하면 맞긴 한데 너무 흐릿해.</p>
@@ -135,6 +140,7 @@ bool SmallEnoughToDraw(
 <p>기존 StaticMesh LOD처럼 메시 단위로 큰 덩어리 하나를 고르는 방식과 감각이 달라.</p>
 <p>Nanite는 훨씬 작은 클러스터 단위로 "이번 화면에 필요한 컷"을 만든다.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — SW/HW 래스터 경로</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 삼각형은 전부 GPU의 하드웨어 래스터라이저 한 줄로 보내면 돼. 큰 놀이기구 줄 하나만 있는 셈이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 픽셀보다 작은 삼각형이 모래알처럼 쏟아지면, 그 큰 줄에 전부 태우는 준비가 더 부담돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 큰 삼각형은 하드웨어 길로, 작은 삼각형은 compute 셰이더 길로 나눠 보내야 해. 그래서 SW/HW 래스터 경로가 필요해.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — GPU에게 시키는 자유 계산 프로그램(컴퓨트 셰이더)</strong><br>&bull;&nbsp;<strong>정해진 조립 라인 vs 자유 계산</strong>: GPU에는 원래 "삼각형을 픽셀로 칠하는" 전용 조립 라인이 붙어 있어. 빠르지만 하는 일이 정해져 있지.<br>&bull;&nbsp;<strong>컴퓨트 셰이더</strong>: 그 전용 라인 말고, GPU의 수천 일꾼에게 "이 숫자들을 가져다 이렇게 계산해서 여기다 써라"라고 자유롭게 시키는 프로그램이야. 조립 라인이 안 맞는 일은 이 자유 계산으로 대신 처리할 수 있어.<br>이게 잡히면 "작은 삼각형은 컴퓨트로 칠한다"는 아래 갈림길이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>2. 왜 하드웨어 래스터만으로는 부족해?</h2>
 <p>기존 파이프라인은 대충 이래.</p>

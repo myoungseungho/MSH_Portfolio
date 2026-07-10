@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -50,7 +53,8 @@ a.xref:hover { background:#e1bee7; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Lumen — 실시간 전역 조명</h1><p>언리얼 렌더링 · 30 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "<code>Lumen</code>이 왜 bake를 대신하려고 나왔는지, 어떤 조건을 통과해야 실제로 켜지는지"가 잡힌다.</div>
-<hr></div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 빛은 한 번 튕겨 다시 다른 곳을 비춘다(간접광)</strong><br>&bull;&nbsp;<strong>직접광</strong>: 해나 전등에서 나온 빛이 물체에 곧장 닿는 것. 손전등으로 벽을 바로 비추는 느낌이야.<br>&bull;&nbsp;<strong>간접광(튕긴 빛)</strong>: 그 빛이 벽이나 바닥에 맞고 다시 튀어, 옆의 다른 곳을 은은히 비추는 것. 빨간 벽에 닿은 빛이 옆 바닥을 붉게 물들이고, 밝은 바닥이 다시 얼굴 밑을 살짝 밝히는 게 이거야. 눈에 잘 안 띄지만 이게 있어야 장면이 진짜처럼 보여.<br>이게 잡히면 "그 튕긴 빛을 실시간으로 계산한다"는 아래 이야기가 얹힌다.</div></div>
 <div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p>너는 서버에서 캐시가 왜 필요한지 알아. 매번 DB를 깊게 긁으면 느리니까, 자주 쓰는 값은 메모리에 잡아두고 상황이 바뀌면 갱신하지.</p>
 <p>간접광도 똑같은 압박을 받아. 빛이 벽에 맞고 바닥에 맞고 다시 캐릭터 얼굴에 닿는 걸 200만 픽셀마다 정직하게 여러 번 추적하면, 한 프레임 16.6ms 안에 끝내기 어렵다. 그래서 예전엔 많이 <strong>굽기</strong>, 즉 bake를 했어. 맵이 고정돼 있으면 에디터에서 미리 빛 튐 결과를 계산해 텍스처로 저장하고, 게임 중에는 읽기만 하는 방식이야.</p>
@@ -151,6 +155,7 @@ bool Lumen::IsLumenFeatureAllowedForView(const FScene* Scene, const FSceneView&a
 <p>물론 매번 완전 정답을 계산하진 못해. 그래서 screen probe, radiance cache, surface cache, distance field, hardware ray tracing 같은 장치를 섞는다. 이번 챕터에서는 이름만 잡고, 다음 <a class="xref" href="ch-31-lumen-diffuse.html">lumen-diffuse</a>에서 실제 diffuse indirect 경로를 더 본다.</p>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Software Distance Field</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 하드웨어 레이 트레이싱 차량이 있으면 실제 도로를 레이로 훑으면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그 차량이 없거나 모든 길에 쓰기엔 비싸면, 배달원이 도시 모양을 모른 채 출발해. 벽이 10cm 앞인지 10m 앞인지 모르면 빛 길도 못 잡아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 메시를 "여기서 표면까지 거리"로 압축한 지도야. 하드웨어 길이 부족할 때 software로 추적하려고 쓰는 게 distance field야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 광선 한 줄 따라가기(레이)와 거리 지도</strong><br>&bull;&nbsp;<strong>레이(광선 한 줄)</strong>: 한 점에서 한 방향으로 가느다란 실 하나를 쭉 뻗어, 그 실이 처음 무엇에 부딪히는지 따라가 보는 거야. 빛이 어디서 막히고 어디서 튀는지 이 실로 알아내. 진짜 도로를 직접 훑는 특수 차량이라고 보면 돼.<br>&bull;&nbsp;<strong>거리 지도(distance field)</strong>: 특수 차량이 없을 때 쓰는 대체 지도야. 장면 곳곳에 "여기 서면 가장 가까운 벽까지 몇 걸음"이 적혀 있어서, 그 숫자만 보고도 실을 얼마나 더 뻗어도 안전한지 가늠할 수 있어.<br>이게 잡히면 아래 하드웨어 추적과 소프트웨어 거리장 추적의 갈림길이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>4. 움직이는 지도 재료 — Software Distance Field</h2>
 <p>실시간 간접광은 장면을 추적할 재료가 필요해. 벽이 어디 있는지, 메시가 어디 있는지, 빛이 어느 방향으로 막히는지 모르면 배달 경로를 못 짜.</p>

@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -50,7 +53,8 @@ a.xref:hover { background:#e1bee7; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>후처리 체인 — 톤매핑·블룸</h1><p>언리얼 렌더링 · 33 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "HDR 장면 색이 블룸을 거쳐 화면용 LDR 색으로 바뀌는 후처리 체인"이 잡힌다.</div>
-<hr></div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 밝기를 숫자로 적기, 그리고 화면이 낼 수 있는 밝기는 좁다</strong><br>&bull;&nbsp;<strong>밝기 = 숫자</strong>: 밝음을 숫자로 적을 수 있어. 0은 캄캄, 1은 하얀 종이만큼. 그런데 태양이나 전구는 1을 훌쩍 넘는 10, 100 같은 값이야. 이렇게 큰 값까지 담는 게 "넓은 밝기".<br>&bull;&nbsp;<strong>화면은 좁은 범위만 낸다</strong>: 모니터나 인화지는 아무리 밝아도 낼 수 있는 한계가 있어. 넘치는 값을 그냥 자르면 밝은 데는 하얗게 뭉치고, 어두운 데는 새까맣게 뭉개진다.<br>이게 잡히면 아래 HDR 장면 색을 화면용으로 눌러 담는다는 설명이 얹힌다.</div></div>
 <div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p>네가 DirectX로 렌더타깃을 만져봤으면 이 느낌을 알 거야.</p>
 <p>셰이더가 계산한 빛은 보통 <code>float</code>야. 태양은 1보다 훨씬 밝고, 금속 반사는 더 튀고, 어두운 골목은 0에 바짝 붙어. 그런데 모니터에 마지막으로 내보내는 색은 보통 8비트나 10비트 안에 들어가야 해. <strong>HDR 장면 색을 그대로 백버퍼에 밀어 넣으면</strong> 밝은 곳은 하얗게 터지고, 어두운 곳은 뭉개져.</p>
@@ -65,6 +69,7 @@ a.xref:hover { background:#e1bee7; }
 <ol><li><strong>원본 사진 받기</strong> — 아직 HDR 같은 넓은 밝기 사진.</li><li><strong>작업표 만들기</strong> — 어떤 보정대를 켤지 고른다.</li><li><strong>빛 번짐 만들기</strong> — 밝은 부분만 작게 줄여 흐린 뒤 다시 섞는다. 이게 블룸.</li><li><strong>인화용 밝기로 눌러 담기</strong> — 넓은 밝기를 종이/모니터 범위로 압축한다. 이게 톤매핑.</li><li><strong>마지막 손질</strong> — FXAA/SMAA, 디버그, 업스케일 같은 꼬리 작업.</li></ol>
 <p>언리얼의 <code>PostProcessing.cpp</code>는 이 사진관 작업표야. 특히 <code>AddPostProcessingPasses</code>가 큰 라인 하나를 지휘해. 여기서 <code>SceneColor</code>라는 사진이 계속 다음 작업대로 넘어가. <code>PassSequence</code>는 작업표고, <code>Bloom</code>은 빛 번짐 레이어고, <code>AddTonemapPass</code>는 인화기야.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — SceneColor</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 장면을 다 그렸으면 그 색을 바로 화면에 보내면 될 것 같아. 사진관이면 RAW를 그대로 손님에게 주는 셈이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: HDR 사진에는 창밖 20 같은 밝기와 방 안 0.02 같은 어둠이 같이 들어 있어. 8비트 화면에 바로 누르면 밝은 곳은 하얗게 터지고 어두운 곳은 뭉개져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "지금 보정 중인 사진" 손잡이가 필요해. 원본은 따로 두고 작업대가 새 사진을 만들 때마다 이 손잡이를 갈아끼워. 그게 <code>SceneColor</code>야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 일을 한 번에 안 하고 작업대를 줄줄이 통과시키기</strong><br>&bull;&nbsp;<strong>줄줄이 작업대</strong>: 큰 일을 한 손으로 다 하지 않고, 작은 작업대를 여러 개 세워 물건을 하나씩 통과시키면 각 작업대는 자기 몫만 단순하게 해. 공장 컨베이어나 급식 배식줄처럼.<br>&bull;&nbsp;<strong>중간 결과를 넘긴다</strong>: 앞 작업대가 손본 물건이 다음 작업대의 재료가 돼. 그래서 "지금 손보는 물건"이 작업대를 지날 때마다 바뀐다.<br>이게 잡히면 아래 SceneColor를 계속 갈아끼우며 패스를 통과시킨다는 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>1. 출발점 — SceneColor는 계속 갈아끼우는 사진이다</h2>
 <p>후처리의 시작은 "장면을 다 그린 색"이야. 언리얼 코드에서는 이걸 <code>SceneColor</code>로 잡아. 중요한 건 이 변수가 <strong>한 번 만들고 끝나는 원본</strong>이 아니라는 점이야. 패스를 지나면서 새 텍스처로 계속 바뀌는 손잡이야.</p>
@@ -139,6 +144,7 @@ a.xref:hover { background:#e1bee7; }
 <p>왜 작은 사진이 필요할까?</p>
 <p>블룸은 흐림이야. 흐림은 주변 픽셀을 많이 읽어야 해. 원본 4K 사진을 크게 흐리면 픽셀을 너무 많이 만져야 하지. 그래서 먼저 사진을 작게 만든다. 작은 사진에서는 같은 반경의 블러도 훨씬 싸.</p>
 <p>이게 DirectX에서 렌더타깃 mip 체인을 만들어서 blur pass를 여러 번 돌리는 감각과 같아. 풀해상도 RTV 하나로 버티는 게 아니라, half, quarter, eighth 텍스처를 준비해서 비용을 낮추는 거야.</p>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 흐리게 하기, 그리고 작게 줄이면 일이 준다</strong><br>&bull;&nbsp;<strong>흐림 = 주변을 섞어 뭉갬</strong>: 한 점을 흐리게 만들려면 그 둘레 점들을 함께 평균 내 뭉갠다. 안경을 벗거나 김 서린 유리로 볼 때처럼, 넓게 섞을수록 더 흐려져.<br>&bull;&nbsp;<strong>작게 줄이면 값이 싸다</strong>: 큰 그림 한 장을 흐리려면 점을 엄청 많이 만져야 해. 먼저 작은 복사본으로 줄여 흐리면 만질 점이 확 줄어 빨라진다.<br>이게 잡히면 아래 작은 사진들을 흐려서 더한다는 블룸 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>4. 블룸 내부 — 작은 사진들을 흐려서 더한다</h2>
 <p>가우시안 블룸의 실제 함수는 <code>PostProcessBloomSetup.cpp</code>에 있다. <code>PostProcessing.cpp</code>는 "블룸 필요해"라고 판단하고, 가우시안 블룸이면 <code>AddGaussianBloomPasses</code>를 부른다. 그 안의 루프를 보면 여러 단계의 작은 텍스처를 가져와서 흐리고 더하는 구조가 바로 보인다.</p>
@@ -187,6 +193,7 @@ a.xref:hover { background:#e1bee7; }
 <p>여기서 "블룸은 화면 전체에 그냥 흰색을 얹는 것"이 아니라는 게 중요해. 블룸은 별도 텍스처로 만들어져. 그리고 톤매퍼에 들어갈 때 <code>Bloom</code> 입력으로 합쳐진다.</p>
 <p>사진관 말로 하면, 원본 사진 위에 바로 붓질하지 않고, 빛 번짐만 따로 투명 필름에 만든 뒤, 인화기에 같이 넣는 거야.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 톤매핑(Tonemap)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 셰이더가 만든 HDR 색을 그대로 화면 색으로 쓰면 제일 쉽지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 사진에는 태양 반사 10.0, 실내 그림자 0.03 같은 값이 같이 있어. 모니터 범위에 그냥 자르면 창밖은 하얀 종이, 방 안은 검은 뭉치가 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 넓은 밝기를 화면이 먹을 수 있는 좁은 범위로 눌러 담는 인화 규칙이 필요해. 밝기 톤을 화면 값에 매핑해서 <code>Tonemap</code>이야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 넓은 범위를 좁은 범위로 눌러 담기(압축)</strong><br>&bull;&nbsp;<strong>눌러 담기</strong>: 아주 큰 소리부터 작은 소리까지를 작은 스피커가 낼 수 있는 음량 범위 안으로 줄여 담듯이, 넓은 밝기(0부터 100까지)를 화면이 낼 수 있는 좁은 범위(0부터 1까지)로 비율 맞춰 줄일 수 있어.<br>&bull;&nbsp;<strong>자르기와 다르다</strong>: 그냥 한계 넘는 걸 싹둑 자르면 밝은 부분이 다 똑같이 하얘져. 눌러 담으면 밝은 것끼리도 차이가 살아남아.<br>이게 잡히면 아래 톤매핑이 HDR 색을 화면용으로 바꾼다는 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>5. 톤매핑 — HDR 사진과 블룸 레이어를 같이 인화한다</h2>
 <p>이제 핵심 관문이다. 톤매핑은 HDR <code>SceneColor</code>를 화면에 낼 수 있는 범위로 바꾸는 작업이야. 하지만 혼자 하지 않아. 여기서 블룸, 로컬 노출, 아이 어댑테이션, 컬러 그레이딩 LUT가 같이 들어간다.</p>

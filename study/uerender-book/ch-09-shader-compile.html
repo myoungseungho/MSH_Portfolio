@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -50,7 +53,8 @@ a.xref:hover { background:#e1bee7; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>셰이더 컴파일 파이프라인</h1><p>언리얼 렌더링 · 09 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "언리얼이 <code>.usf</code>를 어떻게 전처리하고, 백엔드로 넘기고, 캐시에 저장해 다시 안 하려 하는가"가 잡힌다.</div>
-<hr></div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 사람 글을 기계 주문으로 바꾸기</strong><br>&bull;&nbsp;<strong>사람 글</strong>: 사람은 "왼쪽으로 세 걸음"처럼 읽기 쉬운 말로 규칙을 적는다.<br>&bull;&nbsp;<strong>기계 주문</strong>: 기계는 그 말을 그대로 알아듣지 못해서, 아주 딱딱한 번호와 명령 묶음으로 바꿔 줘야 한다.<br>&bull;&nbsp;<strong>검사와 결과물</strong>: 바꾸는 동안 빠진 말이나 틀린 약속을 찾고, 끝나면 기계가 바로 따라 할 수 있는 결과물이 나온다.<br>이게 잡히면 아래 컴파일 파이프라인 설명이 얹힌다.</div></div>
 <div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p>DirectX를 만져봤으면 셰이더 컴파일은 낯설지 않아. HLSL을 쓰고, DXC 같은 컴파일러를 태우고, 나온 바이트코드를 PSO에 꽂지.</p>
 <p>그런데 언리얼은 그 단순한 그림보다 훨씬 커. 같은 <code>.usf</code>라도 플랫폼, 엔트리 함수, 머티리얼 옵션, 레이 트레이싱, bindless, 개발용 디버그 플래그가 다르면 결과가 갈라져.</p>
@@ -74,6 +78,7 @@ a.xref:hover { background:#e1bee7; }
 <p>그리고 같은 주문이 다시 오면 창고에서 완성 카드를 꺼내야지, 매번 새로 인쇄하면 장사가 안 된다.</p>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 컴파일 환경</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 원본 레시피(<code>.usf</code>) 하나를 그대로 기계에 넣고 카드 하나만 뽑으면 제일 단순해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 같은 김치볶음밥도 매운맛, 치즈 추가, 포장용이 갈라지듯이 같은 셰이더도 플랫폼, 함수 이름, bindless 설정이 달라지면 결과가 달라져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 원본 옆에 "이번 주문 옵션"을 붙이는 상자가 필요해. 그게 <strong>컴파일 환경</strong>이야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 원본에 붙는 조건표</strong><br>&bull;&nbsp;<strong>원본</strong>: 같은 요리법이나 놀이 규칙도 기본 종이는 하나일 수 있다.<br>&bull;&nbsp;<strong>조건표</strong>: "매운맛", "포장", "어린이용"처럼 작은 쪽지가 붙으면 해야 할 일이 달라진다.<br>&bull;&nbsp;<strong>같은지 판단하기</strong>: 원본만 같다고 같은 결과가 아니고, 붙은 쪽지까지 같아야 같은 결과다.<br>이게 잡히면 아래 컴파일 환경 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>1. 먼저 주문 옵션을 붙인다</h2>
 <p>주요 소스인 <code>Shader.cpp</code>에서 먼저 볼 곳은 <code>FShaderType::ModifyCompilationEnvironment</code>야.</p>
@@ -108,6 +113,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 타입별 설정 함수가 환경을 채우고 → 바인딩 레이아웃이 있으면 RHI용 레이아웃을 넣고 → 일반 셰이더면 함수 이름을 define으로 박아. 이어 읽으면 "원본 레시피에 이번 주문 옵션을 붙인다"는 뜻이야.</div>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 전처리</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 주문 옵션을 붙였으니 바로 매장별 기계에 넣어 구우면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 레시피 안에 "소스 레시피 참고", "매운맛이면 이 줄 사용" 같은 include와 조건문이 남아 있으면 기계마다 읽는 방식이 꼬일 수 있어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 먼저 레시피를 펼치고 조건을 정리한 작업지시서가 필요해. 그 정리 단계가 <strong>전처리</strong>야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 미리 펼쳐 한 장으로 정리하기</strong><br>&bull;&nbsp;<strong>참고 펼치기</strong>: "3쪽 표를 붙여라"라고 적혀 있으면 실제로 그 표를 가져와 옆에 붙인다.<br>&bull;&nbsp;<strong>조건 고르기</strong>: "비 오면 우산, 맑으면 모자"처럼 지금 맞는 줄만 남긴다.<br>&bull;&nbsp;<strong>정리본</strong>: 여기저기 흩어진 종이를 한 사람이 바로 읽을 수 있게 한 묶음으로 만든다.<br>이게 잡히면 아래 전처리 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>2. <code>.usf</code>를 바로 굽지 않고 전처리한다</h2>
 <p>이제 <code>ShaderCore.cpp</code>의 실제 파이프라인으로 내려가자.</p>
@@ -184,6 +190,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 전처리 결과 압축을 풀고 → 보조 출력이 있으면 보조 결과도 풀고 → <code>CompilePreprocessedShader</code>로 백엔드에 넣는다. 이어 읽으면 ".usf 원본이 아니라 전처리된 결과를 플랫폼 컴파일러에 넘긴다"는 말이 보인다.</div>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 입력 해시(캐시 키)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 같은 <code>.usf</code> 파일명이면 같은 완성 카드라고 보고 창고에서 꺼내 쓰면 편해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 파일명은 같은데 치즈 추가 define 하나가 바뀌면 완전히 다른 카드야. 예전 카드를 쓰면 화면이 틀린 재료로 그려져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 파일명 말고 주문 옵션, 매장, 정리된 작업지시서까지 다 섞은 카드 번호가 필요해. 그게 <strong>입력 해시</strong>, 캐시에서 찾을 때 쓰는 키야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 물건을 헷갈리지 않게 찾는 번호표</strong><br>&bull;&nbsp;<strong>번호표</strong>: 가방을 맡길 때 이름 대신 번호표를 받으면, 나중에 같은 번호로 정확히 찾을 수 있다.<br>&bull;&nbsp;<strong>작은 차이</strong>: 색이나 크기가 조금만 달라도 다른 물건이면 번호표도 달라야 한다.<br>&bull;&nbsp;<strong>보관함</strong>: 자주 다시 쓸 물건은 번호표와 함께 넣어 두면, 다음엔 새로 만들지 않고 꺼내 쓴다.<br>이게 잡히면 아래 캐시 키 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>4. 캐시 키는 원본 파일명이 아니라 입력 지문이다</h2>
 <p>셰이더 컴파일이 느린 가장 큰 이유는 조합이 많기 때문이야.</p>

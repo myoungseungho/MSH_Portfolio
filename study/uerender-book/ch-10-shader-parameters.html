@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -50,7 +53,8 @@ a.xref:hover { background:#e1bee7; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>셰이더 파라미터 · 유니폼 버퍼 바인딩</h1><p>언리얼 렌더링 · 10 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버를 만들다가 렌더링을 처음 파는 사람.<br>끝나면 "<code>FParameters</code>에 넣은 C++ 값이 어떻게 셰이더 변수 칸에 꽂히나"를 손으로 따라갈 수 있어.</div>
-<hr></div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 이름표와 실제 자리</strong><br>&bull;&nbsp;<strong>이름표</strong>: 사물함에 "철수"라고 붙어 있어도, 실제 가방은 몇 번째 칸 안에 들어 있다.<br>&bull;&nbsp;<strong>실제 자리</strong>: 이름만 알아서는 꺼낼 수 없고, 어느 줄 몇 번째 칸인지도 알아야 한다.<br>&bull;&nbsp;<strong>약속 맞추기</strong>: 부르는 이름과 찾아갈 자리가 서로 맞아야 엉뚱한 칸을 열지 않는다.<br>이게 잡히면 아래 설명이 얹힌다.</div></div>
 <div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p>앞에서 셰이더는 GPU에서 도는 작은 프로그램이라고 했어. <a class="xref" href="ch-08-shader-basics.html">shader-basics</a> 그리고 그 셰이더가 컴파일될 때, 어떤 파라미터 이름을 쓰는지도 같이 정리된다고 봤지. <a class="xref" href="ch-09-shader-compile.html">shader-compile</a></p>
 <p>근데 아직 제일 실전 질문이 남아. <code>Parameters.TexelSize = ...</code>로 C++ 값을 넣으면, 그 값은 어떻게 HLSL의 <code>TexelSize</code> 자리까지 갈까?</p>
@@ -58,6 +62,7 @@ a.xref:hover { background:#e1bee7; }
 <p>문제는 이름, 타입, 위치야. 셰이더는 <code>TexelSize</code>라는 이름을 요구하고, C++ 구조체는 어떤 바이트 오프셋에 <code>TexelSize</code> 값을 들고 있어. 둘이 이름도 맞아야 하고, 크기도 맞아야 하고, 읽는 위치도 맞아야 해.</p>
 <p>우리 서버로 치면 <code>SP_LOGIN</code>이 <code>AccountID</code>를 원했는데, 패킷 구조체 오프셋이 밀려서 월드 ID를 읽는 상황이야. 패킷도 필드 이름과 위치가 맞아야 하듯, 셰이더 파라미터도 C++ 필드와 HLSL 변수의 약속이 맞아야 해.</p>
 <p>그래서 이번 챕터는 그 약속표를 만든다. <code>SHADER_PARAMETER</code> 매크로가 멤버 선언을 넘어 메타데이터를 만들고, <code>ShaderParameterStruct.cpp</code>가 그 메타데이터를 셰이더 컴파일 결과와 맞춘 뒤, 마지막에 RHI 커맨드 리스트에 실제 값을 붙이는 흐름을 본다.</p>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 줄지어 선 칸과 떨어진 거리</strong><br>&bull;&nbsp;<strong>줄지어 선 칸</strong>: 긴 서랍장처럼 작은 칸들이 처음부터 끝까지 순서대로 놓여 있다고 생각하면 된다.<br>&bull;&nbsp;<strong>시작점</strong>: 맨 앞 칸을 하나 정하면, 다른 칸은 거기서 몇 칸 떨어졌는지로 찾을 수 있다.<br>&bull;&nbsp;<strong>크기</strong>: 어떤 물건은 한 칸만 쓰고, 어떤 물건은 여러 칸을 이어서 쓴다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>0. 비유부터 — 급식판과 배식표</h2>
 <p>이번 장은 급식판 비유로 가자.</p>
@@ -67,6 +72,7 @@ a.xref:hover { background:#e1bee7; }
 <p><code>FShaderParameterBindings</code>는 배식 동선표야. C++ 식판의 어느 칸을 읽어서 셰이더의 어느 슬롯에 줄지 적어 둔다.</p>
 <p>마지막 <code>SetShaderParameters</code>는 배식원이야. 동선표를 보고 C++ 메모리에서 값을 꺼내 <code>FRHIBatchedShaderParameters</code>에 담고, RHI 커맨드 리스트에 "이 셰이더 실행할 때 이 반찬들 같이 내보내"라고 넘긴다.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 셰이더 파라미터 구조체(FParameters)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 셰이더에 줄 값을 함수 인자처럼 하나씩 넘기면 될 것 같아. <code>TexelSize</code> 따로, 텍스처 따로, 샘플러 따로.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 셰이더 하나가 값 10개, 텍스처 4개, 샘플러 2개를 원하면 배식원이 매번 "몇 번째 칸?"을 외워야 해. 칸 하나 밀리면 국 자리에 반찬이 들어가.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 값들을 한 급식판에 담고, 칸 이름까지 같이 붙이는 구조가 필요해. 그 식판이 <code>FParameters</code>야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 미리 펼쳐지는 글자 약속</strong><br>&bull;&nbsp;<strong>글자 바꾸기</strong>: 공책에 "여기에 이름 쓰기"라고 적어 두면, 나중에 그 자리에 실제 이름을 끼워 넣을 수 있다.<br>&bull;&nbsp;<strong>미리 펼치기</strong>: 어떤 글은 일을 시작한 뒤 실행되는 게 아니라, 시작 전에 더 긴 글로 바뀐다.<br>&bull;&nbsp;<strong>한 줄이 여러 일</strong>: 짧은 약속 한 줄이 펼쳐지면 이름 적기, 칸 만들기, 검사하기 같은 여러 줄이 될 수 있다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>1. 사용자는 이렇게 쓴다 — <code>FParameters</code> 식판</h2>
 <p>먼저 실제 사용 예시부터 보자. <code>GenerateMips.cpp</code>의 컴퓨트 셰이더가 파라미터 구조체를 이렇게 선언해.</p>
@@ -239,6 +245,7 @@ a.xref:hover { background:#e1bee7; }
 <p>여기가 핵심이야. 같은 셰이더 타입은 바인딩 지도를 한 번 만들어 두고, 매 프레임 다른 <code>FParameters</code> 인스턴스만 읽어서 제출할 수 있다.</p>
 <p>서버에서 패킷 디스크립터를 한 번 만들고, 실제 패킷 바이트는 매번 다르게 읽는 것과 비슷해.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 유니폼 버퍼 바인딩</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 숫자 값은 그냥 몇 바이트 복사하면 돼. 그러면 텍스처나 큰 공용 값 묶음도 똑같이 복사하면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 4KB짜리 공용 상수 묶음을 패스마다 통째로 복사하고, 텍스처까지 값처럼 옮기려 하면 식판이 아니라 창고를 들고 뛰는 꼴이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 큰 묶음은 GPU가 볼 수 있는 버퍼 객체로 두고, 셰이더 슬롯에는 그 손잡이만 꽂아야 해. 그래서 유니폼 버퍼를 바인딩해.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 물건과 손잡이는 다르다</strong><br>&bull;&nbsp;<strong>물건 통째로 옮기기</strong>: 무거운 상자를 매번 들고 가면 힘도 들고 시간도 걸린다.<br>&bull;&nbsp;<strong>손잡이만 건네기</strong>: 상자가 이미 창고에 있으면 "저 상자 써"라고 번호표나 열쇠만 건네도 된다.<br>&bull;&nbsp;<strong>사용 표시</strong>: 빌려 쓴 물건은 목록에 체크해 둬야, 나중에 치우거나 다시 쓸 때 헷갈리지 않는다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>6. 마지막 제출 — 식판에서 값을 읽어 RHI에 꽂는다</h2>
 <p>이제 진짜 값 제출이다. <code>SetShaderParameters</code>는 <code>Bindings</code> 지도를 보고 C++ 구조체 메모리를 바이트 배열처럼 읽는다.</p>

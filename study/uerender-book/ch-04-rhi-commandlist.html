@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -50,7 +53,8 @@ a.xref:hover { background:#e1bee7; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>RHICommandList — 명령을 쌓고 제출하기</h1><p>언리얼 렌더링 · 04 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "RHI 호출이 왜 바로 GPU로 가지 않고, 명령으로 기록됐다가 제출되는가"가 잡힌다.</div>
-<hr></div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 정해진 시간 안에 끝내기</strong><br>&bull;&nbsp;<strong>시간 약속</strong>: 종이 울리기 전까지 숙제를 내야 하면, 한 문제에 오래 붙잡힐수록 뒤 문제를 못 푼다.<br>&bull;&nbsp;<strong>기다리는 사람</strong>: 앞사람이 늦게 움직이면 뒤 사람은 할 일이 있어도 멈춰 서서 기다린다.<br>&bull;&nbsp;<strong>한꺼번에 몰린 일</strong>: 작은 심부름도 수백 개가 한꺼번에 오면, 왔다 갔다 하는 시간만으로 하루가 찬다.<br>이게 잡히면 아래 설명이 얹힌다.</div></div>
 <div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p>DirectX를 조금 써봤으면 이런 코드를 떠올릴 거야. <code>DrawIndexedInstanced</code> 부르고, <code>ResourceBarrier</code> 치고, <code>ExecuteCommandLists</code>로 제출하지. 게임 서버 쪽으로 치면 워커가 패킷을 받았다고 그 자리에서 바로 게임 로직을 다 실행하지 않고, 큐에 넣었다가 메인 로직 스레드가 순서대로 처리하는 구조랑 비슷해.</p>
 <p>그런데 렌더러가 수천 개 드로우콜을 매 프레임 즉석에서 다 처리하면 어떻게 될까. 렌더 스레드 하나가 "상태 세팅 → 드로우 → 배리어 → 복사"를 전부 직접 때리느라 막혀. 60fps면 한 프레임에 16.6ms뿐인데, 그중 몇 ms를 명령 포장에만 태우면 GPU는 놀고 CPU는 줄 서는 이상한 상황이 나온다.</p>
@@ -90,6 +94,7 @@ Finalize 후 RHISubmitCommandLists()로 플랫폼 RHI에 제출</div>
 <p>여기서 헷갈리면 안 되는 말이 두 개 있어.</p>
 <ul><li><strong>recording</strong> = 명령을 리스트에 쌓는 단계.</li><li><strong>execute/translate</strong> = 쌓아둔 명령을 꺼내서 RHI context에 실제 호출로 재생하는 단계.</li><li><strong>submit</strong> = 그렇게 만들어진 플랫폼 command list를 GPU 쪽으로 넘기는 단계.</li></ul>
 <p>DirectX 12로 치면 command list에 <code>DrawIndexedInstanced</code>를 기록하고, close하고, queue에 submit하는 흐름과 닮았다. 언리얼은 그 위에 "엔진 공용 RHI 명령 리스트"를 하나 더 둔 셈이야.</p>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 줄마다 다음 줄을 알려 주기</strong><br>&bull;&nbsp;<strong>이어 붙인 줄</strong>: 기차 칸처럼 한 칸이 다음 칸을 물고 있으면, 첫 칸부터 따라가며 끝까지 갈 수 있다.<br>&bull;&nbsp;<strong>마지막의 빈 고리</strong>: 새 칸을 붙일 자리를 늘 기억해 두면, 뒤쪽에 빠르게 하나 더 달 수 있다.<br>&bull;&nbsp;<strong>크기가 다른 칸</strong>: 어떤 칸은 작고 어떤 칸은 커도, "다음 칸은 여기"라는 표시만 같으면 한 줄로 이을 수 있다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>2. 기록의 핵심 — 명령 하나는 링크드 리스트에 꽂힌다</h2>
 <p>먼저 주문서에 줄 하나를 쓰는 코드부터 보자. <code>AllocCommand</code>는 새 명령 객체가 들어갈 메모리를 잡고, 현재 리스트 뒤에 붙인다.</p>
@@ -136,6 +141,7 @@ Finalize 후 RHISubmitCommandLists()로 플랫폼 RHI에 제출</div>
 <p>이 차이를 못 잡으면 앞으로 렌더러 코드가 이상해 보여.</p>
 <p>"분명 <code>RHICmdList.DrawPrimitive()</code>를 불렀는데 왜 GPU가 바로 움직이지 않지?"</p>
 <p>답은 간단해. 아직 주문서에 적은 단계라서 그래.</p>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 끝났다는 신호</strong><br>&bull;&nbsp;<strong>기다림</strong>: 친구가 준비를 마쳐야 같이 출발할 수 있으면, 끝났다는 말을 듣기 전에는 움직이면 안 된다.<br>&bull;&nbsp;<strong>신호</strong>: 손을 들거나 종을 치는 것처럼, 다음 사람이 시작해도 되는 순간을 알려 주는 표시가 필요하다.<br>&bull;&nbsp;<strong>먼저 할 일</strong>: 빠진 물건이 없는지 확인한 뒤 신호를 보내야, 다음 사람이 헛걸음하지 않는다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>4. 기록 완료 — 주문서 작성 끝 신호</h2>
 <p>명령을 쌓았으면 어느 순간 "이 주문서 이제 다 썼다"는 신호가 필요해. 언리얼은 <code>FinishRecording()</code>에서 그 신호를 준다.</p>
@@ -192,6 +198,7 @@ Finalize 후 RHISubmitCommandLists()로 플랫폼 RHI에 제출</div>
 <p>여기까지 보면 기록과 실행이 분리된 이유가 보인다.</p>
 <p>기록은 여러 곳에서 빠르게 할 수 있다. 실행은 정해진 순서로 밀어 넣을 수 있다. 이 분리가 있어야 병렬 기록과 순서 보장이 같이 가능해진다.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 병렬 번역(translate task)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 주문서를 한 접수대 직원이 처음부터 끝까지 읽고, 주방 말로 바꿔서 넘기면 돼. 한 줄이라서 순서는 확실해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 드로우콜이 수천 개면 그 한 명이 병목이 돼. CPU 코어가 여러 개 있어도 접수대 한 명만 일하면 나머지는 구경하고, GPU는 번역 끝나길 기다려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 기록은 이미 끝났으니, 나중에 안전한 주문서는 여러 작업 스레드가 나눠 번역하면 돼. 이게 병렬 번역이고, <code>TranslatePipe</code>는 그 주문서를 흘려보내는 접수대 레일이야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 여럿이 나눠 일할 때</strong><br>&bull;&nbsp;<strong>나눌 수 있는 일</strong>: 시험지를 여러 묶음으로 나눠 채점하면, 선생님 여러 명이 동시에 빨리 끝낼 수 있다.<br>&bull;&nbsp;<strong>순서가 중요한 일</strong>: 번호표 순서대로 해야 하는 일은 아무에게나 흩어 주면 앞뒤가 꼬인다.<br>&bull;&nbsp;<strong>줄 고르기</strong>: 빨리 처리해도 되는 줄과 차례를 지켜야 하는 줄을 나눠 보내면 덜 기다린다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>6. 병렬 번역 — 어떤 스레드가 주문서를 정리할까</h2>
 <p>이제 핵심 질문으로 가자.</p>

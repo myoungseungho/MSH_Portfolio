@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -50,7 +53,8 @@ a.xref:hover { background:#e1bee7; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>TAA — 시간을 가로질러 픽셀을 모으다</h1><p>언리얼 렌더링 · 32 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "TAA가 현재 프레임 하나를 믿지 않고, 지터와 히스토리로 픽셀을 모으는 이유"가 잡힌다.</div>
-<hr></div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 네모 칸으로 그린 그림과, 여러 장 겹쳐 보기</strong><br>&bull;&nbsp;<strong>칸으로 그린 사선은 계단이 된다</strong>: 모눈종이에 대각선을 칠하면 매끈한 선이 아니라 작은 계단처럼 삐뚤빼뚤해져. 화면도 작은 네모 칸이 수백만 개 모인 거라, 비스듬한 모서리가 계단처럼 보인다.<br>&bull;&nbsp;<strong>한 장은 증거가 가난하다</strong>: 얇은 실이나 철망은 칸 사이에 걸쳐서, 어떤 순간엔 칸에 잡히고 어떤 순간엔 빠진다. 그래서 한 장만 보면 켜졌다 꺼졌다 깜빡여.<br>&bull;&nbsp;<strong>여러 장을 겹치면 또렷해진다</strong>: 살짝살짝 다르게 찍은 사진 여러 장을 포개면, 한 장엔 흐릿하던 게 여러 장에서 모여 진해진다.<br>이게 잡히면 아래 "한 프레임을 못 믿고 여러 프레임을 모은다" 설명이 얹힌다.</div></div>
 <div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p>서버를 해봤으면 이런 감각이 있을 거야. 한 번 온 패킷만 보고 결론 내리면 위험해. 핑이 튀거나 순서가 밀리면, 다음 틱까지 보고 판단해야 할 때가 있잖아.</p>
 <p>렌더링도 똑같아. 한 프레임의 한 픽셀은 생각보다 가난한 증거야. 대각선 모서리는 계단처럼 깨지고, 얇은 전선은 깜빡이고, 서브픽셀 디테일은 한 번 찍으면 놓쳐. 1920x1080이면 픽셀이 207만 개나 되는데, 각 픽셀은 그 순간 딱 한 자리만 본다.</p>
@@ -92,6 +96,7 @@ a.xref:hover { background:#e1bee7; }
 <p>여기서 핵심은 <code>InputHistory</code>와 <code>OutputHistory</code>가 동시에 있다는 거야. TAA는 현재 프레임을 완성하면서 동시에 다음 프레임의 과거를 만든다. 서버로 치면 이번 틱을 처리하면서 다음 틱에서 볼 상태 스냅샷을 같이 갱신하는 느낌이야.</p>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 지터(Jitter)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 카메라를 매번 픽셀 가운데에 딱 맞춰 찍어. 필름 한 장마다 같은 칸만 보는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 같은 칸만 보면 픽셀 사이에 걸친 얇은 선은 영원히 못 봐. 철망 한 줄이 어떤 프레임은 있고 어떤 프레임은 없어서 깜빡여.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 카메라를 아주 조금씩 흔들어 여러 위치의 증거를 모아야 해. 이 작은 흔들림이 <strong>지터</strong>야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 비중 두고 섞기, 그리고 합을 1로 맞추기</strong><br>&bull;&nbsp;<strong>비중(가중치)</strong>: 여러 값을 섞을 때 가까운 건 많이, 먼 건 조금 쳐주는 식으로 비중을 다르게 줄 수 있어. 가운데에 가까운 이웃 칸일수록 더 크게 친다.<br>&bull;&nbsp;<strong>합을 1로 맞추기</strong>: 비중을 다 더한 값으로 각 비중을 나누면, 전부 합쳐서 딱 1(=100%)이 돼. 그래야 섞은 결과가 원래보다 밝아지거나 어두워지지 않아.<br>이게 잡히면 아래 아홉 칸 가중치를 TotalWeight로 나누는 코드가 안 무섭다.</div>
 </div>
 <div class="conversation"><h2>2. 지터를 먹인 3x3 가중치 — 오늘 필름도 그냥 믿지 않는다</h2>
 <p>TAA라고 하면 보통 "이전 프레임 섞기"만 떠올리는데, 현재 프레임 자체도 먼저 필터링한다. 현재 프레임의 중심 주변 3x3 픽셀을 보고, 카메라 지터만큼 위치가 밀렸다는 걸 반영해서 가중치를 만든다.</p>
@@ -187,6 +192,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 카메라 컷이면 <code>HistoryBuffer</code>를 <code>BlackDummy</code>로 바꿔 어제 필름을 버린다. 속도 텍스처도 <code>BlackDummy</code>로 바꿔 셰이더가 velocity에 의존하지 않게 한다. TAA는 누적 기술이지만, 믿을 수 없는 과거는 과감히 끊어야 해.</div>
 <p>여기서 고스팅 트레이드오프가 처음 드러나. 히스토리를 너무 쉽게 버리면 화면이 다시 흔들린다. 히스토리를 너무 오래 붙잡으면 움직인 물체 뒤에 잔상이 남는다. TAA는 이 줄타기를 매 픽셀마다 한다. 카메라 컷이 아닌 일반 경로에서는 바로 아래 <code>else</code>에서 <code>InputHistory.ViewportRect</code>와 <code>InputHistory.RT</code>를 이용해 진짜 히스토리 텍스처를 등록한다.</p>
 <hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 방금 전 어디 있었는지 되짚기</strong><br>&bull;&nbsp;<strong>되짚기</strong>: 달리는 친구를 찍은 지금 사진에서, 그 친구가 조금 전엔 어디 있었는지 발자국을 거꾸로 따라가 짚을 수 있어. 카메라나 물체가 움직인 만큼 거꾸로 되돌리면 '지난 자리'가 나온다.<br>&bull;&nbsp;<strong>화면 밖이면 못 찾는다</strong>: 조금 전엔 화면 밖에 있던 것이면, 되짚어도 지난 사진에 그 자리가 없어. 이럴 땐 지난 기록을 믿으면 안 돼.<br>이게 잡히면 아래 이전 프레임 위치를 찾고, 화면 밖이면 버리는 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>5. 셰이더에서 과거 위치 찾기 — 어제 필름을 현재 픽셀에 맞춘다</h2>
 <p>이제 GPU 셰이더 안으로 내려가자. 현재 픽셀의 깊이로 clip 위치를 만들고, <code>View.ClipToPrevClip</code>으로 지난 프레임 위치를 구한다. 동적 물체라면 velocity 텍스처에서 읽은 값으로 덮어쓴다. 그 결과가 <code>HistoryScreenPosition</code>이야.</p>

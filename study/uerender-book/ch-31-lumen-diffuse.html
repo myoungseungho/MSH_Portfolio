@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -50,7 +53,8 @@ a.xref:hover { background:#e1bee7; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Lumen Diffuse Indirect — 간접광이 모이는 곳</h1><p>언리얼 렌더링 · 31 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "Lumen의 diffuse GI가 화면 프로브를 세우고, 화면 추적과 레이 트레이싱/SDF 추적을 섞어 간접광을 모으는 흐름"이 잡힌다.</div>
-<hr></div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 전부 재지 말고 군데군데 대표만 재기(프로브)</strong><br>&bull;&nbsp;<strong>전수 측정은 비쌈</strong>: 모든 자리의 밝기를 하나하나 재려면 끝이 없어. 화면 한 장에도 잴 자리가 수백만 곳이야.<br>&bull;&nbsp;<strong>프로브(대표 측정기)</strong>: 그래서 군데군데 일정 간격으로 측정기 몇 개만 세워 재고, 그 사이 자리들은 가까운 측정기 값을 나눠 써. 온 밭의 흙을 다 검사하지 않고 몇 군데만 찔러 보고 전체를 짐작하는 것과 같아.<br>이게 잡히면 "화면에 프로브를 세워 간접광을 모은다"는 아래 이야기가 얹힌다.</div></div>
 <div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p>DirectX를 조금 해봤으면 직접광은 감이 와. 라이트 위치에서 노멀을 보고, 그림자 맵을 보고, 픽셀에 빛을 더하면 돼. 서버로 치면 <code>CM_ATTACK</code> 하나 받아서 대상 하나에게 데미지 주는 정도야.</p>
 <p>그런데 간접광은 그렇게 단순하지 않아. 빨간 벽에 빛이 맞으면 그 빨간 빛이 바닥으로 튀고, 바닥에서 또 캐릭터 발밑으로 퍼져. 이걸 픽셀마다 정직하게 여러 방향으로 쏘면 4K 화면에서는 수백만 픽셀 * 여러 레이야. 프레임 안에 못 끝내거나, 끝내도 노이즈가 심해서 화면이 지글거려.</p>
@@ -116,6 +120,7 @@ a.xref:hover { background:#e1bee7; }
 <p>특수한 gather를 쓰지 않으면 결국 화면에 검사원을 깔고, 그 검사원들이 간접광을 모으는 방식으로 간다.</p>
 <p>서버로 치면 특수 라우팅이 없으면 기본 패킷 핸들러로 들어가는 흐름이야.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Screen Probe</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 손님 픽셀마다 검사원을 붙여서 여러 방향으로 빛을 물어보면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 4K면 손님이 830만 명쯤이야. 각자 8방향만 봐도 탐침이 6천만 개를 넘어가서 시장 관리소가 터져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 화면 격자마다 대표 검사원을 세우고 주변 픽셀이 같이 쓰게 하자. 화면 위 탐침이라서 <strong>Screen Probe</strong>야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 사방 모든 방향을 평평한 표 한 장에 펴 담기</strong><br>&bull;&nbsp;<strong>한 점에서 온 사방을 봄</strong>: 측정기 하나는 위·아래·옆 등 공처럼 모든 방향의 빛을 봐야 해.<br>&bull;&nbsp;<strong>평면으로 펴기</strong>: 둥근 공을 그대로 저장할 수 없으니, 지구본을 평평한 세계지도로 펴듯 사방 방향을 네모난 표 한 장에 눌러 담아. 그 표를 잘게 나눌수록(해상도가 높을수록) 방향을 더 촘촘히 구분해 저장해.<br>이게 잡히면 아래 "방향판 해상도(Octahedron Resolution)를 정한다"가 얹힌다.</div>
 </div>
 <div class="conversation"><h2>3. 검사원을 화면 격자에 세운다</h2>
 <p><code>RenderLumenScreenProbeGather</code>에 들어오면 먼저 프로브의 해상도와 화면 격자를 잡아.</p>

@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -181,6 +184,7 @@ IMPLEMENT_MATERIAL_SHADER_TYPE(, FMicropolyRasterizeCS, TEXT("/Engine/Private/Na
 <p>하나의 패스 결과가 소프트웨어 래스터용 인자와 하드웨어 래스터용 인자를 같이 들고 간다.</p>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — SW/HW visible 결과판</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 컬링이 끝나면 "보이는 클러스터 목록" 하나만 만들고, CPU나 다음 단계가 다시 훑어서 어느 줄로 보낼지 나누면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 보이는 상자가 수천, 수만 개면 다시 훑는 것도 일이야. 물류센터가 분류해 놓고 사무실에 다시 들고 가서 재분류하는 꼴이 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 보인다고 판정하는 순간, SW 줄과 HW 줄의 자리까지 바로 잡는 결과판이 필요해. 그래서 <code>OutVisibleClustersSWHW</code>에 양쪽 끝에서 쌓는 거야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 여럿이 동시에 번호표를 뽑아도 안 겹치게</strong><br>&bull;&nbsp;<strong>동시에 손 뻗으면 부딪힘</strong>: 여러 사람이 같은 종이에 "다음 빈 칸"을 동시에 적으려 하면, 둘이 같은 칸을 골라 덮어쓰는 사고가 나.<br>&bull;&nbsp;<strong>번호표 기계</strong>: 그래서 은행 번호표 기계처럼 "누가 눌러도 지금까지 몇 명인지 세고 +1 해서 겹치지 않는 자기 번호를 하나 뽑아 주는" 장치가 필요해. 아래에서 GPU 일꾼 수천 명이 동시에 결과 자리를 잡을 때 바로 이 방식을 써.<br>이게 잡히면 아래 "카운터를 올려 자기 자리를 잡는다"가 얹힌다.</div>
 </div>
 <div class="conversation"><h2>4. visible 결과판 — SW는 앞에서, HW는 뒤에서 쌓는다</h2>
 <p>컬링 셰이더가 "이 클러스터는 보인다"라고 결정하면, 그 클러스터를 visible 목록에 넣어야 해.</p>
@@ -283,6 +287,7 @@ IMPLEMENT_MATERIAL_SHADER_TYPE(, FMicropolyRasterizeCS, TEXT("/Engine/Private/Na
 <p>컬링 결과가 래스터 인자로 바로 이어진다.</p>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 간접 컴퓨트 디스패치</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: CPU가 "이번엔 클러스터 183개니까 컴퓨트 그룹 몇 개" 하고 세어서 GPU에 실행 수를 넣어 주면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: Nanite는 GPU가 이미 컬링하고 비닝했어. 그걸 CPU가 다시 읽어 오면 왕복 시간이 생기고, 물류센터 자동 분류기를 멈춰 세우는 꼴이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: GPU가 만든 실행 인자를 GPU가 바로 먹는 방식이 필요해. CPU가 직접 숫자를 넣지 않아서 indirect, 그래서 간접 컴퓨트 디스패치야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 몇 번 할지를 미리 안 세고 쪽지 보고 정하기</strong><br>&bull;&nbsp;<strong>보통은 개수를 미리 정함</strong>: 일을 시킬 때 "이거 100번 해"처럼 횟수를 미리 알아야 하는 게 보통이야.<br>&bull;&nbsp;<strong>결과를 봐야 아는 경우</strong>: 그런데 앞 단계가 끝나봐야 "몇 개 남았는지"를 알 때가 있어. 이럴 땐 앞 일꾼이 "남은 개수"를 쪽지에 적어 두고, 다음 일꾼이 그 쪽지를 읽어 몇 번 돌지 스스로 정해. 사람이 중간에 세어서 넣지 않으니 왕복 시간이 안 생겨.<br>이게 잡히면 아래 "GPU가 만든 실행 인자를 GPU가 바로 먹는다"가 얹힌다.</div>
 </div>
 <div class="conversation"><h2>6. SW 라인의 마지막 — 간접 컴퓨트 디스패치</h2>
 <p>마지막으로 <code>DispatchSW</code> 안쪽을 보자.</p>

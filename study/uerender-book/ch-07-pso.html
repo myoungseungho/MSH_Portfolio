@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -50,7 +53,8 @@ a.xref:hover { background:#e1bee7; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>PSO — GPU의 설정 묶음</h1><p>언리얼 렌더링 · 07 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "GPU에 넘기는 거대한 렌더 상태 묶음이 왜 PSO라는 손잡이 하나가 되는가"가 잡힌다.</div>
-<hr></div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 설정값은 일을 시작하기 전의 약속</strong><br>&bull;&nbsp;<strong>설정값</strong>: 기계를 쓰기 전에 온도, 세기, 모드처럼 먼저 맞춰 두는 숫자나 선택이다.<br>&bull;&nbsp;<strong>상태</strong>: 지금 기계가 어떤 모드로 맞춰져 있는지 기억된 모습이다.<br>&bull;&nbsp;<strong>묶음</strong>: 따로 맞춰야 할 약속이 많으면 한 장에 같이 적어야 빠뜨리지 않는다.<br>이게 잡히면 아래 설명이 얹힌다.</div></div>
 <div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p>DirectX를 조금 만져봤으면 셰이더 바꾸고, 블렌드 상태 바꾸고, 래스터라이저 상태 바꾸고, 뎁스 스텐실 상태 바꾸고, 렌더타깃 포맷 맞추던 기억이 있을 거야. 서버로 치면 패킷 하나 처리할 때마다 "이 유저 락은 뭐고, DB 트랜잭션 옵션은 뭐고, 라우팅 테이블은 뭐고, 권한 검사는 뭐고"를 매번 새로 조립하는 느낌이지.</p>
 <p>한두 번이면 괜찮아. 그런데 렌더링은 한 프레임에 드로우가 수천 번 나와. 16.6ms 안에 끝내야 하는데, 드로우마다 GPU 설정을 낱개로 검증하고 조합하면 그 자체가 병목이 돼. 처음 보는 조합이면 드라이버가 "이 셰이더랑 이 렌더타깃 포맷이랑 이 뎁스 상태가 같이 되는지"를 만들고 검사하느라 40ms, 80ms 히치를 만들 수도 있어.</p>
@@ -97,6 +101,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 구조체는 <code>BoundShaderState</code>로 "누가 요리하나"를 적고 → <code>BlendState</code>, <code>RasterizerState</code>, <code>DepthStencilState</code>로 "어떤 조리 규칙인가"를 적고 → <code>RenderTargetFormats</code>, <code>DepthStencilTargetFormat</code>, <code>NumSamples</code>로 "어떤 접시에 담나"를 적어. 이어 읽으면 "GPU 조리법 카드 한 장"이야. 아까는 이름이 길었는데 이제 묶음으로 보이지?</div>
 <p>여기서 중요한 건 셰이더만 PSO가 아니라는 거야. 셰이더는 카드의 큰 항목일 뿐이고, 렌더타깃 포맷도 카드에 들어가고, 뎁스 포맷도 들어가고, 샘플 수도 들어가. 그러니까 "같은 픽셀 셰이더인데 렌더타깃 포맷이 다르면 같은 PSO인가?"라고 물으면 답은 보통 아니야. 접시가 바뀌면 주방 카드도 바뀐다.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 해시 이름표</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 카드 보관함에서 찾을 때 조리법 전체를 줄줄이 비교하면 돼. 셰이더, 블렌드, 뎁스, 접시 포맷을 하나씩 대조하는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 카드가 수천 장이고 드로우도 수천 번이면, 요리보다 카드 찾기가 길어져. "7번 카드 있어?" 대신 매번 긴 조리법을 읽는 셈이지.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 긴 조리법을 짧은 숫자 이름표로 접어두는 거야. 값을 잘게 섞어 만든 이름표라서 <strong>해시</strong>고, 보관함에서 빨리 찾는 손잡이가 돼.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 긴 정보를 짧은 이름표로 접기</strong><br>&bull;&nbsp;<strong>대표 이름표</strong>: 긴 설명을 짧은 번호 하나로 대신 부르면 찾고 비교하기가 빨라진다.<br>&bull;&nbsp;<strong>차례로 섞기</strong>: 여러 항목의 번호를 하나씩 섞어 넣으면 전체 조합을 대표하는 번호가 된다.<br>&bull;&nbsp;<strong>다르면 빠르게 거르기</strong>: 번호가 다르면 같은 물건이 아니라고 빨리 판단할 수 있다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>2. 카드 이름표는 해시로 만든다</h2>
 <p>카드를 보관하려면 이름표가 필요해. 언리얼은 PSO 주문서의 핵심 항목들을 해시로 섞어 캐시 키를 만든다. 주방 카드 보관함에서 "이 조합 카드 이미 있나?"를 빨리 찾으려면 긴 설명 대신 짧은 번호가 필요하잖아.</p>
@@ -137,6 +142,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>BoundShaderState</code> 해시에서 시작해서 → 블렌드, 래스터라이저, 뎁스, 렌더타깃 포맷을 하나씩 <code>HashCombineFast</code>로 섞고 → 마지막에 <code>return Hash</code>로 카드 번호를 만든다. 긴 조리법을 매번 비교하지 않으려고 "7번 카드" 번호표를 붙이는 거지.</div>
 <p>이 코드가 말해주는 게 있어. PSO는 성능용 캐시이면서 동시에 정확성용 키야. 상태 하나라도 바뀌면 해시가 달라질 수 있고, 해시가 달라지면 보관함에서 다른 카드를 찾게 돼. GPU 입장에서는 셰이더뿐 아니라 출력 포맷, 샘플 수, 뎁스 규칙까지 같이 맞아야 한다.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — PSO 캐시/프리캐시</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 주문이 들어온 순간 카드가 없으면 그때 새로 쓰고 코팅하면 돼. 한두 장이면 주방이 잠깐 멈춰도 티가 안 나.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 전투 첫 폭발처럼 처음 보는 조합이 몰리면 새 카드를 한꺼번에 굽게 돼. 앞에서 말한 40ms, 80ms 히치가 여기서 튀어나와.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 이미 만든 카드는 <strong>캐시</strong> 보관함에 넣고, 올 것 같은 카드는 미리 굽는 <strong>프리캐시</strong>가 필요해. 피크 시간에 조리법을 쓰지 말고, 준비 시간에 카드부터 만들어두자는 거야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 한 번 만든 것은 보관해 다시 쓰기</strong><br>&bull;&nbsp;<strong>보관함</strong>: 한 번 만든 물건을 바로 버리지 않고 이름표를 붙여 넣어두는 곳이다.<br>&bull;&nbsp;<strong>다시 쓰기</strong>: 같은 요청이 오면 새로 만들지 않고 보관함에서 꺼내면 빠르다.<br>&bull;&nbsp;<strong>미리 준비</strong>: 바쁜 순간이 오기 전에 예상되는 물건을 만들어 두면 기다림이 줄어든다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>3. 카드 보관함에서 찾고, 없으면 만든다</h2>
 <p>이제 주문서가 들어왔어. 언리얼은 먼저 보관함을 뒤져. 이미 카드가 있으면 그걸 쓰고, 없으면 새 카드를 만든다. 여기가 런타임 히치가 생길 수 있는 지점이라 중요해.</p>
@@ -265,6 +271,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>CmdList-&gt;Execute()</code>가 주문표에 적어둔 명령을 재생하고 → 그 실행 중에 PSO 설정 명령도 RHI 컨텍스트로 내려가고 → 끝나면 <code>CmdList-&gt;Contexts</code>에서 사용한 컨텍스트를 꺼내 다음 번역 작업에 재사용한다. 웨이터가 주문표를 주방에 전달하고, 주방 라인 담당자를 다음 주문에도 이어 쓰는 흐름이야.</div>
 <p>이 장의 핵심은 여기야. <code>RHICommandList.h</code>에서는 PSO 설정을 명령으로 쌓고, <code>RHICommandList.cpp</code>에서는 쌓인 명령 전체를 재생해. PSO는 따로 떠다니는 개념이 아니라, RHI 명령 재생 흐름 안에서 "GPU 상태 카드를 꽂는 명령"으로 살아 있어.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — D3D12 SetPipelineState</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 드로우할 때마다 셰이더, 블렌드, 뎁스 같은 상태를 낱개로 다시 꽂으면 돼. 주방 라인을 주문마다 전부 새로 세팅하는 방식이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 같은 카드로 100번 그릴 때도 매번 전부 다시 꽂으면 손이 너무 많이 가. 반대로 Draw/Dispatch가 바뀌는데 카드가 안 맞으면 엉뚱한 라인 세팅으로 요리하는 꼴이 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 지금 꽂힌 카드와 다음 카드를 비교해서, 달라질 때만 파이프라인 상태를 새로 <strong>Set</strong>하는 호출이 필요해. 그 끝단 명령이 D3D12의 <code>SetPipelineState</code>야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 현재 것과 다음 것을 비교하기</strong><br>&bull;&nbsp;<strong>현재 것</strong>: 지금 꽂혀 있거나 쓰이고 있는 물건이다.<br>&bull;&nbsp;<strong>다음 것</strong>: 이번에 새로 쓰려는 물건이다.<br>&bull;&nbsp;<strong>같으면 유지, 다르면 교체</strong>: 둘이 같으면 그대로 두고, 다를 때만 바꾸면 손이 덜 간다.<br>이게 잡히면 아래 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>6. D3D12 끝단에서는 진짜 SetPipelineState가 호출된다</h2>
 <p>마지막으로 주방 라인 끝을 보자. RHI가 D3D12 백엔드로 내려가면, 상태 캐시는 현재 꽂힌 D3D12 PSO와 새로 꽂을 PSO를 비교한다. 다르면 진짜 DirectX 명령 리스트에 <code>SetPipelineState</code>를 호출한다.</p>

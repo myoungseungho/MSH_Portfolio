@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -163,6 +166,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>BeginRenderView</code>로 빛 카메라를 켜고 → 패스 파라미터를 만들고 → 그림자 뷰 유니폼을 꽂고 → <code>ShadowDepthTexture</code>를 <code>DepthStencil</code>에 묶는다. 손전등 CCTV 사진에 색을 칠하는 게 아니라 거리 숫자만 적는 장면이야.</div>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 빛의 지도 좌표 변환</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 섀도맵을 만들었으면 화면 픽셀이 그 지도 몇 칸인지 바로 보면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 카메라는 관중석에서 보고, 빛은 선생님 손전등 자리에서 봐. 화면의 학생 A가 CCTV 사진의 어느 UV 칸인지 모르면 거리표를 펼쳐도 못 찾아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 화면 픽셀 위치를 빛이 쓰던 기준자와 같은 좌표로 옮기는 변환이 필요해. 그 기준자 묶음이 <code>GetScreenToShadowMatrix</code>가 만드는 그림자 좌표 행렬이야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 같은 자리도 보는 사람마다 다르게 부른다</strong><br>&bull;&nbsp;<strong>기준이 다르면 부르는 법이 다르다</strong>: 교실 한 자리를 나는 "내 왼쪽 두 번째"라 부르고, 맞은편 친구는 "내 오른쪽 두 번째"라 불러. 같은 자리인데 말하는 방법이 달라.<br>&bull;&nbsp;<strong>옮겨 적기</strong>: 그래서 남의 기준으로 말하려면 내 기준 위치를 그 사람 기준으로 바꿔 적어야 해.<br>&bull;&nbsp;<strong>한 방법으로 통째로</strong>: "내 기준 위치 → 상대 기준 위치"로 바꾸는 정해진 셈틀이 하나 있으면, 어떤 점이든 같은 방법으로 옮길 수 있다.<br>이게 잡히면 아래 "화면 픽셀을 빛의 기준으로 옮긴다" 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>4. 화면 픽셀을 빛의 지도 좌표로 옮긴다</h2>
 <p>거리표를 만들었으니 이제 화면 픽셀이 그 표의 어느 칸인지 알아야 해.</p>
@@ -222,6 +226,7 @@ a.xref:hover { background:#e1bee7; }
 <p>최종 색을 여기서 바로 칠하는 게 아니라, "이 픽셀이 빛을 얼마나 받을 수 있나"라는 값을 만든다.</p>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — PCF</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 한 픽셀마다 섀도맵 한 칸만 보고, 앞이면 빛·뒤면 그림자라고 딱 자르면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 거리표 칸은 네모인데 실제 그림자 경계는 비스듬해. 한 칸 차이로 0과 1이 갈리면 발밑 그림자가 톱니처럼 덜컥거려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 주변 칸을 여러 번 보고 "빛 쪽에 더 가까운 칸이 몇 퍼센트인지"를 평균내야 해. 그래서 <strong>Percentage Closer Filtering</strong>, PCF야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 여러 번 재서 평균 내면 경계가 부드러워진다</strong><br>&bull;&nbsp;<strong>한 번만 재면 딱 갈린다</strong>: "넘었나 안 넘었나"를 한 지점에서 한 번만 물으면 답이 예/아니오 둘뿐이라, 경계가 톱니처럼 딱딱해진다.<br>&bull;&nbsp;<strong>평균</strong>: 여러 개를 재서 다 더한 뒤 개수로 나누면 중간값이 나온다. 열 번 물어 일곱 번 통과면 0.7처럼.<br>&bull;&nbsp;<strong>부드러움</strong>: 예/아니오 대신 "몇 퍼센트"가 나오니, 경계가 흐릿하게 이어져 자연스러워진다.<br>이게 잡히면 아래 "주변을 여러 번 비교해 평균낸다" 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>6. 셰이더의 진짜 판정 — SampleDepth와 SceneDepth</h2>
 <p>마지막은 셰이더 안이야.</p>

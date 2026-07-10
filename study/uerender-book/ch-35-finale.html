@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -65,12 +68,14 @@ a.xref:hover { background:#e1bee7; }
 <p>촬영표 등록 = <code>FSceneRenderBuilder</code>에 렌더러 등록 카메라/배우 확인 = <code>InitViews</code>와 visibility 바닥 표시 = <code>PrePass</code> 의상표 기록 = <code>BasePass</code>와 <code>GBuffer</code> 조명 켜기 = <code>RenderLights</code> 색보정 = <code>AddPostProcessingPasses</code> 장비 실행 = <code>FRDGBuilder::Execute</code></p>
 <p>이번 장에서는 새 지식을 많이 넣지 않는다. 대신 앞에서 배운 조각들을 이 촬영장 마감표에 꽂아 넣을 거야.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 한 프레임 트리</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 화면 한 장을 그냥 "그린다" 한 단어로 봐도 돼. 감독이 카메라 켜고, 배우 세우고, 조명 켜고, 끝.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 프레임이 33ms로 튀면 어디가 막혔는지 몰라. 배우가 많은 건지, 조명이 많은 건지, 색보정실이 느린 건지 한 덩어리라서 못 찾아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 하루 촬영을 부서별 가지로 쪼갠 지도야. 그래서 <strong>트리</strong>처럼 입구에서 가지가 갈라지고, 마지막에 다시 장비 실행으로 모인다고 보는 거야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 가지가 갈라지는 그림(조직도) 읽기</strong><br>&bull;&nbsp;<strong>위에서 아래로 갈라진다</strong>: 조직도나 가계도처럼, 맨 위에 하나가 있고 아래로 내려갈수록 가지가 여러 개로 갈라져. 아래로 갈수록 더 잘게 나뉜 세부 일이야.<br>&bull;&nbsp;<strong>들여쓰기가 깊을수록 하위</strong>: 글로 그린 가지 그림에서는 안쪽으로 더 들어가(들여쓰기) 적힌 줄이 바로 위 줄의 하위 가지야. 폴더 안의 폴더처럼.<br>이게 잡히면 아래 한 프레임을 부서별 가지로 쪼갠 트리 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>1. 00장 트리로 돌아가기</h2>
 <p>먼저 전체 트리를 다시 보자. 각 줄은 이미 앞 챕터에서 한 번 이상 본 부서야.</p>
 <p>한 프레임 │ ├─ 입구: 게임 쪽이 렌더러를 촬영표에 올림 │  └─ <code>BeginRenderingViewFamilies</code> → <code>FSceneRenderBuilder</code> │ ├─ 렌더러: 이번 카메라 묶음을 실제 패스로 쪼갬 │  └─ <code>FDeferredShadingSceneRenderer::Render</code> │ ├─ 무엇을 그릴지 고름 │  └─ <code>BeginInitViews</code> / visibility task / mesh pass setup │ ├─ 실제로 그림 │  ├─ <code>PrePass</code> │  ├─ <code>BasePass</code> │  ├─ <code>RenderLights</code> │  ├─ translucency / Nanite / Lumen / shadow 계열 │  └─ <code>AddPostProcessingPasses</code> │ └─ 실행과 하드웨어 └─ <code>FRDGBuilder::Execute</code> → RHI command list → D3D12RHI</p>
 <p>서버식으로 말하면 이거야. 패킷 하나가 들어와서 곧장 캐릭터 HP를 깎지 않듯이, 화면 한 장도 곧장 <code>DrawIndexedInstanced</code>로 가지 않아. 중간에 소유권, 순서, 버퍼 수명, 병렬 작업, 플랫폼 차이를 처리하는 층이 있어.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — FSceneRenderBuilder(촬영표)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 렌더 요청이 오면 그 자리에서 바로 <code>RenderViewFamily_RenderThread</code>를 불러서 쭉 그리면 단순해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 뷰 패밀리가 여러 개고, 히트 프록시 같은 특수 촬영도 섞이면 "누가 오늘 촬영할 감독인지"를 한곳에 모아야 해. 안 그러면 순서표가 흩어져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 이번 프레임에 돌 렌더러들을 먼저 촬영표에 올리는 상자야. 이름 그대로 Scene Render를 <strong>Build</strong>하는 사람, <code>FSceneRenderBuilder</code>야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 바로 안 하고 할 일을 적어두었다가 나중에 실행</strong><br>&bull;&nbsp;<strong>적어두기</strong>: 마트에서 물건을 볼 때마다 사는 게 아니라, 살 것을 목록에 적어두었다가 나중에 한꺼번에 계산하지. 일을 "지금 당장"이 아니라 "목록에 등록"만 해둘 수 있어.<br>&bull;&nbsp;<strong>나중에 한꺼번에</strong>: 목록이 다 차면 그제서야 순서대로 실제로 실행해. 그래서 등록하는 순간엔 아직 아무 일도 벌어지지 않은 거야.<br>이게 잡히면 아래 렌더러를 촬영표에 등록만 하고 나중에 실행한다는 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>2. 입구 — 촬영표에 감독을 올린다</h2>
 <p>프레임의 시작점은 "이 뷰 패밀리를 렌더링해"라는 요청이야. 여기서 이미 만들어진 <code>SceneRenderer</code>들을 <code>FSceneRenderBuilder</code>에 등록한다. 등록된 람다는 나중에 렌더 스레드에서 실행돼.</p>

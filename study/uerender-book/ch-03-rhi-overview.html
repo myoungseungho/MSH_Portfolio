@@ -31,6 +31,9 @@ a.xref:hover { background:#e1bee7; }
 .note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
 .note.origin code { background:#b2ebf2; color:#00565e; }
 .note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
 .compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
@@ -50,7 +53,8 @@ a.xref:hover { background:#e1bee7; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
 </style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>RHI — CPU가 GPU에게 말 거는 법</h1><p>언리얼 렌더링 · 03 / 36</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "언리얼이 D3D12/Vulkan 차이를 어디서 가리고, CPU가 어떤 공용 창구로 GPU에게 말 거는지"가 잡힌다.</div>
-<hr></div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 같은 부탁을 여러 말로 해야 할 때</strong><br>&bull;&nbsp;<strong>같은 부탁</strong>: "문 열어줘"라는 일은 같아도 집, 차, 사물함마다 여는 방법과 부르는 말이 다를 수 있다.<br>&bull;&nbsp;<strong>중간 사람</strong>: 부탁하는 사람은 쉬운 말로 한 번만 말하고, 중간 사람이 상대에게 맞는 말로 바꿔 전한다.<br>&bull;&nbsp;<strong>하나로 모으기</strong>: 종류가 늘어날수록 모두에게 직접 말하기보다 한곳에 맡기는 편이 덜 헷갈린다.<br>이게 잡히면 아래 RHI 설명이 얹힌다.</div></div>
 <div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p>네가 서버를 짜봤으면 이미 비슷한 구조를 알아.</p>
 <p>게임 로직은 "이 유저에게 이동 패킷 보내"라고 말하지, 매번 IOCP의 <code>WSASend</code> 세부 옵션을 직접 만지면 안 돼.</p>
@@ -83,6 +87,7 @@ a.xref:hover { background:#e1bee7; }
 <div class="note"><strong>소스 위치</strong> (아래 코드는 전부 이 클론의 실제 파일에서 그대로 뽑음)<br>&bull;&nbsp;공통 구현: <code>Engine/Source/Runtime/RHI/Private/DynamicRHI.cpp</code><br>&bull;&nbsp;공통 인터페이스: <code>Engine/Source/Runtime/RHI/Public/DynamicRHI.h</code><br>&bull;&nbsp;Windows 백엔드 선택: <code>Engine/Source/Runtime/RHI/Private/Windows/WindowsDynamicRHI.cpp</code></div>
 <hr>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — <code>FDynamicRHI</code></strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 공용 창구가 있다면 렌더러가 "열어", "닫아", "셰이더 만들어" 같은 말을 아무렇게나 던져도 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: D3D12 직원은 <code>Init</code>이 있는데 Vulkan 직원은 이름이 다르면, 홀 직원이 매번 "너는 뭐라고 불러?"부터 물어야 해. 창구가 3개만 돼도 호출 규칙이 엉켜.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 모든 직원이 반드시 지킬 메뉴판이 필요해. 그 설계도가 <code>FDynamicRHI</code>야. <code>virtual</code> 함수들은 "뒤 직원이 자기 방식으로 채워라"라는 빈칸이야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 약속표와 실제 담당자</strong><br>&bull;&nbsp;<strong>약속표</strong>: 여러 사람이 함께 일하려면 "열기, 닫기, 이름 말하기"처럼 꼭 해야 할 일을 같은 이름으로 적어둔다.<br>&bull;&nbsp;<strong>실제 담당자</strong>: 약속표에는 빈칸만 있고, 각 담당자가 자기 방식대로 빈칸을 채운다.<br>&bull;&nbsp;<strong>부르는 쪽</strong>: 부탁하는 사람은 담당자가 누구인지 몰라도 약속표에 적힌 이름으로 부를 수 있다.<br>이게 잡히면 아래 <code>FDynamicRHI</code> 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>1. RHI 창구의 모양 — <code>FDynamicRHI</code></h2>
 <p>먼저 공용 창구의 간판부터 보자.</p>
@@ -115,6 +120,7 @@ public:
 <p>게임 로직은 <code>Send()</code>만 부른다.</p>
 <p>RHI도 렌더러에게 그런 공용 언어를 준다.</p>
 <div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — <code>GDynamicRHI</code></strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 창구 설계도가 있어도, 렌더러가 매번 "오늘은 D3D12 창구? Vulkan 창구?"를 찾아다니면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: BasePass, Shadow, Lumen 같은 코드가 전부 같은 질문을 반복하면, 공항 안내판이 수백 장으로 흩어진 꼴이야. 하나만 바뀌어도 전부 확인해야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "오늘 열린 창구는 여기야"라고 가리키는 전역 손잡이 하나가 필요해. 그게 <code>GDynamicRHI</code>야. 렌더러는 그 손잡이만 잡고 말하면 돼.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 손잡이와 빈자리</strong><br>&bull;&nbsp;<strong>손잡이</strong>: 큰 물건을 직접 들고 다니지 않고, 어디 있는지 알려주는 표지나 끈만 잡을 수 있다.<br>&bull;&nbsp;<strong>빈자리</strong>: 아직 물건이 정해지지 않았으면 손잡이가 아무것도 가리키지 않을 수 있다.<br>&bull;&nbsp;<strong>하나만 보기</strong>: 여러 사람이 같은 손잡이를 보면, 손잡이가 바뀔 때 모두 새 대상을 보게 된다.<br>이게 잡히면 아래 <code>GDynamicRHI</code> 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>2. 창구 손잡이 — <code>GDynamicRHI</code></h2>
 <p>공항에는 여러 항공사가 있어도 승객은 안내판에 적힌 "오늘 여기로 오세요" 창구 하나를 찾아가.</p>
@@ -233,6 +239,7 @@ inline FMeshShaderRHIRef RHICreateMeshShader(TArrayView&lt;const uint8&gt; Code,
 <p>BasePass, Shadow, Lumen 같은 상위 렌더링 코드는 "픽셀 셰이더 필요해"라고만 말하면 돼.</p>
 <p>D3D12의 루트 시그니처나 Vulkan의 디스크립터 셋 같은 디테일은 백엔드 쪽으로 내려간다.</p>
 <div class="note">실제 D3D12 백엔드 안쪽은 → <a class="xref" href="ch-05-d3d12-backend.html">d3d12-backend</a></div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 끝내기 전 남은 일 비우기</strong><br>&bull;&nbsp;<strong>남은 줄</strong>: 가게 문을 닫기 전에 기다리던 손님을 먼저 처리해야 한다.<br>&bull;&nbsp;<strong>빌린 물건</strong>: 빌린 도구는 주인이 아직 쓸 때 버리면 사고가 나니, 순서대로 반납해야 한다.<br>&bull;&nbsp;<strong>빈 표시</strong>: 다 치운 뒤에는 "이제 없음"이라고 표시해야 다음 사람이 헷갈리지 않는다.<br>이게 잡히면 아래 <code>RHIExit</code> 설명이 얹힌다.</div>
 </div>
 <div class="conversation"><h2>7. 열었으면 닫는다 — <code>RHIExit</code></h2>
 <p>창구는 시작할 때만 중요한 게 아니야.</p>
