@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -71,6 +74,7 @@ void OnRep_Health();   // Health가 도착하면 자동으로 불림</div>
 <ul><li><code>Runtime/Engine/Private/RepLayout.cpp</code> — 값을 받아 갱신하고, 바뀌었으면 "나중에 부를 목록"에 등록하고, 나중에 실제로 콜백을 부름.</li><li><code>Runtime/Engine/Private/DataReplication.cpp</code> — 오브젝트 하나 단위로 "이제 다 받았으니 콜백 돌려" 하고 지휘함.</li></ul>
 <div class="note">값이 어떻게 여기까지 도착하는지(번치 수신 → 프로퍼티 역직렬화)가 안 그려지면 → <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a>, <a class="xref" href="ch-15-replayout.html">replayout</a> 먼저 보고 와.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 지연 콜백(받는 즉시 안 부름)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: HP가 새 값으로 도착하는 그 자리에서 바로 <code>OnRep_Health()</code>를 불러 UI를 갱신하면 제일 빠르잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 서버가 HP·좌표·버프를 <strong>한 봉투에</strong> 같이 보냈어. HP를 읽자마자 콜백을 부르면, 콜백이 "HP랑 좌표를 같이 보고 그리려" 할 때 좌표는 아직 <strong>옛날 값</strong>이야. 반쪽짜리 데이터로 화면을 그려버려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 받는 도중엔 "이 초인종 눌러야 함"이라고 <strong>메모만</strong> 하고, 봉투를 다 반영한 <strong>안전한 지점</strong>에서 메모지를 몰아 울리는 것. → 이게 <strong>지연 콜백</strong>이야. 조선 서버가 파싱은 워커가, 로직은 완성된 상태에서 몰아 처리하는 그 감각과 똑같아.</div>
 </div>
 <div class="conversation"><h2>핵심 뒤틀림: 받는 즉시 안 부른다</h2>
 <p>여기서 초보가 제일 많이 헷갈리는 지점이 하나 있어. 미리 맞춰봐.</p>
@@ -118,6 +122,7 @@ void OnRep_Health();   // Health가 도착하면 자동으로 불림</div>
 <p>핵심은 이 함수 어디에도 <code>OnRep_Health()</code>를 부르는 코드가 없다는 거야. <strong>오직 메모만 해.</strong> 초인종을 예약만 한 거지.</p>
 <div class="note">배열/FastArray 같은 커스텀 델타 경로는 조금 다른 문(門)으로 메모해. <code>FObjectReplicator::QueuePropertyRepNotify</code>(<code>DataReplication.cpp:2709</code>)가 <code>CPF_RepNotify</code> 없으면 바로 return하고(<code>:2717</code>), 있으면 똑같이 <code>ReceivingRepState-&gt;RepNotifies.AddUnique</code>(<code>:2730</code>). 원리는 같아 — "받는 중엔 메모만."</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 이전 값 인자(OldValue)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 초인종이 울리면 콜백은 새로 도착한 값(멤버에 이미 들어있음)만 보면 되잖아. HP가 80이다, 끝.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 콜백이 하고 싶은 일이 "<strong>얼마나</strong> 깎였나"일 때가 많아. 피가 100→80이면 데미지 20을 빨간 숫자로 띄우고 싶은데, 새 값 80만으론 변화량을 못 구해. 옛날 값이 이미 새 값에 덮여 사라졌거든.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 값을 덮어쓰기 <strong>전에</strong> 직전 값을 그림자 버퍼에 백업해뒀다가, 콜백에 인자로 넘겨주는 것. → 이게 <code>OnRep_Health(float OldHealth)</code>의 <code>OldHealth</code>야. 새 값 − 옛 값으로 변화량을 계산할 수 있게.</div>
 </div>
 <div class="conversation"><h2>(B) 다 받으면 초인종 울리기</h2>
 <p>번치를 다 받으면 수신 마무리 함수가 "이제 콜백 돌려" 하고 방아쇠를 당겨.</p>

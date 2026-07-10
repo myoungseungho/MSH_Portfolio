@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -64,6 +67,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note">핵심 직관 하나 먼저 박아두자.<br><strong>매 프레임 = 받기 펌프 1번 + 보내기 펌프 1번.</strong> 이 두 펌프를 실제로 구현한 함수가 <code>TickDispatch</code>(받기)와 <code>TickFlush</code>(보내기)야. 이 챕터의 주인공.</div>
 <hr>
 <p>지금부터 진짜 언리얼 코드가 나와. <strong>겁먹지 마</strong> — 낯선 기호는 코드 바로 아래 🔤 상자에서 하나씩 풀어줄게. 통째로 외우는 게 아니라 "아, 이게 이거구나"만 잡으면 돼.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 느슨한 결합(델리게이트)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 월드가 매 프레임 <code>netDriver-&gt;TickDispatch()</code>를 직접 부르면 간단하잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그러면 월드 코드가 NetDriver라는 존재를 <strong>속속들이 알아야</strong> 해. 네트워크가 없는 모드도 있고, 드라이버가 여러 개일 수도 있는데, 월드가 걔들을 일일이 이름으로 부르면 서로 <strong>꽉 묶여서</strong> 갈아끼우기 힘들어져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 월드는 그냥 <strong>"수신 단계 시작!"이라고 방송만</strong> 하고, 관심 있는 NetDriver가 <strong>알아서 귀를 대고</strong> 있자. → 이 방송-구독 장치가 <strong>멀티캐스트 델리게이트</strong>야. 월드는 누가 듣는지 몰라도 돼.</div>
 </div>
 <div class="conversation"><h2>1. 그런데 월드는 NetDriver를 어떻게 부를까? — 델리게이트 한 방</h2>
 <p>여기서 초보가 처음 넘어져. <code>UWorld::Tick</code>이 매 프레임 도는 건 알겠는데, <strong>월드가 NetDriver를 직접 부르지 않아.</strong></p>
@@ -123,6 +127,7 @@ a.xref:hover { background:#bbdefb; }
 <ol><li><strong><code>TGuardValue&lt;bool&gt; GuardInNetTick(bInTick, true)</code></strong> — 틱 실행 중임을 표시하는 재진입 방지 플래그. 스코프 들어올 때 <code>bInTick</code>을 <code>true</code>로 켜고, 함수 벗어날 때 <strong>자동으로 원래 값으로 되돌려</strong>. 조선 서버로 치면 <code>m_bInTick = true; ... m_bInTick = false;</code>를 손으로 짝 맞추던 걸, C++ RAII가 자동화해준 거야. <code>return</code>이 중간에 어디서 튀든 원복이 보장돼.</li><li><strong>Iris <code>PreReceiveUpdate</code> / <code>PostReceiveUpdate</code>로 감싸기</strong> — 새 리플리케이션 시스템(Iris)이 켜져 있으면 수신 전후를 감싼다. Iris 얘긴 여기선 넘어가 → <a class="xref" href="ch-28-iris.html">iris</a></li></ol>
 <p>그리고 <strong>진짜 일</strong>은 <code>TickDispatch(DeltaSeconds)</code> 한 줄로 내려가.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 틱 예산과 히치 감지</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 받기 펌프는 그냥 도착한 패킷을 퍼올리기만 하면 되지, 시간 같은 걸 왜 재?<br>&bull;&nbsp;<strong>그런데 문제</strong>: 어딘가 블로킹 콜이 물려서 프레임 사이가 <strong>5초씩 벌어지면</strong>, 클라 입장에선 연결이 끊긴 것처럼 보여. 근데 진짜 끊긴 건지, 서버가 잠깐 <strong>얼어붙은</strong> 건지 나중에 구분이 안 돼 — 로그만 봐선 둘 다 "타임아웃"이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 매 틱마다 지난 프레임과의 시간 차를 재서, 임계(5초)를 넘으면 "이번 프레임 히치났다"고 <strong>표시</strong>해두자. → 프레임에 시간 예산을 두고 넘침을 감지하는 이 습관이 나중에 "네트워크 문제냐 서버 문제냐"를 갈라줘.</div>
 </div>
 <div class="conversation"><h2>3. 받기 펌프 <code>TickDispatch</code> — 근데 소켓을 안 읽는다고?</h2>
 <p>이제 3층 맨 아래 <code>TickDispatch</code>. 이름만 보면 "패킷 퍼올리는(dispatch) 데니까 여기서 <code>recvfrom</code> 돌리겠지" 싶지? <strong>반전이야.</strong> 엔진 베이스 <code>UNetDriver::TickDispatch</code>는 <strong>소켓을 직접 안 읽어.</strong></p>
@@ -171,6 +176,7 @@ a.xref:hover { background:#bbdefb; }
 <p>즉 베이스 <code>TickDispatch</code>의 진짜 역할은 "<strong>받기 펌프의 뼈대/관리</strong>"고, "<strong>펌프질 그 자체</strong>"는 서브클래스가 끼워 넣는 구조야. 초보가 제일 헷갈리는 지점이라 크게 박아둔다.</p>
 <p>받고 나면 <code>BroadcastPostTickDispatch()</code> → <code>UNetDriver::PostTickDispatch()</code>(<code>NetDriver.cpp:2762</code>)로 수신 후처리(대기 중이던 RPC flush 등)를 하고 받기 단계 끝.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 프레임 끝 상위 루프(전원 배칭 flush)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 커넥션마다 보낼 게 생길 때마다 그 자리에서 바로 소켓에 내보내면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그러면 한 프레임 안에서도 커넥션 여기저기가 제각각 소켓을 때려 — 누구는 이번 프레임 결과를, 누구는 반쯤 된 결과를 받아. <code>send()</code> 횟수도 헛되이 늘고, 접속자마다 <strong>다른 박자</strong>로 패킷이 나가.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 짐 쌓기(액터 복제)를 프레임 앞에서 다 끝낸 뒤, 프레임 <strong>끝에서 한 번</strong> <code>ClientConnections</code>를 통째로 돌며 전원에게 이번 프레임 몫을 flush하자. → 이 "모든 커넥션 한 바퀴"가 상위 루프야. 조선 서버에서 Nagle 끄고 프레임 단위로 묶어 보내는 그 배칭이랑 똑같은 정신.</div>
 </div>
 <div class="conversation"><h2>4. 보내기 펌프 <code>TickFlush</code> — "모든 NetConnection을 도는 상위 루프"</h2>
 <p>프레임 후반. 이번 프레임에 쌓인 액터 변화를 복제하고, 각 커넥션에 쌓인 번치를 패킷으로 묶어 내보내는 단계. 진입은 <code>InternalTickFlush</code>(<code>NetDriver.cpp:2371</code>, 여기도 <code>bInTick</code> 가드 래핑) → <code>TickFlush</code>(<code>NetDriver.cpp:1113</code>)야.</p>

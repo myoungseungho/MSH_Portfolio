@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -63,6 +66,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그리고 이 봉투 담기·봉하기를 실제로 하는 함수가 바로 이번 챕터 주인공, <strong><code>UActorChannel::ReplicateActor()</code></strong> 야.</p>
 <div class="note">앞 챕터(<a class="xref" href="ch-12-server-replicate-actors.html">server-replicate-actors</a>)에서 NetDriver가 "이번 프레임에 누구를 누구한테 보낼지" 정하는 것까지 봤지. 거기서 "이 액터 보내!" 결정이 내려지면, 그 액터 전용 채널(ActorChannel)의 <code>ReplicateActor()</code>가 호출돼. 이번 챕터는 그 <strong>한 마리 안쪽</strong>을 들여다보는 거야.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 액터 채널(ActorChannel)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 서버-클라 사이 연결은 하나야. 그 한 통로로 모든 액터(몬스터, 문짝, 아이템…)의 소식을 그냥 섞어서 흘려보내면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 몬스터 42번은 "지난번에 HP 어디까지 보냈지?", 문짝 7번은 "얘는 처음 보내는 거였나?"처럼 <strong>액터마다 따로 기억할 상태</strong>가 있어. 한 통로에 다 섞으면 누구 몫인지, 어디까지 보냈는지가 뒤엉켜.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 액터 한 마리마다 전용 <strong>우편 창구</strong>를 하나씩 두고, 그 안에서 걔의 복제 상태를 따로 관리하는 것. → 이게 <strong>액터 채널(UActorChannel)</strong>이야. 창구마다 봉투(Bunch)를 자기 몫만 싼다.</div>
 </div>
 <div class="conversation"><h2>개념 → 코드 연결: 봉투 하나 = 채널 하나</h2>
 <p>언리얼은 액터 한 마리마다 <strong>채널(UActorChannel)</strong> 을 하나씩 붙여. 채널은 "이 액터 전용 우편 창구"라고 보면 돼. 그 창구에서 매 프레임 봉투(Bunch)를 만들어 보내는 게 <code>ReplicateActor()</code>.</p>
@@ -71,6 +75,7 @@ a.xref:hover { background:#bbdefb; }
 <p>이제 진짜 코드로 들어가자. 낮은 계단으로.</p>
 <p>지금부터 진짜 언리얼 코드가 나와. <strong>겁먹지 마</strong> — 낯선 기호는 바로 아래 🔤 상자에서 초등학생도 읽을 수 있게 풀어줄게. 코드를 외우는 게 아니라 "이 줄이 봉투의 어느 단계구나"만 잡으면 돼.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 재진입 가드(bIsReplicatingActor)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 액터를 복제하라고 하면 그냥 봉투에 값을 차곡차곡 쓰기 시작하면 되잖아. 누가 부르든 바로 시작.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 봉투를 <strong>반쯤 쓰던 도중에</strong> 또 "이 액터 복제해!"가 들어오면?(예: 값 쓰다가 콜백이 실수로 복제를 또 트리거) 반쯤 담긴 봉투에 새 데이터가 끼어들어 봉투가 뒤죽박죽 깨져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "지금 이 액터 복제 중"이라는 팻말 하나를 세워두고, 그게 켜져 있으면 두 번째 진입은 그냥 돌려보내는 것. → 이게 <strong>재진입 가드</strong>야. 조선 서버가 버퍼에 다른 스레드 못 끼어들게 막듯, 단일스레드판 "락"인 셈.</div>
 </div>
 <div class="conversation"><h2>계단 1 — 함수 진입 &amp; "복제 중엔 또 복제 금지"</h2>
 <p><strong>DataChannel.cpp:3568-3576</strong></p>
@@ -167,6 +172,7 @@ a.xref:hover { background:#bbdefb; }
 <p><strong>(2) <code>DoSubObjectReplication(Bunch, RepFlags)</code></strong> — 액터에 딸린 서브오브젝트(컴포넌트, 인벤토리 아이템 등)를 같은 봉투에 이어 담는 분기. 이 안쪽이 계단 5.</p>
 <p><code>|=</code> (OR 대입) 쓰는 거 보여? 프로퍼티가 뭐라도 담겼거나, 서브오브젝트가 뭐라도 담겼으면 <code>bWroteSomethingImportant</code>가 true로 켜져. <strong>하나라도 담기면 봉투를 보낸다</strong>는 뜻.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 콘텐츠 블록(Content Block)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 봉투 하나에 액터 본체 값, 컴포넌트 값, 아이템 값을 그냥 비트로 줄줄이 이어 붙여 보내면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 받는 쪽은 비트가 쭉 붙은 걸 보고 <strong>어디까지가 액터 몫이고 어디부터 컴포넌트 몫인지</strong> 알 길이 없어. 경계를 모르면 값이 밀려서 전부 깨져(조선 서버에서 구조체 바이트 밀리면 다 깨지던 그거랑 똑같아).<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 오브젝트마다 <code>[누구냐(헤더)][몇 비트냐(길이)][실제 데이터]</code>로 자기 몫을 포장하는 규칙. → 이게 <strong>콘텐츠 블록</strong>이야. 받는 쪽은 길이만큼 딱 잘라 읽으면 경계가 정확히 맞는다.</div>
 </div>
 <div class="conversation"><h2>계단 5 — 서브오브젝트는 "콘텐츠 블록"으로 실린다</h2>
 <p><code>DoSubObjectReplication</code>(정의 3960) 안으로 들어가면 서브오브젝트 하나하나가 결국 이 경로를 타:</p>

@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -65,6 +68,7 @@ a.xref:hover { background:#bbdefb; }
 <p>이번 챕터는 그 매뉴얼의 <strong>목차</strong>를 그리는 거다. 각 업무를 실제로 어떤 함수가 맡는지, 그 함수들이 어떤 순서로 손을 잡는지. 세부 구현은 안 판다 — 지도만.</p>
 <div class="note"><strong>소스 위치</strong> (둘 다 이 클론에 실제로 있음, 아래 코드는 전부 그 파일에서 그대로 뽑음)<br>&bull;&nbsp;구현: <code>Engine/Source/Runtime/Engine/Private/NetConnection.cpp</code><br>&bull;&nbsp;헤더: <code>Engine/Source/Runtime/Engine/Classes/Engine/NetConnection.h</code></div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 추상 클래스(순수가상 <code>LowLevelSend</code>)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 제일 단순하겐 <strong>연결 클래스 하나가 소켓질까지 다 하면</strong> 돼. 채널 관리도, Ack 세기도, 실제 <code>send()</code>도 한 클래스 안에 몰아넣는 거지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 전송 수단이 UDP 소켓만 있는 게 아니야. 스팀 소켓, 데모 녹화(파일에 쓰기)도 있어. 그때마다 "채널 관리·Ack·우아한 종료" 같은 <strong>똑같은 코드를 통째로 복붙</strong>하면? 버그 하나 고치려면 세 군데를 다 고쳐야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 공통 업무(웨이터가 하는 일 전부)는 부모 <code>UNetConnection</code>에 몰아두고, <strong>"진짜 어디로 내보내냐"(<code>LowLevelSend</code>)만 빈칸으로 비워</strong> 자식(<code>UIpConnection</code> 등)이 채우게 하는 것. 그 빈칸이 <strong>순수가상</strong>이고, 그래서 부모는 혼자선 못 쓰는 <strong>추상 클래스</strong>가 돼.</div>
 </div>
 <div class="conversation"><h2>1. 먼저 알고 갈 것 — 이건 "추상 클래스"다</h2>
 <p>한 가지 반전부터. <code>UNetConnection</code>은 <strong>혼자서는 소켓에 바이트 한 개도 못 보낸다.</strong></p>
@@ -157,6 +161,7 @@ a.xref:hover { background:#bbdefb; }
 <p>빈 인덱스 하나 얻어서(<code>GetFreeChannelIndex</code>) 채널을 만들고 <code>Channels[]</code> 배열이랑 <code>OpenChannels</code>에 등록해. <strong>인덱스 0번은 항상 컨트롤 채널</strong>로 예약돼 있다는 것만 기억해둬 — 로그인, 종료 사유 같은 제어 메시지가 다 그리로 다녀. 종료 체인에서 다시 나온다.</p>
 <div class="note">채널 종류(컨트롤/액터/보이스)는 → <a class="xref" href="ch-05-channel-types.html">channel-types</a></div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 우아한 종료(GracefulClose)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 손님 배웅은 간단할 것 같지? <strong>그냥 소켓 딱 닫으면</strong> 끝이야. "끊어" 한 방.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 아직 <strong>못 보낸 신뢰(reliable) 데이터가 버퍼에 남아 있으면?</strong> 그게 중요한 아이템 지급 패킷이었으면 그대로 <strong>영영 유실</strong> — 사고야. TCP는 커널이 이걸 챙겨주지만 UE는 UDP 위라 직접 해야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 당장 안 끊고 <strong>"보낼 거 다 보냈다는 확인(Ack)이 올 때까지 기다렸다 끊는"</strong> 절차. 이게 <strong>우아한 종료(GracefulClose)</strong>야. 그냥 <code>Close</code>가 "즉시 끊기"라면, 얘는 "정리 끝나면 끊기" 예약 버튼이지.</div>
 </div>
 <div class="conversation"><h2>4. 종료 — 여기가 이 챕터의 하이라이트</h2>
 <p>웨이터 비유에서 "손님 배웅"인데, UE는 이걸 <strong>두 갈래</strong>로 나눠놨어. 초보가 제일 헷갈리는 부분이라 천천히 가자.</p>

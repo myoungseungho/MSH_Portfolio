@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -63,6 +66,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note">채널이 뭔지, 연결 안에서 채널들이 어떻게 나뉘는지가 흐릿하면 → <a class="xref" href="ch-05-channel-types.html">channel-types</a> 먼저 보고 와. Voice 채널이 Control/Actor 채널이랑 어떻게 다른지 거기서 잡아. 여기선 다시 설명 안 하고 링크로 넘길게 — 안 그러면 챕터마다 같은 얘기 무한 반복이거든.</div>
 <hr>
 <p>지금부터 실제 UE 코드가 나와. <strong>겁먹지 마</strong> — <code>UCLASS</code>, <code>TSharedPtr</code>, <code>-&gt;</code> 같은 기호는 바로 아래 🔤 상자에서 하나씩 풀어줄 거야. 코드를 외우는 게 아니라, 음성 패킷이 어디에 쌓이고 어디로 나가는지만 따라가면 돼.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Voice 채널(음성 전용 통로)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 연결 하나에 채널 여러 개가 흘러(Control·Actor…). 음성도 그냥 아무 채널에 같이 실으면 되잖아?<br>&bull;&nbsp;<strong>그런데 문제</strong>: 음성은 성격이 아주 달라 — 초당 수십 조각씩 쏟아지고, 옛날 소리는 차라리 안 오는 게 나아. 액터 복제("하나도 놓치면 안 돼")랑 같은 줄에 태우면 서로 방해돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 소리만 나르는 <strong>전용 채널</strong>에 자기 큐를 하나 두고, 틱마다 몰아 내보내자. → 이게 <strong><code>UVoiceChannel</code></strong>이야. 채팅 릴레이의 컨베이어 벨트 버전.</div>
 </div>
 <div class="conversation"><h2>1. Voice 채널 = 소리만 싣는 전용 통로</h2>
 <p>먼저 채널 그릇부터. Voice 채널은 <code>UChannel</code>을 상속한 자식인데, 남들과 다른 딱 하나의 살림살이를 들고 있어 — <strong>내보낼 음성 패킷 큐</strong>.</p>
@@ -94,6 +98,7 @@ class UVoiceChannel : public UChannel
 <ul><li><strong>클라 → 서버 (내 목소리 올리기):</strong> 내 마이크에서 뽑힌 음성 패킷을 <code>ServerConnection-&gt;GetVoiceChannel()</code>에 <code>AddVoicePacket</code>. 즉 "서버로 가는 연결"의 Voice 채널에 쌓아. (<code>UNetDriver::ProcessLocalClientPackets</code> — <code>NetDriver.cpp:1592</code>)</li><li><strong>서버 → 다른 클라들 (남의 목소리 뿌리기):</strong> 서버가 릴레이 판정을 거친 뒤, 받을 자격 있는 <strong>각 클라 연결</strong>의 Voice 채널에 같은 패킷을 <code>AddVoicePacket</code>. (<code>ReplicateVoicePacket</code> 안에서 — 다음 절)</li></ul>
 <p><code>TSharedPtr&lt;FVoicePacket&gt;</code>라는 타입에 주목해. <strong>레퍼런스 카운트 공유 포인터</strong>야. 서버가 한 화자의 목소리를 30명한테 뿌린다고 30번 복사하는 게 아니라, 같은 패킷 하나를 여러 채널 큐가 공유 포인터로 나눠 들어. 마지막 큐가 다 쓰고 놓으면 그때 자동 해제. 릴레이할 때 메모리 안 터지게 하는 장치야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 서버 릴레이(음성이 P2P가 아닌 이유)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 음성이면 마이크 켠 사람이 상대한테 <strong>직접</strong> 쏘면(P2P) 제일 빠르잖아. 서버 안 거치고.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그럼 음소거·팀 보이스·거리 제한·차단 목록을 누가 강제해? 클라끼리 직접 쏘면 서버가 규칙을 못 잡아. 우리 서버에서 클라가 <code>SP_*</code>를 제멋대로 만들어 뿌리게 두지 않는 것과 같아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 내 목소리를 <strong>일단 서버로 올리고</strong>, 서버가 "이 사람 목소리 저 사람이 들을 자격 있나" 판정한 뒤 되뿌리자. → 이게 <strong><code>ReplicateVoicePacket</code> 서버 릴레이</strong>야.</div>
 </div>
 <div class="conversation"><h2>3. 서버 릴레이 — 채팅 되뿌리기의 음성판</h2>
 <p>이제 도입에서 말한 "서버 권위 릴레이"의 실물이야. 서버가 한 명의 목소리를 받으면, 전 클라 연결을 훑으면서 되뿌려.</p>
@@ -149,6 +154,7 @@ class UVoiceChannel : public UChannel
 <p><code>StaticChannelIndex</code> — "정적 채널 인덱스"라는 이름 그대로야. Control이 0번에 고정 예약되듯이, Voice도 <strong>연결의 <code>Channels[]</code> 배열에서 자기만의 지정석</strong>을 갖고 있어. 그 자리에 가서 "여기 진짜 Voice 채널 맞아?"(<code>ChName == NAME_Voice</code>) 확인하고 꺼내는 거지. 그래서 릴레이 코드가 매번 채널을 새로 만들 필요 없이, 그냥 지정석에서 꺼내 쓰면 돼.</p>
 <div class="note">이 "정적 채널 = 고정 슬롯" 개념이 낯설면 → <a class="xref" href="ch-05-channel-types.html">channel-types</a>. 거기서 Control=0번 예약을 다뤘고, Voice도 같은 방식의 예약 슬롯이야. 슬롯 번호의 구체 숫자는 <code>BaseEngine.ini</code>의 <code>ChannelDefinitions</code>에 있는데 이 스터디 클론엔 Config 폴더가 안 딸려와서 숫자 자체는 못 짚어 — "고정 슬롯을 갖는다"는 동작만 코드로 확실해.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — unreliable 음성(최신성 우선)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 데이터는 다 확실히 도착시키는 게 좋지(reliable). 빠지면 재전송해서 기어이 보내고.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 음성은 망이 막혔을 때 밀린 조각을 <strong>기어이 다 밀어내면</strong> 옛날 목소리가 뒤늦게 로봇처럼 들려. 1초 밀린 소리는 차라리 안 오는 게 나아. "빠짐없이"가 오히려 독이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 웬만한 음성 조각은 <strong>도착 보장 안 하고</strong>, 망 막히면 그냥 버리는 전송. → 이게 <strong>unreliable</strong>이야. 액터 복제와 정반대 선택 — "옛것 붙들지 말고 지금 것만".</div>
 </div>
 <div class="conversation"><h2>5. 틱마다 큐 비우기 — 핸드셰이크와 신뢰성의 갈림길</h2>
 <p>큐에 쌓기만 해선 소리가 안 흘러. 실제로 네트워크에 밀어내는 건 매 프레임 도는 <code>Tick</code>이야. 여기가 "음성 데이터가 어떻게 다뤄지느냐"의 규칙이 다 박혀 있는 곳이야.</p>

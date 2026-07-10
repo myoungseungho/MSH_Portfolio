@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -69,6 +72,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note">용어 두 개만 미리 깔고 갈게. 자세한 건 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a><br>&bull;&nbsp;<strong>패킷(Packet)</strong>: UDP 한 방으로 나가는 바이트 덩어리 = "봉투".<br>&bull;&nbsp;<strong>번치(Bunch)</strong>: 그 봉투 안에 담기는 논리적 데이터 조각 = "편지". 봉투 하나에 편지 여러 통.</div>
 <hr>
 <p>지금부터 진짜 엔진 경로와 코드가 나온다. <strong>겁먹지 마</strong> — 박스는 길어 보여도 "쌓기 → 기다리기 → Flush" 세 단어만 붙잡고 보면 된다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 번치(Bunch)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 보낼 게 생기면 그냥 바이트로 만들어 소켓에 바로 던지면 되잖아? "좌표 바뀜"이든 "RPC 호출"이든 그때그때 써서 보내.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 봉투(패킷) 하나에 좌표·RPC·채팅이 <strong>뒤죽박죽 섞여</strong> 들어가면, 받는 쪽이 "여기부터 여기까지가 좌표 편지, 그다음이 RPC 편지"를 어떻게 잘라? 게다가 어떤 편지는 잃으면 안 되고(아이템) 어떤 건 잃어도 되는데(옛 좌표), 바이트로 뭉개면 <strong>골라낼 수가 없어.</strong><br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 보낼 걸 "논리적 편지 한 통" 단위로 묶자. 각 편지에 채널·크기·신뢰성 표시를 붙여서. → 이게 <strong>번치(Bunch)</strong>야. 봉투(Packet) 하나에 편지(Bunch) 여러 통 — 그래서 잘라 읽고, 골라 등기 보낼 수 있어.</div>
 </div>
 <div class="conversation"><h2>1. 전체 콜체인 한 장으로</h2>
 <p>상위 게임 코드가 RPC/프로퍼티를 채널에 실으면, 아래 순서로 <strong>누적 → 전송</strong>된다.</p>
@@ -149,6 +153,7 @@ a.xref:hover { background:#bbdefb; }
 <p><code>Prepare...</code>(자리 확보) → <code>...Internal</code>(실제 기록) 순서지? <strong>쓰기 전에 자리 확보.</strong> 왜냐면 반쯤 쓰다가 "넘쳤네" 하고 되돌리는 건 비트 스트림에선 지옥이거든. 이게 반전 하나.</p>
 <p>그리고 여기서 <strong>이 챕터 최고 중요 한 줄</strong>을 만나. 가운데 <code>TimeSensitive = 1;</code>. "이번 프레임에 보낼 게 생겼다"는 깃발이야. 주석도 친절하게 설명해 — *Prepare가 패킷을 flush해버릴 수 있으니, 그 전에 이 깃발부터 세운다*고. 이 깃발이 §3의 <strong>주 경로(C)</strong>를 여는 열쇠야. 지금은 "Bunch 하나 썼으면 이 깃발이 선다"만 기억해.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Flush(모았다 한 번에 보내기)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 편지(Bunch) 한 통 만들 때마다 곧장 소켓에 <code>send()</code>를 때리면 제일 간단해. 만들었으니 바로 보낸다.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 사람 500명이 한 프레임에 좌표·채팅·전투 패킷을 <strong>와르르</strong> 쏟아내면, 편지 한 통마다 우체국까지 뛰어가는 꼴이야. <code>send()</code>(=커널 진입) 수천 번이면 다리부터 부러져. 조선 서버에서 <code>WSASend</code>를 매 패킷 거는 거랑 똑같은 낭비지.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 편지를 우체통(SendBuffer)에 <strong>모아뒀다가</strong>, "정해진 순간"에 트럭 한 번으로 걷어가자. → 그 걷어가는 순간이 <strong>Flush</strong>야. 문제는 "정해진 순간이 언제냐" — 그 답이 이 장의 방아쇠 4개.</div>
 </div>
 <div class="conversation"><h2>3. Flush는 대체 언제 터지나 — 4개의 방아쇠</h2>
 <p>이 챕터의 진짜 핵심. <strong>§0의 그 질문 "정해진 순간이 언제냐"의 답이야.</strong> Flush(우체부가 걷어가기)는 4가지 상황에서 터진다. 전부 소스 확인됨.</p>

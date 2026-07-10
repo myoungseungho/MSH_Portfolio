@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -70,6 +73,7 @@ a.xref:hover { background:#bbdefb; }
 <table class="compare-table"><thead><tr><th>구간</th><th>이 트리로</th><th>이 챕터</th></tr></thead><tbody><tr><td>핸드셰이크가 엔진에 <strong>어떻게 켜지나</strong> (배선/진입/실패/재시작)</td><td>✅ 실제 소스로 대조</td><td>verbatim 코드 + file:line</td></tr><tr><td>Hello→Challenge→Cookie <strong>바이트 왕복</strong> 구현</td><td>❌ 미포함</td><td>개념으로만, 추측 안 함</td></tr></tbody></table>
 <p>즉, <strong>"문지기를 어디에 세우고 어떤 명령을 줬는지"까지는 실물로 보여주고</strong>, "종이에 도장을 실제로 어떻게 찍는지"는 개념 설명으로 간다. 없는 걸 있는 척 지어내진 않아.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 무상태 핸드셰이크(Stateless Handshake)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 누가 접속 노크를 하면 바로 손님 자리를 깔아주면 되지 — 세션 만들고, 플레이어 객체 잡고, 세션 맵에 넣고.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 노크 중 상당수가 <strong>주소를 위조한 가짜</strong>야. 가짜 노크 1만 개마다 의자(메모리)를 1만 개 깔면 방이 꽉 차서 진짜 손님이 못 들어와. 이게 스푸핑 홍수 공격이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 노크가 오면 의자부터 깔지 말고, <strong>"이 종이 다시 가져와"</strong> 하며 도장 찍은 쿠키를 던지자. 진짜 주소만 그걸 되받아 올 수 있어(위조 IP는 응답을 못 받음). 서버는 쿠키를 <strong>저장도 안 하고</strong> 비밀키로 다시 계산해 검증만 해 — 그래서 "무상태", 그래서 홍수에 안 무너져.</div>
 </div>
 <div class="conversation"><h2>1) 개념: Stateless가 왜 "무상태"인가</h2>
 <p>핵심 단어 세 개만 먼저 깔자. (막히면 → <a class="xref" href="ch-08-packethandler.html">packethandler</a> 로 컴포넌트 계층 개념 먼저 보고 와)</p>
@@ -78,6 +82,7 @@ a.xref:hover { background:#bbdefb; }
 <p>...</p>
 <p>반전. <strong>아니야.</strong> 저장하면 그 순간 "무상태"가 깨져. 저장 테이블이 곧 가짜 노크로 채워질 표적이 되니까. 대신 서버는 <strong>비밀키로 쿠키를 매번 재계산</strong>해서, 되돌아온 쿠키가 "내 비밀키로 만든 게 맞나"만 확인해. 저장 없이 검증 — 그래서 무상태고, 그래서 홍수에 안 무너져. (이 재계산 코드가 바로 미포함 파일 안에 있어.)</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 문지기를 "가장 바깥"에 세우기</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 검문소야 여러 개(핸드셰이크·암호화·압축) 있는데, 순서는 아무래도 상관없어 보이잖아?<br>&bull;&nbsp;<strong>그런데 문제</strong>: 아직 <strong>검증 안 된</strong> 낯선 놈의 패킷을 압축 풀고 복호화하느라 CPU를 먼저 쓰면, 가짜가 던진 쓰레기 하나에 서버가 헛일을 실컷 해. 홍수로 오면 그 헛일만으로 무너져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 신원 확인(핸드셰이크)을 <strong>맨 바깥 껍질</strong>에 세워서, 통과 못 한 놈은 안쪽 검문소(암호화·게임로직)에 <strong>닿기도 전에</strong> 걸러내자. → <code>AddHandler(..., true)</code>의 그 <code>true</code>가 "최외곽(outermost)" 표시야.</div>
 </div>
 <div class="conversation"><h2>2) 뼈대 콜체인: 문지기를 세우는 순서</h2>
 <p>서버가 리스닝 → 클라가 접속 시도 → 처음 보는 주소는 "커넥션리스"로 취급 → <strong>Stateless 핸드셰이크 컴포넌트를 가장 바깥에 세워서</strong> 그 트래픽을 먼저 거른다. 이 흐름이야.</p>

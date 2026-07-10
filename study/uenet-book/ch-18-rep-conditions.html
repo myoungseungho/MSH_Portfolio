@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -55,6 +58,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그래서 필요한 질문은 이거야. <strong>바뀐 프로퍼티가 맞다 해도, 지금 이 커넥션에게 보낼 자격이 있나?</strong> 우체국으로 치면 편지가 만들어진 것과 배달 주소가 맞는 것은 다른 일이야. 편지가 있다고 아무 우편함에 넣으면 안 되잖아.</p>
 <p>언리얼도 같은 문제를 만났고, 그 답이 <code>COND_</code> 조건부 복제야. 프로퍼티마다 <code>COND_OwnerOnly</code>, <code>COND_SkipOwner</code> 같은 딱지를 붙여두고, 실제 전송 순간에는 커넥션의 상황을 보고 통과시킬지 막을지 결정해. 핵심은 "무엇이 바뀌었나"가 아니라 <strong>"바뀐 것 중 이 사람에게 갈 것만 남긴다"</strong> 야.</p>
 <p>이걸 지금 배우는 이유도 흐름상 딱 맞아. 앞장 <a class="xref" href="ch-16-changelist.html">changelist</a>에서는 "이번 프레임에 뭐가 바뀌었나"를 골라냈어. 하지만 그 목록은 아직 전원 공용 장바구니야. 이번 장에서 그 장바구니를 커넥션별로 걸러야, 다음 전송 단계에서 진짜로 보낼 Bunch가 깨끗하게 만들어진다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — COND_ 조건부 복제</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 값이 바뀌면 그냥 접속자 전원한테 똑같이 뿌려. 편지 한 통 만들면 모든 우편함에 복사해 넣는 셈이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 내 소지금이 옆 사람 화면에 뜨고, 내가 이미 아는 내 피격모션이 나한테 또 오고, 100명 맵에선 사소한 값까지 전부 흘러 대역폭이 터져. 게다가 "이건 주인만/이건 주인 빼고"를 패킷 핸들러마다 손으로 적으면 한 군데 빠뜨린 버그를 못 찾아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 프로퍼티마다 "누구한테 갈지"를 미리 딱지로 붙여두고, 보낼 때 커넥션을 보고 거르는 규칙. → 그게 <strong>COND_</strong>야. <code>COND_OwnerOnly</code>=주인만, <code>COND_SkipOwner</code>=주인 빼고. 조선 서버로 치면 <code>SP_MONEY</code>를 손분기 없이 딱지로 선언해두는 거지.</div>
 </div>
 <div class="conversation"><h2>1. 먼저 그림부터 — 우편함 앞의 문지기</h2>
 <p>네가 게임 서버를 짜봤으니 이 상황은 익숙할 거야. 한 액터(예: 플레이어 캐릭터)의 값이 바뀌었어. 체력, 소지금, 어떤 내부 쿨타임 같은 것들.</p>
@@ -111,6 +115,7 @@ a.xref:hover { background:#bbdefb; }
 <ul><li><code>COND_Never</code>면 아예 <code>continue</code> — 절대 복제 안 될 애라 셋업조차 안 함. <strong>가장 싼 조건은 처음부터 배제.</strong></li><li>나머지는 <code>RepParentCmd.Condition</code>에 딱지를 저장. 이게 이후 <strong>모든 필터 판정의 원천</strong>이 돼. 한 번 심어두면 커넥션마다 계속 참조해.</li></ul>
 <p>즉 여기까지가 "정적" 단계야. 조건은 이 시점에 확정돼 Parent에 박힌다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 통과표(ConditionMap)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 프로퍼티 하나 보낼 때마다 <code>if (OwnerOnly &amp;&amp; !주인) 막기</code>처럼 즉석에서 조건을 검사하면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 한 커넥션한테 프로퍼티 <strong>수백 개</strong>를 연달아 보내는데, 그때마다 "주인이냐/첫전송이냐/시뮬이냐" 다섯 개를 다시 계산하면 같은 답을 수백 번 다시 구하는 헛일이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 커넥션 상황(RepFlags)이 정해지면 <strong>딱 한 번</strong> 표를 만들어두고, 프로퍼티마다는 <code>표[딱지]</code> 룩업 한 방으로 끝내기. → 그게 <strong>ConditionMap</strong>이야. 조선 서버에서 매 틱 반복 계산을 캐싱으로 빼는 감각 그대로.</div>
 </div>
 <div class="conversation"><h2>5. [B단계] 통과표 만들기 — 핵심 중의 핵심</h2>
 <p>여기가 이 장의 심장이야. 아까 예측을 뒤집었던 그 "테이블".</p>
@@ -157,6 +162,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그리고 재밌는 구석:</p>
 <ul><li><code>COND_None</code>, <code>COND_Custom</code>, <code>COND_Dynamic</code>은 <strong>항상 true.</strong> → 이 표에선 무조건 통과. <code>Custom</code>/<code>Dynamic</code>의 실제 on/off는 이 표가 아니라 <strong>별도 트래커(PropertyConditions)</strong>가 담당해. 이 표는 "일단 통과시키고 나중에 딴 데서 거른다"는 뜻.</li><li><code>COND_Never</code>는 <strong>항상 false.</strong> 절대 안 나감.</li></ul>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 못 나갈 명단(InactiveParents)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 통과표가 있으니, 실제로 보낼 때 바뀐 핸들마다 <code>표[딱지]</code>를 그때그때 물어보면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 바뀐 핸들이 많으면 매 핸들마다 딱지 꺼내고 표 뒤지고를 반복해. 게다가 changelist를 걸러내는 코드가 여러 군데라, 각자 또 "이거 통과야?"를 따로 물어봐야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 통과 못 한 Parent만 <strong>미리 비트 하나로 굳혀둔 명단</strong>. → 그게 <strong>InactiveParents</strong>야. 이름 그대로 "오늘 못 나가는 명단" — 전송할 땐 명단만 보고 <code>!</code>로 뒤집어 빼면 끝.</div>
 </div>
 <div class="conversation"><h2>6. [B단계 이어서] 통과표 → 못 나갈 명단(InactiveParents)</h2>
 <p>표를 만들었으면, 그걸로 "오늘 못 나가는 명단"을 채워. 이게 <code>RebuildConditionalProperties</code>야.</p>

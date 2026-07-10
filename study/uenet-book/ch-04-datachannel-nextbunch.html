@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -87,6 +90,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note">참고: 이 순서 분기는 <strong>reliable일 때만</strong> 걸린다. unreliable Bunch는 애초에 <code>bReliable</code>이 0이라 이 <code>if</code>를 건너뛰고 바로 else로 가. "안 믿는 물건은 순서 안 따진다"는 거지.</div>
 <p>그리고 이 순서 판정보다 <strong>먼저</strong> 하는 일이 하나 있어. NetGUID(패키지맵 export) 소비 (<code>:611</code>). partial이든 순서가 밀렸든 상관없이 이건 제일 먼저 빼먹는데, 왜 그런지는 이 챕터 범위 밖이라 링크만 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a>. 지금은 "순서 게이트가 핵심"만 붙잡자.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 순서 재조립 선반(<code>InRec</code>)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 도착한 상자를 <strong>오는 순서 그대로 처리하면</strong> 제일 쉬워. 우리 서버는 TCP라 커널이 이미 순서를 맞춰줘서 이 고민을 안 해봤을 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: UDP는 상자가 <strong>5번, 7번, 6번 순서로</strong> 도착해. 지금 창고가 기다리는 건 5번인데 7번이 먼저 왔어. 이걸 그냥 손님한테 주면 아직 안 온 6번 앞 내용이 빠진 채 7번이 먼저 처리돼 → 상태가 꼬여.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 순서 밀린 상자를 바로 안 주고 <strong>선반에 번호순으로 얹어뒀다가</strong>, 빠진 번호가 도착해 구멍이 메워지는 순간 <strong>밀린 걸 순서대로 우르르 풀어주는</strong> 장치. 이 선반이 <code>InRec</code>이야. TCP가 커널에서 해주던 순서 재조립을 UE는 앱 레벨에서 손수 흉내 내는 거지.</div>
 </div>
 <div class="conversation"><h2>2. 순서 밀린 놈은 선반에 "정렬해서" 꽂는다</h2>
 <p>(C) 갈래로 들어왔어. 7번이 먼저 왔고 5번을 기다리는 중. 이 7번을 <code>InRec</code>이라는 링크드리스트에 꽂는데, 아무데나 안 꽂고 <strong>시퀀스 오름차순으로 정렬 삽입</strong>해.</p>
@@ -165,6 +169,7 @@ a.xref:hover { background:#bbdefb; }
 <ol><li><strong>retirement (은퇴 처리)</strong> — reliable이면 <code>InReliable[ChIndex]</code>를 이 시퀀스로 갱신 (<code>:781</code>). 3절에서 "구멍이 메워졌다"의 실체가 바로 이 줄이야. <code>check(...)</code>는 "여기 온 reliable은 무조건 <code>+1</code>이어야 한다"는 자기 확인이고.</li><li><strong><code>HandleBunch</code> 세팅</strong> — 이게 "결국 위층으로 올려보낼 완성본"을 가리키는 포인터야. non-partial이면 그냥 자기 자신(<code>&amp;Bunch</code>)이라 조립 필요 없이 통과. partial이면 일단 <code>NULL</code>로 두고 (<code>:787</code>), 조립이 끝나야 채워진다.</li></ol>
 <p>즉 이 함수의 일은 딱 하나 남았어. <strong>partial이면 조각을 다 모아 <code>HandleBunch</code>에 완성본을 담는 것.</strong></p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 조립 버퍼(<code>InPartialBunch</code>)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 조각(partial) 편지가 오면 <strong>오는 족족 위층(컨텐츠 처리)으로 올려버리면</strong> 될 것 같지?<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 조각은 <strong>반쪽짜리</strong>야. 3편 중 1편만 올려서 액터를 만들려고 하면, 아직 안 온 2·3편 데이터가 비어서 <strong>반쪽 상태로 액터가 꼬여</strong>. 조각이 다 모이기 전엔 처리하면 안 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 조각을 <strong>임시 버퍼에 계속 이어붙여 두고</strong>, <strong>마지막 조각(<code>bPartialFinal</code>)이 올 때까지 위층으로 안 올리는</strong> 대기소. 이게 <code>InPartialBunch</code>야. 조각을 다 붙여 완성본이 되는 순간에만 문을 열어(<code>HandleBunch</code>) 위로 보내지. 보내는 쪽이 쪼갠 걸 받는 쪽이 다시 한 통으로 되돌리는 자리야.</div>
 </div>
 <div class="conversation"><h2>5. 조각을 이어붙이고, 마지막 조각에서 완성한다</h2>
 <p>partial 조각이 왔어. 첫 조각(<code>bPartialInitial</code>)이면 새 조립 버퍼 <code>InPartialBunch</code>를 만들고 (<code>:820</code>), 이어지는 조각이면 거기다 갖다붙여. 붙이는 코드가 이거.</p>

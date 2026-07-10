@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -68,6 +71,7 @@ a.xref:hover { background:#bbdefb; }
 Runtime/Engine/Private/NetConnection.cpp  ← 패킷 단위 ack/nak 디스패치</div>
 <div class="note">🔬 정직 고지: 이 클론은 <strong>최신 UE 리비전</strong>(패킷-notify 방식, <code>FNetPacketNotify</code>)이야. 옛날 UE4처럼 패킷 헤더에 ack 비트마스크를 직접 싣는 게 아니라, <strong>시퀀스 히스토리 델타</strong>로 "이 패킷 배달됐다/잃었다"를 계산해서 통지해. 개념은 똑같아(패킷ID → 그 패킷에 실렸던 reliable bunch를 ack/재전송). 아래 코드는 전부 이 레포에서 직접 확인한 verbatim이고 file:line을 박아뒀어.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 시퀀스·ack (UDP 위 신뢰성)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: UDP는 그냥 우체통에 편지 넣고 끝. 보내면 알아서 도착하겠지 — 코드도 제일 짧아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: UDP는 편지를 <strong>잃어도 미안하다 안 하고</strong>, 3번보다 4번이 먼저 와도 태연해. 이 상태로 "아이템 획득"을 보내면 한 명만 칼이 없고, "몬스터 죽음"이 뒤바뀌면 이미 죽은 놈이 다시 맞아. TCP를 깔고 앉은 조선 서버는 커널이 대신 해주지만, UDP는 아무도 안 해줘.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 편지마다 <strong>번호</strong>를 매기고(순서), 받은 쪽이 <strong>수령증</strong>을 보내고(도착확인), 안 오면 <strong>다시 부친다</strong>(재전송). → 이 등기우편 3종 세트가 <strong>시퀀스·ack·재전송</strong>이야. 근데 번호를 세보면 축이 두 개라 헷갈려 — 그게 이 절 주제.</div>
 </div>
 <div class="conversation"><h2>1. 딱 하나만 먼저 뚫자 — "번호가 두 개다"</h2>
 <p>이 챕터에서 초보가 100% 넘어지는 지점. 신뢰성에 관여하는 <strong>번호(축)가 두 개</strong>야. 이거 안 나누면 뒤가 전부 꼬여.</p>
@@ -120,6 +124,7 @@ Runtime/Engine/Private/NetConnection.cpp  ← 패킷 단위 ack/nak 디스패치
 <p>박스 많아 보여도 레인 4개야. <strong>송신(1)</strong> = 사본 보관. <strong>수신(2)</strong> = 순서 맞춤. <strong>ack(3)</strong> = 사본 버림. <strong>nak(4)</strong> = 다시 부침. 레인 2는 옆 챕터(<a class="xref" href="ch-04-datachannel-nextbunch.html">datachannel-nextbunch</a>) 몫이라 여기선 얇게만 짚고, <strong>1·3·4에 집중</strong>한다.</p>
 <hr>
 <p>지금부터 실제 C++ 조각이 이어져. <strong>겁먹지 마</strong> — 기호가 복잡해 보여도 이번 장에서 볼 건 "번호 붙이기, 사본 남기기, 도장 찍기, 다시 보내기" 네 동작뿐이야. 낯선 표시는 코드 바로 아래에서 작게 풀어볼게.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 재전송 큐(OutRec)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 편지를 소켓에 실어 보냈으면 내 손을 떠났으니 잊어버리면 되지. 보낸 편지를 뭐하러 들고 있어?<br>&bull;&nbsp;<strong>그런데 문제</strong>: UDP라 그 편지가 도중에 <strong>증발</strong>할 수 있어. 그때 "다시 보내"라고 하면 — 원본은 이미 나가버렸는데 <strong>다시 부칠 종이가 없어.</strong> 손에 아무것도 안 남겼으니까.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 보낼 때 <strong>사본을 한 장 떠서</strong> 서랍에 넣어두자. 수령증(ack) 오면 찢고, 반송(nak) 오면 그 사본으로 다시 부쳐. → 그 "아직 수령증 안 온 등기편지 서랍"이 <strong>OutRec</strong>이야.</div>
 </div>
 <div class="conversation"><h2>3. 레인 1 — 편지에 번호 매기고 사본을 OutRec에 매단다</h2>
 <p>reliable 편지를 보낼 때, 그냥 보내기만 하면 잃어버렸을 때 다시 부칠 원본이 없잖아? 그래서 <strong>사본을 재전송 큐(<code>OutRec</code>)에 보관</strong>해둔다. 수령증(ack) 올 때까지.</p>
@@ -243,6 +248,7 @@ Runtime/Engine/Private/NetConnection.cpp  ← 패킷 단위 ack/nak 디스패치
 <ul><li><code>for(... Out=OutRec ...)</code> — 재전송 큐 전체를 훑어.</li><li><code>Out-&gt;PacketId==NakPacketId &amp;&amp; !Out-&gt;ReceivedAck</code> — <strong>잃어버린 그 봉투(NakPacketId)에 실렸고</strong>, 아직 ack 안 된 편지만 골라. (다른 봉투 편지나 이미 ack된 건 건드리면 안 되니까.)</li><li><code>Connection-&gt;SendRawBunch(*Out, 0)</code> — 사본을 <strong>다시 전송.</strong> ChSequence는 그대로(같은 편지니까), 대신 새 봉투(PacketId)에 실려 나가.</li></ul>
 <p>여기서도 §1의 번호 두 축이 살아있어. <strong>PacketId로 골라내고</strong>(어느 봉투가 잃었나), <strong>ChSequence는 유지</strong>(편지 정체성은 안 변함). 받는 쪽은 재전송된 편지의 ChSequence를 보고 "어 이거 이미 받은 번호네" 하면 폐기하거나, 못 받았던 거면 구멍을 메워. 그래서 재전송이 중복돼도 안전한 거야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 번호 wrap과 큐 상한</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 편지 번호는 1, 2, 3… 계속 올리고, 사본 서랍(OutRec)도 오는 대로 계속 쌓으면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 번호를 무한히 올릴 순 없어(칸이 정해져 있으니 언젠가 되돌아 0으로 감). 그리고 상대가 계속 반송만 하면 서랍이 <strong>끝없이 부풀어</strong> 메모리가 터져. 게다가 번호를 너무 빨리 재사용하면 "37번"이 <strong>옛것인지 새것인지</strong> 구분이 안 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 서랍 깊이에 상한(<code>RELIABLE_BUFFER</code>)을 두고, 넘치면 연결을 끊어. 번호가 되돌기까지의 주기(<code>MAX_CHSEQUENCE</code>)는 서랍의 <strong>2배</strong>로 잡아서, 늦게 도는 옛 편지와 새 편지가 안 헷갈릴 시간창을 확보해.</div>
 </div>
 <div class="conversation"><h2>8. 안전장치 — 큐가 무한정 쌓이면?</h2>
 <p>등기우편이 계속 반송되는데 답이 없으면? 큐가 무한히 커지면 메모리도 연결도 못 버텨. 그래서 상한이 있어.</p>

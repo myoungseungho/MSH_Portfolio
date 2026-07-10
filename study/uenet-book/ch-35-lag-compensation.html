@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -53,6 +56,7 @@ a.xref:hover { background:#bbdefb; }
 <p>이걸 방치하면 논타겟 전투가 전부 답답해져. 핑이 조금만 튀어도 빠른 대상은 계속 빗나가고, 운영팀에는 "분명 맞췄는데 왜 안 맞냐"는 CS가 쌓여. 반대로 클라 판정을 믿으면 조작 패킷 한 방에 다 맞는 게임이 돼.</p>
 <p>그래서 이 챕터의 답이 <strong>랙 보상</strong>, 더 정확히는 <strong>서버가 과거 시점으로 히트 판정을 되감는 방법</strong>이야. 서버 권위는 유지하되, 판정 순간만 "그 유저가 실제로 보고 쏜 장면"으로 되돌려 채점하는 거지. 사진첩에서 그때 사진을 꺼내 보고 판정한 다음, 다시 현재로 돌아오는 느낌이야.</p>
 <p>이걸 지금 배우는 이유도 분명해. 앞에서 서버 시각 동기화와 스무딩을 배웠으니, 이제 "클라가 왜 과거를 보고 있는지"와 "서버가 그 과거를 어떻게 계산하는지"를 연결할 차례야. 다음 능력/GAS 예측으로 넘어가기 전에, 서버 판정이 지연을 어떻게 공정하게 흡수하는지 잡아야 이후 예측·검증 흐름이 덜 뜬다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 랙 보상 되감기(lag compensation)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 스킬 명중은 서버가 판정해(핵 방지). 서버가 "지금 현재" 적 위치로 히트 검사하면 공정하겠지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 핑 100ms 유저는 100ms 전 옛날 적을 보고 조준해. 발사 패킷이 서버에 닿는 동안 적은 딴 데로 가버려 — 분명 머리에 맞췄는데 서버 현재엔 그 자리에 없어서 "빗나감". 억울해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 서버가 시계를 거꾸로 돌려, 적을 그 유저가 보던 과거 위치로 되돌려 놓고 판정하기. → 이게 랙 보상 되감기야. 축구 VAR이 패스 나간 프레임으로 영상 되감는 것처럼.</div>
 </div>
 <div class="conversation"><h2>0. 들어가기 전에: "분명 머리에 맞췄는데 안 맞아"</h2>
 <p>FPS든 액션 MMO든, 유저가 제일 억울해하는 순간이 이거야. 조준선 딱 갖다 대고 쐈는데, 서버가 "빗나감" 판정을 내려. 핵도 아니고 렉도 아닌데 왜?</p>
@@ -77,6 +81,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그래서 이 챕터는 <strong>verbatim 실제 코드 대신 개념 뼈대</strong>로 간다. 아래 다이어그램·판정 흐름은 "이렇게 생겼을 것"이 아니라 업계 표준 되감기의 <strong>구조적 원리</strong>야. 우리 프로젝트에 되감기를 넣는다면 이 뼈대를 직접 짜야 해 — 실제 코드 대조가 필요하면 Lyra 소스나 프로젝트 자체 컴포넌트를 봐야 해.</p>
 <p>딱 하나, <strong>이 서브셋에 실제로 존재하는 "과거로 되감기" 코드</strong>가 있긴 해. 근데 주제가 달라. 혼동 방지용으로 §4에서 명시적으로 구분해서 보여줄게.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 히트박스 히스토리 버퍼</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 서버는 액터의 "지금 위치" 하나만 들고 있으면 이동·충돌 처리에 충분하잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 되감아 판정하려면 "100ms 전 그 자리"가 필요한데, 지금 위치만 있으면 과거가 없어 못 돌아가. 없는 과거로는 못 되감아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 매 틱 모든 표적의 위치·충돌바운드를 시계열로 쌓는 링버퍼. → 이게 히트박스 히스토리야. 단 200~250ms 어치만(깊이×해상도×메모리 절충).</div>
 </div>
 <div class="conversation"><h2>1. 되감기의 재료: "히트박스 히스토리" 버퍼</h2>
 <p>되감으려면 <strong>과거를 저장해둬야</strong> 돼. 없는 과거로는 못 돌아가.</p>
@@ -108,6 +113,7 @@ a.xref:hover { background:#bbdefb; }
 <p>여기서 <strong>왜 서버가 클라 지연을 정확히 알아야 하는지</strong> 감이 오지? RTT를 잘못 알면 엉뚱한 틱으로 되감아 판정이 다 틀어져. 그래서 되감기 시스템은 <strong>서버-클라 시각 동기화(→ <a class="xref" href="ch-34-server-time-sync.html">server-time-sync</a>)와 한 몸</strong>이야. CH34에서 본 "서버 시각 추정"이 여기서 되감을 양을 계산하는 원료로 쓰여. 두 챕터가 짝꿍인 이유가 이거야.</p>
 <div class="note">단, 클라가 보낸 RTT/타임스탬프를 <strong>그대로 믿으면 안 돼.</strong> 유저가 "나 500ms 전이었어" 하고 조작하면 되감기를 악용해 이미 코너 뒤로 숨은 적도 맞힐 수 있어. 그래서 서버는 클라가 주장한 시점을 <strong>버퍼 깊이(창 상한) 안으로 클램프</strong>하고, 서버가 측정한 RTT와 대조해 검증해(→ <a class="xref" href="ch-22-rpc-reliable-validation.html">rpc-reliable-validation</a>). 되감기는 서버 권위를 유지한 채 하는 보정이지, 클라 말 받아쓰기가 아니야.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 되감기 창 상한(window cap)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 되감아 판정하면 쏜 사람은 본 대로 맞으니 행복. 그럼 지연이 크든 작든 다 되감아주면 되겠네?<br>&bull;&nbsp;<strong>그런데 문제</strong>: 나는 코너 뒤로 완전히 숨었는데 상대는 100ms 전 노출된 옛날 나를 보고 쏴. 무제한 되감으면 벽 뒤 숨은 내가 맞아 죽어 — 악명 높은 "코너 뒤 사망". 쏜 사람 유리 = 맞은 사람 억울, 동전의 양면이라 못 없애.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 되감기에 상한선 두기(예: 최대 200ms). 그보다 느린 유저는 혜택 못 받되 남을 억울하게도 안 해. → 창 상한 = 버퍼 깊이 = 공정성 손잡이.</div>
 </div>
 <div class="conversation"><h2>3. 판정과 그 대가: "코너 뒤에서 맞았어"</h2>
 <p>되감아서 판정하면 쏜 사람은 행복해. 근데 <strong>공짜가 아니야.</strong> 여기가 되감기의 가장 유명한 트레이드오프(2번).</p>

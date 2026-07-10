@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -75,6 +78,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그래서 이 챕터의 전략은 이거야: <strong>본체 대신 "계약서"를 읽는다.</strong> RPC가 어떤 파라미터로 서버에 뭘 보내는지(시그니처), 남의 캐릭터를 어떻게 부드럽게 받는지(스무딩), 물리 시뮬레이션이 Role별로 어떻게 갈리는지 — 이 세 개는 실물 코드로 확인 가능하고, 그걸로 큰 그림은 충분히 그려져. 심장 근육의 세밀한 수축은 다음 챕터들(<a class="xref" href="ch-30-client-prediction.html">client-prediction</a>, <a class="xref" href="ch-31-server-reconciliation.html">server-reconciliation</a>)에서 개념으로 이어붙인다.</p>
 <p>아래 코드블록은 전부 <strong>위 세 파일에서 한 글자도 안 바꾸고</strong> 가져왔고 file:line을 붙였어. 직접 대조도 마쳤음.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Role(역할)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 싱글플레이면 캐릭터는 그냥 캐릭터 하나야. 내 입력대로 움직이고 끝.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 멀티에선 <strong>같은 캐릭터가 컴퓨터마다 해야 할 일이 완전히 달라</strong>. 내 화면의 내 캐릭터는 서버 안 기다리고 먼저 움직여야(예측) 하고, 서버 컴퓨터에선 그게 진짜 원본이라 검증해야 하고, 친구 화면에선 복제받은 위치를 흉내만 내야 해. 하나의 코드가 이 셋을 뭉뚱그리면 엉켜.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 같은 캐릭터라도 <strong>이 컴퓨터에서 어떤 자격이냐</strong>를 나누는 딱지. <code>AutonomousProxy</code>(내 캐릭터·예측) / <code>Authority</code>(서버 원본) / <code>SimulatedProxy</code>(남 캐릭터·보간). → 이게 <strong>Role</strong>이야. 세 배우가 같은 대본의 다른 페이지를 읽어.</div>
 </div>
 <div class="conversation"><h2>1) 큰 그림 — 세 명의 배우가 있다</h2>
 <p>CMC를 이해하려면 먼저 "누가 이 캐릭터를 보고 있냐"를 세 종류로 갈라야 해. 이걸 <strong>Role(역할)</strong> 이라고 불러. 같은 캐릭터라도 어느 컴퓨터에서 보느냐에 따라 완전히 다른 코드가 돈다.</p>
@@ -127,6 +131,7 @@ a.xref:hover { background:#bbdefb; }
 <p>읽는 법: <strong>왼쪽 세로줄이 시간이야.</strong> 클라가 먼저 움직이고(1) → 서버에 보고(2) → 서버가 틀렸다 판정하면 정답 회신(3). 남의 캐릭터(맨 아래 박스)는 이 예측/보정 사이클과 무관하게, 그냥 복제받은 위치를 부드럽게 보간만 해.</p>
 <hr>
 <p>지금부터 진짜 C++ 스니펫이 나와. <strong>겁먹지 마</strong> — 함수 이름이 길고 기호가 많아 보여도, 바로 아래 🔤 상자에서 "이 표시는 이런 뜻"으로 쪼개서 읽을 거야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 이동 보고(ServerMove)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 클라가 서버한테 "나 앞으로 갈래" 요청하고 서버가 위치를 정해주면 제일 단순하고 안전해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 내 캐릭터는 이미 서버를 안 기다리고 <strong>먼저 움직여버렸잖아</strong>(예측). 그럼 서버는 그걸 어떻게 검증하지? 클라가 "그냥 요청"만 보내면, 서버는 클라가 정확히 어떤 입력으로 어디까지 갔는지 몰라서 벽 통과 치트도 못 잡아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 클라가 "<strong>언제(TimeStamp), 어떤 입력(InAccel)으로, 어디까지 갔다(ClientLoc)</strong>"를 통째로 보고하는 패킷. 서버는 같은 물리로 재현해보고 어긋나면 되돌려. → 이게 <strong>ServerMove</strong>야. 파라미터 목록 자체가 "클라가 자기 이동을 서버한테 설명하는 문법"이야.</div>
 </div>
 <div class="conversation"><h2>3) Verbatim 스니펫 — 계약서를 읽는다</h2>
 <h3>3-1. 클라 → 서버 이동 보고 RPC (thunk)</h3>

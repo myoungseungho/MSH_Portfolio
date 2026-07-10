@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -53,6 +56,7 @@ a.xref:hover { background:#bbdefb; }
 <p>우리 조선 서버로 치면 IOCP 워커가 패킷을 받아서 단일스레드 로직 큐로 넘기고, <code>CChosunPlayer</code> 안에서 쿨타임과 이벤트 상태를 순서대로 처리하잖아. 락을 잘 걸어도 <strong>각 클라가 서로 다른 시계를 보고 있으면</strong> UI 예측과 서버 판정이 계속 어긋나. 락은 데이터 충돌을 막아주지만, 시계가 다 다른 문제까지 맞춰주진 못해.</p>
 <p>언리얼도 같은 문제를 만났고, 답은 "매번 서버한테 지금 몇 시냐고 묻기"가 아니야. 서버는 자기 시각만 복제해주고, 클라는 그걸 받아서 <strong>서버 시각과 내 시각의 차이(delta)</strong>를 스스로 계산해. 그 delta를 로컬 시계에 더하면, 클라는 서버에 계속 묻지 않고도 서버 시각을 추정할 수 있어.</p>
 <p>그래서 이 챕터의 주인공이 <code>AGameStateBase</code>야. 앞에서 복제 변수와 RepNotify를 배웠으니, 이제 그 파이프를 써서 <strong>서버 시간을 클라가 어떻게 맞춰 잡는지</strong> 볼 차례야. 그리고 다음의 랙 보상에서는 "그때 그 순간"을 되감아 판정해야 하니까, 공통 시계 감각을 여기서 먼저 잡아야 해.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 서버 시간 동기(server time sync)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 클라가 서버 시각이 궁금하면 그냥 "지금 몇 시야?" 물어보면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 이벤트 카운트다운·쿨타임을 매 프레임 그리려면 초당 수십 번 물어야 해 — 뉴욕 친구한테 5분마다 전화 거는 꼴이야. 게다가 묻는 사이에도 시간은 흐르고 답이 오는 데 지연도 껴.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 처음에 "시차 = 14시간"만 알아내고 내 시계에 더해 쓰기. → 이게 서버 시간 동기야. 계속 안 묻고 내 시계 + 시차로 서버 시각을 추정해.</div>
 </div>
 <div class="conversation"><h2>시차 이야기부터</h2>
 <p>뉴욕 사는 친구랑 통화 약속을 잡는다고 해봐. 걔 시계랑 내 시계는 애초에 안 맞아. 걔는 오전 9시, 나는 밤 11시. 그렇다고 5분마다 "지금 몇 시야?" 물어볼 순 없잖아.</p>
@@ -67,6 +71,7 @@ a.xref:hover { background:#bbdefb; }
 <p>이 함수 하나를 아무 데서나 부르면 서버 시각 추정치가 튀어나와. 어떻게 그게 가능한지가 이 챕터 전부야. 세 갈래 코드가 협력하는데, <strong>누가 어느 머신에서 도는지</strong>가 핵심이라 역할로 나눠서 볼게.</p>
 <div class="note">값이 서버→클라로 어떻게 자동 전송되고, 도착하면 왜 콜백이 불리는지가 안 그려지면 → <a class="xref" href="ch-17-repnotify.html">repnotify</a>, <a class="xref" href="ch-14-lifetime-props.html">lifetime-props</a> 먼저 보고 와.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — delta(시차)는 클라가 계산</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 시차(delta)가 필요하면 서버가 "너랑 나랑 3.7초 차이야" 계산해서 딱 내려주면 제일 깔끔하잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 서버는 클라가 몇 초짜리 시계를 들고 접속했는지 몰라. 클라마다 접속 시점·지연이 다 달라서 시차도 제각각 — 서버가 남의 시차를 대신 못 구해. 만 명이면 시차 만 개를 서버가 떠안아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 서버는 자기 raw 시각만 방송, 시차는 각 클라가 "받은값 − 내 시각"으로 스스로 빼기. → delta는 복제 안 하고 클라가 만든다.</div>
 </div>
 <div class="conversation"><h2>핵심 뒤틀림: delta는 복제 안 된다</h2>
 <p>여기서 먼저 맞춰봐.</p>
@@ -117,6 +122,7 @@ a.xref:hover { background:#bbdefb; }
 <p>하는 일은 딱 하나. <strong>자기 월드 시각(<code>World-&gt;GetTimeSeconds()</code>)을 복제 변수 <code>ReplicatedWorldTimeSecondsDouble</code>에 대입.</strong> 이게 끝이야. "보내라"는 명령도, 소켓도 없어. 그냥 복제 변수에 대입하기만 하면, UE의 리플리케이션이 알아서 "값 바뀌었네" 하고 클라들로 실어 날라. (그 자동 전송 장치가 궁금하면 → <a class="xref" href="ch-12-server-replicate-actors.html">server-replicate-actors</a>)</p>
 <p>여기서 초보가 헷갈리는 지점 하나. <strong>서버는 delta 근처에도 안 가.</strong> 그냥 raw 초를 복제 변수에 꽂을 뿐이야. delta는 순전히 클라 몫이지.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 스무딩 보간(절반씩 따라가기)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 시차 한 방울을 재면(받은값 − 내 시각) 그 값을 바로 delta로 쓰면 되지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 네트워크 지연이 매번 들쭉날쭉이라 한 방울은 노이즈투성이야. 그대로 쓰면 delta가 확 튀고, 화면 카운트다운이 뒤로 갔다 앞으로 갔다 덜컹거려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 여러 방울을 누적 평균 내고, 목표로 한 번에 안 뛰고 "목표−현재의 절반"만 다가가기. → 지연 스파이크가 껴도 시계가 스르륵 수렴해. 시계는 튀는 게 제일 나쁘거든.</div>
 </div>
 <div class="conversation"><h2>(클라) 받은 값으로 시차 계산하고 다듬기</h2>
 <p>복제 변수가 클라에 새로 도착하면, UE가 자동으로 RepNotify 콜백을 눌러줘 (초인종이 뭔지 기억 안 나면 → <a class="xref" href="ch-17-repnotify.html">repnotify</a>). 그 콜백이 이 챕터 진짜 알맹이야.</p>

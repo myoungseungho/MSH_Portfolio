@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -63,6 +66,7 @@ a.xref:hover { background:#bbdefb; }
 <p><strong>반전.</strong> 아니야. 소켓이 붙는 것과 PlayerController가 생기는 건 <strong>한참 떨어져 있어</strong>. 그 사이에 로그인 협상(핸드셰이크), 게임코드 승인 심사, 클라의 맵 로딩까지 여러 관문이 껴 있어. PlayerController는 이 챕터 흐름에서 거의 마지막에, 클라가 "나 맵 다 깔았어!"라고 보고한 다음에야 태어나. 왜 그런지는 아래에서 하나씩 풀어줄게.</p>
 <div class="note">NetConnection이 소켓 위에 어떻게 얹히는지, NetDriver가 뭔지가 흐릿하면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a> 먼저 보고 와. 이번 챕터는 "그 연결이 태어나서 죽기까지"의 얘기라, 연결 객체가 뭔지는 잡고 오는 게 안 헤매. 여기선 다시 설명 안 하고 링크로 넘길게 — 안 그러면 챕터마다 같은 소리 무한 반복이거든.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 연결 생명주기(단계 분리)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 클라가 소켓 붙으면 곧바로 정식 유저로 보고 캐릭터 붙이고 게임에 앉히면 간단하잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그 사이 DB 심사가 실패하거나 클라가 맵 로딩 중에 끊기면? 아직 유저도 아닌데 로그아웃 저장을 태우거나, 없는 캐릭터를 정리하려 들어 터져. "접속 중"과 "게임 중"이 뒤섞여.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 접속을 <strong>문 앞 판정 → 신원 협상 → 맵 로딩 → 조인 → 정리</strong>로 잘게 쪼개 단계마다 문지기를 두자. → 이게 <strong>연결 생명주기</strong>야. 손님을 문 열자마자 밥상에 앉히지 않는 것과 같아.</div>
 </div>
 <div class="conversation"><h2>1. 큰 그림 — 다섯 단계, 다섯 문지기</h2>
 <p>전체를 다섯 덩어리로 쪼갤 수 있어. 각 덩어리마다 대표 함수가 하나씩 있어.</p>
@@ -96,6 +100,7 @@ a.xref:hover { background:#bbdefb; }
 <p>수락이 확정되면 <code>NotifyAcceptedConnection</code>(<code>World.cpp:6985</code>)이 로그/프로파일에 "OPEN" 이벤트를 남겨. 그리고 <code>NotifyAcceptingChannel</code>(<code>World.cpp:6993</code>)이 하나 더 지켜 — <strong>클라가 맨 처음 여는 컨트롤 채널(채널0)만 허용</strong>하고 나머지는 다 거부해. 왜? 아직 로그인도 안 한 놈이 게임플레이 채널을 함부로 열게 두면 안 되잖아. 협상은 오직 채널0으로만.</p>
 <div class="note">채널이 뭔지, 채널0이 왜 특별한지 → <a class="xref" href="ch-05-channel-types.html">channel-types</a></div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 컨트롤 메시지(NMT_* 핸드셰이크)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 신원 확인도 그냥 게임 패킷으로 주고받으면 되지 않나? 로그인 요청도 하나의 패킷일 뿐인데.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 아직 로그인도 안 한 놈이 게임플레이 채널을 함부로 열고 액터를 만지면 위험해. 협상과 게임을 같은 줄에 섞으면 "이건 협상이야 게임이야?"를 매번 헷갈려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 채널0으로만 오가는 <strong>저수준 협상 전용 신호</strong>("로그인할래"·"어서 와"·"조인할게"). → 이게 <strong>컨트롤 메시지(<code>NMT_*</code>)</strong>야. 게임 시작 전 문 앞에서만 쓰는 암호 문답.</div>
 </div>
 <div class="conversation"><h2>3. C단계 — 로그인 협상: 제어 메시지 상태머신</h2>
 <p>문은 통과했어. 이제 신원 확인 차례. 여기서 <strong>컨트롤 메시지(NMT_*)</strong>가 등장해.</p>
@@ -143,6 +148,7 @@ a.xref:hover { background:#bbdefb; }
 <p>에러 없으면 <code>WelcomePlayer</code>(<code>World.cpp:7033</code>)를 불러. 이게 클라에게 <strong><code>NMT_Welcome</code></strong>을 쏴 — "환영해, 이 레벨명·게임명으로 접속 준비해." 클라는 이 신호를 받고 나서야 해당 맵을 로드하기 시작해.</p>
 <div class="note">여기 <code>WeakObjectPtr</code> 쓴 거 봤지? 비동기 콜백이 도는 사이에 커넥션이 이미 끊겨 사라졌을 수 있거든. 약참조로 받아서 <code>.Get()</code>이 null이면 조용히 관두는 거야. 비동기 경계에서 객체 수명 챙기는 정석 패턴이야.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — PlayerController를 조인 후에야 만드는 이유</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 소켓 붙는 순간 바로 그 클라의 PlayerController(조종 객체)를 만들어두면 편하잖아. 미리 준비.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 로그인 통과와 "맵 로딩 완료"는 시점이 완전히 달라. 클라가 몇 GB짜리 맵을 까는 몇 초~몇십 초 동안 PC를 미리 만들어두면 낭비고, 그 사이 끊기면 만든 걸 도로 부숴야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 클라가 "나 맵 다 깔았어"(<code>NMT_Join</code>)라고 보고할 때까지 <strong>PC 생성을 미루기</strong>. → 그래서 PlayerController는 이 흐름의 거의 끝에서야 태어나. "만들기 전엔 만든 척 안 하기".</div>
 </div>
 <div class="conversation"><h2>4. D단계 — 진짜 입장: PlayerController가 태어난다</h2>
 <p>클라가 맵 로딩을 끝내면 이제 <strong><code>NMT_Join</code></strong>(<code>World.cpp:7440</code>)을 보내. "나 준비 끝, 게임에 넣어줘." 여기가 PlayerController가 태어나는 지점이야.</p>

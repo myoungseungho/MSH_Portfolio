@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -102,6 +105,7 @@ a.xref:hover { background:#bbdefb; }
 <table class="compare-table"><thead><tr><th>축</th><th>함수 · file:line</th><th>한 줄 역할</th></tr></thead><tbody><tr><td>—</td><td><code>ServerReplicateActors</code> — :1112</td><td>프레임당 1회 진입. 아래를 지휘</td></tr><tr><td>① 쓰기</td><td><code>PrepareForReplication</code> 루프 — :1176</td><td>커넥션 루프 <strong>전에</strong> 준비 훅 1회 (N에만 비례)</td></tr><tr><td>① 쓰기</td><td><code>GridSpatialization2D::PrepareForReplication</code> — :5831</td><td>이동한 동적 액터를 셀에 재배치</td></tr><tr><td>—</td><td><code>GetCellInfoForActor</code> — :5686</td><td>위치+관심반경 → 셀 좌표 사각형</td></tr><tr><td>② 조건</td><td>Remove/AddDynamicActor — :5892</td><td>셀 경계 넘은 액터만 옮김</td></tr><tr><td>① 읽기</td><td><code>Gather...ForConnection</code> 루프 — :1290</td><td>커넥션마다 호출 (M에만 비례)</td></tr><tr><td>① 읽기</td><td><code>GridSpatialization2D::Gather...</code> — :6236</td><td>뷰어가 선 셀 노드에게만 위임</td></tr></tbody></table>
 <p>이 두 층 — <strong>①커넥션 밖에서 1회 준비 / ②커넥션마다 셀만 조회</strong> — 만 잡으면 이 챕터는 다 잡은 거야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 노드(ReplicationGraphNode)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: "이 커넥션한테 보낼 관련 액터 모으기"를 그냥 <strong>한 덩어리 함수</strong>에 if-else로 다 때려박으면 처음엔 돌아가.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 모으는 규칙이 한둘이 아니야. 격자로 모으기, "항상 관련(AlwaysRelevant)" 액터 모으기, 휴면(Dormancy) 빼기, 팀별로 모으기… 규칙이 늘 때마다 그 함수가 비대해지고, 게임마다 규칙을 <strong>갈아끼우기</strong>가 불가능해져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "관련 액터를 모으는 로직 한 조각"을 <strong>부품</strong>으로 떼어내 조립하는 것. → 이게 <strong>노드</strong>야. 격자·AlwaysRelevant·Dormancy가 다 같은 노드의 형제고, 매 프레임 <code>준비</code>+<code>수집</code> 두 훅만 맞추면 레고처럼 끼운다.</div>
 </div>
 <div class="conversation"><h2>2) 노드라는 발상: "관련 액터를 모으는 로직 조각"</h2>
 <p>격자 얘기 전에 한 계단 낮춰서. RepGraph의 만물은 <strong>노드(<code>UReplicationGraphNode</code>)</strong>야. 노드는 "관련 액터 리스트를 모으는 로직 한 조각"이고, 매 프레임 두 개의 훅을 가져 — 준비하는 <code>PrepareForReplication</code>과 수집하는 <code>GatherActorListsForConnection</code>.</p>
@@ -145,6 +149,7 @@ public:
 <div class="note gloss">🔤 <strong>기호 사전</strong> — <code>CellInfo.StartX = FMath::Max&lt;int32&gt;(0, UE::LWC::FloatToIntCastChecked&lt;int32&gt;(MinX / CellSize));</code><br>&bull;&nbsp;<strong><code>.</code></strong> = 상자 안의 칸을 가리킨다. <code>CellInfo.StartX</code>는 <code>CellInfo</code> 상자의 <code>StartX</code>칸.<br>&bull;&nbsp;<strong><code>=</code></strong> = 오른쪽 계산 결과를 왼쪽 칸에 넣는다.<br>&bull;&nbsp;<strong><code>::</code></strong> = "~소속" 표시. <code>FMath::Max</code>는 <code>FMath</code> 상자 안의 <code>Max</code> 도구야.<br>&bull;&nbsp;<strong><code>Max&lt;int32&gt;(0, 값)</code></strong> = 둘 중 큰 값을 고르는데, 결과를 <code>int32</code> 정수로 다룬다. 값이 음수면 0이 이겨.<br>&bull;&nbsp;<strong><code>UE::LWC::FloatToIntCastChecked&lt;int32&gt;</code></strong> = UE의 큰 월드 좌표 도구로 실수를 정수로 바꾸되, 위험하면 체크하는 변환.<br>&bull;&nbsp;<strong><code>MinX / CellSize</code></strong> = 월드 X좌표를 셀 크기로 나눠 "몇 번째 셀인가" 계산한다.<br>&bull;&nbsp;<strong><code>return CellInfo</code></strong> = 다 채운 셀 정보 상자를 호출한 쪽에 돌려준다.<br>🔁 <strong>이제 다시 보자.</strong> <code>MinX / CellSize</code>(좌표를 셀 번호로 바꿈) → <code>FloatToIntCastChecked&lt;int32&gt;</code>(정수로 깎음) → <code>Max&lt;int32&gt;(0, ...)</code>(음수는 0으로 막음) → <code>CellInfo.StartX = ...</code>(상자에 저장). 네 줄이 같은 방식으로 StartX/StartY/EndX/EndY를 채워서 <strong>"액터가 걸치는 셀 사각형"</strong>을 만든다.</div>
 <p><code>MinX/MaxX</code>는 이미 "위치 − 컬거리 ~ 위치 + 컬거리"로 계산돼 넘어온 값이야. 그걸 <code>CellSize</code>로 나눠 정수로 깎으면(<code>FloatToIntCastChecked</code>) 걸치는 셀 범위가 나와. <code>Max&lt;int32&gt;(0, ...)</code>로 음수 셀은 0으로 막고. 이 <code>FActorCellInfo{StartX,StartY,EndX,EndY}</code> 하나가 "이 액터가 지금 어느 셀들에 속하나"의 전부야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 정적/동적 액터 구분</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 격자를 쓰면 액터를 셀에 담아두잖아. 제일 단순하게 하면 <strong>매 프레임 모든 액터의 위치를 다시 읽어</strong> 어느 셀인지 다시 계산하고 다시 넣어.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 문짝·표지판은 <strong>평생 안 움직여</strong>. 얘들 위치를 매 프레임 다시 재고 셀에서 뺐다 넣었다 하는 건 순수 낭비야. 움직이는 액터도 대부분은 <strong>같은 셀 안에서 꼼지락</strong>대지, 셀을 넘는 일은 드물어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 안 움직이는 건 <strong>정적(static)</strong>으로 셀에 한 번 넣고 끝, 움직이는 건 <strong>동적(dynamic)</strong>으로 두되 <strong>셀 경계를 넘었을 때만</strong> 재배치. "안 움직이면 계산 안 함"이 격자의 두 번째 절감 축이야.</div>
 </div>
 <div class="conversation"><h2>4) 절감 축② 실물: 셀 경계 넘었을 때'만' 옮긴다</h2>
 <p>이제 매 프레임 준비 단계에서 무슨 일이 벌어지는지 보자. 동적 액터가 움직였어. 새 위치로 셀 사각형(NewCellInfo)을 다시 계산하고, <strong>이전 프레임 사각형(PreviousCellInfo)과 겹치는지</strong> 본다.</p>
@@ -215,6 +220,7 @@ public:
 <p>여기 <code>CellX, CellY</code>는 뷰어 위치를 <code>(ViewLoc - SpatialBias) / CellSize</code>로 바꾼 셀 좌표야. 그 셀 노드(<code>UReplicationGraphNode_GridCell</code>)를 <code>GetCell</code>로 꺼내서 걔한테만 <code>GatherActorListsForConnection</code>을 던져. <strong>전체 액터를 순회하는 코드가 어디에도 없지.</strong> 이게 100만 번을 서너 번으로 줄이는 바로 그 지점이야.</p>
 <p><code>UniqueCurrentGridCells</code>는 화면 분할 등으로 뷰어가 여럿일 때 <strong>같은 셀을 두 번 모으지 않게</strong> 하는 중복 방지 장치야. 이미 처리한 셀이면 스킵.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — SpatialBias(격자 원점 편향)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 위치를 CellSize로 나눠 셀 번호를 매길 때, 제일 단순하게는 <strong>월드 원점(0,0)을 격자 (0,0)으로</strong> 그냥 고정하면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 맵이 원점보다 <strong>왼쪽/아래(음수 좌표)</strong>로도 펼쳐지면? 음수 셀 번호가 나오는데, 이걸 0으로 뭉개버리면 <strong>서로 다른 위치가 같은 셀 0으로 짓뭉개져</strong> 격자가 깨져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 격자 (0,0)이 <strong>월드 어디에 대응할지</strong>를 옮길 수 있는 기준점. 셀 번호 = (위치 − <strong>SpatialBias</strong>) / CellSize. 맵이 예상 밖으로 튀면 Bias를 밀고 격자를 다시 지어. → 이게 <strong>SpatialBias</strong>야.</div>
 </div>
 <div class="conversation"><h2>6) 격자 밖으로 나가면? — SpatialBias와 재구축</h2>
 <p>한 가지 구멍. 격자 좌표 (0,0)이 월드의 어디에 대응하는지를 <code>SpatialBias</code>가 정해. 근데 맵을 넓혔거나 액터가 예상 밖으로 멀리 튀어서 <strong>Bias보다 바깥(음수 셀)</strong>으로 나가버리면? §3의 <code>Max&lt;int32&gt;(0, ...)</code>가 음수를 0으로 뭉개니까, 그냥 두면 서로 다른 위치가 같은 셀 0으로 짓뭉개져 버려.</p>

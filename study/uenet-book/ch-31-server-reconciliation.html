@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -55,6 +58,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그래서 필요한 게 <strong>서버 보정(server reconciliation)</strong>이야. 서버가 유일한 채점자라서, 맞은 이동은 "통과"라고 알려주고, 틀린 이동은 "정답 위치는 여기야. 그 지점부터 다시 해"라고 돌려보낸다. UE에서 그 빨간 펜 신호가 바로 <code>ClientAdjustPosition</code>이고, 통과 도장이 <code>ClientAckGoodMove</code>야.</p>
 <p>우리 조선 서버 식으로 말하면, 서버가 <code>CChosunPlayer</code>의 권위 위치를 기준으로 클라 보고를 채점한 뒤 <code>SP_위치보정</code> 같은 패킷을 보내는 구조와 닮았어. 차이는 UE 클라가 그냥 좌표만 덮어쓰지 않고, 저장해둔 입력을 정답 위치부터 다시 재생(replay)해서 "핑 때문에 먼저 움직였던 느낌"을 최대한 살린다는 점이야.</p>
 <p>왜 지금 배우냐면, 바로 앞 <a class="xref" href="ch-30-client-prediction.html">client-prediction</a>에서 "클라가 서버를 안 기다리고 먼저 움직이는 이유"를 봤기 때문이야. 먼저 움직이게 허락했으면, 반드시 그걸 서버가 채점하고 되돌리는 길도 있어야 해. 이 챕터는 그 반쪽, 즉 서버의 채점 결과가 <code>NetDriver</code>와 <code>PlayerController</code>를 거쳐 <code>ClientAdjustPosition</code>까지 어떻게 흘러가는지 보는 자리야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 서버 보정(server reconciliation)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 클라가 먼저 움직이게 허락해줬어(앞 챕터). 서버는 "이 이동 맞나?"만 속으로 검사하면 되지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 검사만 하고 아무 신호도 안 보내면, 틀린 클라는 자기가 틀린 줄 모르고 계속 가. 클라 화면은 문을 지났는데 서버는 문 앞 — 두 세계가 갈라져 고무줄처럼 튀고, 맞아야 할 공격이 빗나가.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 서버가 채점 결과를 도로 알려주기. 맞으면 "통과", 틀리면 "정답 위치 여기야, 여기부터 다시 해". → 이 되돌리기가 서버 보정이야.</div>
 </div>
 <div class="conversation"><h2>0. 먼저 비유부터 — 받아쓰기 채점</h2>
 <p>받아쓰기 시험을 생각해봐. 선생님이 불러주고, 너는 공책에 <strong>네 나름대로</strong> 적어. 다 적고 나서 선생님한테 공책을 내밀지. 그럼 선생님이 두 가지 중 하나를 해.</p>
@@ -76,6 +80,7 @@ a.xref:hover { background:#bbdefb; }
 <ol><li><strong><code>NetDriver.cpp</code></strong> — 서버 틱이 매 커넥션마다 보정 송신을 <strong>촉발하는 드라이버 루프</strong>. verbatim 존재. ✅</li><li><strong><code>PlayerController.cpp</code></strong> — PC가 "이건 내가 조종하는 폰이네?" 확인하고 이동 컴포넌트로 <strong>위임하는 관문</strong>. verbatim 존재. ✅</li><li><strong><code>Character.cpp</code></strong> — 서버가 이동을 <strong>받는</strong> RPC, 클라가 보정을 <strong>받는</strong> RPC — 이 <strong>얇은 포워더들</strong> verbatim 존재. ✅</li></ol>
 <p>즉 <strong>판정 로직으로 들어가는 입구와 나오는 출구는 다 있는데, 판정 그 자체(오차 비교·되돌림 계산)만 미포함.</strong> 그 부분은 아래 "개념 재료"로만 정리한다. 정확한 함수 본체·라인이 필요하면 UE 원본 <code>CharacterMovementComponent.cpp</code>를 따로 대조해야 해.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 두 답장(ClientAdjustPosition vs ClientAckGoodMove)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 서버가 틀린 이동만 "너 틀렸어" 하고 고쳐주면 되지. 맞은 건 굳이 답장 안 해도 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 클라는 미확인 무브를 SavedMove 버퍼에 계속 쌓아둬(앞 챕터). 맞았다는 신호가 안 오면 그 기록을 언제 지울지 몰라 버퍼가 무한정 부풀고, 나중에 되밟을 때 헛되게 다 밟아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 맞아도 "통과!"를 꼬박꼬박 알려주기. 틀리면 ClientAdjustPosition(되돌려), 맞으면 ClientAckGoodMove(버퍼 비워). → 채점 결과가 반드시 둘 중 하나로 돌아오는 동전의 양면.</div>
 </div>
 <div class="conversation"><h2>1. 전체 콜체인 한 장으로</h2>
 <p>보정 신호가 흐르는 두 방향이 있어. <strong>① 서버가 채점 결과를 클라로 쏘는 쪽</strong>(정방향)과 <strong>② 클라 이동이 서버로 들어와 채점을 촉발하는 쪽</strong>(역방향). ★는 이 트리에 <strong>실물 없음</strong>(CMC.cpp), ✅는 실물 있음.</p>
@@ -122,6 +127,7 @@ a.xref:hover { background:#bbdefb; }
 <ol><li><strong>서버 틱</strong>이 커넥션마다 <code>SendClientAdjustment()</code>를 부른다 (NetDriver).</li><li><strong>PC</strong>가 "이거 그 클라가 조종하는 폰 맞아?" 확인하고 이동 컴포넌트로 넘긴다 (PlayerController).</li><li><strong>이동 컴포넌트</strong>(미포함)가 오차를 재서, 크면 <code>ClientAdjustPosition</code>(되돌려), 작으면 <code>ClientAckGoodMove</code>(통과)를 클라로 쏜다.</li></ol>
 <p>이제 실물 코드로 한 칸씩 밟자.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 되돌려-재생(replay)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 서버가 "정답 위치 여기야" 하면 클라는 그 좌표로 뚝 순간이동시키면 끝 아냐?<br>&bull;&nbsp;<strong>그런데 문제</strong>: 순간이동만 하면 핑 동안 예측으로 밟아둔 101~107번 무브가 통째로 날아가 조작감이 리셋 → 툭 튀는 rubber-banding. 우리 조선 서버가 <code>SM_순간이동</code>으로 끊어붙일 때 딱 그 거친 튐이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 정답 위치로 되감은 다음, 그 뒤 SavedMove들을 다시 밟아 현재까지 재생하기. → 이 "되돌리고 다시 밟기"가 UE 이동이 부드러운데도 서버 권위를 지키는 비결이야.</div>
 </div>
 <div class="conversation"><h2>2. 실물 코드 — 배관을 따라가며</h2>
 <p>지금부터 진짜 언리얼 코드가 나와. <strong>겁먹지 마</strong> — 함수 이름이 길어도 대부분 "있는지 확인하고, 있으면 다음 사람에게 넘긴다"는 흐름이야. 낯선 기호는 코드 바로 아래 🔤 상자에서 하나씩 풀어볼게.</p>

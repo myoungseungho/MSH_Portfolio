@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -164,6 +167,7 @@ a.xref:hover { background:#bbdefb; }
 └────────────────────────────────────────────────────────────────────┘</div>
 <p>이 다이어그램 전체를 다 외울 필요 없어. <strong>세 덩어리만</strong> 기억해: <code>양자화(1번, 공유)</code> → <code>델타(N번, baseline 대비)</code> → <code>역양자화+Apply(수신)</code>. 나머지는 이 뼈에 붙는 살이야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 함수포인터 테이블</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 레거시는 타입마다 "나를 어떻게 네트워크에 실어?"를 <strong>가상함수 오버라이드</strong>(<code>NetSerialize(FArchive&amp;)</code>)로 정했어. 객체지향의 정석이지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 가상함수는 부를 때마다 "이 객체의 진짜 함수가 뭐지?"를 표 뒤져 찾아가는 <strong>디스패치 비용</strong>이 붙어. 이걸 커넥션×멤버 수만큼, 매 프레임 돌리면 그 잔비용이 쌓여. 게다가 아카이브에 매번 다시 써넣어야 하고.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 타입 하나가 "양자화·델타·비교·검증" 하는 법을 <strong>함수 손잡이들의 표(POD)</strong> 하나로 미리 등록해두는 것. 가상함수 디스패치 대신 표에서 바로 꺼내 쓰니 빠르고, 데이터라 다루기도 가벼워. → 이게 Iris의 <strong>함수포인터 테이블</strong>이야.</div>
 </div>
 <div class="conversation"><h2>3) 심장 — 함수포인터 테이블</h2>
 <p>레거시에서 타입마다 복제를 어떻게 정의했지? <code>NetSerialize(FArchive&amp;)</code> 가상함수 오버라이드였어. 문제는 이게 커넥션마다 아카이브에 매번 다시 써넣는 구조라는 거.</p>
@@ -236,6 +240,7 @@ typedef void(*NetSerializeDeltaFunction)(FNetSerializationContext&amp;, const FN
 <p>그리고 마지막 세 줄이 영리해. <code>XYZIsNotZero</code> 비트마스크에 "이 축이 0이 아니냐"를 미리 접어둬. 세 축이 다 0(회전 없음)이면 이 비트들이 다 꺼져서, 직렬화할 때 "안 움직였음"을 극소 비트로 표현할 수 있어. 무거운 계산(float 압축 + 0판정)을 <strong>양자화 단계에서 한 번에 몰아서</strong> 해두는 거야 — 스니펫 0에서 본 "한 번만" 원칙의 실물이야.</p>
 <div class="note">참고: 이 <code>Target</code>은 반드시 POD여야 하고(memcpy로 커넥션들이 나눠 쓰니까), 비트결정적이어야 해. 소스가 대놓고 경고해 — "양자화 상태의 패딩을 조심하라, 스택에 만들면 비결정적 상태가 될 수 있다"(NetSerializer.h:239). 김밥을 똑같이 말아야 100명한테 똑같이 나눠주지, 매번 모양 다르면 공유가 안 되잖아.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Fragment(파편)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 레거시는 "이 액터의 이 프로퍼티를 이렇게 복제해"라는 지식을 <code>UNetDriver</code>/<code>RepLayout</code> 같은 <strong>중앙 덩어리</strong>에 몰아넣었어.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그럼 액터가 <strong>자기 상태를 어떻게 네트워크에 태우는지가 자기 밖</strong>에 있게 돼. 새 타입·새 규칙을 붙이려면 그 중앙 덩어리를 매번 건드려야 하고, 커지면 얽혀서 손대기 무서워져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "게임 상태의 일부를 네트워크 프로토콜에 묶는 단위"를 <strong>작은 객체로 쪼개</strong> 각자 책임지게 하는 것. → 이게 <strong>Fragment(파편)</strong>야. 수신 데이터를 실제 객체에 밀어넣는 것도 파편의 <code>ApplyReplicatedState</code> 하나로 통일. "중앙 집중 → 객체 단위 분산"이 오브젝트 지향 재설계의 실체.</div>
 </div>
 <div class="conversation"><h2>5) 오브젝트 지향 — Fragment</h2>
 <p>이제 두 번째 축. "오브젝트 지향 재설계"가 무슨 뜻이냐.</p>
@@ -265,6 +270,7 @@ public:
 <ul><li>레거시 <code>RepLayout</code>이 하던 "무슨 프로퍼티를 어떻게" → Fragment 객체들이 나눠 가짐</li><li>레거시 프로퍼티별 memcpy/조건검사 → Serializer 함수포인터 테이블(스니펫 A)</li><li>레거시 <code>RepNotify</code> 콜백 지점 → <code>ApplyReplicatedState</code></li></ul>
 <p>즉 "중앙 집중 → 객체 단위 분산". 이게 오브젝트 지향 재설계의 실체야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — NetRefHandle(경량 핸들)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 레거시는 복제 대상을 대개 <strong>UObject 포인터나 GUID</strong>로 가리켰어. 그냥 객체를 손가락으로 짚는 느낌.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 포인터는 기계마다 값이 달라 네트워크로 못 보내고, GUID는 커. 복제 시스템이 객체를 <strong>해시맵 키로 쓰고, 수백 개를 훑고, 네트워크로 실어나르는데</strong> 무거운 식별자면 그게 다 비용이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 정체성을 <strong>64비트 숫자 하나</strong>에 통째로 패킹한 가벼운 손잡이. 심지어 최하위 비트 하나로 static/dynamic까지 구분해. → 이게 <strong>NetRefHandle</strong>이야. 포인터 대신 이 번호표로 객체를 싸게 지칭해.</div>
 </div>
 <div class="conversation"><h2>6) NetObject 정체성 — 핸들</h2>
 <p>마지막 조각. 레거시는 복제 대상을 대개 UObject 포인터 / GUID로 지칭했어. Iris는 경량 핸들 하나로 바꿨어. 64비트 안에 정체성을 통째로 패킹.</p>

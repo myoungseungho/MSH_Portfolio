@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -68,6 +71,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note"><strong>"함수처럼 생긴" RPC를, 엔진은 로컬 실행 vs 원격 전송으로 어떻게 갈라내고, 누구한테 보낼지 어떻게 정할까?</strong></div>
 <p>비유부터. 회사 우편함을 떠올려봐. 네가 서류(함수 호출)를 책상 위에 올려놨어. 근데 서류 겉면 도장(플래그)에 "이건 본사로", "이건 전 지점에 뿌려", "이건 그냥 여기서 처리"가 찍혀 있어. <strong>분류원 한 명</strong>이 도장만 보고 "여긴 두고 / 저긴 부치고 / 이건 버려"를 정해. RPC의 그 분류원이 바로 <code>GetFunctionCallspace</code>야. 이걸 실제로 구현하는 게 아래 함수들이고. 낮은 계단으로 들어가자.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — RPC 세 방향(Server/Client/Multicast)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: "이 함수 저쪽에서 실행해줘" 한 종류만 있으면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 네트워크가 <strong>별 모양</strong>이야 — 서버가 중심, 클라들은 바큇살, 클라끼리는 직접 선이 없어. 그래서 "클라 A → 클라 B"는 아예 불가능하고, 누가→누구인지 안 정하면 어디로 보낼지 알 수가 없어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 방향을 딱지로 못 박기. <strong>Server</strong>(클라→서버), <strong>Client</strong>(서버→소유 클라 1명), <strong>Multicast</strong>(서버→전 클라). 조선 서버의 <code>CM_</code>(클라→서버)·<code>SP_</code>(서버→클라) 구분을 엔진이 플래그로 강제하는 셈이야.</div>
 </div>
 <div class="conversation"><h2>세 종류의 RPC — 방향이 전부다</h2>
 <p>먼저 용어. RPC는 딱 세 종류고, 구분 기준은 <strong>"누가 → 누구에게"</strong> 딱 하나야.</p>
@@ -121,6 +125,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note">🔬 ①번 <code>CallFunction</code>/<code>ProcessInternal</code>은 CoreUObject 모듈 소스인데 이 클론엔 안 들어 있어. 그래서 ①은 <strong>개념으로만</strong> 설명하고, ②부터는 아래 전부 verbatim 실소스야.</div>
 <hr>
 <p>지금부터 진짜 엔진 코드가 나온다. <strong>겁먹지 마</strong> — 낯선 기호는 바로 아래 🔤 상자에서 쪼개고, 그다음 🔁에서 다시 한 문장으로 읽어줄게.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Callspace 판정(GetFunctionCallspace)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 함수를 부르면 그 자리에서 바로 실행하면 되잖아. 그게 함수니까.<br>&bull;&nbsp;<strong>그런데 문제</strong>: RPC는 부른 자리에서 실행할지, 바다 건너로 부칠지, 아니면 권한 없는 클라의 반칙이라 조용히 버릴지가 <strong>상황마다 달라.</strong> 이걸 안 정하고 그냥 실행하면 치트가 되거나 엉뚱한 데서 돌아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 도장(플래그)과 내 신분(Role)을 보고 <strong>Local/Remote/Absorbed</strong>를 판정하는 분류원 한 명. → 그게 <code>GetFunctionCallspace</code>야. 회사 우편함에서 서류 도장 보고 "두고/부치고/버리고"를 정하는 그 사람.</div>
 </div>
 <div class="conversation"><h2>계단 1 — ② 분류원 <code>GetFunctionCallspace</code>: 세 가지 답</h2>
 <p>②번이 이 챕터의 심장이야. 얘가 내놓는 답은 세 가지(그리고 조합):</p>
@@ -233,6 +238,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 처음엔 <code>bProcessed = false</code>로 시작해. 월드와 컨텍스트를 찾고, <code>ActiveNetDrivers</code>를 하나씩 돌면서 비어 있지 않고 <code>ShouldReplicateFunction</code>이 참인 드라이버에게 <code>ProcessRemoteFunction</code>을 맡긴다. 하나라도 맡기면 <code>true</code>로 바꾸고, 마지막에 "처리됐나?"를 돌려주는 함수야.</div>
 <p>넷드라이버가 왜 여러 개(<code>ActiveNetDrivers</code> 루프)냐면 — 게임 넷드라이버 말고도 데모(리플레이) 넷드라이버, 빔(beacon) 넷드라이버가 동시에 붙어 있을 수 있거든(<a class="xref" href="ch-42-demo-replay.html">demo-replay</a>). 각자 <code>ShouldReplicateFunction</code>으로 "이 함수 내가 처리할 대상 맞아?"를 답하고, 맞다는 놈마다 <code>ProcessRemoteFunction</code>으로 넘겨. 여기서 실제 송신 엔진 ④번으로 넘어가.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 대상 선택(1명이냐 전원이냐)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: "원격으로 보내라"까지 정했으면, 그냥 상대한테 쏘면 끝 아냐?<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 상대가 한 명이 아닐 수 있어. 멀티캐스트는 <strong>전 클라</strong>한테 뿌려야 하고, Client RPC는 <strong>소유 클라 딱 한 명</strong>, Server RPC는 <strong>서버 하나</strong>. 같은 "전송"이라도 대상 수가 완전히 달라.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 함수가 서버 멀티캐스트냐 아니냐를 보고 <strong>전 커넥션 루프 vs 한 커넥션</strong>을 고르는 갈림길. → 그게 <code>ProcessRemoteFunction</code>이야. 조선 서버에서 브로드캐스트 for 루프냐, 세션 하나 <code>SendPacket</code>이냐를 고르던 그 판단이지.</div>
 </div>
 <div class="conversation"><h2>계단 3 — ④ <code>ProcessRemoteFunction</code>: 1명이냐 전원이냐</h2>
 <p>이제 진짜 갈림길이야. <strong>누구한테 보낼 것인가.</strong> 그 판단의 기준 플래그를 먼저 세워:</p>

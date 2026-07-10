@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -69,6 +72,7 @@ a.xref:hover { background:#bbdefb; }
 <p>재밌는 건, "여기 없다"는 사실 자체가 이 챕터의 핵심 교훈이라는 거야. 엔진 코어를 아무리 뒤져도 소켓이 안 나오는 이유 — 그게 바로 "코어는 소켓을 직접 안 만진다"는 UE의 설계 철학이거든. 없는 게 정상이야.</p>
 <hr>
 <p>지금부터 코드 조각이 나오지만 <strong>겁먹지 마</strong>. 여기서 볼 건 "소켓을 직접 보내는 코드"가 아니라, 왜 어떤 함수에는 몸통이 없고 어떤 함수는 다음 칸으로 넘기는지만 읽으면 돼.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 계약과 구현 분리(PURE_VIRTUAL)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: NetDriver 안에 그냥 소켓 <code>SendTo()</code>를 직접 박아 넣으면 제일 직관적이지. 보낼 데서 소켓 함수 부르면 끝.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 언리얼은 PC·PS5·모바일·스팀소켓 <strong>수십 플랫폼</strong>에서 돌아. 소켓 API가 플랫폼마다 다른데, 코어에 직접 박으면 플랫폼 하나 늘 때마다 <strong>엔진 심장을 뜯어고쳐야</strong> 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 코어는 "이 바이트를 소켓으로 보내라"는 <strong>계약(빈 함수)</strong>만 선언하고, 진짜 <code>SendTo</code>는 플랫폼별 구현체가 채우자. → 그 "몸통 없는 계약" 표시가 <strong>PURE_VIRTUAL</strong>이야. 택배 회사(규칙)와 택배 기사(운전)를 갈라놓는 거지.</div>
 </div>
 <div class="conversation"><h2>1) 왜 몸통을 비워둘까? — PURE_VIRTUAL 계약</h2>
 <p>먼저 딱 하나의 개념. <strong><code>PURE_VIRTUAL</code></strong>.</p>
@@ -96,6 +100,7 @@ class INetSender {
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>GetSocketSubsystem</code>은 "소켓 라이브러리 주소를 줘"라는 함수인데, 코어는 <code>PURE_VIRTUAL</code>로 비워둬. 이어 읽으면 <strong>"소켓 종류는 플랫폼별 기사 클래스가 정해라"</strong>가 된다.</div>
 <p>"어떤 소켓 라이브러리를 쓸지는 서브클래스가 정해라. 코어는 모른다." — 이 한 줄이 코어를 OS/플랫폼으로부터 완전히 떼어놓는 장치야. Windows든, PS5든, 스팀 소켓이든, 코어 코드는 하나도 안 바뀌어. 기사만 갈아끼우면 돼.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 주소→커넥션 맵</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: TCP면 소켓 하나가 곧 연결 하나라, 받은 바이트가 누구 건지 소켓만 봐도 알아. 조선 서버가 세션마다 소켓을 들고 있는 것처럼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: UDP는 <strong>연결이라는 게 없어.</strong> 서버 소켓 딱 하나로 수천 명의 패킷이 다 쏟아져 들어와. 방금 온 이 바이트가 <strong>누구 건지</strong> 소켓만 봐선 몰라.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 패킷에 실려 온 <strong>송신자 주소(FInternetAddr)</strong>를 열쇠로, "이 주소 = 이 커넥션" 주소록을 두자. 있으면 그 커넥션으로 넘기고(<code>ReceivedRawPacket</code>), 없으면 "처음 보는 놈(connectionless)"이라 핸드셰이크부터. → 그 주소록이 <strong>FInternetAddr→UNetConnection 맵</strong>이야.</div>
 </div>
 <div class="conversation"><h2>2) 받는 길: TickDispatch → 주소 판별 → 커넥션</h2>
 <p>송신을 봤으니 이제 수신. 받는 쪽 규약은 헤더 주석에 통째로 적혀 있어. 이거 하나면 수신 경로의 큰 그림이 다 잡혀:</p>

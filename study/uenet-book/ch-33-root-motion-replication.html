@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -55,6 +58,7 @@ a.xref:hover { background:#bbdefb; }
 <p>우리 서버로 치면 <code>SP_*</code>에 최종 좌표만 넣고 "스킬 모션은 알아서 재생해"라고 던진 셈이야. 받는 쪽은 그 스킬이 <strong>몇 초째 재생 중인지</strong>, 그 몇 초 동안 루트 본이 <strong>얼마나 밀고 나갔는지</strong>를 모른다. 락으로 순서를 맞추고 단일스레드로 처리해도, 애니 시간표와 서버 위치표가 서로 다른 종이를 보고 있으면 화면은 깨진다.</p>
 <p>그래서 언리얼도 같은 문제를 별도로 다룬다. 답이 바로 <code>RepRootMotion</code>이야. 그냥 "위치가 여기다"가 아니라, "어떤 루트모션 몽타주가 몇 초째 재생 중이고, 그때 권위 위치/회전은 이렇다"를 한 덩이로 보내서, 받는 쪽이 애니와 위치를 다시 같은 박자로 맞추게 만든다.</p>
 <p>이걸 지금 배우는 이유도 분명해. 앞 챕터 <a class="xref" href="ch-32-simulated-proxy-smoothing.html">simulated-proxy-smoothing</a>에서는 남의 캐릭터 위치가 조금 틀어졌을 때 부드럽게 맞추는 일반 해법을 봤다. 이번 챕터는 그 특수 케이스야. <strong>위치를 만든 원인이 애니메이션일 때</strong>, 단순 스무딩만으로는 안 되고 애니 재생 위상까지 같이 복제해야 한다는 걸 여기서 잡아야 한다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 루트모션(Root Motion)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 캐릭터 이동은 키 입력에서 나와. W 누르면 앞으로, 애니는 그 위에 얹은 눈요기일 뿐이고 서버는 좌표만 알면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 구르기·돌진베기·잡기는 몸이 애니 클립을 따라 훅 나가. 이걸 좌표만 보내면 발이 땅을 미끄러지고 몸이 순간이동한 것처럼 보여 — 애니 진행이 곧 위치인데 위치만 떼서 보냈으니.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 애니의 루트 본 움직임을 캐릭터의 진짜 이동으로 바꾸기. → 이게 루트모션이야. "발 안 미끄러지는 이동"을 애니가 직접 만들어.</div>
 </div>
 <div class="conversation"><h2>0. 먼저 비유부터 — 춤을 전화로 중계하기</h2>
 <p>친구 둘이 똑같은 노래에 맞춰 <strong>똑같은 안무</strong>를 춘다고 해봐. 문제는 둘이 다른 방에 있고, 전화로만 소통해.</p>
@@ -75,6 +79,7 @@ a.xref:hover { background:#bbdefb; }
 <ul><li><strong>루트모션 (Root Motion)</strong> — 애니 클립의 루트 본 움직임을 캐릭터의 <strong>실제</strong> 위치/회전 이동으로 바꾸는 것. "발이 미끄러지지 않는 이동"을 애니가 직접 만든다. 대시, 구르기, 칼 휘두르며 훅 들어가기가 다 이거.</li><li><strong>AutonomousProxy / SimulatedProxy</strong> — 복제된 캐릭터의 클라 역할. AutonomousProxy = <strong>내가</strong> 조종(스스로 예측하고 서버에 보고), SimulatedProxy = <strong>남이</strong> 조종(서버 상태를 받아 흉내). 소스에서 <code>GetLocalRole() == ROLE_SimulatedProxy</code>(:1380)로 경로가 갈린다.</li><li><strong>몽타주(Montage) / Position</strong> — 애니 몽타주는 재생 구간(섹션)을 가진 애니 재생 단위. <code>Position</code>은 지금 몇 초째 재생 중인가 하는 <strong>재생 위상(초)</strong>. 서버 Position과 클라 Position의 차이(<code>DeltaPosition</code>)를 메꾸는 게 이 챕터 전체의 핵심.</li><li><strong>RepRootMotion (<code>FRepRootMotionMontage</code>)</strong> — 서버가 루트모션 상태(어떤 애니, 몇 초째, 위치/회전, 속도/가속, 권위 RootMotionSource)를 한 덩이로 담아 <strong>SimulatedProxy에게만</strong> 복제하는 전용 구조체. 일반 위치복제와 <strong>분리된 채널</strong>.</li></ul>
 <p>이 4개만 잡으면 나머지는 다 이 위에 얹힌다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 루트모션 복제(RepRootMotion 별도 채널)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 남 캐릭터 위치는 일반 위치복제로 "지금 여기 있음"만 보내면 되잖아(앞 챕터 스무딩처럼).<br>&bull;&nbsp;<strong>그런데 문제</strong>: 애니가 이동을 만드니까 "몇 초째 재생 중"을 모르면 위치를 못 맞춰. 위치만 툭 주면 모션 진행도랑 자리가 어긋나 발이 미끄러지고 순간이동해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 위치 + 어떤 애니 + 몇 초째(Position)를 한 덩이로 묶어 남에게만 보내는 전용 채널. → 이게 RepRootMotion이야. 일반 위치복제랑 분리된 파이프.</div>
 </div>
 <div class="conversation"><h2>2. 왜 별도 채널이어야 하나 — 이 챕터의 존재 이유</h2>
 <p>일반 위치복제는 "지금 어디 있음"만 보내. 근데 애니 이동은 그걸론 부족해. 왜?</p>
@@ -249,6 +254,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> 긴 첫 줄은 "캐릭터가 서버로 받은 루트모션 이동 보고 RPC의 실제 처리 함수"야. 안쪽 한 줄은 새 계산을 직접 하지 않고, <code>GetCharacterMovement()</code>로 이동 컴포넌트를 찾아 같은 이름의 처리 함수에 받은 값들을 그대로 넘긴다. 캐릭터는 입구, 실제 채점은 Movement 쪽이라는 뜻이야.</div>
 <p>이름이 길지만 겁먹지 마. 핵심만: 내 클라가 루트모션으로 움직인 결과를, <strong>루트모션 전용 하이브리드 이동 RPC</strong>로 서버에 보고하는 거야. 그럼 서버가 <a class="xref" href="ch-31-server-reconciliation.html">server-reconciliation</a>처럼 권위적으로 검증/보정하고, 그 권위 결과가 다시 §4-A의 <code>RepRootMotion</code>으로 포장돼 남들에게 뿌려져. <code>Character.cpp</code>의 이 함수는 실제 일을 <code>CharacterMovement</code>에 위임(정의 미포함)하고 껍데기만 잡아. 일반 이동은 <code>ServerMove_Implementation</code>(:1869), 압축 비트스트림은 <code>ServerMovePacked_Implementation</code>(:1857)이 받는데, <strong>루트모션이 낀 이동은 별도 하이브리드 RPC</strong>가 따로 있다는 것만 기억하면 돼. RPC가 뭔지는 → <a class="xref" href="ch-21-rpc-types.html">rpc-types</a>.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 애니 위상 되감기(되감고 다시 재생)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 서버가 정답 위치(Location)를 보냈으니, 남 클라는 거기로 뚝 순간이동시키면 제일 간단하지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 서버가 준 위치는 "서버 위상 3.0초 시점" 자리인데 내 화면 애니는 이미 3.2초까지 재생됐어. 몸만 3.0초 자리로 튕기면 위치와 모션이 따로 놀아 — 후렴 위치만 맞추고 춤은 딴 박자인 꼴.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 서버 위치로 되감은 다음, 3.0→3.2초 애니가 만든 이동만큼 로컬에서 다시 춰서 전진하기. → 위치와 모션이 한 몸으로 굴러가. 그래서 Position을 굳이 복제해.</div>
 </div>
 <div class="conversation"><h2>5. 여기서 맞춰봐 — 왜 순간이동 대신 굳이 다시 춤추나?</h2>
 <p>도입에서 던진 반전. 남의 클라는 서버가 보낸 위치(<code>RepRootMotion.Location</code>)를 알잖아. 그냥 거기로 <strong>뚝 순간이동</strong>시키면 안 돼? 왜 §4-E처럼 되감은 다음 위상차만큼 <code>SimulateRootMotion</code>으로 <strong>다시 재생</strong>하는 번거로운 짓을 할까?</p>

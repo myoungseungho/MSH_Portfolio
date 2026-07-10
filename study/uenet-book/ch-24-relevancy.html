@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -63,6 +66,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그리고 이걸 실제로 구현하는 게 <code>AActor::IsNetRelevantFor</code> 라는 함수야. 이번 챕터는 이 함수 하나를 뜯는 거야. 앞에서 <a class="xref" href="ch-12-server-replicate-actors.html">server-replicate-actors</a>로 "매 틱 후보 추리고 정렬해서 보낸다"는 큰 그림을 봤다면, 이번엔 그 <strong>"후보에 애초에 넣을지 말지"의 관문</strong>을 보는 거지.</p>
 <div class="note">전제 복습은 링크로만. 커넥션이 뭔지 애매하면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a>, 매 틱 어디서 이게 도는지 → <a class="xref" href="ch-11-netdriver-tick.html">netdriver-tick</a>, 우선순위·빈도로 "누구 먼저"를 정하는 건 이 챕터 다음 → <a class="xref" href="ch-25-priority-updatefreq.html">priority-updatefreq</a>.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 관련성(Relevancy)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 제일 단순하게 짜면, 월드에 떠 있는 액터를 <strong>전부 모든 클라한테</strong> 매 틱 보내. 몬스터 위치, 문 상태, 남의 총알까지 싹 다.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 플레이어 500명 × 액터 수천 개면 보낼 짝이 <strong>곱셈으로 폭발</strong>해. 지도 반대편 몬스터 싸움까지 내 화면에 초당 수십 번 날아와 — 보이지도 않는데. 대역폭도 CPU도 그냥 샌다.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 액터마다 커넥션마다 "<strong>이거 이 사람한테 보낼 필요가 있나?</strong>"를 먼저 묻는 관문. 잔치 초대장을 소리 들릴 거리 안에만 돌리듯. → 이게 <strong>관련성(Relevancy)</strong>이고, 우리 서버 말로는 AOI(관심 영역) 판정이야.</div>
 </div>
 <div class="conversation"><h2>1) 큰 그림 — 예외 먼저, 거리 나중</h2>
 <p>관련성 판정은 두 층으로 되어 있어. 순서가 중요해.</p>
@@ -100,6 +104,7 @@ AActor::IsNetRelevantFor(...)                    ActorReplication.cpp:382
 <p>한 줄 요약: <strong><code>IsNetRelevantFor</code> = 예외로 먼저 답 내고, 안 나면 거리로 자른다.</strong></p>
 <hr>
 <p>지금부터 진짜 언리얼 C++가 나와. <strong>겁먹지 마</strong> — 낯선 기호는 코드 바로 아래 🔤 상자에서 하나씩 풀고, 우리는 <code>true</code>가 되는 길과 <code>false</code>가 되는 길만 보면 돼.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 거리 기반 컬링(NetCullDistanceSquared)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: "관심 있냐"를 판정하는 제일 자연스러운 기준은 <strong>가까우면 보내고 멀면 안 보내기</strong>야. 그럼 뷰어랑 액터 사이 거리를 재야 해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 진짜 거리를 구하려면 마지막에 <strong>제곱근(sqrt)</strong>을 씌워야 하는데, 이걸 액터×커넥션 수천 번을 매 틱 돌리면 sqrt 비용이 산더미로 쌓여. 게다가 "몇 미터까지가 가까운 거야?"라는 <strong>기준선</strong>도 없으면 자를 수가 없어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 컷 거리를 미리 정해 <strong>제곱값으로 저장</strong>해두고(그래서 이름 끝이 …<strong>Squared</strong>), 거리도 제곱인 채로 비교하는 것. sqrt를 통째로 아끼면서 "가깝냐"만 딱 판정하는 게 <strong>거리 컬링</strong>이야. 기본 제곱값을 풀면 150m.</div>
 </div>
 <div class="conversation"><h2>2) 거리 컷의 심장 — DistSquared 한 줄</h2>
 <p>먼저 제일 밑바닥, 실제로 "가깝냐 머냐"를 재는 함수부터 봐. 놀랄 만큼 짧아.</p>
@@ -148,6 +153,7 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 <p>값을 액터마다 다르게 줄 수도 있어. 큰 보스나 멀리서도 봐야 하는 랜드마크는 이 값을 <strong>키워서</strong> 더 멀리서도 보이게 하고, 자잘한 이펙트·장식물은 <strong>줄여서</strong> 가까이서만 보이게 해 대역폭을 아껴.</p>
 <div class="note"><strong>소스 주의:</strong> 이 <code>NetCullDistanceSquared</code> 멤버가 <code>UPROPERTY</code>로 선언된 <code>Actor.h</code>, 그리고 <code>bUseDistanceBasedRelevancy</code>를 담은 <code>AGameNetworkManager</code> 클래스 헤더는 이 클론에 <strong>.h가 배포 안 됐어(.cpp만 존재).</strong> 그래서 "에디터에 어떻게 노출되나"까지는 대조 못 했지만, 기본값·접근자·실제 사용처는 위 .cpp들에서 전부 확인했어.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 예외 규칙 플래그(bAlwaysRelevant / bOnlyRelevantToOwner)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 관련성을 그냥 <strong>거리 하나로만</strong> 자르면 코드가 깔끔하지. 가까우면 보내고 멀면 끝.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 거리로만 자르면 엉뚱한 게 잘려. 게임모드·매치상태는 지도 어디 있든 <strong>전원</strong>이 알아야 하고, 내 총알은 화면 밖으로 날아가도 <strong>주인인 나한텐</strong> 계속 와야 해. 반대로 남의 개인 UI 액터는 코앞이어도 나한텐 오면 안 되고.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 거리를 재기 <strong>전에</strong> "무조건 보낸다 / 무조건 안 보낸다"를 먼저 정하는 <strong>예외 플래그</strong>. <code>bAlwaysRelevant</code>(전원), <code>bOnlyRelevantToOwner</code>(주인만) 같은 거. 싸고 확실한 예외를 먼저 쳐내고, 남은 애만 비싼 거리계산으로 넘겨.</div>
 </div>
 <div class="conversation"><h2>4) 판정 본체 — 예외들이 먼저 손을 든다</h2>
 <p>이제 진짜 관문, <code>IsNetRelevantFor</code> 본체야. 앞부분(예외층)부터.</p>

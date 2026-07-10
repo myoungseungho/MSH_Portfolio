@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -55,6 +58,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그래서 이 문제는 "서버 좌표가 맞냐"와 "화면이 부드럽게 보이냐"를 나눠서 봐야 해. 서버 권위 좌표는 캡슐처럼 즉시 맞춰야 하고, 눈에 보이는 메시만 살짝 늦게 따라오게 만들면 돼. 아이가 줄에 묶인 장난감 차를 끌 때, 손 위치는 바로 바뀌지만 차 몸통은 잠깐 뒤따라오는 느낌이라고 보면 쉬워.</p>
 <p>이번 챕터의 답이 바로 <strong>Simulated Proxy Smoothing</strong>이야. 내가 조종하지 않는 "남의 캐릭터"는 서버가 보내준 위치를 믿되, <code>PostNetReceiveLocationAndRotation()</code>에서 새 위치를 받고 <code>SmoothCorrection()</code>으로 차이를 저장한 뒤, 렌더링 쪽에서 그 차이를 조금씩 없애. 핵심은 예측을 더 똑똑하게 하는 게 아니라, 확정된 서버 위치와 화면 표현 사이의 빈칸을 메우는 거야.</p>
 <p>책 흐름상 지금 이걸 배우는 이유도 있어. 앞에서는 내 캐릭터가 먼저 움직이고 서버 보정으로 맞춰지는 길을 봤어. 이제 반대로, 내가 조종하지 않는 캐릭터는 예측하지 않고 서버 업데이트를 받아 보이기만 해. 이 차이를 여기서 잡아두면 뒤의 root motion, server time sync, lag compensation을 볼 때 "정확한 좌표"와 "부드러운 그림"을 헷갈리지 않아.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 네트워크 스무딩(Network Smoothing)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 서버가 남 캐릭터 위치를 보내주면, 받은 그 위치로 화면에 딱 찍어 그리면 되지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 서버는 초당 10~30번만 보내는데 화면은 60~144번 그려. 중간 칸이 텅 비어서 남들이 뚝뚝 끊기거나 순간이동 유령처럼 보여 — 5초마다 텔레포트하는 버스 아이콘 그 꼴이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 마지막 위치와 새 위치 "사이"를 내가 부드럽게 채워 그리기. → 이게 네트워크 스무딩이야.</div>
 </div>
 <div class="conversation"><h2>0) 들어가며 — 정거장에 띄엄띄엄 도착하는 버스</h2>
 <p>친구가 버스 타고 오는 걸 지도 앱으로 본다고 해봐. 버스 GPS가 매 순간 오는 게 아니라 <strong>5초에 한 번씩</strong> 위치를 쏴. 그럼 지도 위 버스 아이콘이 어떻게 보일까.</p>
@@ -70,6 +74,7 @@ a.xref:hover { background:#bbdefb; }
 <table class="compare-table"><thead><tr><th>구분</th><th>대상</th><th>상태</th></tr></thead><tbody><tr><td><strong>포함 (검증됨)</strong></td><td>스무딩을 켜는 <strong>트리거/호출부</strong> 전체 (<code>Character.cpp</code>)</td><td>✅ verbatim 인용</td></tr><tr><td><strong>포함 (검증됨)</strong></td><td>스무딩 모드 <strong>enum 정의</strong> (<code>EngineTypes.h</code>)</td><td>✅ verbatim 인용</td></tr><tr><td><strong>포함 (검증됨)</strong></td><td>리슨 서버 비동기 <strong>배선</strong> (<code>CharacterMovementComponentAsync.cpp</code>)</td><td>✅ verbatim 인용</td></tr><tr><td><strong>미포함</strong></td><td><code>SmoothCorrection</code> / <code>SmoothClientPosition_Interpolate</code> / <code>_UpdateVisuals</code> <strong>본체</strong></td><td>🔬 개념만 (§5)</td></tr></tbody></table>
 <p>즉 <strong>"누가 언제 왜 스무딩을 켜는가"</strong> (입구·트리거·정책)는 실제 소스로 다 보이고, <strong>"미끄러지는 수식 그 자체"</strong> 만 소스에 없어서 §5에서 개념으로 보충한다. 이 챕터에 실린 코드블록은 전부 이 클론에서 직접 읽어 확인한 것이고, 미포함 부분엔 🔬 배너를 달았다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 캡슐/메시 분리</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 캐릭터 하나면 위치도 하나. 서버가 준 좌표로 몸 전체를 한꺼번에 옮기면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 부드럽게 하려고 몸 전체를 천천히 밀면 총알 히트 판정·벽 충돌이 옛 위치로 틀어져 — "쟤 지금 어디 있냐"의 정답이 흐려져. 반대로 정확히 순간이동시키면 화면이 뚝뚝 튀어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 판정용 몸(캡슐)은 정확한 서버 좌표로 즉시 스냅, 눈요기 몸(메시)만 천천히 따라붙게 둘로 나누기. → 정확성은 즉시, 부드러움은 서서히.</div>
 </div>
 <div class="conversation"><h2>1) 큰 그림 — 캡슐과 메시를 분리해라</h2>
 <p>스무딩의 <strong>핵심 아이디어 딱 하나</strong>만 먼저 못 박자. 나머지는 다 여기서 파생돼.</p>
@@ -112,6 +117,7 @@ a.xref:hover { background:#bbdefb; }
 <p>3개나 되는 이유는 "남의 위치가 갱신되는 상황"이 여러 개라서야. 근데 어느 길로 오든 "캡슐 스냅 + 메시 offset"이라는 처리는 하나로 통일돼 있어. 이게 좋은 설계야 — 입구는 여러 개, 정책은 한 곳.</p>
 <hr>
 <p>지금부터 진짜 언리얼 코드가 나와. <strong>겁먹지 마</strong> — <code>::</code>, <code>-&gt;</code>, <code>|=</code> 같은 낯선 표시는 코드 바로 아래 🔤 상자에서 하나씩 풀어줄게. 코드를 외우는 게 아니라 "어디서 남의 캐릭터 스무딩 스위치가 켜지는지"만 잡으면 돼.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 보간 vs 외삽(Interpolation / Extrapolation)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 빈 칸을 채우려면 최신 위치에서 속도로 "다음은 여기겠지" 앞질러 그리면(외삽) 제일 최신이라 좋아 보여.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 앞질러 찍었는데 적이 갑자기 방향을 틀면? 없는 미래를 찍은 거라 엉뚱한 데로 튀었다 되돌아와 — 오히려 더 흉해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 미래를 찍지 말고, 이미 받은 두 위치 "사이"만 시간축으로 채우기(보간). 살짝 과거를 재생하지만 절대 안 틀려. → UE의 Linear 모드가 이 보간이야.</div>
 </div>
 <div class="conversation"><h2>3) Verbatim 코드 — 한 글자도 안 바꿈</h2>
 <h3>[A] 스무딩 진입점 — <code>Character.cpp:1589-1608</code></h3>

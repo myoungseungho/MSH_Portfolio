@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -54,6 +57,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그래서 언리얼의 답이 <code>UDemoNetDriver</code>와 Demo Replay야. 언리얼은 "화면"을 저장하지 않고, 서버가 클라이언트에게 보내던 리플리케이션 결과를 파일에 적어둬. 재생할 때는 그 파일 바이트를 다시 네트워크에서 받은 것처럼 <code>ReceivedRawPacket</code> 경로에 넣어서, 기존 복원 코드를 그대로 태운다.</p>
 <p>우리 서버식으로 말하면, <code>SP_*</code>를 소켓으로 보내기 직전의 바이트를 순서대로 테이프에 적어두고, 나중에 그 테이프를 읽어서 가짜 수신 경로에 다시 넣는 느낌이야. <code>CChosunPlayer</code>를 손으로 직접 고치는 게 아니라, 원래 쓰던 패킷 처리와 상태 갱신 흐름을 다시 지나가게 만드는 거지.</p>
 <p>이걸 지금 배우는 이유도 딱 맞아. 앞에서 연결, 송수신, 채널, 리플리케이션을 배웠으니 이제 "그 네트워크 파이프를 소켓이 아니라 파일에 꽂으면 어떻게 되나"를 볼 차례야. 이 챕터를 지나면 리플레이가 별도 마법이 아니라, 이미 배운 네트워크 흐름을 재사용한 디버그/저장 도구로 보이기 시작한다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 리플레이(영상 아닌 상태 녹화)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 리플레이라면 화면을 mp4로 녹화하면 되잖아. 보이는 그대로 찍는 거.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그럼 파일이 어마어마하게 커지고, 재생할 때 카메라를 못 돌려 — 이미 "그려진 그림"이라 다른 시점에서 못 봐. 게다가 서버 로직이 왜 그렇게 굴렀는지는 영상만으론 못 만져봐.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 화면 대신 <strong>월드의 변화(델타)</strong>만 적어두고, 재생 때 그 변화를 다시 월드에 먹여 세계를 재구성하기. → 이게 <strong>리플레이</strong>야. 무너진 블록 탑을 사진이 아니라 쌓은 순서로 되짚는 것.</div>
 </div>
 <div class="conversation"><h2>0. 리플레이는 "영상 녹화"가 아니다</h2>
 <p>게임 리플레이라고 하면 보통 화면을 동영상으로 찍는 걸 떠올리기 쉽지. 화면을 mp4로 뽑는 거. 근데 그렇게 하면 파일이 어마어마하게 커지고, 재생할 때 카메라를 돌리거나 다른 시점에서 다시 볼 수가 없어. 이미 "그려진 그림"이니까.</p>
@@ -156,6 +160,7 @@ class UDemoNetDriver : public UNetDriver
 <div class="note gloss">🔤 <strong>기호 사전</strong> — <code>void FReplayHelper::WritePacket(FArchive&amp; Ar, uint8* Data, int32 Count)</code><br>&bull;&nbsp;<strong><code>void</code></strong> = 이 함수는 답을 돌려주지 않아. 파일에 쓰는 일이 곧 결과야.<br>&bull;&nbsp;<strong><code>FReplayHelper::</code></strong> = <code>FReplayHelper</code>에 속한 함수라는 소속 표시. <code>::</code>는 "~의"라고 읽으면 돼.<br>&bull;&nbsp;<strong><code>FArchive&amp; Ar</code></strong> = 아카이브 공책 원본을 받는다. 여기에 적으면 바깥 파일/스트림에 실제로 적혀.<br>&bull;&nbsp;<strong><code>uint8* Data</code></strong> = 바이트들이 줄줄이 있는 시작 주소. <code>*</code>는 "주소를 들고 있다"는 포인터 표시야.<br>&bull;&nbsp;<strong><code>int32 Count</code></strong> = 바이트가 몇 개인지 담는 정수.<br>&bull;&nbsp;<strong><code>Ar &lt;&lt; Count</code></strong> = 먼저 길이를 적는다.<br>&bull;&nbsp;<strong><code>Ar.Serialize(Data, Count)</code></strong> = <code>Data</code>에서 <code>Count</code>개만큼의 바이트를 그대로 적는다.<br>🔁 <strong>이제 다시 보자.</strong> <code>Ar &lt;&lt; Count</code>(길이 먼저 쓰기) → <code>Ar.Serialize(Data, Count)</code>(그 길이만큼 바이트 쓰기). 그래서 패킷 하나는 <strong>"[몇 바이트인지][진짜 바이트]"</strong> 두 조각으로 저장돼.</div>
 <p><code>[길이][그 길이만큼의 바이트]</code>. 그게 다야. 이 바이트 덩어리 안에 든 게 뭐냐면 — 온라인이었으면 소켓으로 나갔을 그 패킷 원본이야. 즉 데모 파일은 "만약 이 게임을 실제로 네트워크 중계했다면 클라가 받았을 바이트 스트림"을 시간순으로 통조림해 놓은 거라고 보면 딱 맞아.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 재생 = 수신 경로 재주입</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 재생하려면 파일을 읽어서 액터를 직접 <code>SpawnActor</code>하고 위치를 <code>SetActorLocation</code>으로 찍으면 되겠지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그럼 리플레이 전용 복원 코드를 따로 짜야 하는데, 온라인 로직이 바뀔 때마다(새 프로퍼티·RepNotify 조건) 여기도 똑같이 손봐야 해. 조금만 어긋나도 "온라인이랑 리플레이가 다르게 보이는" 버그가 터져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 파일 바이트를 <strong>"네트워크에서 방금 받은 척"</strong> <code>ReceivedRawPacket</code>에 부어, 온라인 수신 코드가 알아서 액터를 만들게 놔두기. → 이게 <strong>재주입</strong>이야. 온라인이 맞으면 리플레이도 공짜로 맞아.</div>
 </div>
 <div class="conversation"><h2>2. 재생의 정체 — "파일 바이트를 수신 경로에 다시 흘려넣기"</h2>
 <p>녹화가 "출구를 파일로 틀기"였으면, 재생은 정확히 그 거울상이야. <strong>파일에서 읽은 바이트를 "네트워크에서 방금 받은 척" 수신 코드에 먹이는 거.</strong></p>
@@ -202,6 +207,7 @@ class UDemoNetDriver : public UNetDriver
 <p>왜 이렇게 했을까? <strong>정확성이 공짜로 따라오기 때문</strong>이야. 리플레이 전용 저장/복원 코드를 따로 짰다고 상상해봐. 온라인 로직이 업데이트될 때마다(새 프로퍼티 추가, RepNotify 조건 변경 등) 리플레이 코드도 똑같이 손봐야 하고, 조금만 어긋나도 "온라인이랑 리플레이가 다르게 보이는" 버그가 터져. 반대로 같은 코드를 재사용하면 온라인이 맞으면 리플레이도 자동으로 맞아. 유지보수 지점이 하나로 합쳐지는 거지.</p>
 <p>우리 서버로 치면 이런 감각이야. 로그 시스템(→ 우리 <code>CLogManager</code>)을 "역추론 모델"로 짜는 거랑 비슷해. <code>{idx + before + after}</code>만 정밀히 적어두면 나중에 상태를 통째로 복원할 수 있잖아. 리플레이도 "월드의 델타"만 적어서 재구성하는 거야. 다만 언리얼은 그 델타 포맷을 새로 발명하지 않고 <strong>네트워크 리플리케이션이라는 기존 델타 시스템을 그대로 빌려 썼다</strong>는 게 영리한 지점이지.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 체크포인트(Checkpoint)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 리플레이 프레임은 변경분(델타)만 담아 — 3번 액터가 이만큼 움직였다, 체력이 이만큼 줄었다. 그래서 파일이 작아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 재생하다 "10분 지점으로 점프!" 하면? 델타만 있으니 처음부터 10분치 프레임을 죄다 재생해서 상태를 따라잡아야 해. 점프가 느려터져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 중간중간 "이 순간의 월드 전체 스냅샷"을 통째로 박아두기. 점프하면 가장 가까운 스냅샷으로 복원한 뒤 거기서부터 델타만 재생. → 이게 <strong>체크포인트</strong>야. 그래서 델타랑 별개 큐(<code>QueuedCheckpointPackets</code>)를 써.</div>
 </div>
 <div class="conversation"><h2>4. 체크포인트 — 리플레이 중간 지점으로 점프하기</h2>
 <p>지금까지 얘기한 "프레임"은 전부 <strong>변경분(델타)</strong>만 담아. 3번 액터가 이만큼 움직였다, 체력이 이만큼 줄었다. 그래서 파일이 작지. 근데 여기 함정이 하나 있어.</p>

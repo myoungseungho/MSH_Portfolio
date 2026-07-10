@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -68,6 +71,7 @@ a.xref:hover { background:#bbdefb; }
 <p>하나씩 밟자.</p>
 <p>지금부터 진짜 언리얼 코드가 나와. <strong>겁먹지 마</strong> — 낯선 기호는 코드 바로 아래 🔤 상자에서 하나씩 풀어줄게. 코드를 외우는 게 아니라 "아, 이 줄이 봉투/편지를 이렇게 다루는구나"만 잡으면 돼.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Bunch(편지)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 게임 서버 감각이면 <strong>패킷 하나 = 메시지 하나</strong>가 제일 자연스러워. 우리 서버가 <code>wID</code> 하나 읽고 <code>CM_</code> 핸들러 하나 부르는 그 방식이지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 이러면 낭비랑 한계가 생겨. ① 작은 메시지 수십 개를 보낼 때마다 <strong>패킷 헤더가 수십 번</strong> 붙어(대역폭 아까워). ② 반대로 큰 액터 스냅샷은 <strong>패킷 하나(MTU)에 안 들어가</strong>. ③ 게다가 "이건 꼭 순서 지켜야 하는 신뢰 메시지", "이건 어느 채널 소속"처럼 <strong>메시지마다 성격이 달라</strong>.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 네트워크가 나르는 <strong>봉투(패킷)</strong>와, 그 안에 담기는 <strong>논리 메시지(편지)</strong>를 <strong>따로</strong> 두는 거야. 작은 편지는 봉투 하나에 몰아 담고, 큰 편지는 봉투 여러 개로 쪼개고, 편지마다 "어느 채널·신뢰성"을 적어. 이 편지 단위가 <strong>Bunch</strong>야.</div>
 </div>
 <div class="conversation"><h2>1. 관계부터 정확히 — 패킷 : Bunch는 1:N (양방향)</h2>
 <p>제일 먼저 머리에 박아야 할 그림이야. 헷갈리기 딱 좋은 지점이라 천천히 가자.</p>
@@ -102,6 +106,7 @@ a.xref:hover { background:#bbdefb; }
 <ul><li><strong><code>bReliable</code></strong> — 이 편지가 "손실되면 재전송, 순서 보장"되는 신뢰 전송 대상이라는 표시. 이게 켜지면 <code>ChSequence</code>(채널 내 순번)가 따라붙어서 받는 쪽이 누락을 검사해.</li><li><strong><code>bPartial</code></strong> — "나는 완전한 편지가 아니라 조각이야"라는 표시. 주석 그대로 <code>Not a complete bunch</code>.</li><li><strong><code>bPartialInitial</code> / <code>bPartialFinal</code></strong> — 조각 중 <strong>첫 조각</strong> / <strong>마지막 조각</strong> 표시. 이 둘 사이 조각들을 모으면 원본 편지가 복원돼.</li></ul>
 <p>나머지(<code>bHasPackageMapExports</code> 등)는 GUID 매핑 같은 고급 주제라 여기선 이름만 알고 넘어가면 돼.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — partial bunch(조각 편지)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 편지 한 통을 봉투 하나에 넣어 보내면 제일 깔끔하지. 대부분 편지는 그렇게 보내.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 편지가 <strong>봉투(패킷 하나에 들어갈 최대치)보다 두꺼우면?</strong> 봉투에 안 들어가. 우리 서버는 TCP가 큰 데이터를 알아서 잘라 보내고 순서 맞춰 재조립해주지만, UE는 UDP 위라 <strong>아무도 안 잘라줘</strong>.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 두꺼운 편지를 앱이 <strong>직접 조각내서</strong> 봉투 여러 개에 나눠 싣는 거야. 이 조각 하나하나가 <strong>partial bunch</strong>. 그냥 자르면 받는 쪽이 헷갈리니까 <strong>첫 조각(<code>bPartialInitial</code>)·끝 조각(<code>bPartialFinal</code>)</strong> 표시를 붙여서, 그것만 보고 다시 한 통으로 합칠 수 있게 해.</div>
 </div>
 <div class="conversation"><h2>3. 두꺼운 편지 쪼개기 — partial bunch가 태어나는 곳</h2>
 <p>이제 (나) 방향, 큰 Bunch가 조각으로 갈리는 실제 코드야. <code>UChannel::SendBunch</code>(<code>DataChannel.cpp:1249</code>) 안쪽이야.</p>

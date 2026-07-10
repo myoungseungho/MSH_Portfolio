@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -63,6 +66,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그래서 이 챕터는 다른 편들과 달라. <strong>콜체인 다이어그램에 붙일 실제 <code>file:line</code>이 없다.</strong> <code>TryActivateAbility → ServerTryActivateAbility → FScopedPredictionWindow → …</code> 이 실제 흐름의 함수/줄번호를 인용할 수가 없어. 각색·창작은 금지니까, 그 자리는 <strong>개념 흐름도</strong>로 대신하고, verbatim은 트리에 <strong>딱 하나 실재하는</strong> GAS 흔적(§4의 Iris 주석)만 싣는다.</p>
 <p>읽는 자세: 아래 흐름은 "GAS가 이런 원리로 동작한다"는 <strong>개념 뼈대</strong>야. 나중에 실제 <code>GameplayPrediction.h/.cpp</code>를 확보하면 이 뼈대에 정확한 라인을 채워 대조해야 해. 지금은 원리까지만.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 낙관적 실행(예측)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 클라가 스킬 버튼 누르면 <code>CM_SKILL</code>을 서버로 쏘고, 서버 판정(<code>SP_*</code>)이 올 때까지 <strong>가만히 기다렸다</strong> 이펙트를 터뜨려. 서버가 진실이니 제일 안전해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 핑이 80ms만 돼도 버튼과 이펙트 사이가 반 박자 늘어져. 150ms면 "씹혔나?" 하고 또 눌러. 유저 손가락은 네트워크 왕복을 안 기다려주거든.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 서버 대답 오기 전에 클라가 <strong>먼저 스킬을 터뜨려</strong> 기다리는 느낌만 숨기자. → 이게 <strong>예측(낙관적 실행)</strong>이야. "대부분 서버가 승인해줄 거야"에 베팅하는 거지.</div>
 </div>
 <div class="conversation"><h2>0. 먼저 비유부터 — 주문부터 받고 나중에 취소</h2>
 <p>카페에서 네가 "아이스 아메리카노요" 하고 외치면, 알바생이 본사 승인 기다리고 나서 컵 꺼내디? 아니잖아. <strong>바로 컵 꺼내서 얼음 담기 시작해.</strong> 손님 체감상 즉시 반응.</p>
@@ -74,6 +78,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그럼 이 챕터의 진짜 질문은 이거 하나야:</p>
 <div class="note"><strong>"미리 터뜨린 효과"를 어떻게 딱지 붙여 기억해뒀다가, 서버 결과가 오면 정확히 그놈만 걷어내냐?</strong></div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — PredictionKey(예측 장부)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 그냥 프로퍼티 복제로 하면 되잖아? 서버가 마나 깎으면 클라로 자동으로 내려오고 끝. 딱지 같은 거 왜 필요해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 클라가 마나 -30을 <strong>미리</strong> 깎아 보여줬는데, 뒤이어 서버 복제분 -30이 또 내려오면 화면은 <strong>-60</strong>이 돼. 예측분+복제분 이중 차감. 어느 -30이 임시였는지 몰라서 못 걷어내.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "이 -30은 내가 예측으로 미리 깎은 거다"라고 <strong>번호표를 붙인 장부</strong>. 서버 진짜 -30이 오면 그 번호표 붙은 예측분만 골라 걷어내고 갈아끼운다. → 이게 <strong>PredictionKey</strong>야.</div>
 </div>
 <div class="conversation"><h2>1. 왜 굳이 별도 시스템인가 — 복제만으론 안 되는 이유</h2>
 <p>여기서 잠깐 맞춰봐. 우리는 이미 <a class="xref" href="ch-14-lifetime-props.html">lifetime-props</a>, <a class="xref" href="ch-17-repnotify.html">repnotify</a>에서 "프로퍼티 복제"를 배웠잖아. 서버가 값 바꾸면 클라로 자동으로 내려오는 그거. <strong>그럼 스킬 효과도 그냥 복제로 하면 되는 거 아냐?</strong> 서버가 마나 깎으면 클라로 복제돼서 내려오고, 끝. PredictionKey니 뭐니 왜 필요해?</p>
@@ -84,6 +89,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그래서 필요한 게 <strong>장부</strong>야. "이 -30은 내가 예측으로 미리 깎은 거다"라고 딱지를 붙여두면, 서버의 진짜 -30이 도착했을 때 <strong>내 예측분을 먼저 걷어내고</strong> 서버 걸로 갈아끼울 수 있어. 이 딱지가 바로 <strong>PredictionKey</strong>고, 딱지가 유효한 코드 구간이 <strong>ScopedPredictionWindow</strong>야.</p>
 <div class="note">한 줄로: <strong>복제는 "받기만", 예측은 "먼저 만들고 나중에 화해". 화해하려면 뭘 걷어낼지 알아야 하니까 PredictionKey라는 장부가 따로 있다.</strong></div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — ScopedPredictionWindow(예측 창)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 번호표(PredictionKey)는 있어. 근데 스킬 한 번에 마나 차감·쿨다운·이펙트가 우르르 생겨. 이 중 <strong>어디까지가 이번 예측분</strong>이지?<br>&bull;&nbsp;<strong>그런데 문제</strong>: 딱지 붙는 범위를 안 정하면, 나중에 서버가 "표 #47 실패" 해도 그 표에 뭐가 묶였는지 몰라서 되돌릴 걸 못 찾아. 롤백이 애매해져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "여기서부터 여기까지 생긴 변화는 전부 표 #47" 하고 <strong>묶는 구간</strong>. → 이게 <strong>ScopedPredictionWindow</strong>야. 창 안에서 생긴 변화만 예측분으로 딱지가 붙어.</div>
 </div>
 <div class="conversation"><h2>2. 개념 흐름도 — 스킬 한 번의 일생</h2>
 <p>소스가 없어 실제 <code>file:line</code>은 못 박지만, GAS 예측의 표준 흐름은 개념적으로 이렇게 돌아가. (아래 함수명은 실제 엔진의 통상 명칭이지만, <strong>이 트리에서 라인 대조는 불가</strong> — 개념 흐름도로 읽어.)</p>

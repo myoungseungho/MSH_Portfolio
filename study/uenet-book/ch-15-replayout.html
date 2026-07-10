@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -64,6 +67,7 @@ a.xref:hover { background:#bbdefb; }
 <p>이 클론에 소스 있음. 아래 코드는 전부 실제 원문 그대로고 <code>파일:줄번호</code> 를 달았어.</p>
 <hr>
 <p>지금부터 진짜 언리얼 코드가 나와. <strong>겁먹지 마</strong> — 표처럼 생긴 코드라 처음엔 딱딱해 보이지만, 바로 아래 🔤 상자에서 낯선 기호를 하나씩 풀어줄게. 코드를 외우는 게 아니라 "아, 이 줄은 표의 한 칸을 설명하는구나"만 잡으면 돼.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 직렬화 명령표(RepLayout/Cmds)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 값을 보낼 때마다 액터를 뒤져서 "이 프로퍼티 이름이 뭐고, 타입이 뭐고, 메모리 어디 있지?"를 그 자리에서 리플렉션으로 물어보면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 이 "물어보기"가 느려. 액터 수백 개가 매 틱 바뀌는데 전송할 때마다 매번 이름·타입을 다시 캐물으면 CPU가 녹아. 이삿짐 나를 때마다 방마다 뛰어다니며 "이건 뭐지?" 고민하는 꼴이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 클래스당 <strong>딱 한 번</strong> 프로퍼티를 훑어 "몇 번 칸=오프셋 얼마, 타입 뭐"를 미리 적은 짐 목록표. → 이게 <strong>RepLayout</strong>이고, 표의 한 줄이 <code>FRepLayoutCmd</code>야. 전송 땐 표를 인덱스로 훑기만 하면 돼.</div>
 </div>
 <div class="conversation"><h2>1. 표의 한 줄은 어떻게 생겼나 — FRepLayoutCmd</h2>
 <p>먼저 "짐 목록표의 한 줄"부터 보자. 프로퍼티 하나가 이 구조체 하나로 눕혀져.</p>
@@ -127,6 +131,7 @@ public:
 <ul><li><strong><code>Parents</code> (FRepParentCmd)</strong> — 최상위 프로퍼티 단위. <code>Health</code> 하나, <code>Buffs</code> 하나. 각 Parent 는 <code>CmdStart~CmdEnd</code> 로 "나를 구성하는 하위 명령 줄들"을 가리켜.</li><li><strong><code>Cmds</code> (FRepLayoutCmd)</strong> — 실제로 평탄하게 펼쳐진 명령 줄들. 구조체 프로퍼티 하나가 여러 Cmd 로 쪼개질 수 있어.</li></ul>
 <p>즉 트리 구조(프로퍼티 안에 프로퍼티)를 <strong>한 줄로 쭉 편 배열</strong>로 바꾸는 게 빌드 단계의 전부야. 편 다음부터는 트리를 몰라도 돼. 그냥 배열 인덱스만 있으면 돼.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 한 함수로 송·수신(양방향 직렬화)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 값을 비트로 <strong>쓰는</strong> 함수(송신)와 비트를 값으로 <strong>읽는</strong> 함수(수신)를 따로 짜면 되잖아. 각자 만들면 명확하지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 둘이 프로퍼티 순서를 조금이라도 다르게 훑으면, 보낸 순서와 읽는 순서가 어긋나 값이 통째로 밀려 깨져. 코드가 둘이면 한쪽만 고치고 한쪽 까먹는 사고도 나(조선 서버 구조체 lockstep 안 맞던 그 사고랑 똑같아).<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 같은 표를 같은 순서로 훑는 함수 <strong>하나</strong>로 합치고, 방향은 넘겨받은 아카이브(Writer냐 Reader냐)가 정하게 하는 것. → 이게 <code>SerializeProperties_r</code> 하나가 양방향을 다 처리하는 이유야. 순서가 자동으로 짝이 맞아.</div>
 </div>
 <div class="conversation"><h2>3. 표를 훑어 비트로 — SerializeProperties_r</h2>
 <p>자, 이제 표가 준비됐어. 값을 실제 비트로 바꾸는 함수가 <code>SerializeProperties_r</code> (<code>RepLayout.cpp:6659</code>) 야. <strong>이 함수 하나가 송신과 수신 둘 다 처리해.</strong> 어떻게? 곧 나와.</p>
@@ -171,6 +176,7 @@ public:
 <p><strong>반전: 둘 다야.</strong> 방향을 정하는 건 <code>NetSerializeItem</code> 이 아니라 넘겨받은 <code>Ar</code>(<code>FBitArchive</code>) 야. 송신 쪽이 <code>FBitWriter</code> 를 넘기면 <code>Ar.IsSaving()</code> 이 참이라 값을 비트로 <strong>쓰고</strong>, 수신 쪽이 <code>FBitReader</code> 를 넘기면 <code>Ar.IsLoading()</code> 이 참이라 비트를 값으로 <strong>읽어</strong>. 함수 본문은 글자 하나 안 바뀌어. 방향만 아카이브가 들고 있는 거지.</p>
 <p>그래서 송신용 코드와 수신용 코드를 따로 안 짜. <code>SerializeProperties_r</code> 하나가 양방향을 다 커버해. 버그가 생겨도 한 군데만 고치면 되고, "보낼 때랑 받을 때 순서가 어긋나는" 사고가 원천적으로 안 나. <strong>표를 같은 순서로 훑으니 송신·수신이 자동으로 짝이 맞는다</strong> — 이게 RepLayout 설계의 진짜 우아한 점이야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 배열 길이 먼저 보내기</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 배열도 그냥 요소를 하나씩 비트로 죽 이어 보내면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 받는 쪽은 <strong>몇 개가 올지 몰라.</strong> 어디서 배열이 끝나고 다음 프로퍼티가 시작되는지 경계를 못 잡아 뒤 데이터가 다 밀려. 게다가 악의적 클라가 "20억 개"라고 뻥치면 서버 메모리가 터져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 내용보다 <strong>개수를 먼저</strong> 흘려보내서, 받는 쪽이 그 숫자만큼 그릇을 미리 늘리게 하는 것(+ 개수 상한 검증). → 이게 배열을 특별 취급하는 이유야.</div>
 </div>
 <div class="conversation"><h2>4. 배열은 왜 특별한가 — 길이부터 보낸다</h2>
 <p>배열은 요소 개수가 매번 달라지잖아. 받는 쪽은 몇 개 올지 몰라. 그래서 <strong>길이를 먼저</strong> 흘려보내:</p>

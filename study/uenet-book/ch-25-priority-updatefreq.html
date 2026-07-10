@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -89,6 +92,7 @@ a.xref:hover { background:#bbdefb; }
 <p>이제 각 단계를 뜯어보자.</p>
 <p>지금부터 엔진 코드가 연달아 나와. <strong>겁먹지 마</strong> — 여기서 볼 건 계산식의 뜻이지, 줄마다 외우는 게 아니야. 낯선 <code>-&gt;</code>, <code>? :</code>, <code>*</code>, <code>&amp;</code> 같은 기호는 코드 바로 아래 🔤 상자에서 풀어줄게.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 갱신빈도(NetUpdateFrequency)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 관련 있는 액터는 <strong>매 틱 빠짐없이</strong> 상태를 보내면 제일 정확해. 위치든 HP든 초당 수십 번 갱신.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 벽, 문짝, 안 움직이는 장식은 <strong>초당 수십 번 보낼 게 없어</strong>. 그대로인데 계속 보내면 좁은 문(대역폭) 앞에 쓸데없는 짐만 쌓여서, 정작 자주 변하는 플레이어 위치가 밀려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 액터마다 "<strong>얼마나 자주 볼지</strong>"를 정하는 시계. 문짝은 초당 2번, 플레이어는 초당 100번. → 이게 <strong>갱신빈도</strong>야. 파이프라인 맨 앞의 수도꼭지라, 여기서 잠그면 뒤따르는 계산·정렬·전송이 통째로 마른다.</div>
 </div>
 <div class="conversation"><h2>[1] 시간 축 — 갱신빈도 게이트</h2>
 <p>먼저 이번 틱에 "고려할 가치가 있는" 액터만 추린다. 핵심은 딱 한 줄이야.</p>
@@ -127,6 +131,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>LastReplicateDelta</code>가 길어질수록 <code>Alpha</code>가 커지고, <code>Lerp</code> 결과가 <code>MaxOptimalDelta</code> 쪽으로 간다. 말로 풀면 <strong>"오래 실제 전송이 없던 액터는 다음 후보 등록 간격을 더 느리게 잡는다"</strong> 야.</div>
 <p><code>NetUpdateFrequency</code>(가장 빠름)와 <code>MinNetUpdateFrequency</code>(가장 느림) 사이를, "얼마나 오래 실제 전송이 없었나"를 Alpha로 잡아 Lerp한다. <code>MinNetUpdateFrequency</code>라는 이름이 함정인데 — <strong>"Min빈도 = 가장 느린 갱신 = 대역폭 절약 하한선"</strong>이야. 낮은 숫자일수록 뜸하다.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 우선순위(NetPriority)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 시간 게이트를 통과한 액터를 그냥 <strong>오는 순서대로</strong> 다 보내면 되지 않아? 대역폭 남으면 문제도 없고.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 대역폭이 꽉 차는 순간이 진짜 문제야. 이번 틱에 500개어치인데 100개어치만 보낼 수 있으면, <strong>누굴 살리고 누굴 버릴지</strong> 순번이 없으면 안 돼. 장식 문짝 보내느라 지금 칼 맞는 플레이어 갱신이 밀리면 "분명 피했는데 맞았다"가 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 포화됐을 때 <strong>누구 먼저</strong>를 정하는 점수. 가까운 적, 방금 때린 놈, 오래 못 보낸 놈이 앞줄. → 이게 <strong>우선순위</strong>야. "자주"가 아니라 "<strong>막히면 생존 순번</strong>"이라는 게 핵심.</div>
 </div>
 <div class="conversation"><h2>[2] 경쟁 축 — 우선순위 점수 매기고 정렬</h2>
 <p>시간 게이트를 통과한 액터들이 이제 <strong>연결(Connection)별로</strong> 점수를 받는다. 왜 연결별이냐면, 우선순위는 "그 플레이어 시점에서 얼마나 중요한가"라서 보는 사람마다 달라지거든 (내 코앞의 적 vs 지도 반대편의 적).</p>
@@ -180,6 +185,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note gloss">🔤 <strong>정렬 기호 사전</strong> — <code>Algo::SortBy(...)</code><br>&bull;&nbsp;<strong><code>Algo::SortBy</code></strong> = <code>Algo</code> 상자 안의 "정렬해줘" 함수. <code>::</code>는 소속 표시야.<br>&bull;&nbsp;<strong><code>MakeArrayView(...)</code></strong> = 배열 전체가 아니라 앞쪽 <code>FinalSortedCount</code>개만 보게 하는 창을 만든다.<br>&bull;&nbsp;<strong><code>&amp;FActorPriority::Priority</code></strong> = <code>FActorPriority</code> 안의 <code>Priority</code> 칸을 정렬 기준으로 삼겠다는 표시. 여기서 <code>&amp;</code>는 그 멤버를 가리키는 표시야.<br>&bull;&nbsp;<strong><code>TGreater&lt;&gt;</code></strong> = 큰 값이 먼저 오게 하는 비교 규칙.<br>&bull;&nbsp;<strong><code>&lt;&gt;</code></strong> = 템플릿 자리. 타입을 넣는 꺾쇠칸인데, 여기선 기본 모양으로 둔 거야.</div>
 <p><code>TGreater&lt;&gt;</code> — <strong>내림차순</strong>. 점수 높은 놈이 배열 앞에 온다. 이제 앞에서부터 보내기만 하면 돼.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 대역폭 예산과 포화 컷(IsNetReady)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 점수로 줄까지 다 세웠으면, 그냥 <strong>줄 선 순서대로 끝까지</strong> 다 보내면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 커넥션 송신 버퍼는 <strong>한 틱에 담을 수 있는 양이 정해져</strong> 있어. 넘치게 밀어넣으면 지연이 눈덩이처럼 불고, 다음 틱까지 밀려서 다 같이 늦어져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "<strong>이 연결 이번 틱 예산 다 썼어?</strong>"를 물어보고, 다 썼으면 그 자리서 멈추는 컷라인. → 이게 포화 체크(<code>IsNetReady</code>)야. 컷라인은 대역폭이 긋고, 그 위에 누가 남을지는 점수가 정해. (잘린 애는 다음 틱에 우선 재고려되니 굶진 않아.)</div>
 </div>
 <div class="conversation"><h2>[3] 예산 집행 — 대역폭 찰 때까지만</h2>
 <p>정렬된 순서대로 실제 전송에 들어간다(<code>ProcessPrioritizedActorsRange</code>, :5495). 여기서 "대역폭 예산"이 진짜로 집행되는데, 집행자는 우선순위가 아니라 <strong>연결의 포화 여부</strong>야.</p>

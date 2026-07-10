@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -68,6 +71,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note">전제가 헷갈리면 → <a class="xref" href="ch-15-replayout.html">replayout</a> (프로퍼티가 RepIndex/Changelist로 어떻게 펼쳐지는지), <a class="xref" href="ch-16-changelist.html">changelist</a> (바뀐 것만 모으는 changelist 개념)</div>
 <hr>
 <p>지금부터 진짜 코드가 나와. <strong>겁먹지 마</strong> — 이름이 길고 괄호가 많아 보여도, 바로 아래 🔤 상자에서 하나씩 풀어줄게. 코드를 외우는 게 아니라 "dirty 비트가 어디서 켜지나"만 따라가면 돼.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Push Model(dirty 비트)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 서버가 매 틱 모든 액터의 모든 프로퍼티를 지난 값이랑 하나하나 비교해서 바뀐 걸 찾아. 정직하지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 액터 10만 개 × 프로퍼티 30개인데 이번에 바뀐 건 5개뿐이면, 그 5개 찾으려고 <strong>300만 번</strong>을 비교해. 안 바뀐 걸 확인하려고 안 바뀐 값까지 전부 만지는 헛수고야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 서버가 묻지 말고, <strong>값 바꾼 코드가 직접 "나 바뀌었어요" 손들게</strong> 하기. → 그게 <strong>Push Model</strong>이고, 손드는 방법이 dirty 비트 하나 켜기. 전교생 하나씩 부르는 대신 숙제 낸 애만 손드는 거지.</div>
 </div>
 <div class="conversation"><h2>1. 큰 그림: dirty 비트 하나 켜는 게 전부</h2>
 <p>Push Model의 핵심은 놀랄 만큼 단순해. <strong>프로퍼티마다 비트 하나</strong>를 두고, 값이 바뀌면 그 비트를 1(dirty)로 켠다. 리플리케이트할 때 켜진 비트만 골라서 비교하고, 다 처리하면 비트를 끈다.</p>
@@ -115,6 +119,7 @@ a.xref:hover { background:#bbdefb; }
         |   DirtiedThisFrame[RepIndex] = true;
         +-- ★ push 끝. 비교 없음.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 2층 dirty 상태(글로벌 ↔ 넷드라이버별)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: dirty 비트를 한 군데만 두면 깔끔하잖아. 값 바뀌면 거기 켜고, 보낼 때 거기 보고.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 서버엔 넷드라이버가 여러 개일 수 있어(게임용 + 리플레이 녹화용 등). 값 바꿀 때마다 곧바로 모든 넷드라이버에 복사하면, 정작 relevancy·dormancy로 이번에 <strong>안 보낼 놈들 상태까지</strong> 부지런히 갱신하는 헛수고가 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 게임 코드는 <strong>글로벌 한 곳</strong>에만 쌓고, 진짜 보내기 직전에만 각 넷드라이버로 몰아 넣는 <strong>지연 반영(lazy flush)</strong>. 생산은 한 곳, 소비는 필요할 때 여러 곳 — 조선 서버 "공용 dirty 큐 → 샤드별 소비 분리"랑 닮았어.</div>
 </div>
 <div class="conversation"><h2>3. 왜 상태가 2층이야? (글로벌 ↔ 넷드라이버별)</h2>
 <p>여기가 이 챕터에서 제일 헷갈리는 부분이자 제일 똑똑한 부분이야. dirty 상태가 <strong>한 군데가 아니라 두 군데</strong>에 있어.</p>

@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -93,6 +96,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그 아래 <code>DOREPLIFETIME_WITH_PARAMS_FAST(AActor, Role, ...)</code> 한 줄이 바로 "명단에 <code>Role</code>이라는 이름 적기"야. <code>AActor</code>가 기본으로 복제하는 것들 — 소유자(<code>Owner</code>), 역할(<code>Role</code>), 숨김 여부(<code>bHidden</code>), 이동 복제 여부(<code>bReplicateMovement</code>)... 게임 액터라면 누구나 갖는 뼈대 속성들이 여기서 등록된다.</p>
 <div class="note"><code>SharedParams.bIsPushBased = true</code> 이 줄은 지금은 그냥 "이 속성들은 Push Model이라는 최적화를 쓴다" 정도로만 넘겨. 매 틱 값 비교 대신, 바뀔 때만 코드가 "나 dirty!" 하고 손드는 방식이야. 자세한 건 → <a class="xref" href="ch-19-push-model.html">push-model</a>.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 명단 상속(Super 체인)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 클래스마다 "복제할 변수 명단"을 각자 처음부터 다 적으면 되잖아. 폰이면 폰이 쓸 거 전부.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 폰(APawn)은 액터(AActor)의 자식이라 Owner·Role·bHidden 같은 부모 속성도 다 필요해. 자식마다 부모 것을 <strong>손으로 또 베껴 적으면</strong>, 부모가 속성 하나 추가할 때 모든 자식 명단을 다 고쳐야 해 — 하나 빼먹으면 조용히 복제 누락.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 자식이 명단을 쓰기 전에 부모한테 <strong>같은 종이를 먼저 넘겨</strong> 부모 몫을 채우게 하는 것. → 이게 첫 줄 <code>Super::</code>야. 명단이 부모→자식으로 내려오며 누적돼서, 베끼기도 빠뜨림도 없어.</div>
 </div>
 <div class="conversation"><h2>명단은 상속된다 — Super 체인</h2>
 <p>여기서 첫 반전. <code>APawn</code>(폰, 조종 가능한 캐릭터의 부모)은 자기만의 명단을 새로 쓸까?</p>
@@ -122,6 +126,7 @@ a.xref:hover { background:#bbdefb; }
     + ACharacter 몫  (조건부 속성들)         ← 실제로 호출된 클래스</div>
 <p>이게 왜 중요하냐면, <strong><code>Super::</code>를 빼먹으면</strong> 부모 속성이 통째로 명단에서 빠져서 위치·소유자 복제가 조용히 안 되는 버그가 나. 오버라이드 첫 줄에 <code>Super::</code> — 이건 거의 법이야.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 복제 조건(COND_)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 명단에 올린 변수는 그냥 <strong>접속한 전원</strong>에게 다 보내면 되잖아. 단순하지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 내 캐릭터가 어디 보는지(ViewPitch)는 나 자신은 이미 아는 값이야. 서버가 그걸 나한테 되돌려 보내면 순수 낭비고, 남이 조종하는 캐릭터한테만 필요한 값도 있어. "전원에게"는 대역폭을 헛써.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 변수마다 "누구한테 보낼지" 필터를 같은 명단에 함께 적는 것. → 이게 <strong>COND_ 조건</strong>이야(<code>COND_SkipOwner</code>=본인 빼고 등). 명단에 이름만이 아니라 "받을 사람"까지 적는 거지.</div>
 </div>
 <div class="conversation"><h2>"누구한테" 보낼지도 명단에 적는다 — CONDITION</h2>
 <p>위 코드에서 이런 줄 봤지?</p>
@@ -171,6 +176,7 @@ a.xref:hover { background:#bbdefb; }
 <p><code>GET_MEMBER_NAME_CHECKED(c,v)</code>는 "컴파일 시점에 <code>c</code>에 <code>v</code>라는 멤버가 진짜 있는지" 확인해주는 안전장치야. 오타 나면 컴파일이 안 돼. 첫 관문이지.</p>
 <div class="note reread">🔁 <strong>다시 매크로를 보자.</strong> 이제 <code>DOREPLIFETIME(APawn, PlayerState)</code>는 "PlayerState를 <strong>찾아서(검사 포함) 명단에 추가</strong>해라"로 읽혀. 마법이 아니라 함수 두 번 부르는 것으로 펼쳐질 뿐이었어.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 복제는 두 곳이 짝(Replicated ↔ DOREPLIFETIME)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: <code>.cpp</code>에서 <code>DOREPLIFETIME(내액터, Health)</code> 한 줄만 적으면 "Health 복제해줘"가 끝날 것 같잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 헤더의 변수 선언에 <code>UPROPERTY(Replicated)</code> 딱지가 없으면, 엔진은 그 변수를 네트워크용으로 준비를 안 해둬. 명단엔 올렸는데 정작 변수는 복제 채비가 안 된 <strong>반쪽 상태</strong> — 조용히 안 되면 원인 찾느라 반나절 날려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 등록할 때 그 변수에 복제 딱지(<code>CPF_Net</code>)가 있나 검사해서, 없으면 <strong>개발 중에 즉시 크래시</strong>로 알려주는 관문. → 이게 관문 1이야. 헤더 선언과 cpp 등록이 반드시 짝이어야 한다는 규칙을 강제하는 거지.</div>
 </div>
 <div class="conversation"><h2>관문 1 — "Replicated 안 붙였지?" 즉사 검사</h2>
 <p>여기가 초보자가 제일 많이 밟는 지뢰야. <code>GetReplicatedProperty</code>를 열어보자.</p>

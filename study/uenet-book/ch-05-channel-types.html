@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -53,6 +56,7 @@ a.xref:hover { background:#bbdefb; }
 <p>그래서 UE는 같은 문제를 더 큰 구조로 풀어. <code>UNetConnection</code>이라는 한 연결 안에 <strong>Channel</strong>이라는 논리적 길을 여러 개 뚫어두고, 연결 제어는 Control, 액터 복제는 Actor, 음성은 Voice처럼 역할별로 따로 보낸다. 겉으로는 소켓 하나지만, 안쪽에는 색깔 다른 전선이 여러 가닥 들어 있는 셈이야.</p>
 <p>특히 중요한 건 상태가 같이 딸려간다는 점이야. Actor Channel은 액터 하나를 붙잡고 그 액터 전용 복제 흐름을 책임지고, Control Channel은 0번 자리에서 로그인·종료 같은 연결 생명줄을 붙잡아. 우리 서버로 치면 <code>CChosunPlayer</code> 안에 "접속 제어용 처리", "캐릭터 상태용 처리", "음성/부가 데이터 처리"를 한데 섞지 않고, 각자 전용 통로와 상태칸을 준 느낌에 가깝다.</p>
 <p>왜 지금 배우냐면, 앞에서 <code>UNetConnection</code>이라는 큰 그릇을 봤고 이제 그 안이 어떻게 칸막이 되는지 알아야 하기 때문이야. 이걸 모르면 다음에 나오는 bunch 라우팅, reliable/ack, ActorChannel 복제 흐름이 전부 "어디로 배달되는 얘기인지" 흐릿해져. 이번 챕터는 그 배달 주소표를 먼저 읽는 시간이다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 채널(Channel)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 소켓 하나에 로그인·이동·채팅·음성을 <strong>전부 한 줄로 밀어넣고</strong>, 받은 쪽이 헤더의 <code>wID</code> 보고 갈래를 고르면 돼. 우리 서버가 딱 이 방식이지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 다 한 줄로 섞이면 서로 방해해. 아직 로그인도 안 끝난 클라가 보낸 <strong>이동 패킷이 먼저 처리</strong>되거나, <strong>음성 데이터가 밀려서 이동까지 막</strong>거나. 게다가 "이 데이터가 어느 액터 것이고, 순서는 어디까지 왔고, 재전송할 건 뭔지" 같은 <strong>상태를 전부 손으로</strong> 따라다녀야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 소켓 하나 안에 <strong>역할별 논리 스트림을 여러 가닥</strong> 파두는 거야. 연결관리는 이 선, 액터 복제는 저 선, 음성은 또 다른 선. 겉은 케이블 하나인데 안은 색깔 다른 전선 여러 가닥 — 이 한 가닥이 <strong>채널(Channel)</strong>이야.</div>
 </div>
 <div class="conversation"><h2>하나의 선(線)에 여러 물건을 실으면 안 되나?</h2>
 <p>게임 서버 짜봤으면 소켓 하나로 온갖 걸 다 밀어넣어 본 적 있을 거야. 로그인 패킷, 이동 패킷, 채팅 패킷 전부 같은 TCP 스트림에. 그러다 보면 이런 게 헷갈리지. "지금 온 이 바이트 덩어리가 이동이야 채팅이야? 헤더 보고 분기해야지."</p>
@@ -94,6 +98,7 @@ a.xref:hover { background:#bbdefb; }
 <p>보이지? <code>ChName = NAME_Control</code> / <code>ChName = NAME_Voice</code>. Actor 채널도 똑같이 <code>ChName = NAME_Actor</code>를 박아 (<code>DataChannel.cpp:1145</code>). 이 이름표가 나중에 라우팅할 때 "이 데이터가 어느 종류 채널행이냐"를 판단하는 근거가 돼.</p>
 <p>우리 서버로 치면 패킷 헤더의 <code>wID</code>(패킷 타입) 같은 거야. 다만 UE는 그걸 채널 인스턴스에 이름으로 박아두는 게 차이.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Actor Channel(액터 하나당 채널 하나)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 한 연결이 <strong>모든 액터의 상태를 한 스트림에 뒤섞어</strong> 보내도 되긴 해. 전선 하나에 300마리 액터 정보를 줄줄이.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그럼 받은 쪽이 "이 바이트가 <strong>어느 액터 것</strong>이냐"를 매번 골라내야 하고, 액터 하나가 <strong>사라지면</strong> 그 스트림만 깔끔히 닫기도 애매하고, 여러 액터 상태가 뒤섞여 <strong>하나가 꼬이면 옆 액터까지</strong> 영향받아.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: <strong>액터 딱 하나를 전담하는 채널</strong>을 두는 거야. 이게 <strong>Actor Channel</strong>. 멤버 <code>Actor</code>가 단수(포인터 하나)인 이유지. 그 액터의 스폰·프로퍼티·RPC만 이 배달부가 책임지니까 액터끼리 상태가 안 꼬여 — 우리가 "캐릭터 하나 = 세션 객체 하나"로 격리하는 감각이랑 통해.</div>
 </div>
 <div class="conversation"><h2>2. Actor Channel = 액터 딱 하나</h2>
 <p>Actor 채널의 핵심은 이름부터 정직해. <strong>액터 하나당 채널 하나</strong>.</p>
@@ -109,6 +114,7 @@ a.xref:hover { background:#bbdefb; }
 <p>여기서 초보가 자주 오해하는 것 하나 짚고 갈게. <strong>채널이 프로퍼티 복제를 "계산"하지는 않아.</strong> 채널은 그냥 통로고, 실제로 "어떤 프로퍼티가 바뀌었나, 뭘 보낼까"를 따지는 건 <code>FObjectReplicator</code>라는 별도 놈이야 (<code>ActorChannel.h</code> 49~50 주석). 채널은 배달 트럭, 리플리케이터는 물건 싸는 창고. 이 분업은 <a class="xref" href="ch-13-actorchannel-replicate.html">actorchannel-replicate</a>에서 파고들 거니까 지금은 "채널 ≠ 복제 계산기"만 챙겨.</p>
 <p>Actor 채널의 수신은 <code>UActorChannel::ReceivedBunch</code>(<code>DataChannel.cpp:3080</code>)로 들어와서 그 액터의 스폰 정보/프로퍼티/RPC 컨텐츠 청크를 파싱해. 다만 위에서 말했듯 실제 복제 값 계산은 리플리케이터가 하고, 채널은 뜯어서 넘겨주는 역할.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — ChIndex 0 = Control 채널 예약</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 채널을 <strong>다 똑같이 대접</strong>하면 단순하지. 데이터 오면 그때그때 채널 만들고 배달하고.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 연결을 <strong>갓 맺은 순간엔 채널이 하나도 없어</strong>. 그런데 로그인·엔디안 협상 같은 <strong>첫 대화를 어디로 보내지?</strong> 채널을 만들려면 협상이 돼야 하고, 협상하려면 채널이 있어야 하고 — 닭이 먼저냐 달걀이 먼저냐로 막혀버려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: <strong>0번 슬롯을 Control 채널로 미리 예약</strong>해두고, "0번 Control만은 채널이 아직 없어도 받아준다"는 예외를 두는 거야. 이 예외가 닭-달걀 고리를 끊어. 그래서 Control(<code>ChIndex 0</code>)은 남의 채널도 닫을 수 있는 <strong>특별 시민</strong>이고, 얘가 서야 나머지 채널이 지어져.</div>
 </div>
 <div class="conversation"><h2>3. ChIndex 0 = Control은 특별 시민이다</h2>
 <p>이제 이 챕터에서 제일 중요한 부분. 채널들은 연결 안에서 <code>Channels[]</code> 배열에 담겨. 그 배열의 슬롯 번호가 <strong>ChIndex</strong>야.</p>

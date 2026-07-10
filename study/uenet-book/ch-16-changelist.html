@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -63,6 +66,7 @@ a.xref:hover { background:#bbdefb; }
 <p>이 클론에 소스 있음. 아래 코드는 전부 실제 원문 그대로고 <code>파일:줄번호</code>를 달았어. 앞 챕터에서 "프로퍼티를 표(Cmds)로 눕히는 법"을 봤지(→ <a class="xref" href="ch-15-replayout.html">replayout</a>). 이번엔 그 표를 굴려서 <strong>바뀐 것만</strong> 골라내는 이야기야.</p>
 <hr>
 <p>지금부터 진짜 언리얼 코드가 나와. <strong>겁먹지 마</strong> — 길어 보이는 줄도 결국 "비교한다 → 번호를 적는다 → 모아둔다" 세 동작이 반복될 뿐이야. 낯선 기호는 코드 바로 아래 🔤 상자에서 풀어줄게.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 그림자 데이터(Shadow)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: "바뀐 것만 보내자"고 마음먹었어. 근데 서버는 지금 값만 들고 있잖아 — 현재 HP가 80이라는 것만 알아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: "바뀌었다"고 말하려면 <strong>뭐랑</strong> 비교해야 하는데, 비교할 옛날 값이 없어. 직전에 뭘 보냈는지 기억을 안 하면 매 프레임 "바뀐 건가 아닌가"를 판단할 기준선이 없어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 직전에 보낸 값의 <strong>사본</strong>을 서버가 한 벌 더 들고 있는 것. → 이게 <strong>그림자 데이터</strong>야. 현재 값 ↔ 그림자를 비교해 다르면 "바뀜", 그리고 그림자를 새 값으로 갱신해 다음 기준선으로 삼는다.</div>
 </div>
 <div class="conversation"><h2>1. "바뀐 걸 어떻게 아나" — 그림자와 비교한다</h2>
 <p>서버는 매 프레임 액터의 현재 값을 들고 있어. 근데 "바뀌었다"고 말하려면 <strong>뭐랑 비교</strong>해야 하잖아. 비교 대상이 있어야지. 그게 <strong>그림자 데이터(shadow)</strong> 야 — 직전에 보낸 값의 사본. 서버가 따로 한 벌 더 들고 있어.</p>
@@ -82,6 +86,7 @@ a.xref:hover { background:#bbdefb; }
 <p>핸들이 뭐냐면, 복제 프로퍼티를 가리키는 1-based 인덱스야(0은 종료자로 예약). "3번 프로퍼티, 7번 프로퍼티가 바뀌었다" — 이렇게 번호로만 표시해. 값 20KB 대신 번호 몇 개. 이게 대역폭을 아끼는 첫 번째 트릭이야.</p>
 <p>이 비교를 재귀로 프로퍼티 트리 전체에 돌리는 게 <code>CompareProperties_r</code>(<code>RepLayout.cpp:1648</code>)이고, 그걸 부르는 상위가 <code>CompareProperties</code>(<code>RepLayout.cpp:1777</code>)야. Push Model이 켜져 있으면 dirty로 찍힌 것만 비교하고, 아니면 전수 비교해(그 최적화 이야기는 → <a class="xref" href="ch-19-push-model.html">push-model</a>).</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 핸들(번호표) 목록 = Changelist</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 바뀐 걸 골랐으면, 그 프로퍼티 이름이랑 값을 통째로 목록에 담아 보내면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 "Health"라는 <strong>글자</strong>를 매번 같이 실으면 그것도 대역폭이고, 20개 프로퍼티 중 뭐가 바뀌었는지를 글자로 표시하면 무거워. 델타로 아낀 대역폭을 이름표로 도로 까먹어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 프로퍼티마다 정수 번호(핸들)를 매겨두고, "3번, 7번이 바뀌었다"처럼 <strong>번호만</strong> 목록에 담는 것. → 이 번호 목록이 <strong>Changelist</strong>야. 값 자체는 여기 없고, 나중에 송신할 때 그 번호로 진짜 값을 찾아 실어.</div>
 </div>
 <div class="conversation"><h2>2. Changelist 한 개의 실체 — 번호 목록 + 영수증</h2>
 <p>방금 <code>Changed.Add(Handle)</code>로 채운 그 목록이 바로 changelist 한 개야. 자료구조로는 이렇게 생겼어:</p>
@@ -107,6 +112,7 @@ a.xref:hover { background:#bbdefb; }
 <p><strong>반전: 아니야.</strong> 이 클래스는 "무엇이 바뀌었나"를 <strong>저장하지 않아.</strong> 헤더 주석(<code>RepChangedPropertyTracker.h:14-20</code>)이 스스로 고백해 — 이 클래스는 연결들 사이에서 공유되는 프로퍼티 <strong>메타데이터</strong>(이 프로퍼티가 지금 Conditional/Active 상태냐, Replay용 외부 데이터가 뭐냐)를 담을 뿐이고, "하는 일에 맞게 이름을 바꿔야 한다(TODO)"라고 적혀 있어. Epic 개발자도 이름이 거짓말이라는 걸 알고 주석에 사과문을 남긴 거지.</p>
 <p>진짜 "변경분(changelist)" 알맹이는 우리가 1·2절에서 본 <code>FRepChangelistState</code> / <code>FRepChangedHistory</code> / <code>CompareProperties</code>가 담당해. <strong>이름만 보고 넘겨짚으면 엉뚱한 파일에서 반나절 헤맨다.</strong> 네트워크 코드에서 이런 이름-실체 불일치는 흔해. 항상 주석과 실제 쓰임을 확인해.</p>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 64칸 변경 이력 버퍼</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 방금 만든 changelist 하나만 들고 있다가, 모두에게 보내고 버리면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 <strong>연결마다 진도가 달라.</strong> 방금 접속한 클라는 최근 것만 받으면 되지만, 잠깐 랙 걸렸던 클라는 밀린 지점부터 몰아 받아야 해. 최신 하나만 들고 있으면 뒤처진 연결이 놓친 변경분을 못 챙겨줘.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 최근 변경 이력을 여러 개(64칸) 창고에 쌓아두고, 연결마다 "너는 여기부터" 하고 잘라 주는 것. → 이게 <strong>64칸 순환버퍼</strong>야. 꽉 차면 가장 오래된 걸 다음 것에 병합해 정보를 안 잃는다.</div>
 </div>
 <div class="conversation"><h2>4. Changelist를 어디에 쌓나 — 64칸 순환버퍼</h2>
 <p>changelist 하나를 만들었어. 이걸 어디 보관하지? 오브젝트마다 <strong>64칸짜리 순환버퍼</strong>에 히스토리로 쌓아:</p>

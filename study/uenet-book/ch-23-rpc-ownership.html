@@ -28,6 +28,9 @@ a.xref:hover { background:#bbdefb; }
 .note.reread code { background:#c8e6c9; color:#1b5e20; }
 .note.reread strong { color:#1b5e20; }
 .note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
 .note.warn code { background:#ffe0e0; color:#b71c1c; }
 .code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
 .compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
@@ -63,6 +66,7 @@ a.xref:hover { background:#bbdefb; }
 <div class="note">전제 두 개는 링크로 넘긴다 — RPC가 뭔지, 몇 종류인지는 → <a class="xref" href="ch-21-rpc-types.html">rpc-types</a> / 커넥션 객체가 뭔지는 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a>. 여기선 "이미 RPC 하나를 쏘기로 했다"는 지점부터 시작해.</div>
 <hr>
 <p>지금부터 진짜 언리얼 코드가 나와. <strong>겁먹지 마</strong> — 낯선 기호는 코드 바로 아래 🔤 상자에서 하나씩 풀어줄게. 코드를 외우는 게 아니라 "아, 주소를 이렇게 찾는구나"만 잡으면 돼.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 소유권으로 주소 찾기(Owner 사슬)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: RPC를 클라한테 보내려면 "어느 소켓으로 보낼지" 주소가 있어야 해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 액터마다 "너는 누구 소켓으로 가"를 적은 라우팅 표를 따로 만들면, 스폰·소멸할 때마다 그 표를 손으로 맞춰야 하고 하나 어긋나면 남의 집으로 택배가 가.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 액터가 스스로 <strong>Owner 포인터</strong>를 들고, 주소를 물으면 주인한테 떠넘기며 재귀로 위로 올라가기. 무기→캐릭터→PlayerController까지 올라가면 그 PC의 커넥션이 곧 주소야. → 그게 소유권이야. 조선 서버가 캐릭터 인덱스로 세션 테이블 뒤지던 걸, UE는 오브젝트 그래프 자체로 푸는 거지.</div>
 </div>
 <div class="conversation"><h2>1. 주소는 Owner를 타고 올라간다</h2>
 <p>먼저 주소부터. UE에서 모든 액터는 <code>Owner</code> 포인터를 하나 들 수 있어. 그리고 "이 액터의 커넥션(소켓)이 뭐냐"를 물으면, 엔진은 자기가 답을 모른다. 대신 <strong>주인한테 떠넘긴다.</strong></p>
@@ -137,6 +141,7 @@ a.xref:hover { background:#bbdefb; }
 <ul><li><code>RemoteRole == ROLE_None</code>(<code>Actor.cpp:5597</code>) 이면 → 애초에 복제 대상이 아니라 Absorbed.</li><li>다 통과하면 <code>Actor.cpp:5609</code>에서 <strong><code>FunctionCallspace::Remote</code></strong> 반환. "원격으로 보내라" 확정.</li></ul>
 <div class="note">용어 3개만 짚고 가자. <strong>LocalRole==ROLE_Authority</strong> = "이 머신에서 내가 이 액터의 진짜 주인(권한자)이다". <strong>Absorbed</strong> = 실행도 송신도 안 하고 소리 없이 버림. <strong>Callspace</strong> = 이 세 갈래(Local/Remote/Absorbed)의 판정 결과값, RPC 한 번의 운명.</div>
 <hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 클라는 무조건 서버 커넥션으로(ServerConnection)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: §1에서 Owner 사슬로 소유 커넥션을 구했으니, 그 커넥션으로 그냥 부치면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 내가 <strong>클라</strong>일 땐 소유 커넥션이 누구를 가리키든 상관없이 목적지는 언제나 <strong>유일한 서버</strong> 하나뿐이야. 클라는 서버로 가는 길 하나(ServerConnection)만 갖고 있거든.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 클라에선 방금 구한 주소를 무시하고 <strong>ServerConnection으로 덮어써</strong> 무조건 서버로 몰기. 서버가 Client RPC 보낼 땐 이게 없으니 그 클라의 소유 커넥션이 그대로 목적지가 돼. 주소가 아예 없으면? 경고 찍고 조용히 드롭.</div>
 </div>
 <div class="conversation"><h2>3. Remote가 나오면 NetDriver가 실제로 부친다</h2>
 <p><code>GetFunctionCallspace</code>가 <code>Remote</code>를 뱉었어. 이제 진짜로 소켓에 실어야지.</p>
