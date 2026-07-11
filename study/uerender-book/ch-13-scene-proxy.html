@@ -269,6 +269,45 @@ a.xref:hover { background:#e1bee7; }
 <div class="conversation"><h2>8. 이 챕터에서 딱 이것만</h2>
 <ul><li><code>FPrimitiveSceneProxy</code>는 <code>UPrimitiveComponent</code> 원본이 아니라 렌더 스레드용 대리 카드야.</li><li>등록 때 게임 스레드는 <code>CreateSceneProxy()</code>로 프록시를 만들고 <code>FPrimitiveSceneInfo</code>와 묶는다.</li><li>렌더 스레드로 넘어가는 문은 <code>ENQUEUE_RENDER_COMMAND</code>야.</li><li>렌더 스레드는 원본 컴포넌트 포인터를 역참조하면 안 된다. 소스 주석이 직접 경고한다.</li><li>위치 변경과 삭제도 원본 직접 접근이 아니라 수정/철거 명령으로 전달된다.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>FPrimitiveSceneProxy</code>는 왜 있나요? 렌더 스레드가 그냥 <code>UPrimitiveComponent</code>를 읽으면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>UPrimitiveComponent</code>는 액터 소유, UObject 생명주기, 에디터 상태, 게임 로직까지 품은 <strong>원본</strong>이야. 근데 렌더 스레드는 매 프레임 컬링하고, 메시 모으고, GPU 리소스를 건드려. 렌더 스레드가 그때마다 원본을 뒤지면, 게임 스레드가 위치를 바꾸는 순간 예전 bounds로 그림자를 만들거나, unregister 되면서 포인터가 풀릴 수 있어. <code>FPrimitiveSceneProxy</code>는 <strong>렌더 스레드가 봐도 되는 그림자 사본</strong>이야 — 원본에서 렌더에 필요한 값만 뽑은 대리 카드. 원본 배우를 무대감독 책상에 앉히는 대신, 공연용 대리 카드를 넘기는 거지.</div></details>
+
+<h4>↳ 그거 성능 최적화 아니에요? 그냥 복사본 두는 거잖아요.</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">최적화도 되지만 본질은 <strong>스레드 안전 경계</strong>야. 실제로 <code>FPrimitiveSceneInfo</code> 안엔 디버깅용 컴포넌트 포인터(<code>...ForDebuggingOnly</code>)가 있긴 한데, 소스 주석이 "렌더 스레드에서 이걸 역참조하지 마라, 게임 스레드가 언제든 UObject 멤버를 바꾼다"라고 못을 박아놨어. 그래서 컴포넌트를 가리킬 땐 포인터 대신 <code>PrimitiveComponentId</code> 같은 안정적 식별자를 써. 두 사람이 같은 서랍을 동시에 잡아당기는 걸 막는 게 프록시의 진짜 존재 이유야.</div></details>
+
+<h4>↳ 우리 서버로 치면 뭐랑 같나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>송신용 DTO</strong>야. 원본 <code>CPlayer</code>엔 퀘스트, 인벤토리, DB dirty flag, AI 상태까지 많지만, 클라에 보낼 이동 패킷엔 <code>id</code>, <code>pos</code>, <code>rot</code>, <code>state</code>만 뽑아 담잖아. 그 패킷을 워커가 들고 있어도 원본 <code>CPlayer</code>를 직접 안 만져. 프록시도 컴포넌트에서 렌더링에 필요한 값(메시, 머티리얼, transform, bounds)만 뽑은 렌더 스레드용 사본이야.</div></details>
+
+<h3>Q2. 게임 스레드에서 만든 프록시가 어느 순간부터 렌더 스레드 소유가 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">경계선이 정확히 <code>ENQUEUE_RENDER_COMMAND</code>야. 게임 스레드는 <code>CreateSceneProxy()</code>로 대리 카드를 만들고 첫 위치표(<code>RenderMatrix</code>, <code>WorldBounds</code>)를 뽑아서 봉투(<code>CreateCommands</code>)에 담기까지만 해. 그 봉투가 <code>ENQUEUE_RENDER_COMMAND</code>라는 전달함을 타는 순간부터, 렌더 스레드가 <code>SetTransform</code>으로 위치 박고, <code>CreateRenderThreadResources</code>로 GPU 리소스 만들고, <code>FScene</code> 장부에 꽂아. <strong>큐를 타는 순간 소유권과 실행 스레드가 바뀐다</strong>는 게 핵심이야.</div></details>
+
+<h4>↳ 서버에서 비슷한 경계가 있나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">IOCP 워커가 패킷 바이트를 직접 플레이어 객체에 꽂지 않고, 게임 스레드 큐에 <code>CM_MOVE</code> 같은 명령을 넣는 거랑 같아. 큐에 넣기 전엔 워커 소유, 큐를 타면 게임 스레드 소유로 넘어가지. 소유권 경계를 락이 아니라 <strong>명령 큐</strong>로 긋는다는 발상이 똑같아.</div></details>
+
+<h3>Q3. 프리미티브 위치가 매 프레임 바뀌면 렌더 스레드가 원본을 다시 읽나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그러면 안 돼. 무대감독이 배우 이동할 때마다 대기실까지 뛰어가 원본을 훑으면, 한 프레임에 컴포넌트 1,000개가 움직이면 원본 뒤지기가 1,000번 생기고 그 사이 게임 스레드가 또 위치를 바꿔. 대신 게임 스레드가 새 bounds·render matrix·이전 transform만 <code>UpdateParams</code>라는 <strong>수정 메모</strong>에 담아서 렌더 명령으로 보내. 렌더 스레드는 그 메모만 보고 프록시를 고쳐. 서버로 치면 <code>CPlayer</code> 포인터를 넘기는 게 아니라 <code>{ id, x, y, dir, tick }</code> 작은 갱신 메시지를 큐에 넣는 거야.</div></details>
+
+<h4>↳ 삭제할 때도 같은 원칙인가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">응, 삭제도 <strong>두 단계</strong>야. 게임 스레드는 원본에서 프록시 연결만 끊어(<code>ReleaseSceneProxy</code>). 그다음 렌더 명령으로 장부 줄 제거(<code>RemovePrimitiveSceneInfo_RenderThread</code>)랑 렌더 리소스 파괴(<code>DestroyRenderThreadResources</code>)를 보내. "배우 카드 회수"랑 "무대 장비 철거"를 같은 스레드에서 막 섞지 않는 거지. 무대감독이 아직 그 카드로 그림자를 정리 중인데 게임 쪽이 바로 free하면, 워커가 쓰는 세션 버퍼를 먼저 해제한 사고랑 같으니까.</div></details>
+
+<h3>Q4. 그럼 프록시 하나 요약하면 뭐라고 설명하나요? 태어나서 죽을 때까지.</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">세 단어면 돼. <strong>Proxy</strong>(렌더 스레드가 보는 대리 카드), <strong>SceneInfo</strong>(<code>FScene</code> 장부의 한 줄), <strong>ENQUEUE</strong>(게임→렌더 넘어가는 전달함). 태어날 때 <code>CreateSceneProxy()</code>로 카드 만들어 큐로 넘기고, 움직이면 수정 메모를 큐로 보내고, 죽을 때 연결 끊고 철거 명령을 큐로 보내. <strong>태어날 때도 큐, 죽을 때도 큐</strong>야. 원본 UObject랑 렌더 장부 사이에 명령 큐로 스레드 안전 경계를 긋는 게 전부야.</div></details>
+
+<h4>↳ 단순 DirectX 샘플에선 이런 게 없잖아요. 왜 UE만 이렇게 복잡한가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">단순 DX 샘플은 한 스레드에서 다 처리하니까 원본 구조체를 바로 읽어도 문제가 안 보여. 근데 그때도 GPU가 <code>TransformComponent</code>를 직접 읽진 않아 — CPU가 월드 행렬을 상수/인스턴스 버퍼에 복사해 올리고 GPU는 그 복사본을 읽지. 프록시가 딱 그 CPU 렌더러 버전 복사본이야. UE는 게임 스레드랑 렌더 스레드가 파이프라인처럼 겹쳐 도니까, "원본 바로 읽기"가 아니라 "프록시+렌더 명령으로 넘기기"가 기본 구조가 될 수밖에 없어. 락으로 원본 공유하면 돌긴 하지만 성능·복잡도가 망가지거든.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong><code>FPrimitiveSceneProxy</code>는 게임 객체 원본을 렌더 스레드에 공유하지 않기 위한 "렌더용 대리 카드"다 — 생성, 갱신, 삭제 모두 명령 큐를 타고 넘어가며 원본 UObject와 렌더 장부 사이의 스레드 안전 경계를 만든다.</strong></p>
 <hr>

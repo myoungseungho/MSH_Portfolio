@@ -375,6 +375,45 @@ RenderViewFamily_RenderThread</div>
 <p>다섯째, 씬캡처와 반사는 다른 눈으로 같은 Scene을 다시 보는 일이라서 Family 흐름 근처에 붙는다.</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>View</code>랑 <code>ViewFamily</code>는 각각 뭐고, 왜 나눴나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">상영관 하나가 <code>Scene</code>이야 — 같은 무대, 같은 배우, 같은 조명. 근데 관객석은 여러 개일 수 있어. 정면 좌석, 분할화면 좌우 좌석, 미니맵처럼 위에서 보는 좌석, 거울 속 좌석. 각 좌석이 <code>View</code>고, 좌석마다 보는 방향·렌즈·화면 사각형·이전 프레임 기억이 달라. <code>ViewFamily</code>는 <strong>같은 렌더 흐름에서 같이 처리할 좌석들의 가족 장부</strong>야. 전역 카메라 하나로 밀면 왼쪽 좌석 정보가 오른쪽 좌석 정보를 덮어써서, 분할화면·VR·씬캡처가 다 깨져.</div></details>
+
+<h4>↳ <code>View</code>가 그냥 카메라 위치 하나 아니에요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야, 위치값 하나가 아니라 <strong>렌더링 작업용 가방을 든 카메라</strong>야. 행렬, 화면 사각형(<code>ViewRect</code>), 이전 프레임 기억, 오클루전 쿼리, GPU에 넘길 유니폼버퍼까지 한 덩어리로 묶여. 서버로 치면 소켓 핸들만 든 객체가 아니라, 그 소켓의 세션 상태랑 송수신 버퍼까지 같이 든 객체인 거지. 그래서 렌더러 내부에선 <code>FSceneView</code>를 <code>FViewInfo</code>로 복사해서 렌더러용 쿼리·캐시를 덧붙여 써.</div></details>
+
+<h3>Q2. 같은 월드를 보는데 왜 View마다 따로 처리해야 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">같은 나무 한 그루도 "정문에서 몇 걸음"과 "내가 선 자리에서 몇 걸음"은 숫자가 다르잖아. 화면에 그리려면 모든 물체 위치를 <strong>"지금 이 카메라 눈 기준으로 어디냐"로 다시 적어야</strong> 해. 카메라마다 이 '다시 적는 규칙'(행렬)이 달라서, 카메라가 여럿이면 규칙도 각각 따로 있어야 해. 그래서 렌더러는 <code>InViewFamily-&gt;Views.Num()</code>만큼 반복 돌면서 View를 하나씩 <code>FViewInfo</code>로 만들어. Family가 카메라 하나짜리 껍데기였다면 이 반복 자체가 필요 없었겠지.</div></details>
+
+<h4>↳ GPU가 그 카메라별 행렬을 직접 읽나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, CPU의 <code>FViewMatrices</code>는 셰이더가 직접 못 읽어. 그래서 행렬·화면 크기·<code>ViewRect</code>·이전 프레임 행렬을 <code>FViewUniformShaderParameters</code>라는 상자에 채우고(<code>SetupUniformBufferParameters</code>), 그걸 실제 <code>ViewUniformBuffer</code>로 찍어내(<code>CreateUniformBufferImmediate</code>). 이 버퍼가 <strong>View의 GPU용 신분증</strong>이야. 분할화면이면 왼쪽 View와 오른쪽 View가 서로 다른 유니폼버퍼를 가져서, 같은 머티리얼 코드도 어떤 버퍼가 묶였는지에 따라 다른 카메라 기준으로 계산돼.</div></details>
+
+<h4>↳ DirectX 직접 짜던 거랑 대응시키면요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">DX로 렌더러 짤 때 카메라별 <strong>constant buffer</strong>에 View 행렬, Projection 행렬, ViewProjection 행렬 넣던 거랑 같아. <code>FViewUniformShaderParameters</code>는 그 거대한 버전이야 — 행렬 몇 개가 아니라 <code>ViewRect</code>, 이전 프레임, 노출, 안개, 대기, 샘플러까지 같이 붙어. 근데 발상은 똑같아. "이 카메라에서 모든 픽셀이 똑같이 읽을 값"을 한 상자에 찍어 GPU에 묶는 거지. Uniform은 모두에게 같은 값, Buffer는 그걸 담는 상자.</div></details>
+
+<h3>Q3. 분할화면에서 렌더 타깃 크기는 어떻게 정하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">View 하나만 보고 정하면 안 돼. 1920x1080을 좌우로 나누면 1P는 왼쪽, 2P는 오른쪽 960칸을 쓰는데, 왼쪽 View만 보고 판을 만들면 오른쪽 좌석이 잘려. 그래서 <code>ComputeFamilySize</code>가 <strong>Family 안의 모든 View 사각형을 돌면서</strong> 가장 오른쪽·가장 아래까지 필요한 크기를 찾아 <code>FamilySize</code>를 정해. 극장으로 치면 좌석 하나만 보고 상영관 크기를 정하는 게 아니라, 모든 좌석에서 스크린이 보이도록 전체 배치를 잡는 거야. 이게 분할화면이 왜 "Family"인지 가장 잘 보이는 지점이야.</div></details>
+
+<h4>↳ 씬캡처나 반사도 이 흐름에 왜 끼어 있나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">씬캡처랑 평면 반사도 <strong>같은 Scene을 다른 눈으로 다시 보는 일</strong>이라서 그래. 함수 이름부터 <code>BeginRenderingViewFamilies</code>로 Family 복수형을 받아. 메인 카메라만 처리한다면 씬캡처가 이 흐름에 있을 이유가 약하지만, 언리얼은 여러 관점을 한 프레임에 같이 정리하려고 ViewFamily 흐름 근처에 얹어. 그래서 Family는 "한 카메라 포인터"가 아니라 <strong>한 프레임에 같이 정리할 렌더 관점들의 묶음</strong>인 거야.</div></details>
+
+<h3>Q4. 이 챕터를 왜 컬링·베이스패스 앞에서 배우나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">뒤 챕터의 좌표계 기준이 전부 <code>View</code>라서 그래. 컬링은 "어느 View에서 보이냐"를 계산하고, 베이스패스는 "그 View의 행렬과 사각형에 그리냐"를 써. View와 Family를 못 잡으면 프러스텀 컬링, deferred, basepass가 계속 흐릿해져. 카메라 관점을 먼저 확정해야 "무엇을 그릴까"랑 "어디에 그릴까"가 명확해지는 거야.</div></details>
+
+<h4>↳ 서버 경험이랑 대응시키면 <code>ViewFamily</code>는 뭐에 가깝나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>같은 월드 틱에서 같이 처리할 세션 묶음</strong>에 가까워. 세션 하나가 <code>View</code>라면, 세션 배열을 돌며 각 세션의 상태와 버퍼를 갱신하는 쪽이 <code>ViewFamily</code>야. 유저 한 명이 소켓 번호 하나가 아니라 세션·캐릭터·권한·버퍼가 붙은 덩어리이듯, 카메라도 위치 하나가 아니라 행렬·<code>ViewRect</code>·이전 프레임·유니폼버퍼가 붙은 덩어리인 게 딱 대응돼.</div></details>
+</div>
 <div class="conversation"><h2>한 줄 요약</h2>
 <p><strong><code>View</code>는 카메라 한 대의 렌더링 신분증이고, <code>ViewFamily</code>는 같은 Scene을 같은 렌더 흐름에서 같이 그릴 View들의 가족 장부다.</strong></p>
 <hr>

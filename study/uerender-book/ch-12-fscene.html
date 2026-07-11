@@ -323,6 +323,49 @@ UpdateAllPrimitiveSceneInfos (:5159)
 <div class="conversation"><h2>10. 이 챕터에서 딱 이것만</h2>
 <ul><li><code>FScene</code>은 <code>UWorld</code>가 아니라 렌더러가 보는 세계 장부야.</li><li>프리미티브는 <code>UPrimitiveComponent</code> 그대로가 아니라 <code>FPrimitiveSceneProxy</code>와 <code>FPrimitiveSceneInfo</code>로 들어온다.</li><li>등록은 게임 스레드에서 proxy/info를 만들고, 렌더 커맨드로 넘긴 뒤, <code>UpdateAllPrimitiveSceneInfos</code>에서 packed array에 반영된다.</li><li>해제도 바로 지우지 않고 delete 예약을 거쳐 packed array의 여러 칸을 같은 박자로 제거한다.</li><li><code>PackedIndex</code>는 빠른 배열 순회용 현재 위치, <code>PersistentIndex</code>는 더 안정적인 추적용 번호로 보면 된다.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>FScene</code>은 왜 있나요? 렌더러가 그냥 <code>UWorld</code>를 보면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>UWorld</code>는 공연장 전체야 — 배우 대기실, 매표소, 창고, 휴게실까지 다 있어. 렌더러가 매 프레임 이걸 처음부터 훑으면, 액터가 10만 개면 10만 개를 게임 객체 상태까지 건드려야 해. 게다가 한쪽에서 액터를 삭제하는데 렌더 스레드가 같은 포인터로 그림자를 만들면 레이스가 나. <code>FScene</code>은 게임 월드 자체가 아니라 <strong>렌더러가 보는 세계 장부</strong>, 즉 무대감독이 들고 다니는 공연용 장부야. 렌더용 프리미티브 목록, proxy, 변환 행렬, bounds, occlusion 정보만 압축해서 들고 있어.</div></details>
+
+<h4>↳ 그 장부가 왜 하필 여러 개의 packed array로 되어 있나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">컬링은 수만 개 bounds를 훑고, BasePass는 보이는 mesh를 계속 모으고, MeshDrawCommand 캐시는 프리미티브별 상태를 index로 잡아. 이런 데선 포인터 따라 복잡한 UObject 트리를 걷는 것보다 <strong>packed array</strong>가 훨씬 빨라. 그리고 <code>Primitives[i]</code>, <code>PrimitiveTransforms[i]</code>, <code>PrimitiveSceneProxies[i]</code>가 <strong>같은 index를 공유</strong>하니까, "5번 배우 어디 있지?" 하면 관련 칸을 줄줄이 뽑아. 서버의 <code>Sessions[i]</code>, <code>PlayerIds[i]</code>, <code>SendQueues[i]</code>가 같은 <code>i</code>를 쓰는 거랑 똑같아.</div></details>
+
+<h3>Q2. 게임 객체(<code>UPrimitiveComponent</code>)가 <code>FScene</code> 장부에 직접 안 들어가고 왜 대리인을 거치나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">배우 본인(<code>UPrimitiveComponent</code>)은 게임플레이, 에디터, UObject 수명 관리까지 다 들고 있어. 렌더 스레드가 이걸 매번 만지면 락이 걸리고, 삭제 중 포인터를 잡으면 바로 사고야. 그래서 렌더용 대리 카드 <code>FPrimitiveSceneProxy</code>랑 장부 줄 <code>FPrimitiveSceneInfo</code>를 따로 만들어서 넘겨. proxy는 "클라에 보내기 좋은 캐릭터 스냅샷", scene info는 "그 스냅샷이 어느 세션 배열 index에 있고 어떤 시스템에 등록됐는지 적은 관리 레코드"야.</div></details>
+
+<h4>↳ 등록할 때 게임 스레드에서 바로 <code>Primitives.Add</code>를 하면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">안 돼. <code>FScene</code>의 핵심 배열은 렌더 스레드 세계라, 게임 스레드가 직접 찌르면 레이스가 나. 그래서 <code>ENQUEUE_RENDER_COMMAND</code>로 "무대감독한테 전달할 쪽지"를 만들어 넘기고, 렌더 스레드가 <code>SetTransform</code>·<code>CreateRenderThreadResources</code>를 순서대로 실행해. 서버에서 IOCP 콜백 한가운데서 월드 리스트를 바로 안 고치고, 게임 루프 안전한 지점에서 처리하는 거랑 같아.</div></details>
+
+<h4>↳ 쪽지를 보냈다고 바로 배열에 꽂히는 것도 아니라던데요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">맞아, 한 번 더 미뤄. <code>AddPrimitiveSceneInfo_RenderThread</code>도 바로 배열을 채우는 게 아니라 <code>PrimitiveUpdates.EnqueueAdd</code>로 밀어넣고, 한 프레임의 적당한 지점에서 <code>UpdateAllPrimitiveSceneInfos</code>가 add/remove/update를 <strong>한꺼번에</strong> 처리해. 배우가 "저 올라갑니다" 하면 큐시트에 "등장 예정"으로 적어두고, 씬 전환 타이밍에 배치표를 통째로 갱신하는 거야. 등록과 삭제가 같은 프레임에 섞여도 packed array를 정렬된 채로 유지할 수 있어.</div></details>
+
+<h3>Q3. <code>PackedIndex</code>랑 <code>PersistentIndex</code>는 왜 둘 다 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">packed array는 구멍을 싫어해. 중간 배우가 퇴장하면 뒤쪽 배우를 앞으로 당겨와서 촘촘하게 유지하는데, 그러면 <strong>줄 번호가 바뀌어</strong>. <code>PackedIndex</code>는 "지금 이 배열에서 몇 번째냐"라 빠른 순회엔 좋지만 삭제/정렬로 계속 변해. 다른 렌더 시스템이 "저 프리미티브를 시간에 걸쳐 계속 추적"해야 하면 이걸 못 믿어. 그래서 수명 동안 안정적인 <code>PersistentIndex</code>를 따로 두고, <code>PersistentPrimitiveIdToIndexMap</code>이 둘을 연결해. 빠른 순회랑 안정 추적을 둘 다 잡는 거야.</div></details>
+
+<h4>↳ 서버 경험이랑 대응시키면요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>PackedIndex</code>는 현재 접속자 배열의 index야 — 중간 유저 나가면 뒤 유저를 당겨와서 index가 바뀌지. <code>PersistentIndex</code>는 그 세션을 계속 가리키는 내부 핸들에 가까워. 접속자 배열을 빠르게 순회하는 거랑, 특정 세션을 오래 안정적으로 추적하는 건 다른 요구라 둘이 필요한 거야.</div></details>
+
+<h3>Q4. 프리미티브 하나 등록하면 배열에 꽂고 끝인가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야. <code>FScene</code>은 단순 배열이 아니라 <strong>여러 렌더 서브시스템의 허브</strong>야. 배우를 장부에 꽂으면 무대감독이 조명팀·그림자팀·특수효과팀에도 알려야 하듯, 추가된 프리미티브는 velocity(모션 벡터), distance field, Lumen, ray tracing, static mesh draw list에 차례로 연결돼. 삭제도 똑같아 — 등록 때 알려줬으면 퇴장 때도 "이 배우 이제 없어"를 그 시스템들에 다 알려야 해.</div></details>
+
+<h4>↳ 삭제할 때 <code>Primitives[10]</code>만 지우면 왜 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>Primitives[10]</code>을 지웠는데 <code>PrimitiveTransforms[10]</code>이 그대로 남으면, 다음 프레임에 다른 배우가 남의 위치표를 들고 무대에 서는 꼴이 돼. 같은 index로 묶인 모든 장부 칸이 <strong>같은 박자로</strong> 움직여야 해. 그래서 UE는 삭제할 것들을 뒤쪽으로 swap해 모은 뒤, 끝 구간을 여러 배열에서 같은 개수만큼 한꺼번에 <code>RemoveAt</code>으로 잘라내. index 정합성을 지키려고 이렇게 하는 거야.</div></details>
+
+<h4>↳ <code>FScene</code>이랑 <code>RDG</code>는 역할이 어떻게 다른가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">층이 달라. <code>RDG</code>는 "이번 프레임 패스와 리소스를 어떻게 실행할까"의 <strong>요리 순서표(주문 보드)</strong>였어. <code>FScene</code>은 "이번 프레임에 등장 가능한 배우가 누구인가"의 <strong>명단과 위치표</strong>야. RDG가 조리 과정이라면, FScene은 오늘 무대에 올라갈 배우 명단인 셈이지. 컬링·그림자·mesh draw command가 전부 이 FScene 배열을 훑는 게 다음 챕터들로 이어져.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong><code>FScene</code>은 게임 월드를 렌더 스레드가 안전하고 빠르게 훑을 수 있도록 proxy와 scene info의 packed array로 다시 적어둔 무대감독 장부야.</strong></p>
 <hr>

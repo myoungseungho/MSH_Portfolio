@@ -257,6 +257,45 @@ RenderTranslucency(:1838)
 <p>불투명 렌더링은 스티커야. 제일 앞 스티커가 붙으면 뒤는 안 보여. 그래서 GBuffer에는 "이 픽셀의 제일 앞 스티커 정보"만 적어도 된다. 반투명 렌더링은 셀로판지야. 뒤 배경이 있어야 색이 정해지고, 여러 장이면 순서가 결과를 바꾼다. 그래서 언리얼은 스티커 작업을 끝낸 뒤, 셀로판지를 따로 꺼내서, 작업지와 복사본을 준비하고, 번호표대로 겹친다. 이게 이 챕터의 전부야. <code>TranslucentRendering.cpp</code>가 길어 보이는 이유도 이제 보여. 반투명 자체가 한 기능이 아니라, "언제", "어디에", "어떤 순서로", "어떤 블렌드로"를 모두 품은 합성 문제이기 때문이야.</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 반투명은 왜 GBuffer에 그냥 못 넣나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">GBuffer는 픽셀당 <strong>제일 앞 표면 하나</strong>만 저장하는 데 강해. 불투명 벽은 가까운 벽이 픽셀을 차지하면 뒤가 안 보이니 대표 표면 하나면 충분하지 — 스티커야. 근데 유리창은 앞 유리 40% + 뒤 네온 60% + 그 뒤 안개처럼 <strong>여러 장이 겹쳐서 섞여</strong> — 셀로판지야. 픽셀 하나에 유리 3장이 겹치면 GBuffer 칸 하나에 <strong>누구 노멀·색을 저장할지 답이 없어</strong>. 앞 유리를 저장하면 뒤가 사라지고, 뒤를 저장하면 앞이 사라져. 그래서 GBuffer에 억지로 못 눕히고 별도 경로로 가는 거야.</div></details>
+
+<h4>↳ 디퍼드 라이팅 방식이랑 결이 안 맞는다는 게 무슨 뜻이에요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">디퍼드는 "나중에 라이팅할 <strong>재료 정보</strong>"만 GBuffer에 적어두는 방식이야. 그런데 반투명은 재료 하나를 적는 문제가 아니라 <strong>이미 나온 화면 색과 섞는</strong> 문제야. 알파 블렌드가 <code>1 - 알파</code>만큼 <strong>뒤 배경 색(destination color)</strong>을 필요로 하는데, GBuffer 단계엔 아직 "뒤 배경 최종 색"이 없어(빛 계산 전이니까). 그래서 반투명은 불투명·라이팅이 어느 정도 끝나서 scene color가 생긴 <strong>뒤에</strong> 따로 와야 해. 그래서 포워드 느낌인 거지.</div></details>
+
+<h3>Q2. 반투명은 왜 <code>Standard</code>, <code>AfterDOF</code> 같은 여러 패스로 쪼개지나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">셀로판지를 <strong>언제 겹치느냐</strong>가 결과를 바꾸기 때문이야. 네온 유리창을 심도 흐림(DOF) <strong>전</strong>에 섞으면 같이 뭉개지고, <strong>후</strong>에 섞으면 또렷하게 남아. modulate만 할지, 모션블러 뒤에 붙일지도 달라. 그래서 <code>RenderTranslucency</code>가 한 통에 몰지 않고 <code>TPT_TranslucencyStandard</code>, <code>TPT_TranslucencyAfterDOF</code>, <code>AfterMotionBlur</code>, <code>Holdout</code> 같은 <strong>타이밍별 작업대</strong>로 나눠 실행해. 우리 서버로 치면 <code>SP_*</code> 하나로 다 처리하지 않고 로그인·이동·전투 패킷을 <strong>다른 큐, 다른 순서</strong>로 보내는 느낌이야.</div></details>
+
+<h4>↳ 그 반투명 패스도 결국 BasePass 장비를 쓰던데, 불투명 BasePass랑 헷갈리면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">헷갈리면 안 돼. 언리얼은 <code>FBasePassMeshProcessor</code> 같은 <strong>공통 장비를 재사용</strong>하지만, <code>TranslucencyPass</code> 값을 넘겨서 <strong>반투명 전용 상태(블렌드·렌더타깃)로</strong> 굴려. <code>ETranslucencyPass</code>(작업 종류)가 <code>TranslucencyPassToMeshPass</code>로 <strong><code>EMeshPass</code>(실제 그리기 통)</strong>로 바뀌면서 정렬·셰이더·블렌드·렌더타깃을 따로 묶을 수 있게 돼. 같은 집게를 써도 <strong>스티커 붙이는 작업대와 셀로판지 겹치는 작업대는 다른</strong> 거지.</div></details>
+
+<h4>↳ 반투명은 불투명처럼 Early-Z로 픽셀을 확 줄일 수 없다던데, 그럼 뭐가 비싸지나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">불투명은 앞이 뒤를 가리니까 <strong>Early-Z로 안 보이는 픽셀을 미리 버려서</strong> 셰이더를 아껴. 반투명은 뒤가 <strong>비쳐 보여야</strong> 하니 그렇게 못 버려 — 겹친 셀로판마다 셰이더가 다시 돌고, 화면을 덮는 픽셀마다 블렌드가 누적돼(오버드로우). 그래서 유리 파티클이나 큰 반투명이 <strong>화면 전체를 덮으면 프레임이 떨어져</strong>. 별도 버퍼를 <strong>낮은 해상도</strong>로 그렸다가 나중에 합성하는 것도 이 비용을 줄이려는 장치야.</div></details>
+
+<h3>Q3. 반투명 그릴 때 왜 scene color 복사본이나 별도 버퍼를 쓰나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">셀로판지는 뒤 배경이 필요한데, 지금 <strong>쓰고 있는 <code>SceneColor</code>를 동시에 읽으면</strong> GPU 입장에선 "내가 칠하는 종이를 칠하는 중에 다시 읽어라"가 돼서 픽셀마다 결과가 흔들려. 그래서 코드가 scene texture에서 <code>SceneColor</code> 플래그를 빼고(<strong>직접 읽기 차단</strong>) copy 텍스처를 쓰고, 경우에 따라 별도 반투명 색 버퍼(<code>SharedColorTexture</code>)를 만들어. DirectX로 치면 <strong>같은 RTV를 바인딩해 쓰면서 SRV로 동시에 읽으려는 걸 피하는</strong> 거고, 서버로 치면 "같은 컨테이너를 순회하며 동시에 수정하지 말고 복사본을 써라"랑 같은 감각이야.</div></details>
+
+<h4>↳ 그럼 깊이(depth)는 반투명에서 어떻게 다뤄요? 불투명처럼 써버리나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야. <code>DepthRead_StencilWrite</code>로 깊이는 주로 <strong>읽기만</strong> 해. 기존 깊이로 "앞에 막힌 건 그리지 마" 테스트는 하지만, 불투명처럼 depth를 <strong>확정해서 뒤를 지워버리면</strong> 안 돼. 셀로판지는 앞뒤로 여러 장이 겹칠 수 있는데, 제일 가까운 한 장만 depth에 박아버리면 <strong>뒤 셀로판지가 사라지거든</strong>. 색은 <code>ELoad</code>로 기존 장면 위에 얹고, depth는 조심스럽게 읽기 중심으로 가는 게 반투명이 불투명과 갈리는 지점이야.</div></details>
+
+<h3>Q4. 반투명은 왜 정렬(sort)이 필요한가요? 불투명은 안 그러잖아요.</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">불투명은 <strong>depth buffer가 순서를 대신 풀어줘</strong> — 가까운 놈이 이기고 순서 상관없이 결과가 같아. 반투명은 <strong>blend 순서가 곧 결과</strong>야. 파란 셀로판 뒤에 빨간 걸 겹친 것과 빨간 뒤에 파란 걸 겹친 게 화면이 달라. 그래서 <strong>먼 셀로판부터 가까운 순서로</strong> 그려야 하고, <code>CalculateTranslucentMeshStaticSortKey</code>가 우선순위·거리 오프셋·mesh id로 정렬 키를 만들어. 서버 비유로는 <strong>순서 보장되는 TCP vs 직접 시퀀스 번호 붙여 재정렬해야 하는 UDP</strong>의 차이에 가까워.</div></details>
+
+<h4>↳ 그 객체 단위 정렬로 반투명이 완벽하게 풀리나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 완벽하진 않아. 삼각형끼리 서로 <strong>교차</strong>하거나 한 물체 안에서 앞뒤가 꼬이면 단순 객체 정렬로는 못 풀어. 그래서 언리얼에도 <strong>OIT(Order-Independent Transparency)</strong> 같은 별도 경로가 있고 <code>OIT::IsSortedPixelsEnabled</code> 같은 코드가 보여. 기본 감각은 "객체 정렬 키로 대부분 맞추되, 픽셀 단위로 꼬이는 건 별도 기법으로 보완한다"야. 그래서 유리 파티클이 화면을 많이 덮으면 <strong>Early-Z로 못 줄이고 셰이더가 여러 번 돌아서</strong> 프레임이 떨어지는 거고.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>반투명은 GBuffer에 한 표면으로 눕힐 수 없는 셀로판지라서, 언리얼은 불투명 디퍼드 결과 위에 별도 포워드식 패스로 그리고, 알파 블렌드와 정렬 키로 순서를 관리한다.</strong></p>
 <hr>

@@ -263,6 +263,41 @@ return (D * Vis) * F
 <p>이 다섯 개를 말로 설명할 수 있으면 통과야. 공식 전체를 외울 필요는 없어. 대신 "이 함수가 레시피의 어느 카드인가"를 잃지 않으면 된다.</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. PBR의 BRDF는 왜 필요한가요? 그냥 <code>dot(N, L)</code>로 밝기 구하면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>dot(N, L)</code> 하나로 밝히면 플라스틱·금속·젖은 바닥·거친 돌이 <strong>전부 똑같이 번쩍여</strong>. 라이트가 하나만 있어도 "이 표면 왜 비닐 같지?"가 터진다. 실제 재질은 러프니스 0.05 금속과 0.8 벽돌이 완전히 다르게 반사하거든. <code>BRDF</code>는 "빛이 이 방향에서 들어와 저 방향으로 나갈 때 표면이 얼마나 돌려보내나"를 정하는 조리법이야. 옛날 DirectX 튜토리얼의 <code>pow(dot(R,V), Shininess)</code> 한 줄로 하이라이트만 조이던 걸, 물리적으로 다시 짠 거지.</div></details>
+
+<h4>↳ 그럼 왜 하필 D, G, F 셋으로 쪼갰나요? 한 덩어리로 두면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">한 손잡이 하나로 반짝임을 다 조이면, 하이라이트 폭·가림·가장자리 반사가 <strong>서로 엉켜서 한 군데 고치면 다른 데가 망가져</strong>. 그래서 담당을 나눈 거야. <code>D</code>는 작은 거울 조각이 어느 방향으로 서 있나(하이라이트 모양), <code>G</code>/<code>Vis</code>는 그 조각이 서로 가리나(가림), <code>F</code>는 각도 때문에 얼마나 반사되나(가장자리). 이렇게 쪼개면 스페큘러가 이상할 때 "D가 이상한가, Vis가 너무 깎나, F가 너무 세나"로 나눠서 볼 수 있어. 서버 장애를 네트워크·DB·락·게임루프로 쪼개 보는 태도랑 같아.</div></details>
+
+<h3>Q2. 최종 스페큘러는 큰 그림에서 어떻게 합쳐지나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">세 카드를 <strong>곱해</strong>. <code>SpecularGGX</code>에서 <code>D_GGX</code>(설탕 알갱이 방향 분포) × <code>Vis_SmithJointApprox</code>(가려진 만큼 깎기) × <code>F_Schlick</code>(가장자리 반사)을 나란히 계산하고 <code>(D * Vis) * F</code>로 끝내. 원래 물리식은 <code>D*G*F / (4*NoL*NoV)</code>인데, UE는 나눗셈 항을 <code>Vis = G/(4*NoL*NoV)</code>로 미리 접어서 <code>D*Vis*F</code>로 읽는 거야. 곱셈이라 하나라도 작으면 전체가 줄어들어 — 좋은 방향을 봐도(<code>D</code> 큼) 가려지면(<code>Vis</code> 작음) 안 반짝이는 게 자연스럽게 나온다.</div></details>
+
+<h4>↳ 근데 <code>BRDF.ush</code>가 픽셀 최종 색까지 다 만드는 건 아니라면서요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">맞아. <code>BRDF.ush</code>는 <strong>수식 카드 보관함</strong>이야 — <code>D_GGX</code>, <code>Vis_Smith...</code>, <code>F_Schlick</code> 같은 조리법 카드만 들고 있어. 실제로 카드를 꺼내 조립하는 건 <code>ShadingModels.ush</code>의 <code>SpecularGGX</code>고, 그걸 또 디퍼드·포워드·루멘·패스트레이싱 쪽에서 가져다 써. 서버로 치면 <code>BRDF.ush</code>는 <code>CalcHitRate</code>·<code>CalcCritical</code> 같은 공용 계산 유틸이고, <code>SpecularGGX</code>는 그걸 조립하는 <code>SP_ATTACK</code> 본문에 가깝다.</div></details>
+
+<h3>Q3. 러프니스는 큰 그림에서 뭘 하는 값인가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아티스트 눈엔 "흐릿함 슬라이더" 하나지만, 셰이더 입장에선 <strong>여러 카드의 공통 재료</strong>야. <code>SpecularGGX</code>에서 <code>Pow4(Roughness)</code>가 <code>a2</code>로 만들어져서 <code>D_GGX</code>와 <code>Vis_SmithJointApprox</code>에 <strong>같이 들어가</strong>. 거칠기가 커지면 작은 거울 조각 분포가 넓어지고 가림 계산도 바뀌어. 그래서 슬라이더 하나가 하이라이트 모양과 가림을 동시에 흔든다.</div></details>
+
+<h4>↳ 화면에서 스페큘러가 이상해 보이면 어디부터 의심하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">쪼개서 봐. 하이라이트가 너무 작고 날카로우면 <code>D</code>와 러프니스를 의심하고, 가장자리만 지나치게 번쩍이면 <code>F</code>(Fresnel)를 보고, 비스듬한 면이 너무 어두우면 <code>Vis</code>가 과하게 깎는지 봐. D/G/F로 나눠놨으니까 <strong>증상별로 범인을 좁힐 수 있는 게 이 구조의 진짜 이득</strong>이야.</div></details>
+
+<h3>Q4. <code>Vis_SmithJointApprox</code>처럼 "Approx(근사)" 버전을 쓰는 이유가 뭔가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">정확한 물리 Smith 식만 밀면 비용이 커져. 실시간 렌더링은 한 프레임 안에 200만 픽셀을 끝내야 하니까, <strong>화면에서 충분히 비슷하면 싼 근사를 쓰는</strong> 게 이득이야. Fresnel도 정확한 계산 대신 <code>Pow5(1-VoH)</code> 하나로 근사하는 Schlick을 기본으로 써. 서버에서 매 패킷마다 무거운 DB 조회 대신 캐시나 근사 인덱스를 쓰는 감각이랑 같아 — 정확도와 프레임 시간 사이의 트레이드오프지.</div></details>
+
+<h4>↳ 그럼 정확도를 포기해도 괜찮은 판단 기준은 뭔가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">"화면에서 사람 눈에 티가 나느냐"가 기준이야. Fresnel 근사가 물리적으로 완벽하진 않아도 가장자리가 번쩍이는 감각만 살면 충분하고, Smith 근사도 가림의 큰 경향만 맞으면 돼. 오히려 <code>F_Schlick</code>은 2% 미만은 물리적으로 불가능하다고 보고 <code>saturate(50*SpecularColor.g)</code>로 그림자처럼 눌러버리기까지 해. <strong>물리 정답보다 "그럴듯함 + 프레임 예산"을 지키는 게 실시간 PBR의 원칙</strong>이야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>언리얼의 PBR 스페큘러는 <code>BRDF.ush</code>의 <code>D_GGX</code>(분포), <code>Vis_Smith...</code>(가림), <code>F_Schlick</code>(각도 반사)을 꺼내 <code>ShadingModels.ush</code>에서 <code>D * Vis * F</code>로 곱하는 설탕 코팅 레시피다.</strong></p>
 <hr>

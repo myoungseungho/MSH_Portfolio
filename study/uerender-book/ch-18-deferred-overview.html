@@ -313,6 +313,45 @@ Render :1736
 <div class="conversation"><h2>10. 이 챕터에서 딱 이것만</h2>
 <ul><li><code>FDeferredShadingSceneRenderer::Render()</code>는 한 프레임의 총괄 진행표야.</li><li>큰 순서는 <strong>PrePass → BasePass → Lighting → Translucency → PostProcess</strong>야.</li><li>PrePass는 깊이 바닥, BasePass는 GBuffer 재료, Lighting은 빛 소스, Translucency는 투명 장식, PostProcess는 마지막 보정이야.</li><li>세부 구현은 다른 파일에 흩어져 있고, 이 함수는 그 패스들을 RDG에 올리는 지휘자 역할을 해.</li><li>디버깅할 때는 문제가 어느 코스에서 생겼는지 먼저 나눠야 해.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>FDeferredShadingSceneRenderer::Render()</code>는 큰 그림에서 무슨 역할인가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">이 함수는 세부 구현을 다 품은 거대 함수가 <strong>아니야</strong>. 오히려 반대로, <code>RenderPrePass</code>·<code>RenderBasePass</code>·<code>RenderLights</code>·<code>RenderTranslucency</code>·<code>AddPostProcessingPasses</code> 같은 큰 패스들을 <strong>정해진 순서로 호출하는 지휘자</strong>야. 코스 요리 총괄 셰프가 직접 썰고 굽는 게 아니라 "접시 데워 → 전채 → 메인 → 소스 → 장식 → 플레이팅" 순서로 벨만 치는 거랑 같아. 세부 요리사(각 패스)는 다음 챕터들이 따로 파고들고, 이 장은 <strong>동네 지도</strong>만 그려.</div></details>
+
+<h4>↳ 그 순서를 못 잡으면 실무에서 뭐가 곤란해지나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">디버깅할 때 바로 막혀. "그림자는 있는데 물체가 안 보인다"는 증상이 떴을 때, BasePass 문제인지 PrePass에서 깊이가 잘못 깔린 건지 후처리에서 날아간 건지 <strong>어느 코스에서 터졌는지 나눌 줄 알아야</strong> RenderDoc을 열어도 의미가 있어. 패스가 20개 넘게 보이는데 순서 감각이 없으면 그냥 검은 상자야. 서버로 치면 <code>SP_*</code> 핸들러 하나하나는 아는데, 메인 루프가 언제 recv 털고 언제 DB 반영하고 언제 send flush하는지 모르면 디버깅이 안 되는 거랑 같지.</div></details>
+
+<h3>Q2. 디퍼드 렌더러의 큰 순서를 말해보세요. 왜 그 순서인가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">뼈대는 <strong>PrePass → BasePass → Lighting → Translucency → PostProcess</strong>야. 깊이를 먼저 깔고, GBuffer에 재질 정보를 눕히고, 빛을 얹고, 반투명을 따로 올리고, 후처리로 마감해. 이 순서가 디퍼드를 디퍼드답게 만드는 이유는 <strong>BasePass에서 최종 색을 끝내지 않기 때문</strong>이야. 재료를 GBuffer 접시에 먼저 깔아두고, 빛은 뒤에서 한꺼번에 부어. 요리로 치면 접시에 재료 먼저 깔고 소스는 나중에 붓는 방식이지. 계산을 뒤로 미룬다고 해서 Deferred야.</div></details>
+
+<h4>↳ 그럼 빛을 물체 그릴 때 바로 계산하면 왜 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">라이트가 10개, 100개로 늘면 <strong>같은 재료를 보면서 빛 계산을 계속 반복</strong>하게 돼. 물체 하나 그릴 때마다 그 자리에서 조명 다 계산하면, 주방에서 소스 바뀔 때마다 재료 손질부터 다시 하는 꼴이야. 그래서 재질 정보(노멀·러프니스·metallic 등)를 GBuffer에 먼저 적어두고, Lighting 단계에서 그 GBuffer를 읽어 빛을 한 번에 계산해. 라이트 수가 늘어도 재료 손질은 한 번만 하는 거지.</div></details>
+
+<h3>Q3. PrePass는 왜 있나요? BasePass에서 깊이도 같이 쓰면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그냥 BasePass에서 색도 칠하고 깊이도 쓰면 단순하긴 해. 근데 <strong>앞 건물에 가려질 픽셀도 비싼 머티리얼 셰이더를 돌린 뒤 버리면</strong> 헛일이 커져. 접시 뒤에 숨을 재료까지 정성껏 굽는 셈이지. 그래서 PrePass에서 <strong>깊이만 싸게 먼저 깔아서</strong> "뒤에 숨은 애는 패스"라고 빨리 판정해. PrePass는 예쁜 그림 만드는 패스가 아니라, 뒤 패스가 덜 고생하게 하는 <strong>교통정리 패스</strong>야. GPU 말로는 Early Z 감각이고.</div></details>
+
+<h4>↳ 서버 메인 루프로 비유하면 PrePass가 뭐랑 대응돼요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">게임 로직 tick 돌리기 전에 <strong>접속 끊긴 세션·죽은 액터·유효하지 않은 작업을 먼저 걷어내는</strong> 단계랑 같아. 나중에 무거운 로직을 덜 돌리려고 앞에서 싼 검사를 하는 거지. PrePass도 똑같이, 비싼 BasePass 픽셀 셰이더를 덜 돌리려고 앞에서 싼 깊이 검사를 먼저 하는 거야. "비싼 일 하기 전에 싼 정보로 버릴 거 버린다"는 구조가 완전히 같아.</div></details>
+
+<h3>Q4. 반투명(Translucency)은 왜 불투명 조명 다 끝난 뒤에 따로 오나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">GBuffer는 한 픽셀에 <strong>"제일 앞 물체 하나"</strong>의 정보만 안정적으로 넣기 쉬워. 근데 유리·물·연기는 뒤가 비쳐야 하니까 그 픽셀에 여러 겹이 겹쳐. 앞 하나만 저장하는 GBuffer 구조에 안 맞는 거지. 게다가 어떤 순서로 섞느냐(blending)에 따라 색이 달라져서 순서가 중요해. 그래서 불투명 세계를 GBuffer로 먼저 완성하고, 반투명은 깊이와 순서를 보며 뒤에서 별도 패스로 얹어. 투명 젤리 장식을 소스 붓기 전에 올리면 망가지니까 메인 접시 거의 완성된 뒤 올리는 거야.</div></details>
+
+<h4>↳ 그럼 이 <code>Render()</code>가 실제 DirectX 호출을 직접 줄줄 부르는 건가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야. <code>Render()</code>는 <strong><code>GraphBuilder</code>(RDG) 위에 패스 이름표를 붙여 쌓는 곳</strong>이지, D3D API를 직접 호출하는 데가 아니야. 주방장이 칠판에 "이 순서로 요리해"라고 적는 장부라고 보면 돼. 실제 실행 순서와 리소스 배리어는 RDG가 정리해줘. 그래서 이 함수를 읽을 땐 "PrePass는 depth-only draw, BasePass는 MRT에 GBuffer 쓰는 draw, Lighting은 GBuffer 읽어 scene color에 더하는 pass"처럼 <strong>역할로</strong> 읽으면 되고, 실제 호출 릴레이는 RDG가 맡아.</div></details>
+
+<h4>↳ Nanite나 Lumen 같은 것들은 이 순서 어디에 끼나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">큰 코스는 안 무너지고, 그 <strong>뼈대 주변에 붙어</strong>. <code>Nanite</code>는 PrePass/BasePass 주변을 바꾸고(지오메트리 래스터 방식이 달라지니까), <code>Lumen</code>은 Lighting 주변에 붙어(간접광·반사), Virtual Shadow Map은 shadow와 lighting 사이에 끼어들고, Hair·Water·Cloud는 자기 전용 보조 패스를 둬. 실제 함수 안엔 이런 갈림길이 엄청 많지만, 처음엔 <strong>PrePass → BasePass → Lighting → Translucency → PostProcess</strong> 뼈대에 다 걸어두면 돼. 골목이 아무리 많아도 큰길은 이 다섯이야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong><code>FDeferredShadingSceneRenderer::Render()</code>는 한 프레임짜리 코스 요리 주문표다 — 깊이를 먼저 깔고, GBuffer에 재료를 눕히고, 빛을 얹고, 투명을 따로 올린 뒤, 후처리로 화면을 마감한다.</strong></p>
 <hr>

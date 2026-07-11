@@ -300,6 +300,45 @@ CommandList-&gt;Close</div>
 <div class="conversation"><h2>10. 이번 챕터에서 딱 이것만</h2>
 <ul><li><code>D3D12RHI</code>는 RHI 추상 명령을 D3D12 네이티브 호출로 바꾸는 마지막 백엔드야.</li><li><code>FD3D12CommandContext</code>는 주문서를 읽고 <code>GraphicsCommandList()-&gt;...</code> 버튼을 누르는 사람이다.</li><li><code>FD3D12StateCache</code>는 PSO, 루트서명, 디스크립터 같은 상태를 기억해서 필요한 것만 D3D12에 세팅한다.</li><li><code>RHIDispatchComputeShader</code>는 <code>Dispatch</code>, <code>RHIDrawPrimitive</code>는 <code>DrawInstanced</code>, clear는 <code>ClearRenderTargetView</code>/<code>ClearDepthStencilView</code>로 내려간다.</li><li>D3D12에서는 실제 호출 전에 descriptor commit, shader constants commit, resource barrier flush가 같이 따라온다.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>D3D12RHI</code>는 큰 그림에서 어느 위치에 있고 뭘 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">공용 언어였던 <code>RHI</code>를 <strong>윈도우/D3D12용 방언으로 번역해서 진짜 <code>ID3D12GraphicsCommandList</code> 버튼을 누르는 맨 아래 층</strong>이야. 렌더러는 <code>RHIDrawPrimitive</code>라고 말하고 <code>RHICommandList</code>가 주문서로 쌓았지만, 그것만으론 음식이 안 나와. 누군가 주방 안으로 들어가서 실제 기계를 만져야 하잖아. 그 사람이 <code>FD3D12CommandContext</code>고, RHI 주문을 읽어서 D3D12 기계의 실제 버튼을 눌러. 이 층이 없으면 RenderDoc에 찍힌 <code>DrawIndexedInstanced</code>와 엔진의 <code>RHI</code> 호출이 서로 안 이어져서, GPU 크래시가 나도 어느 RHI 명령이 실제 호출이 됐는지 못 찾아.</div></details>
+
+<h4>↳ 위쪽은 왜 D3D12 버튼을 직접 안 누르고 굳이 이 층을 거치나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">엔진 코드가 D3D12 버튼을 직접 누르면 제일 단순하긴 해. 근데 그러면 <strong>윈도우/D3D12 말이 렌더러 전체에 퍼져서</strong>, 다른 그래픽 API나 플랫폼으로 가려면 주문서를 전부 다시 써야 해. 그래서 위쪽은 공용 <code>RHI</code> 말만 쓰고, <strong>맨 아래에서만</strong> D3D12 말로 번역하는 뒷문을 둔 거야. 이게 <code>d3d12-backend</code>의 존재 이유고, 앞 장들에서 계속 "RHI가 추상화 계층"이라고 한 게 여기서 값을 치르는 거지.</div></details>
+
+<h3>Q2. "RHI 함수 하나 = D3D12 호출 하나"라고 보면 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그게 이 장의 핵심 오해 포인트야. D3D12RHI는 <strong>단순 이름 번역기가 아니라</strong>, 마지막 D3D12 버튼을 누르기 전에 상태를 잔뜩 맞춰. <code>RHIDrawPrimitive</code>는 마지막에 <code>DrawInstanced</code> 한 줄이지만, 그 앞에서 <code>SetupDraw</code>가 리소스 테이블 commit, 상수 버퍼 commit, 인덱스 버퍼 세팅, <code>StateCache.ApplyState</code>로 PSO·루트 시그니처·디스크립터를 다 맞춰. 그래서 D3D12RHI를 읽을 땐 "마지막 버튼"만 보면 안 되고, 그 버튼 누르기 전에 어떤 상태를 맞췄는지도 같이 봐야 해.</div></details>
+
+<h4>↳ <code>FD3D12StateCache</code>는 왜 있는 거예요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">한 프레임에 드로우콜이 수천 번인데 매번 셰이더·블렌드·깊이·래스터라이저 버튼을 처음부터 다시 누르면 <strong>같은 세팅을 수천 번 반복</strong>하게 돼. StateCache는 지금 버튼판에 뭐가 꽂혀 있는지 <strong>칠판에 적어두고, 바뀔 때만</strong> <code>SetPipelineState</code>를 눌러. 우리 서버에서 매 패킷마다 플레이어 전체 상태를 DB에 다 쓰지 않고 <strong>바뀐 필드만 dirty로 잡아 반영</strong>하는 거랑 똑같은 감각이야.</div></details>
+
+<h3>Q3. D3D12에서 리소스 배리어(barrier)는 왜 챙겨야 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">D3D12는 "지금 이 리소스가 렌더 타깃인지, 셰이더가 읽는지, 복사용인지"를 <strong>개발자가 직접 GPU에게 알려줘야</strong> 해. "이 텍스처를 방금 렌더 타깃으로 썼는데 이제 셰이더에서 읽을 거야" 같은 표지판을 빼먹으면 GPU validation이 바로 화내거나 화면이 깨져. 그래서 쓰임새가 바뀌는 경계마다 배리어를 꽂고, D3D12RHI는 그걸 모아뒀다가 명령 리스트를 닫기 직전 <code>FlushResourceBarriers()</code>로 밀어내. 뜨거운 냄비 옮기기 전에 "뜨거움" 표시를 붙이는 거야.</div></details>
+
+<h4>↳ 그럼 명령 리스트를 닫을 때(<code>CloseCommandList</code>) 순서가 중요한가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">응. 주문서 다 실행됐다고 바로 닫지 않고, <strong>닫기 직전에 밀린 배리어부터 털어</strong>(<code>FlushResourceBarriers</code>). 그다음에야 <code>CommandList-&gt;Close()</code>를 불러서 제출 가능한 상태로 바꿔. 주방장에게 주문서 넘기기 전에 "이 재료는 냉장, 이 팬은 뜨거움" 같은 마지막 표시를 붙이는 순서야. 이 순서가 어긋나면 안전 표지판 없이 명령이 제출돼서 터져.</div></details>
+
+<h3>Q4. RenderDoc/PIX에서 <code>DrawInstanced</code>를 봤다면 엔진 코드 어디로 거슬러 올라가나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">D3D12RHI의 <code>RHIDrawPrimitive</code>(→ <code>DrawInstanced</code>) 쪽으로 올라가면 돼. 대응이 <strong>깔끔하게 정해져 있어</strong> — <code>RHIDispatchComputeShader</code>는 <code>Dispatch</code>로, <code>RHIDrawPrimitive</code>는 <code>DrawInstanced</code>로, clear는 <code>ClearRenderTargetView</code>/<code>ClearDepthStencilView</code>로 떨어져. 반대로 엔진 코드에서 <code>RHIDispatchComputeShader</code>를 봤으면 최종적으로 PIX엔 <code>Dispatch</code>가 찍힌다고 예상하면 돼. 이 대응표를 알면 GPU 캡처와 엔진 코드가 처음으로 이어지는 거야.</div></details>
+
+<h4>↳ DirectX 12 샘플 직접 짜던 흐름이랑 비교하면요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">손으로 DX12 짤 때 <code>SetPipelineState → ResourceBarrier → DrawInstanced → Close → ExecuteCommandLists</code>로 가던 그 길을 언리얼도 <strong>그대로</strong> 가. 다만 중간에 RHI 추상화, command list 기록, state cache, descriptor cache가 껴 있을 뿐이야. 서버로 치면 <code>CM_*</code> 패킷 핸들러가 세션 상태를 검증하고 마지막에 캐릭터 좌표를 바꾸는 그 "최종 착지 지점"과 같아. 배리어나 리소스 상태를 빼먹으면 GPU validation이 터지는 게, 락이나 순서 보장을 빼먹으면 서버가 터지는 거랑 똑같지.</div></details>
+
+<h4>↳ 클리어나 복사 같은 것도 이 층을 거치나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">응, 전부 여기서 D3D12 버튼으로 갈라져. 렌더 타깃 clear는 <strong>그냥 텍스처 객체가 아니라 RTV/DSV 디스크립터 핸들</strong>을 꺼내서 <code>ClearRenderTargetView</code>/<code>ClearDepthStencilView</code>를 눌러 — D3D12는 "색 접시냐 깊이 접시냐"를 표찰로 알아야 하거든. 리소스 전송은 언리얼 래퍼에서 진짜 D3D12 리소스를 꺼낸 뒤 <code>CopyResource</code>로 떨어지고. 그래서 D3D12RHI는 이름만 바꾸는 번역기가 아니라, <strong>래퍼에서 네이티브 리소스·핸들을 꺼내고 상태를 맞춘 다음 진짜 API를 부르는 계층</strong>이라고 봐야 해.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>D3D12RHI는 언리얼의 RHI 주문서를 읽고, 상태 캐시와 배리어를 맞춘 뒤, 마지막에 <code>ID3D12GraphicsCommandList</code>의 진짜 버튼을 누르는 주방 안쪽 번역기다.</strong></p>
 <hr>

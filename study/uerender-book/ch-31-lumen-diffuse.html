@@ -365,6 +365,38 @@ TraceScreenProbes
 <div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
 <ul><li>Lumen diffuse GI는 <code>ShouldRenderLumenDiffuseGI</code>를 통과해야 돈다.</li><li>기본 final gather 경로는 <code>RenderLumenScreenProbeGather</code>로 들어간다.</li><li>Screen Probe는 픽셀마다가 아니라 화면 격자마다 세운 조명 검사원이다.</li><li><code>TraceScreenProbes</code> 안에서 화면 추적, 하드웨어 RT, Mesh SDF/Global SDF, radiance cache가 순서대로 엮인다.</li><li><code>TraceRadiance</code>와 <code>TraceHit</code>은 프로브 레이가 가져온 빛과 히트 정보를 적는 중간 장부다.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. Lumen diffuse GI가 왜 필요한가요? 직접광이랑 뭐가 그렇게 달라요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">직접광은 단순해. 라이트 위치 보고, 그림자 맵 보고, 픽셀에 빛 더하면 끝이야. 서버로 치면 <code>CM_ATTACK</code> 하나 받아 대상 하나 때리는 정도지. 근데 <strong>간접광</strong>은 빨간 벽에 맞은 빛이 바닥으로 튀고, 바닥에서 또 발밑으로 퍼져. 이걸 픽셀마다 정직하게 여러 방향으로 쏘면 4K에서 수백만 픽셀 × 여러 레이라 <strong>16.6ms 안에 못 끝내거나, 끝내도 노이즈가 지글거려</strong>. 그래서 Lumen은 흩어진 간접광을 마지막에 한 번 몰아 모으는 <code>Final Gather</code> 구조를 쓴 거야.</div></details>
+
+<h4>↳ 그럼 모든 픽셀이 직접 레이를 쏘게 두면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">4K면 손님 픽셀이 830만 명쯤이야. 각자 8방향만 봐도 탐침이 6천만 개를 넘어서 GPU가 터져. 그래서 화면 격자마다 대표 검사원 하나(<code>Screen Probe</code>)를 세우고, 주변 픽셀은 그 검사원 값을 나눠 써. 우리 서버에서 몬스터 AI가 매 tick 모든 유저를 전수조사하면 터지니까 공간 그리드·관심영역·캐시로 대표만 조사하는 거랑 똑같아 — <strong>많은 개체의 일을 대표 샘플로 줄이는 기술</strong>이야.</div></details>
+
+<h3>Q2. Screen Probe Gather가 큰 그림에서 어떻게 도나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">순서가 있어. ① 문지기(<code>ShouldRenderLumenDiffuseGI</code>)가 "이 뷰에서 Lumen GI 켜도 되나, 추적할 길은 있나"를 통과시키고 → ② final gather에서 기본 경로인 <code>RenderLumenScreenProbeGather</code>로 들어가 화면을 downsample한 격자에 프로브를 세우고 → ③ 각 프로브가 레이를 쏴 <code>TraceRadiance</code>(빛 색)와 <code>TraceHit</code>(맞은 곳) 장부를 채워. 핵심은 <strong>픽셀은 손님, 프로브는 검사원, 레이는 탐침 막대</strong>라는 구도야.</div></details>
+
+<h4>↳ 검사원(프로브) 하나가 레이를 쏠 때, 처음부터 월드 끝까지 뛰나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그게 핵심이야. 검사원은 먼저 <strong>화면 안</strong>부터 뒤져. 현재/이전 화면의 깊이·색·HZB로 "이 레이가 화면 안에서 어디 닿나"를 보는 게 <code>Screen Trace</code>야. 싸고 빠른 첫 확인이지. 바로 앞 벽이나 바닥은 이미 화면 장부에 있는데 매번 비싼 출장 조사(월드 추적)를 보내면 낭비잖아. 그래서 <strong>싼 거부터 시도하고, 실패한 레이만 다음 단계로 넘긴다</strong>.</div></details>
+
+<h4>↳ 화면 추적으로 못 찾은 레이는 어떻게 하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">화면 밖 골목까지 나가는 두 번째 루트로 보내. 장비가 되면 <strong>하드웨어 RT</strong>(<code>RenderHardwareRayTracingScreenProbe</code>), 아니면 <strong>Mesh SDF/Global SDF</strong> 소프트웨어 추적으로 가. 이때 아직 안 풀린 레이만 <code>CompactTraces</code>로 촘촘히 모아서 다음 셰이더가 덜 일하게 만들어. 그래도 남은 miss는 마지막에 voxel이나 <code>radiance cache</code>(조명 창고)에서 꺼내 보강해. 카메라 밖 빨간 벽도 빛을 튕기니까, 화면에 없다고 버리면 모서리 간접광이 확 튀거든.</div></details>
+
+<h3>Q3. 그럼 Lumen diffuse는 하나의 알고리즘인가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야. "하나만 쓴다"가 아니라 <strong>검사원 배치 + 여러 조사 루트 + 결과 합치기</strong>에 가까워. 스크린 프로브는 결과를 담는 그릇이고, 그 안의 레이가 상황에 따라 화면 추적 → 하드웨어 RT → SDF → radiance cache로 <strong>우선순위를 두고 갈아타</strong>. 싼 길에서 답이 나오면 거기서 멈추고, 안 되면 점점 비싼 길로 내려가는 폴백 사다리라고 보면 돼.</div></details>
+
+<h4>↳ 이걸 우리가 짜던 DirectX/서버 감각으로 옮기면요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>TraceRadiance</code>와 <code>TraceHit</code>은 UAV로 쓰는 중간 렌더타깃이야. <code>FComputeShaderUtils::AddPass</code>는 컴퓨트 셰이더 dispatch를 RDG에 올리는 거고, <code>PermutationVector</code>는 <code>#define</code> 조합으로 셰이더 바이너리를 고르는 장면이야. 하드웨어 RT 경로는 DXR의 ray generation 감각, SDF 경로는 거리장 텍스처를 타는 소프트웨어 ray marching로 보면 돼. 서버로 치면 문지기는 feature flag 체크, final gather는 라우터, <code>TraceScreenProbes</code>는 실제 워커 큐야.</div></details>
+
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>Lumen Diffuse Indirect는 모든 픽셀이 뛰는 대신 화면에 스크린 프로브 검사원을 세우고, 그 검사원이 화면 장부부터 하드웨어 RT/SDF/조명 창고까지 차례로 뒤져 간접광을 모으는 구조다.</strong></p>
 <hr>

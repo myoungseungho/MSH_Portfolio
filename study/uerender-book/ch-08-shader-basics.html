@@ -282,6 +282,41 @@ void MainPS(float4 InPosition : SV_POSITION,	float2 InUV : TEXCOORD0, out float4
 <ol><li><code>.usf</code>는 메인 셰이더 레시피고, <code>.ush</code>는 공용 include 메모장이다.</li><li><code>FGlobalShader</code>는 머티리얼 밖 전역 셰이더의 C++ 주문표다.</li><li><code>IMPLEMENT_GLOBAL_SHADER</code>는 C++ 타입, 파일, 함수, 스테이지를 묶는다.</li><li><code>Shader.cpp</code>의 <code>FShaderType</code>은 그 정보를 장부에 저장하고 전역 목록에 등록한다.</li><li>GPU에서 도는 건 C++ 클래스가 아니라 <code>.usf</code> 안의 <code>MainVS</code> / <code>MainPS</code> / <code>MainCS</code>다.</li></ol>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 셰이더가 뭐고, C++ 코드랑 어떻게 연결되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">셰이더는 <strong>GPU에서 도는 작은 프로그램</strong>이야. CPU가 "밉맵 만들어"라고 해도 GPU는 C++ 함수를 직접 못 불러 — GPU가 실행하는 건 이미 컴파일된 그 작은 프로그램이거든. 그래서 두 장을 같이 봐야 해: <code>.usf</code>에 있는 실제 HLSL 레시피랑, C++이 들고 있는 주문표(<code>FGlobalShader</code>). 서버 디스패처랑 똑같은 감각이야 — <code>CM_MOVE</code> 번호만 있다고 로직이 도는 게 아니라 어느 핸들러로 가는지가 맞아야 하는 거지.</div></details>
+
+<h4>↳ 그럼 C++ 클래스 자체가 GPU에서 도는 건가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 이게 헷갈리는 지점이야. <code>FGenerateMipsPS</code> 같은 C++ 클래스는 <strong>GPU에서 안 돌아</strong>. 그건 "어느 파일, 어느 함수, 어느 스테이지"를 가리키는 주문표일 뿐이고, 실제로 GPU에서 도는 건 그 주문표가 가리킨 <code>.usf</code> 안의 <code>MainPS</code> 함수가 컴파일된 거야. C++은 CPU에서 주소록 역할만 하고, 진짜 요리는 GPU 조리대에서 <code>.usf</code> 레시피가 하는 거지.</div></details>
+
+<h3>Q2. <code>.usf</code>랑 <code>.ush</code>는 왜 나눠져 있나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>.usf</code>는 <strong>실제로 컴파일할 메인 레시피 카드</strong>고, <code>.ush</code>는 여러 레시피가 같이 <code>include</code>하는 <strong>공용 메모장</strong>이야. 안 나누면 "뭘 컴파일해야 하지?"가 바로 헷갈려 — 공용 양념 메모까지 메인 요리처럼 구우면 주문이 깨지잖아. 그래서 C++ 주문표가 컴파일 대상으로 직접 가리키는 건 항상 <code>.usf</code>고, 코드에도 "<code>.usf</code>만 컴파일해야 한다"는 검사가 박혀 있어. DirectX 감각으론 HLSL 파일 대 HLSL include야.</div></details>
+
+<h3>Q3. <code>IMPLEMENT_GLOBAL_SHADER</code> 한 줄은 큰 그림에서 뭘 하는 건가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">네 칸을 하나로 묶는 <strong>도장</strong>이야 — C++ 타입, <code>.usf</code> 파일, 진입 함수 이름, GPU 스테이지. 예를 들면 "<code>FGenerateMipsPS</code> = <code>ComputeGenerateMips.usf</code>의 <code>MainPS</code>를 <code>SF_Pixel</code>로." 재밌는 건 <strong>같은 <code>.usf</code> 파일이라도 어느 함수·어느 스테이지를 고르냐에 따라 완전히 다른 셰이더</strong>가 된다는 거야. 같은 파일에서 <code>MainVS</code>+<code>SF_Vertex</code>, <code>MainPS</code>+<code>SF_Pixel</code>, <code>MainCS</code>+<code>SF_Compute</code>가 다 갈라져 나와.</div></details>
+
+<h4>↳ 그 등록이 왜 전역 장부에 꽂혀야 하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">셰이더가 수백 개로 늘면 <strong>컴파일할 때도, 캐시에서 찾을 때도 "전체 목록"이 필요</strong>하거든. 주문표가 각자 자기 파일명만 숨겨 들고 있으면 엔진이 전체를 훑을 수가 없어. 그래서 <code>IMPLEMENT_GLOBAL_SHADER</code>가 <code>FShaderType</code> 장부 항목을 만들어서 전역 목록이랑 이름 맵에 꽂아둬. 서버에서 패킷 핸들러를 파일마다 숨기지 않고 디스패처 테이블에 등록하는 거랑 똑같아 — 그래야 "이 이름 보면 이 파일 이 함수를 이 스테이지로 컴파일해"를 나중에 찾지.</div></details>
+
+<h4>↳ 네 칸 중 하나만 틀리면 어떻게 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">바로 터지거나 엉뚱한 게 나가. C++은 <code>MainCS</code>를 찾는데 <code>.usf</code>에 그 함수가 없으면 컴파일에서 막히고, <code>SF_Compute</code>로 등록했는데 함수 모양이 픽셀 셰이더면 안 맞아. 서버로 치면 <strong>패킷 ID는 있는데 핸들러 시그니처가 안 맞는</strong> 상황이야. 그래서 <code>IMPLEMENT_GLOBAL_SHADER</code> 한 줄을 정확히 읽는 게 중요해.</div></details>
+
+<h3>Q4. 컴퓨트 셰이더는 정점/픽셀 셰이더랑 왜 따로 있나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">정점 셰이더는 "재료 위치 손질", 픽셀 셰이더는 "접시에 색 얹기"라서 <strong>그림 그리기 파이프라인</strong>에 묶여 있어. 근데 밉맵 생성이나 컬링, 타일 분류 같은 건 사실 "그림"이 아니라 <strong>칸별 계산 작업</strong>이거든. 삼각형 그리는 척하면서 처리하면 어색해. 그래서 GPU 스레드들에게 칸 번호를 나눠 주고 "너는 네 칸만 계산해"라고 시키는 작업반이 필요한 거고, 그게 컴퓨트 셰이더야. 정점도 삼각형도 없이 큰 도마를 나눠 병렬로 처리하는 방식이지.</div></details>
+
+<h4>↳ 이번 장 내용이 앞의 PSO랑 어떻게 이어지나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">PSO 카드 안의 큰 항목 하나가 바로 <strong>셰이더 손잡이</strong>였잖아. 이 장은 그 손잡이가 실제로 어디를 가리키는지를 푼 거야 — <code>FGlobalShader</code> 주문표가 <code>.usf</code>의 어느 함수·어느 스테이지를 묶는지. 그러니까 PSO의 VS/PS 슬롯에 꽂히는 게 이 장에서 등록한 셰이더 타입들이고, 다음 장에선 그게 어떻게 컴파일되는지로 넘어가.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>셰이더는 GPU에서 도는 작은 프로그램이고, 언리얼은 <code>.usf</code>의 진입 함수를 <code>FGlobalShader</code>/<code>FShaderType</code> 장부에 등록해서 C++ 주문표와 GPU 레시피를 연결한다.</strong></p>
 <hr>

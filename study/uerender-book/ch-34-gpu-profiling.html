@@ -245,6 +245,41 @@ FScopedGPUStatEvent::~FScopedGPUStatEvent()
 <div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
 <ul><li><code>SCOPED_GPU_STAT</code>은 패스에 GPU 시간 이름표를 붙이는 입구야.</li><li><code>FScopedGPUStatEvent</code>는 생성자 Push, 소멸자 Pop으로 스코프 시간을 잰다.</li><li>실제 GPU 시간은 start/end timestamp query를 RHI 명령 리스트에 제출해서 얻는다.</li><li><code>UpdateStats</code>는 늦게 도착한 query 결과를 모아 inclusive/exclusive 시간으로 바꾼다.</li><li><code>ProfileGPU</code>는 한 프레임 보고서, RenderDoc/PIX는 그 프레임의 CCTV야.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. GPU 프로파일링이 왜 필요한가요? CPU에서 <code>Render()</code>가 빨리 끝났으면 된 거 아닌가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야, 그게 함정이야. <strong>GPU는 뒤에서 따로 줄 서서 일해</strong>. CPU가 명령을 빨리 냈어도 GPU가 BasePass·Shadow·PostProcess 중 어디서 막혔는지는 CPU 로그로 안 보여. CPU 로그만 보면 "명령은 빨리 냈는데요?"가 전부지. 프레임이 16.6ms를 넘어 24ms·48ms로 튀는데 원인을 <strong>감으로 찍으면 망해</strong> — 서버에서 락 병목을 느낌으로 찍는 거랑 같아. 그래서 각 작업대에 초시계를 붙여 "어느 구간이 진짜 오래 걸렸나"를 숫자로 봐야 해.</div></details>
+
+<h4>↳ 그 "이름표"는 어디서 나오는 거예요? 프로파일러가 알아서 읽나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>각 패스 코드가 자기 구간에 직접 이름표를 붙여</strong>. 깊이 프리패스 코드에 <code>SCOPED_GPU_STAT(RHICmdList, Prepass)</code>가 박혀 있어서, 병목 표에 <code>Prepass</code>가 뜨면 그 이름은 하늘에서 떨어진 게 아니라 렌더링 코드가 붙인 거야. 서버에서 <code>SP_LOGIN</code>·<code>CM_ATTACK</code> 같은 패킷 이름을 로그에 안 붙이면 "어느 패킷이 느린지" 못 보잖아. 렌더링도 이름표 없으면 숫자가 떠도 어디 숫자인지 몰라.</div></details>
+
+<h3>Q2. GPU 시간을 재는 게 CPU 시간 재는 거랑 왜 다른가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">CPU 시간은 그 자리에서 <code>Now()</code> 바로 읽으면 돼. 근데 GPU는 <strong>뒤쪽 공장 라인에서 나중에 일하니까</strong>, CPU가 지금 시간을 읽어도 GPU가 그 작업대를 아직 안 지나갔을 수 있어. 그래서 GPU 명령줄에 "여기 지나갈 때 시간 찍어줘"라는 <strong>timestamp query(도장 카드)</strong>를 꽂아두고, 결과는 GPU가 실제로 그 명령을 실행한 <strong>나중에</strong> 받아. 이벤트 하나가 start query·end query 두 장을 쌍으로 들고 태어나는 이유야 — 입구 도장, 출구 도장.</div></details>
+
+<h4>↳ 이거 우리가 쓰던 IOCP 감각으로 옮기면요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">거의 똑같아. IOCP에서 <code>WSARecv</code>를 걸었다고 그 순간 패킷이 온 게 아니잖아 — 완료 통지가 나중에 오지. GPU timestamp query도 <strong>명령을 걸어두고, 결과가 준비됐을 때 나중에 읽어</strong>. 그리고 이름표 스코프는 서버의 <code>ScopedLock</code>이랑 판박이야. <code>FScopedGPUStatEvent</code>가 생성자에서 <code>PushStat</code>, 소멸자에서 <code>PopStat</code>을 불러서 <strong>스코프 들어갈 때 시작, 나갈 때 자동으로 끝</strong> — 시작만 하고 끝 깜빡할 걱정이 없어.</div></details>
+
+<h3>Q3. 병목 표를 볼 때 inclusive/exclusive를 왜 나눠 보나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>PostProcess = 8ms</code>라고 그 작업대 자체가 느린 게 아닐 수 있거든. 그 8ms 안에 <code>TAA 3ms</code>·<code>Bloom 1ms</code>가 들어 있으면 부모를 억울하게 범인으로 찍는 거야. 그래서 <strong>자식까지 포함한 시간(inclusive)</strong>과 <strong>자기 몫만 남긴 시간(exclusive)</strong>을 나눠. exclusive는 전체에서 자식 inclusive를 빼서 구해. 서버에서 <code>ProcessPacket()</code>이 10ms인데 안의 <code>DBQuery()</code>가 9ms면 병목은 DB지 디스패처가 아니잖아 — 딱 그 감각이야.</div></details>
+
+<h4>↳ 그런데 결과 집계가 이번 프레임에 항상 끝나나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, query 결과가 아직 준비 안 됐을 수 있어. 그래서 <code>UpdateStats</code>는 pending 이벤트를 돌면서 <code>GatherQueryResults</code>로 확인하고, <strong>안 됐으면 이번 프레임 stat 업데이트를 미루고 다음 프레임에 다시 시도</strong>해. GPU가 뒤에서 일하니 결과가 한두 프레임 늦게 오는 걸 감안한 구조야. 준비된 것만 inclusive/exclusive로 계산하는 거지.</div></details>
+
+<h3>Q4. 그럼 stat 숫자만 보면 다 해결되나요? RenderDoc/PIX는 왜 열어요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">숫자는 "TAA가 4ms다, 늦다"까지만 말해. <strong>왜</strong> 4ms인지 — 텍스처가 큰지, dispatch가 많은지, 리소스 배리어에서 막혔는지는 표만으론 안 보여. 그때 프레임 하나를 <strong>CCTV처럼</strong> 열어 draw/dispatch와 리소스를 직접 보는 게 RenderDoc/PIX야. 읽는 순서는 ① GPU total(16.6ms 넘나) → ② 큰 이름표(inclusive/exclusive) → ③ 캡처 도구로 내려가. 단, 캡처를 켜면 동기화 오버헤드가 섞이니 숫자 절대값은 다시 확인해야 해.</div></details>
+
+<h4>↳ 캡처에서 이름표가 왜 그렇게 중요해요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">RenderDoc 화면에 <code>DrawIndexed</code>만 수천 줄 뜨면 길을 완전히 잃어. 근데 <code>Prepass</code>·<code>ShadowProjection</code>·<code>TemporalSuperResolution</code> 같은 이름표가 보이면 <strong><code>stat gpu</code>에서 본 병목과 캡처 안의 draw/dispatch 묶음이 이어져</strong>. 그래서 언리얼 D3D12RHI는 RenderDoc 아래에서 도는지 감지해서, 캡처 도구가 읽기 좋은 이벤트 이름을 살려두는 코드까지 갖고 있어.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>GPU 프로파일링은 패스마다 이름표를 붙이고, GPU 명령줄에 start/end 초시계를 꽂고, 나중에 그 결과를 트리와 캡처로 읽어서 "어느 작업대가 늦었는지" 찾는 장치다.</strong></p>
 <hr>

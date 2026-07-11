@@ -340,6 +340,41 @@ DDC cache record</div>
 <ul><li><code>.usf</code>는 바로 GPU 코드가 되지 않는다. 먼저 컴파일 환경이 붙고 전처리된다.</li><li>C++ 레벨에서 보이는 핵심 중간 산출물은 <code>FShaderPreprocessOutput</code>이다.</li><li>최종 컴파일은 <code>IShaderFormat::CompilePreprocessedShader</code> 백엔드가 맡는다.</li><li>캐시 키는 원본 파일명이 아니라 버전, 포맷, 엔트리, 환경, 전처리 소스까지 포함한 입력 지문이다.</li><li>DDC는 최종 셰이더 코드와 메타데이터를 저장해 다음 비싼 컴파일을 피하게 해준다.</li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 셰이더 컴파일이 왜 파이프라인이라고 부를 만큼 커지나요? HLSL 넣으면 바이트코드 나오는 거 아닌가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">DirectX 기초 감각으론 "HLSL 넣고 DXIL 나오면 끝"인데, 언리얼은 <strong>같은 <code>.usf</code>라도 조합이 갈라져</strong>. 플랫폼, 엔트리 함수, 머티리얼 옵션, 레이 트레이싱, bindless, 디버그 플래그가 다르면 결과가 달라지거든. 김치볶음밥 하나도 매운맛·치즈추가·포장용이 갈라지는 것처럼. 그래서 원본 옆에 "이번 주문 옵션(컴파일 환경)"을 붙이고 → 전처리하고 → 플랫폼 백엔드가 최종 코드를 만들고 → 해시랑 캐시에 넣는 파이프라인이 되는 거야.</div></details>
+
+<h4>↳ 매번 생으로 컴파일하면 뭐가 망가지나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">에디터 켜자마자 "Compiling Shaders 6000" 뜨고, 작은 머티리얼 수정 하나에도 몇 분씩 멈춰. 조합이 워낙 많아서 그래. 서버로 치면 클라 하나 들어올 때마다 <code>CM_*</code> 디스패치 테이블이랑 메타데이터를 전부 새로 만드는 꼴이야. 그래서 캐시가 없으면 못 버티고, 있으면 살 만해지는 거지.</div></details>
+
+<h3>Q2. 왜 <code>.usf</code>를 바로 백엔드에 넣지 않고 전처리를 먼저 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">레시피 안에 <strong><code>include</code>랑 조건문(<code>#if</code>)이 남아 있으면</strong> 매장별 기계마다 읽는 방식이 꼬일 수 있거든. 그래서 include를 다 펼치고, define을 적용하고, 조건부 코드를 정리해서 <strong>백엔드가 먹기 좋은 작업지시서</strong>로 만드는 게 전처리야. C++ 레벨에서 그 중간 산출물이 <code>FShaderPreprocessOutput</code>이고, 원본 <code>.usf</code>도 아니고 최종 GPU 바이트코드도 아닌 그 사이 단계야.</div></details>
+
+<h4>↳ 그럼 최종 컴파일은 렌더코어가 직접 하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 렌더코어는 <strong>작업지시서까지만</strong> 만들고 진짜 인쇄는 플랫폼 백엔드에 맡겨. <code>IShaderFormat</code>이라는 백엔드 인터페이스를 통해 D3D·Vulkan·Metal 쪽으로 넘기는 거지. 매장 기계가 다르면 종이 크기랑 잉크가 다르니까 한 기계가 다 뽑는다고 믿으면 깨져. 서버로 치면 공통 패킷 프레임워크가 <code>CM_LOGIN</code>을 로그인 모듈로 넘기고 실제 처리는 그 모듈이 하는 구조랑 같아.</div></details>
+
+<h3>Q3. 캐시 키가 그냥 파일명이면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">절대 안 돼. 파일명은 같은데 <strong>치즈 추가 define 하나만 바뀌어도 완전히 다른 카드</strong>거든. 예전 카드를 그냥 쓰면 화면이 틀린 재료로 그려져. 그래서 언리얼은 캐시 버전·목표 포맷·엔트리 함수·bindless 설정·컴파일 환경·전처리된 소스 본문까지 <strong>입력 전체를 해시로 섞어서 "입력 지문"</strong>을 만들어. 이 지문이 같아야만 "같은 레시피 카드"라고 믿는 거야.</div></details>
+
+<h4>↳ 그래서 "작은 define 하나 바꿨는데 왜 또 컴파일하지?"가 되는 건가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">맞아, 바로 그거야. 해시 재료가 하나라도 바뀌면 도장 번호가 달라지고, 도장 번호가 달라지면 창고에서 예전 카드를 못 꺼내니까 새로 인쇄해야 해. 짜증나 보여도 <strong>정확성 때문에 일부러 그러는 것</strong>이야 — 틀린 셰이더를 재사용하면 화면이 깨지니까, 안전하게 비싼 길을 다시 타는 거지.</div></details>
+
+<h3>Q4. DDC는 왜 있고 큰 그림에서 뭘 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">DDC는 <strong>완성된 셰이더 카드를 보관하는 창고</strong>야. 입력 지문이 맞으면 이미 만든 결과를 다시 꺼내 쓰고, 없으면 그때만 비싼 전처리·백엔드 컴파일 길로 내려가. 코드 주석에 "수백만 개 레코드(millions of shader cache records)"라고 적혀 있을 만큼 규모를 크게 잡고 설계했어. 서버로 치면 자주 쓰는 DB 메타를 캐시하고 같은 요청은 재사용하는 거랑 같은데, <strong>비용 단위가 훨씬 커서</strong> 캐시 미스 한 번의 대가가 크다는 게 차이야.</div></details>
+
+<h4>↳ 그럼 이 장 내용이 앞뒤 챕터랑 어떻게 이어져요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">앞 장(<a class="xref" href="ch-08-shader-basics.html">shader-basics</a>)에선 "셰이더는 GPU에서 도는 작은 프로그램"이고 C++ 주문표가 <code>.usf</code> 함수를 가리킨다까지 봤어. 이 장은 <strong>그 작은 프로그램이 애초에 어떻게 만들어지고 캐시에 박히는가</strong>를 채운 거고. 다음 장(<a class="xref" href="ch-10-shader-parameters.html">shader-parameters</a>)에선 C++ 값이 그 컴파일된 셰이더의 변수 칸에 어떻게 꽂히는지로 넘어가. 셋을 이으면 "등록 → 컴파일/캐시 → 값 바인딩"이라는 셰이더 한살이가 완성돼.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>언리얼 셰이더 컴파일은 <code>.usf</code> 원본을 "주문 옵션 붙인 작업지시서"로 전처리한 뒤 플랫폼 백엔드에 맡기고, 그 입력 지문과 최종 코드를 캐시에 넣어 다음 컴파일을 피하는 파이프라인이다.</strong></p>
 <hr>

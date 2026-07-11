@@ -285,6 +285,41 @@ SceneColor -&gt; 모션블러 -&gt; 블룸 준비 -&gt; 톤매핑 -&gt; AA -&gt;
 <div class="conversation"><h2>8. 이 챕터에서 딱 이것만</h2>
 <ul><li>후처리 체인은 <code>SceneColor</code>를 계속 갱신하는 작업대 줄이야.</li><li><code>PassSequence</code>는 이번 뷰에서 어떤 작업대를 켤지 정하는 작업표야.</li><li>블룸은 낮은 해상도 체인을 써서 밝은 번짐 레이어를 만든다.</li><li>톤매퍼는 <code>SceneColor + Bloom + Exposure + ColorGrading</code>을 받아 화면용 색으로 인화한다.</li><li>톤매핑 전 HDR과 톤매핑 후 색은 서로 다르니, 어느 시점의 <code>SceneColor</code>인지 항상 구분해야 해.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 후처리 체인은 왜 필요한가요? 장면 다 그린 색을 바로 화면에 보내면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">셰이더가 계산한 빛은 <code>float</code>이라 태양은 1을 훌쩍 넘고 어두운 골목은 0에 붙어 있는 <strong>HDR</strong>이야. 근데 모니터가 낼 수 있는 밝기 범위는 좁아(8~10비트). HDR <code>SceneColor</code>를 그대로 백버퍼에 밀어 넣으면 <strong>밝은 곳은 하얗게 터지고 어두운 곳은 뭉개져</strong>. 그래서 장면을 다 그린 뒤 모션블러·블룸·노출·톤매핑·AA·업스케일 작업대를 줄줄이 통과시켜 화면용 색으로 마감하는 게 후처리 체인이야. DirectX로 치면 HDR 렌더타깃 만들고 threshold·downsample·blur·tonemap·swapchain 출력으로 가는 그 뼈대랑 같아.</div></details>
+
+<h4>↳ 근데 왜 하나의 거대한 픽셀 셰이더로 안 하고 작업대를 여러 개 두나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">뷰마다 켤 효과가 다르거든. 블룸 강도 0인 뷰도 있고, FXAA 대신 SMAA인 뷰도 있어. 꺼진 작업대까지 매 프레임 1920×1080 사진을 들고 지나가면 돈만 써. 그래서 <code>PassSequence</code>라는 <strong>작업표(체크리스트)</strong>를 만들고 <code>SetEnabled</code>로 이번 뷰에 필요한 작업대만 켜. 서버 미들웨어 체인이랑 똑같아 — 암호화 꺼진 연결은 복호화 핸들러 건너뛰듯, 블룸 강도 0이면 블룸 패스를 건너뛰어.</div></details>
+
+<h3>Q2. 큰 흐름에서 <code>SceneColor</code>는 어떻게 돌아가나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">핵심은 <code>SceneColor</code>가 <strong>한 번 만들고 끝나는 원본이 아니라, 패스를 지날 때마다 새 텍스처로 갈아끼우는 손잡이</strong>라는 거야. 코드 주석도 "incrementally updated"라고 못박아. 원본은 <code>OriginalSceneColor</code>로 따로 서랍에 넣어두고, 작업대 위 사진만 계속 바꿔. 서버로 치면 패킷 버퍼가 복호화 → 압축해제 → 파싱 → dispatch를 지나면서 "지금 단계의 버퍼"로 계속 바뀌는 느낌이야.</div></details>
+
+<h4>↳ 그럼 "어느 시점의 <code>SceneColor</code>인지"가 왜 그렇게 중요해요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">톤매핑 <strong>전 HDR</strong>과 톤매핑 <strong>후 LDR</strong>은 완전히 다른 사진이거든. 이걸 헷갈리면 톤매핑 전 HDR을 써야 하는 패스가 톤매핑 후 LDR을 읽어버리는 사고가 나. 서버에서 여러 스레드가 패킷 버퍼를 마음대로 만지면 터지듯, 후처리에서도 <code>SceneColor</code>가 어느 패스의 출력인지 명확해야 해. 그래서 코드가 <code>SceneColorBeforeTonemap</code>, <code>SceneColorAfterTonemap</code>을 따로 기억하는 거야.</div></details>
+
+<h3>Q3. 블룸은 왜 낮은 해상도 체인을 쓰나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">블룸은 밝은 부분을 뽑아 <strong>흐리는</strong> 작업인데, 흐림은 주변 픽셀을 많이 읽어야 해. 원본 4K를 큰 반경으로 여러 번 흐리면 픽셀을 수천만 번 만져서 후반 작업대가 막혀. 그래서 먼저 half·quarter·eighth로 <strong>작은 복사본</strong>을 뽑아 거기서 흐리고 다시 섞어. 작은 사진에선 같은 반경 블러도 훨씬 싸거든. DirectX에서 렌더타깃 mip 체인 만들어 blur pass 여러 번 돌리는 감각과 같아.</div></details>
+
+<h4>↳ 그렇게 만든 블룸은 화면에 어떻게 합쳐지나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">블룸은 화면 전체에 그냥 흰색을 얹는 게 아니야. <strong>별도 텍스처</strong>로 만들어져서 톤매퍼에 <code>Bloom</code> 입력으로 같이 들어가. 사진관으로 치면 원본에 바로 붓질하지 않고, 빛 번짐만 따로 투명 필름에 만든 뒤 인화기에 같이 넣는 거지. 그래서 순서가 중요해 — <strong>블룸은 톤매핑 전에 준비되고, 톤매퍼가 HDR 원본과 블룸을 함께 받아</strong> 눌러 담아.</div></details>
+
+<h3>Q4. 톤매핑이 이 챕터의 핵심 관문이라는데, 정확히 뭘 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">넓은 HDR 밝기를 화면이 먹을 수 있는 좁은 범위로 <strong>눌러 담는</strong> 인화 규칙이야. 그냥 한계 넘는 걸 싹둑 자르면 밝은 게 다 똑같이 하얘지는데, 눌러 담으면 밝은 것끼리도 차이가 살아남아. 근데 혼자 하지 않아 — 톤매퍼는 <code>SceneColor + Bloom + Exposure(눈 적응) + ColorGrading LUT</code>를 한 상자(<code>FTonemapInputs</code>)에 받아서 <strong>한 번에 인화</strong>해. 여기서 HDR→LDR이 일어나는 거고, <code>bOutputInHDR</code>가 참이면 HDR로 남길 수도 있어.</div></details>
+
+<h4>↳ 후처리 패스가 많아지면 RDG가 왜 더 절실해지나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">후처리 체인은 "하나의 거대한 셰이더"가 아니라 작은 작업대 여러 개가 <code>RDG</code> 위에 올라가는 구조거든. 그래서 중간 텍스처가 계속 생기고, 해상도가 달라지고, 어떤 건 컴퓨트로 어떤 건 픽셀 셰이더로 가. 패스가 많아질수록 <strong>리소스 수명과 배리어를 사람이 직접 관리하기가 불가능</strong>해져. 체인이 길어질수록 "누가 이 텍스처 먼저 쓰고 누가 읽나"를 자동으로 챙기는 RDG가 왜 필요한지 선명해지는 거야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>언리얼 후처리는 HDR <code>SceneColor</code>라는 사진을 <code>PassSequence</code> 작업표대로 넘기며, 블룸 레이어를 먼저 만들고 톤매퍼에서 함께 눌러 담아 화면용 색으로 마감하는 체인이다.</strong></p>
 <hr>

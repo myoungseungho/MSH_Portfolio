@@ -286,6 +286,49 @@ public:
 <div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
 <ul><li><code>FMeshDrawCommand</code>는 RHI 바로 위의 메시 draw 주문표야.</li><li>스태틱 메시의 캐시 가능한 명령은 프리미티브가 씬에 들어올 때 패스별로 구워진다.</li><li>프레임에는 캐시 원본을 직접 다시 만들지 않고, 보이는 것만 <code>FVisibleMeshDrawCommand</code>로 꺼낸다.</li><li><code>SortKey</code>와 <code>StateBucketId</code>로 줄 세워서 PSO 변경을 줄이고, 같은 버킷은 dynamic instancing으로 합칠 수 있다.</li><li>제출 순간에는 <code>CachedPipelineId</code>, <code>VertexStreams</code>, <code>ShaderBindings</code>를 RHI에 꽂고, <code>StateCache</code>로 중복 세팅을 피한다.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>FMeshDrawCommand</code>가 왜 필요한가요? 없으면 뭐가 망가지나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">화면에 스태틱 메시가 5만 개고 그중 2만 개가 보인다고 해봐. 매 프레임마다 "이 메시의 버텍스 버퍼는? 인덱스 버퍼는? 셰이더 바인딩은? PSO는?"을 2만 번 다시 조립하면 <strong>CPU가 먼저 쓰러져</strong>. GPU가 아무리 빨라도 CPU가 명령서를 늦게 써주면 주방은 손 놓고 기다리는 꼴이지. 그래서 그리기 직전 RHI에 넘길 재료를 <strong>"한 장짜리 주문표(조리표)"로 미리 구워두는 게</strong> <code>FMeshDrawCommand</code>야. 프레임마다 하는 일은 훨씬 작아져 — 보이는 조리표만 꺼내고, 정렬하고, 같은 건 묶는 정도.</div></details>
+
+<h4>↳ 그럼 그 조리표는 언제 굽나요? 매 프레임 굽는 거예요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그게 핵심이야. 캐시 가능한 명령은 <strong>스태틱 메시가 씬에 등록되는 시점(Primitive AddToScene)</strong>에 패스별로 미리 구워둬. "이 메시를 BasePass에선 어떻게, DepthPass에선 어떻게 그릴지"를 그때 준비해두는 거지. 점심 몰리기 전에 인기 메뉴 조리표를 미리 인쇄하는 거랑 같아. 매 프레임엔 시야 계산만 새로 하고, 레시피 자체는 이미 창고에 있어.</div></details>
+
+<h4>↳ 캐시가 효율적이려면 조건이 있다던데, 뭐죠?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">매 프레임·매 뷰마다 바뀌는 <strong>셰이더 바인딩이 없어야</strong> 캐시가 산다. 매 손님마다 소스가 다르면 같은 제육 도시락이라도 한 팬에 못 볶잖아. 그래서 커맨드별 셰이더 바인딩을 자꾸 붙이면 뒤에 나올 동적 인스턴싱 효율이 떨어져. 잘 안 바뀌는 것만 구워두는 게 캐싱의 전제야.</div></details>
+
+<h3>Q2. <code>FMeshDrawCommand</code>랑 <code>FVisibleMeshDrawCommand</code>는 왜 굳이 나눴나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">역할이 다르고 <strong>수명이 달라</strong>. <code>FMeshDrawCommand</code>는 레시피 원본이라 여러 프레임을 살아남고 여러 프리미티브가 공유할 수도 있어. 반면 <code>FVisibleMeshDrawCommand</code>는 "오늘 이 뷰에서 보임, 정렬값, 컬링 정보" 같은 <strong>한 프레임짜리 주문 스티커</strong>야. 조리표에는 레시피만 적고, 오늘 몇 번 손님이 주문했는지는 따로 스티커로 붙이는 거지. 안 나누면 원본에 오늘 상황을 덧칠하게 돼서 다음 프레임 창고 조리표가 꼬여.</div></details>
+
+<h4>↳ 그럼 프레임마다 실제로 새로 하는 일은 뭐가 남나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">"보이는가?"만 새로 판단하고, "어떻게 그릴까?"는 이미 구워진 명령을 참조해. 구체적으론 <strong>보이는 것만 꺼내기 → 정렬 → 이번 프레임용 primitive id 쓰기</strong> 정도야. 앞 장 컬링(프러스텀·오클루전)이 "보이는 프리미티브" 목록을 주면, 캐시된 주문표를 꺼내 <code>FVisibleMeshDrawCommand</code>로 감싸는 거지. 무거운 레시피 조립은 프레임 밖으로 빠져나갔어.</div></details>
+
+<h3>Q3. 조리표를 정렬하는 이유가 뭔가요? 순서가 왜 중요하죠?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">보기 좋으라고 하는 게 아니야. 비슷한 주문표를 <strong>이웃으로 붙여놔야 PSO 변경이 줄어</strong>. 제육·돈가스·제육·돈가스 순서로 만들면 팬을 계속 바꿔야 하지만, 제육끼리 모으면 소스 한 번 잡고 여러 개 처리하잖아. 그리고 정렬 덕에 같은 <code>StateBucketId</code>가 이웃으로 붙어서, 다음 단계인 <strong>머지(동적 인스턴싱)</strong>가 가능해져. 정렬은 상태 변경 최소화와 머지, 두 마리를 잡는 사전 작업이야.</div></details>
+
+<h4>↳ 동적 인스턴싱은 정확히 뭘 합치는 거예요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">같은 메시 상태·같은 버텍스 스트림·같은 셰이더 바인딩(=같은 <code>StateBucketId</code>)이면 draw call 여러 개를 <strong>하나의 instanced draw로 합쳐</strong>. 정렬된 목록을 앞에서부터 훑다가 버킷이 이전과 같으면 draw를 새로 내는 대신 그 명령의 <code>NumInstances</code>만 하나 늘려. 같은 메시 100개를 100번 그리는 대신, 주문표 하나에 "100인분"이라고 적는 거지. 같은 팬에 여러 개 한 번에 볶기야.</div></details>
+
+<h4>↳ 그럼 원본 명령의 <code>NumInstances</code>를 바로 늘리면 안 되나요? 왜 복사하죠?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">안 돼. 캐시된 원본 <code>FMeshDrawCommand</code>는 <strong>여러 프레임, 여러 프리미티브가 공유</strong>하거든. 그 원본의 <code>NumInstances</code>를 직접 바꾸면 창고 조리표 자체가 변해서 다음 프레임이 오염돼. 그래서 한 프레임짜리 저장소(<code>MeshDrawCommandStorage</code>)에 복사본을 만들고, 그 복사본만 "이번 팬에서 3인분"처럼 바꿔. 원본은 창고에 그대로 둬야 재사용이 안전해.</div></details>
+
+<h3>Q4. 미리 다 구워뒀으면 실제 제출(draw)할 때는 뭐가 남나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">제출 순간엔 <strong>바뀐 상태만 RHI에 꽂고 draw 준비</strong>로 끝나. 캐시된 <code>CachedPipelineId</code>로 PSO를 찾고, 버텍스 스트림과 셰이더 바인딩을 커맨드 리스트에 얹어. 근데 여기서 <code>StateCache</code>가 조용히 일해 — 방금 RHI에 세팅한 상태를 작은 메모장에 적어두고, <strong>이전 draw랑 다를 때만</strong> 다시 세팅해. 정렬로 같은 PSO가 이어질 확률을 높여놨으니, 상태 세팅을 계속 건너뛸 수 있는 거지.</div></details>
+
+<h4>↳ 이걸 우리 서버나 DirectX 경험이랑 대응시키면요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">서버로 치면 <code>FMeshDrawCommand</code>는 <strong>패킷 핸들러 디스패치 테이블</strong>이야. 패킷 올 때마다 <code>switch</code> 전체를 새로 만들지 않고 미리 만든 테이블에서 핸들러 찾잖아. <code>StateBucketId</code>는 같은 DB 작업을 파라미터만 바꿔 배치 처리하는 감각이고. DirectX로는 더 직관적이야 — 직접 D3D12 쓰면 draw 전에 PSO·VB/IB·descriptor·root parameter를 매번 세팅하고 <code>DrawIndexedInstanced</code>를 부르잖아. 언리얼은 그 반복 세팅을 <code>FMeshDrawCommand</code>로 미리 포장하고, <code>StateCache</code>로 직전과 같으면 재세팅을 건너뛰게 해서 CPU 비용을 줄인 거야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong><code>MeshDrawCommand</code>는 메시를 그리는 조리표를 미리 구워두는 장치다 — 프레임마다 레시피를 다시 쓰지 말고, 보이는 조리표만 꺼내 정렬하고 같은 것은 합쳐서 GPU에 낸다.</strong></p>
 <hr>

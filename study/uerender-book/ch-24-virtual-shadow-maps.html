@@ -345,6 +345,45 @@ FVirtualShadowMapArray::RenderVirtualShadowMapsNonNanite (:3956)
 <div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
 <ul><li>VSM은 큰 섀도맵을 통째로 만드는 기술이 아니라, 큰 <strong>가상 주소 공간</strong>과 작은 <strong>물리 페이지 풀</strong>을 연결하는 기술이야.</li><li>화면 픽셀이 먼저 <code>PageRequestFlags</code>에 필요한 페이지를 표시한다.</li><li><code>AllocateNewPageMappings</code>가 빈 물리 페이지를 꺼내 <code>PageTable</code>에 가상→물리 연결을 적는다.</li><li>실제 깊이 렌더링은 <code>PhysicalPagePoolRDG</code>에 쓴다.</li><li>샘플링할 때는 <code>ShadowVirtualToPhysicalUV</code>가 가상 uv를 물리 텍셀 주소로 번역한다.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. VSM은 왜 나왔나요? 그냥 큰 섀도맵 한 장 쓰면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">월드가 커지고 카메라 근처엔 고해상도 그림자가 필요하고 Nanite로 미세 지오메트리가 늘면, <strong>16K 텍스처를 빛마다 통째로 만드는 게</strong> 메모리·렌더링·캐시를 다 터뜨려. 전교생 10,000명 전부에게 매일 새 사물함을 주고 안 온 학생 것까지 청소하는 꼴이야. VSM(Virtual Shadow Maps)은 이름 그대로 그림자 지도를 <strong>가상 메모리처럼</strong> 봐 — 주소 공간(명부)은 크게 잡되, 실제 물리 페이지(사물함)는 <strong>화면에서 필요한 타일만</strong> 빌려줘. 우리 서버로 치면 유저 ID 공간은 64비트로 넓게 잡아도 세션 객체는 접속자 수만큼만 만드는 거랑 같아.</div></details>
+
+<h4>↳ 그럼 가상 해상도랑 실제 메모리가 다르다는 건데, 진짜 깊이 값은 어디에 저장돼요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>PhysicalPagePool</code>이야 — 진짜 사물함 창고. 가상 섀도맵은 크게 보이지만 실제 깊이가 들어가는 곳은 이 물리 페이지 풀이고, 크기는 <code>MaxPhysicalPages</code> 같은 예산으로 정해져. 큰 그림자 지도를 통째로 산 게 아니라 <strong>작은 사물함 창고 규격만 먼저 정하는</strong> 거야. 가상 주소 공간(<code>VirtualMaxResolutionXY</code>)과 물리 풀 크기(<code>PhysicalPoolSize</code>)가 별개라는 게 VSM의 출발점이야.</div></details>
+
+<h3>Q2. 그럼 어떤 페이지를 실제로 만들지는 누가 정하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>화면 픽셀이 정해</strong>. 이게 VSM의 첫 반전이야. 일반 섀도맵은 그림자 텍스처를 통째로 먼저 렌더하고 나중에 샘플링하는데, VSM은 <strong>화면을 먼저 보면서</strong> 지금 보이는 픽셀마다 "이 픽셀이 그림자 계산하려면 어느 섀도맵 페이지가 필요하지?"를 거꾸로 계산해서 <code>PageRequestFlags</code>에 "이 페이지 필요" 도장을 찍어(<code>MarkPage</code>). 우리 서버로 치면 전 유저에게 매 프레임 패킷을 만드는 게 아니라, <strong>이번 틱에 실제 관심 영역에 들어온 대상만</strong> send queue에 올리는 거랑 같아.</div></details>
+
+<h4>↳ 표시된 요청은 어떻게 실제 물리 페이지로 연결돼요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>AllocateNewPageMappings</code>가 요청 플래그가 있고 아직 연결 안 된 가상 페이지에 대해, <strong>빈 사물함 목록에서 하나를 꺼내(<code>PopPhysicalPageList</code>)</strong> <code>PageTable</code>에 "이 가상 페이지 → 이 물리 페이지" 연결을 적고, 사물함 쪽지(<code>PhysicalPageMetaData</code>)에 소유자를 기록해. 딱 <strong>CPU 가상 메모리의 "가상 주소 → 페이지 테이블 → 물리 프레임"</strong> 구조야. 차이는 목적 — CPU는 프로세스 메모리 보호용, VSM은 그림자를 크게 보이게 하되 실제 렌더는 필요한 타일만 하려는 거지.</div></details>
+
+<h3>Q3. 페이지를 배정한 다음, 그림자는 어디에 그리나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">큰 가상 텍스처가 아니라 <strong>물리 페이지 풀(<code>PhysicalPagePoolRDG</code>)에만</strong> 깊이를 써. 렌더 패스에서 <code>bRenderToVirtualShadowMap</code>을 켜고 페이지 테이블과 물리 풀 UAV를 넘기면, 렌더러가 페이지 테이블을 보며 <strong>배정된 사물함 칸에만</strong> 깊이를 채워. 앞에서 필요한 페이지를 표시했고, 중간에서 물리 페이지를 배정했고, 이제 그 배정된 칸에만 렌더 — <strong>월드 전체 그림자 텍스처를 싹 칠하지 않는</strong> 게 핵심이야.</div></details>
+
+<h4>↳ 그럼 나중에 그림자를 읽을(샘플링할) 때는 뭐가 추가돼요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>주소 번역</strong> 한 단계가 더 붙어. 일반 섀도맵은 "uv로 텍스처 찍고 깊이 비교"면 끝인데, VSM은 <code>ShadowVirtualToPhysicalUV</code>가 가상 uv가 어느 페이지인지 찾고 → <code>PageTable</code>에서 물리 주소를 꺼내고 → 진짜 물리 텍셀 주소로 바꾼 다음 샘플링해. 305호를 "3층의 5호"로 쪼개듯, 가상 주소를 <strong>페이지 번호 + 페이지 안 위치</strong>로 갈라서 물리 창고 좌표를 만드는 거야. 이 번역이 있어서 "Virtual"이 마케팅 이름이 아닌 거지.</div></details>
+
+<h4>↳ 앞 장 <a class="xref" href="ch-23-shadow-maps.html">shadow-maps</a>의 일반 섀도맵과 큰 그림에서 순서가 어떻게 뒤집힌 거예요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">일반 섀도맵은 <strong>"빛 → 그림자 텍스처 통째로 렌더 → 나중에 화면에서 샘플링"</strong> 순서야. VSM은 순서를 뒤집어 <strong>"화면 픽셀이 필요한 페이지 먼저 표시 → 물리 페이지 배정 → 그 페이지만 렌더 → 샘플링 때 주소 번역"</strong>으로 가. 즉 만들고 나서 쓰는 게 아니라, <strong>화면이 뭘 쓸지 먼저 보고 그만큼만 만든다</strong>는 거지. "빛의 눈으로 깊이를 한 번 더 그린다"는 원리 자체는 그대로인데, 그 비용을 필요한 타일로만 좁힌 게 VSM이야.</div></details>
+
+<h3>Q4. 필요한 페이지만 그리면 끝인가요? 캐시는 왜 또 필요해요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">"페이지를 적게 그리자"만으론 부족해. 정적인 벽·바닥·큰 건물 그림자는 카메라가 조금 움직여도 <strong>어제 그린 물리 페이지를 재사용</strong>할 수 있어. 매 프레임 사물함을 전부 비우면 청소부가 헛일하잖아. 그래서 <strong>안 바뀐 페이지는 살리는 캐시</strong>, <strong>움직인 프리미티브·WPO 메시·새로 드러난 물체는 죽이는 무효화</strong>가 있어야 진짜 성능이 나와. 우리 서버 관심 영역 캐시처럼, 무효화를 놓치면 클라 상태가 틀리듯 VSM도 <strong>낡은 그림자가 남거나 빠져</strong>.</div></details>
+
+<h4>↳ 그럼 VSM은 OS 가상 메모리처럼 페이지 폴트가 자동으로 처리되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야, 거기서 갈려. OS는 페이지 폴트가 나면 <strong>CPU/커널이 알아서</strong> 물리 프레임을 붙여줘. VSM은 그런 자동 처리가 없어 — 필요한 페이지 표시, 물리 페이지 배정, 물리 풀 렌더, 페이지 테이블 샘플링을 전부 <strong>렌더러가 직접</strong> 해. 운영체제가 아니라 렌더러가 사물함 담당 선생님 역할을 하는 거지. 구조는 가상 메모리를 빌려왔지만 관리 주체는 렌더러라는 게 면접에서 짚어주면 좋은 포인트야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>Virtual Shadow Maps는 그림자용 가상 메모리다 — 화면에서 필요한 가상 페이지만 표시하고, 빈 물리 페이지를 배정한 뒤, 그 작은 페이지 풀에만 깊이를 렌더한다.</strong></p>
 <hr>

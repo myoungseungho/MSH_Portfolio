@@ -280,6 +280,45 @@ GPU 결과 readback fallback          DynamicRHI.cpp:468</div>
 <div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
 <ul><li>CPU는 지시하는 뇌고, GPU는 수천 명이 동시에 칠하는 손이야.</li><li>둘은 같은 함수 호출 세계에 있지 않고, RHI와 커맨드 리스트를 사이에 두고 말해.</li><li><code>GDynamicRHI</code>는 런타임에 선택된 실제 RHI 구현으로 들어가는 전역 문이야.</li><li>빠른 건 GPU 계산 자체고, 비싼 건 명령 전달, 상태 전환, fence, readback이야.</li><li>다음부터 나오는 렌더 스레드, RHICommandList, RDG는 전부 이 기다림을 줄이려는 구조야.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. CPU와 GPU를 왜 굳이 다른 세계로 나눠서 봐야 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">둘이 잘하는 게 완전히 다르거든. CPU는 복잡한 판단·분기·오브젝트 관리, 즉 <strong>"무엇을 어떤 순서로 그릴지 계획"</strong>에 강해. GPU는 같은 계산을 수백만 개 동시에 처리하는 <strong>"대량 색칠"</strong>에 강하고. 영화 촬영장으로 치면 CPU는 전체 그림을 아는 감독이고, GPU는 운동장에 깔린 수천 명의 손이야. 감독 한 명이 픽셀 207만 개를 직접 칠할 순 없고, 손 수천 개는 계획이 없으면 뭘 먼저 칠할지 몰라서 멈칫해. 그래서 <strong>계획하는 쪽과 실행하는 쪽을 나눈</strong> 거야.</div></details>
+
+<h4>↳ 그럼 "GPU가 빠르다"가 렌더링 성능의 핵심인가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">정확히는 <strong>"GPU가 한 번 일감을 받으면 빠르다"</strong>야. 색칠하는 손 자체는 무시무시하게 빨라. 비싼 건 일감을 준비해서 전달하는 것, 그리고 결과를 되가져오는 거야. 감독이 매 칸마다 운동장까지 뛰어다니며 지시하면 학생 수천 명이 있어도 망해. 큰 작업표를 잘 나눠주고 각자 자기 구역을 오래 칠하게 만들어야 빠른 거지.</div></details>
+
+<h3>Q2. <code>RHI</code>랑 <code>FDynamicRHI</code>는 왜 있는 건가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">CPU 쪽 렌더러가 GPU를 직접 붙잡고 일하지 않게 하려고. <code>FDynamicRHI</code>는 "그래픽 하드웨어에게 말 거는 <strong>공통 계약서</strong>"야. <code>Init()</code>, <code>Shutdown()</code>, <code>GetName()</code>처럼 꼭 필요한 구멍만 뚫어두고, D3D12·Vulkan·Metal이 그 구멍을 자기 방식으로 채워. 안 나누면 벽화 한 장 칠하는 코드가 "D3D12면 이렇게, Vulkan이면 저렇게"로 갈라져서 규칙표가 플랫폼 수만큼 늘어나. 위쪽 렌더러는 계약서만 보고 말하고, 실제 작업반이 누구인지는 시작할 때 정해지는 거야.</div></details>
+
+<h4>↳ 그럼 렌더러 코드가 "지금 D3D12야? Vulkan이야?"를 매번 물어보나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그게 핵심이야. 엔진 시작 때 <code>GDynamicRHI = PlatformCreateDynamicRHI()</code> 한 줄로 실제 작업반이 <strong>전역 포인터</strong>에 한 번 꽂혀. 그다음부터 렌더링 코드 대부분은 그냥 이 <code>GDynamicRHI</code>라는 문만 통과해. "D3D12 함수 호출!"이라고 직접 외치지 않아. 매번 묻는 대신 시작할 때 한 번 정해두는 구조라 곳곳에 플랫폼 분기가 안 퍼지는 거지.</div></details>
+
+<h3>Q3. CPU가 GPU에게 명령을 왜 바로 실행 안 시키고 큐에 쌓나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">즉시 실행하면 단순해 보이지만 느려지거든. 207만 픽셀 화면에서 "여기 빨강, 저기 파랑"을 매번 즉시 보내면 CPU는 외치느라 묶이고 GPU는 다음 말을 기다리느라 멈칫해. 그래서 지시를 <strong>작업표(커맨드 리스트)에 쌓아두고 한 번에 넘겨</strong>. CPU는 적기만 하고, RHI/GPU는 자기 줄에서 자기 속도로 읽어. 그래야 둘이 동시에 달릴 수 있어.</div></details>
+
+<h4>↳ 그럼 <code>fence</code>는 왜 걸어요? 큐에 넣었으면 끝 아닌가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">가끔은 "여기까지 진짜 처리됐는지" 확인하고 다음으로 가야 할 때가 있어. <code>fence</code>가 그 울타리야. 근데 공짜가 아니야 — fence는 감독이 작업지시서 넘긴 뒤 "잠깐, 이거 끝났는지 확인하고 다음 말 할게" 하고 멈추는 거거든. 꼭 필요할 때만 써야 해. 매 픽셀·매 리소스마다 걸면 큐를 둔 의미가 사라져. 우리 서버로 치면 IOCP 워커에게 일 던져놓고 매 패킷마다 <code>WaitForSingleObject</code>로 완료를 기다리는 꼴이지.</div></details>
+
+<h4>↳ GPU 결과를 CPU로 읽어오는 건요? 그것도 그냥 비슷한 비용인가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그 방향(readback)이 <strong>훨씬 더 비싸</strong>. GPU가 아직 칠하는 중일 수 있는데 CPU가 "그 픽셀 값 지금 줘"라고 하면, GPU 작업이 끝날 때까지 CPU가 멈춰 서서 기다려야 하거든. 소스 주석에도 대놓고 "extremely slow"라고 써 있어. 감독이 멀리서 시켜놓고 "183번째 칸 무슨 색인지 적어서 가져와"라고 부르면 학생들이 칠하던 손 멈추고 확인해서 다시 가져와야 하잖아. 그래서 렌더링 코드는 CPU readback을 최대한 피하고, 꼭 필요하면 staging·fence·한 프레임 지연으로 충격을 줄여.</div></details>
+
+<h3>Q4. 예전에 DirectX 직접 짜던 거랑 비교하면 이 계층이 뭐가 좋은 건가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">DirectX 손으로 짤 땐 <code>ID3D12Device</code>, <code>CommandQueue</code>, command list, resource state, fence를 전부 직접 맞췄잖아. 언리얼은 그 위에 <strong>한 겹을 더 씌워서</strong> 여러 RHI(D3D12·Vulkan·Metal)와 여러 스레드 모델을 감춘 거야. <code>FDynamicRHI</code>가 공통 그래픽 API 문이고 <code>FD3D12DynamicRHI</code>가 실제 D3D12 구현이야. 단, 1:1로 외우면 안 돼 — 이 장의 목표는 그 "한 겹"이 왜 필요한지만 잡는 거야.</div></details>
+
+<h4>↳ 이 장을 한 문장으로 요약하면 뭐라고 말하겠어요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>CPU는 큰 작업표를 만들고 GPU는 그 작업표를 병렬로 칠한다. 렌더링 병목은 대개 칠하는 손 자체보다, 두 세계 사이를 너무 자주 건너게 만들 때 생긴다.</strong> 그래서 뒤에 나오는 렌더 스레드·<code>RHICommandList</code>·RDG가 전부 "이 건너감을 줄이려는 구조"라고 이해하면, 다음 장들이 허공에 안 떠.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>CPU는 큰 작업표를 만들고 GPU는 그 작업표를 병렬로 칠한다. 렌더링 병목은 대개 칠하는 손 자체보다 두 세계 사이를 너무 자주 건너게 만들 때 생긴다.</strong></p>
 <hr>

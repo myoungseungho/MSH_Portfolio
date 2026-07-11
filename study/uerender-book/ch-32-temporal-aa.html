@@ -318,6 +318,37 @@ TemporalAA.usf / TemporalAASample : 1957
 <div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
 <ul><li>TAA는 현재 프레임 하나가 아니라, 지터로 조금씩 다른 샘플을 찍은 여러 프레임을 모은다.</li><li><code>InputHistory</code>는 어제 필름이고, <code>OutputHistory</code>는 오늘 결과를 내일 쓰기 위해 저장하는 필름이다.</li><li><code>TemporalJitterPixels</code>와 3x3 가중치는 현재 프레임을 흔들림에 맞춰 읽기 위한 장치다.</li><li>velocity와 <code>ClipToPrevClip</code>은 이전 프레임의 어느 위치를 읽을지 찾는 지도다.</li><li>고스팅은 과거를 너무 믿을 때 생기고, 깜빡임은 현재를 너무 믿을 때 돌아온다.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. TAA는 왜 필요한가요? 현재 프레임 하나만 믿으면 뭐가 망가지나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">한 프레임의 한 픽셀은 <strong>가난한 증거</strong>야. 화면은 네모 칸 격자라 대각선 모서리는 계단처럼 깨지고, 픽셀보다 가는 것(얇은 전선·철망·머리카락)은 그 한 점에 운 나쁘게 안 걸리면 통째로 사라져. 그래서 현재 프레임만 믿으면 카메라를 반 픽셀만 움직여도 이것들이 <strong>반짝반짝 떨어</strong>. TAA는 렌더 위치를 매 프레임 조금씩 흔들어 다른 샘플을 얻고, 그걸 시간 방향으로 누적해서 이 문제를 푼다. 서버로 치면 <strong>한 틱 패킷만 보고 결론 안 내리고 다음 틱까지 보는</strong> 감각이야.</div></details>
+
+<h4>↳ 반대로 이전 프레임을 너무 믿으면요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그게 <strong>고스팅(잔상)</strong>이야. 사람이 움직였는데 어제 필름을 그대로 겹치면 얼굴 뒤에 어제 얼굴이 남아. 그래서 TAA는 "무조건 과거를 많이 믿자"가 아니라 <strong>줄타기</strong>야 — 히스토리를 너무 쉽게 버리면 화면이 다시 떨리고, 너무 오래 붙잡으면 잔상이 남아. 고스팅은 그래서 버그 하나라기보다 <strong>트레이드오프</strong>지.</div></details>
+
+<h3>Q2. TAA가 큰 그림에서 어떻게 도나요? 두 질문으로 요약하면?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">매 픽셀마다 딱 두 질문을 해. ① <strong>이 픽셀은 이전 필름의 어디에서 왔지?</strong> ② <strong>이전 필름을 얼마나 믿어도 되지?</strong> 흐름으로 보면 오늘 필름(SceneColor·Depth·Velocity)과 어제 필름(<code>InputHistory</code>)을 작업대에 올리고 → 지터 흔들림을 반영해 오늘 필름을 읽고 → velocity로 어제 필름을 현재 위치에 맞추고 → <code>BlendFinal</code>로 둘을 섞어. 그 결과가 화면에도 나가고, 동시에 <strong>다음 프레임의 과거(<code>OutputHistory</code>)</strong>가 돼.</div></details>
+
+<h4>↳ 카메라를 "흔든다"는 지터는 정확히 왜 넣는 거예요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">매번 픽셀 정가운데만 찍으면 픽셀 사이에 걸친 얇은 선은 <strong>영원히 못 봐</strong>. 그래서 첫 장은 가운데, 다음 장은 반 픽셀 왼쪽, 그 다음은 반 픽셀 위쪽 식으로 카메라를 조금씩 흔들어 여러 위치의 증거를 모아. 대신 흔들어 찍었으니 오늘 필름을 읽을 때도 "오늘은 어디로 흔들렸지(<code>JitterX/Y</code>)"를 빼고 읽어야 3×3 가중치가 맞아떨어져.</div></details>
+
+<h4>↳ 어제 필름을 현재 픽셀에 맞출 때 velocity가 왜 꼭 필요하죠?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그냥 같은 좌표로 겹치면 안 되거든. 캐릭터가 오른쪽으로 20픽셀 뛰었으면 어제 (100,100)은 오늘 (120,100)에 와 있어. 그래서 카메라 이동은 <code>ClipToPrevClip</code>으로 되짚고, 움직인 물체는 velocity 텍스처로 <strong>과거 위치를 덮어써</strong>. 이 인덱스가 틀리면 남의 상태를 읽는 거고, 렌더링에선 그게 고스팅으로 보여. 서버로 치면 <strong>유저 ID로 지난 틱 상태를 찾는데 인덱스가 틀린</strong> 사고랑 같아.</div></details>
+
+<h3>Q3. 그럼 위험한 과거는 어떻게 걸러내나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">가장 위험한 건 <strong>카메라 컷</strong>이야. 어제랑 오늘이 아예 다른 장면인데 억지로 겹치면 화면 전체에 잔상이 나. 그래서 컷이면 히스토리 텍스처를 <code>BlackDummy</code>로 바꿔 <strong>어제 필름을 통째로 버려</strong>. 그 외에도 되짚은 과거 위치가 <strong>화면 밖(<code>OffScreen</code>)</strong>이면 지난 사진에 그 자리가 없으니 못 믿고, 주변 색 범위에서 너무 벗어난 히스토리도 줄여. 최종적으로 <code>BlendFinal</code>이 속도가 빠르면 현재 쪽 비중을 키우고, Responsive 픽셀은 강제로 오늘을 더 넣어.</div></details>
+
+<h4>↳ 그럼 MSAA랑은 뭐가 다른 거예요? 예전 방식이랑 비교하면?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">MSAA는 <strong>한 프레임 안에서</strong> 픽셀 안쪽을 여러 번 샘플링해. TAA는 <strong>여러 프레임에 걸쳐</strong> 샘플을 모아. 그래서 TAA는 싸고 강력하지만 <strong>시간이라는 빚</strong>을 져 — 움직임이 크면 그 빚이 고스팅으로 청구돼. DirectX 감각으론 TAA는 그냥 후처리 풀스크린/컴퓨트 패스야. 입력은 현재 색·깊이·velocity·이전 history, 출력은 새 scene color와 새 history고, 깊이/velocity가 없으면 "어제 어디를 읽을지"를 몰라서 누적이 금방 엉망이 돼.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>TAA는 매 프레임 카메라를 살짝 흔들어 다른 픽셀 증거를 만들고, velocity로 이전 필름을 현재 위치에 맞춘 뒤, <code>BlendFinal</code>로 현재와 과거의 믿음 비율을 조절하는 시간 누적 필터다.</strong></p>
 <hr>

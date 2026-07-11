@@ -394,6 +394,41 @@ IMPLEMENT_MATERIAL_SHADER_TYPE(, FMicropolyRasterizeCS, TEXT("/Engine/Private/Na
 <p>작은 삼각형을 왜 따로 보내는지, 그 길이 어디서 켜지고 어디서 실행되는지 설명할 수 있어야 해.</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. Nanite에서 "소프트웨어 래스터"가 뭔가요? CPU로 그린다는 뜻인가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>단어에 속으면 안 돼</strong>. 여기서 "소프트웨어"는 CPU 렌더러가 아니라 <strong>GPU 컴퓨트 셰이더</strong>야. 고정 기능 래스터라이저 장치 대신, compute 셰이더 프로그램이 직접 삼각형 범위를 훑어 UAV에 depth/visibility를 써 넣는 길이지. 물류센터로 치면 컨베이어 벨트(하드웨어)가 아니라, 빠른 분류 직원들이 작은 봉투를 직접 칸에 꽂는 라인인데, 그 직원도 CPU 직원이 아니라 GPU 안에서 도는 직원인 거야. 그래서 <code>FMicropolyRasterizeCS</code>가 <code>SF_Compute</code>로 등록되고 <code>SOFTWARE_RASTER</code> define을 켜.</div></details>
+
+<h4>↳ 왜 작은 삼각형만 굳이 컴퓨트 길로 따로 보내나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">고정 기능 하드웨어 래스터는 큰 삼각형엔 아주 좋지만, <strong>1픽셀도 안 되는 미세 삼각형이 먼지처럼 쏟아지면 컨베이어에 올리고 내리는 준비 비용이 더 크게 느껴져</strong>. 작은 봉투를 큰 박스 설비에 태우는 셈이지. Nanite가 상대하는 삼각형이 워낙 잘게 쪼개져 있어서, 이럴 땐 compute 셰이더가 직접 픽셀 후보를 찍는 게 더 맞을 때가 있어. 그래서 아예 코드에 <code>ERasterScheduling</code>으로 HW/SW 두 길을 두고 시작해.</div></details>
+
+<h3>Q2. 이 HW/SW 갈림길은 큰 그림에서 어디서 정해지나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>InitRasterContext</code>에서 스케줄을 먼저 정해. <code>r.Nanite.ComputeRasterization</code>이 켜져 있으면 컴퓨트 래스터를 쓸 수 있고, 플랫폼이 async compute까지 받쳐주면 HW와 SW를 <strong>겹쳐 돌리는</strong> <code>HardwareAndSoftwareOverlap</code>, 아니면 순서대로 도는 <code>HardwareThenSoftware</code>가 돼. 옵션이 꺼지면 <code>HardwareOnly</code>로 고정. 즉 Nanite는 처음부터 두 라인을 스케줄러에 넣고 시작하는 거야. 서버로 치면 메인 루프가 다 하는 게 아니라 워커 큐를 따로 열어 병렬 처리하는 느낌.</div></details>
+
+<h4>↳ 컬링이랑 래스터는 별개 단계로 외우면 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>따로 외우면 안 돼</strong>. MainPass에서 <code>AddPass_InstanceHierarchyAndClusterCull</code>로 안 보이는 상자를 버리고, <strong>곧바로</strong> <code>AddPass_Rasterize</code>로 남은 걸 출고 라인에 올려. RDG 그래프에서 바로 이어지는 두 단계야. 게다가 컬링 셰이더가 만드는 <code>SafeMainRasterizeArgsSWHW</code> 이름의 <code>SWHW</code>가 힌트인데, <strong>컬링 결과가 이미 다음 래스터 인자로 바로 이어지게 설계</strong>돼 있어. "보이는 것 목록"이 아니라 "이미 어느 래스터 줄로 갈지까지 정해진 목록"이지.</div></details>
+
+<h3>Q3. visible 클러스터를 한 버퍼에 SW/HW 양쪽으로 쌓는데, 왜 이렇게 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">컬링이 끝난 뒤 "보이는 목록" 하나만 만들고 나중에 다시 훑어서 SW/HW로 나누면, <strong>보이는 상자가 수만 개일 때 재분류하는 것도 큰 일</strong>이야. 물류센터가 분류해놓고 사무실에 다시 들고 가서 재분류하는 꼴이지. 그래서 "보인다"고 판정하는 순간 SW 줄과 HW 줄의 자리까지 바로 잡아. 같은 <code>OutVisibleClustersSWHW</code> 버퍼를 쓰되 HW는 뒤쪽(<code>MaxVisibleClusters-1</code>)에서 내려오고 SW는 앞쪽(0번)에서 올라가서 서로 안 밟아.</div></details>
+
+<h4>↳ GPU 스레드 수천 개가 동시에 자리를 잡으면 충돌 안 나나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>WaveInterlockedAddScalar_</code>라는 <strong>원자 덧셈</strong>으로 막아. 은행 번호표 기계처럼, 누가 눌러도 지금까지 몇 개인지 세고 +1 해서 겹치지 않는 자기 번호를 하나 뽑아줘. CPU가 배열을 락 잡고 정렬해서 넘겨주는 게 아니라, GPU wave가 카운터를 올려 자기 슬롯을 직접 얻는 구조지. 서버로 치면 IOCP 워커들이 락 없는 atomic 카운터로 결과 슬롯을 잡는 그림이야.</div></details>
+
+<h3>Q4. "GPU-driven"이라는 말이 진짜로 의미하는 게 뭔가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">SW 래스터의 끝단 <code>DispatchSW</code>를 보면 <code>DispatchIndirectComputeShader</code>를 써. 핵심은 <strong>CPU가 "클러스터 183개니까 컴퓨트 그룹 몇 개" 하고 세서 넣지 않는다</strong>는 거야. 앞 단계 GPU 컬링·비닝이 실행 인자(<code>IndirectArgsBuffer</code>)를 써두면, GPU가 그걸 바로 읽어 자기 일을 이어서 해. CPU가 중간에 개수를 다시 읽어오면 왕복 시간이 생겨서 자동 분류기를 멈춰 세우는 꼴이 되거든. 그래서 "indirect" — GPU가 만든 걸 GPU가 다시 소비하는 거야.</div></details>
+
+<h4>↳ 이걸 DirectX 기본 파이프라인과 비교하면 뭐가 낯선가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">전통 DirectX 흐름은 draw call이 IA/VS/RS/PS 고정 기능 래스터라이저로 가는 게 중심이야. Nanite HW 라인은 그 감각과 가깝지. 낯선 건 <strong>SW 라인이 compute 셰이더로 raster work를 직접 먹는다</strong>는 거야. 그래서 한 함수 안에 <code>ERDGPassFlags::Raster</code>(그래픽 래스터 패스)와 <code>FRHIComputeCommandList</code>(컴퓨트 명령)가 같이 보이는 이상한 그림이 나와. 큰 박스 컨베이어와 작은 봉투 분류대가 같은 출고판을 쓰는 셈이야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>Nanite는 GPU에서 visible 클러스터를 고른 뒤, 큰 삼각형은 하드웨어 래스터 길로, 작은 삼각형은 <code>FMicropolyRasterizeCS</code> 컴퓨트 셰이더 길로 보내 같은 visibility/depth 결과판을 채우는 GPU 주도 물류센터다.</strong></p>
 <hr>

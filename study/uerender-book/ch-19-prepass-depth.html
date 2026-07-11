@@ -256,6 +256,45 @@ next
 <p>셋째, 마스크 재질은 조심해야 해. 나뭇잎이나 철망처럼 구멍이 있는 재질은 깊이만 대충 쓰면 뒤쪽 픽셀이 잘못 죽을 수 있다. 그래서 <code>WritesEveryPixel</code> 조건이 나온다.</p>
 <p>넷째, PrePass와 occlusion culling은 이어지지만 같은 말은 아니야. PrePass는 깊이 장부를 채우는 일이고, occlusion culling은 그 장부나 HiZ를 이용해 "아예 안 보이는 물체"를 더 크게 거르는 일이다.</p>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. PrePass가 왜 필요한가요? 그림을 두 번 그리는 거 아닌가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">두 번 그리는 게 아니라, <strong>비싼 색칠을 줄이려고 싼 번호표를 먼저 붙이는</strong> 거야. 실제 화면은 한 픽셀 위에 벽·캐릭터·나무·이펙트가 여러 겹 겹쳐. 뒤에 가려져 어차피 안 보일 픽셀도 픽셀 셰이더를 태우면 낭비야 — 픽셀 셰이더는 텍스처 여러 장 읽고, 노멀 풀고, GBuffer 여러 장에 쓰거든. 그래서 PrePass가 <strong>색 없이 깊이만 싸게 먼저 깔아서</strong>, BasePass에서 뒤쪽 픽셀을 Early-Z로 빨리 떨어뜨리게 해. 도화지 칸마다 "제일 앞 종이가 몇 번째 깊이인지" 숫자만 먼저 적는 거지.</div></details>
+
+<h4>↳ 서버 감각으로 대응시키면요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>CM_ATTACK</code> 하나 왔을 때 대상이 죽었는지, 거리가 맞는지, 맵이 같은지 확인도 안 하고 <strong>비싼 스킬 공식·DB 기록·드랍 계산부터 돌리면 손해</strong>잖아. 먼저 싼 검사로 "이 요청 처리 대상 맞아?"를 걸러야지. 렌더링에서 그 싼 검사가 깊이 버퍼고, 색칠 전에 그걸 먼저 채우는 게 PrePass야. "비싼 일 전에 싼 정보로 버릴 거 버린다"는 구조가 똑같아.</div></details>
+
+<h3>Q2. PrePass가 항상 이득인가요? 안 하는 게 나은 경우도 있나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">항상 이득은 아니야. PrePass도 공짜가 아니거든 — 색만 안 쓸 뿐 <strong>버텍스는 돌고, 래스터라이즈도 하고, 드로우 명령도 쌓아</strong>. 작은 소품이 잔뜩이고 픽셀 셰이더가 가벼우면, 깊이만 한 번 더 그리는 비용이 절약보다 더 클 수 있어. 반대로 벽·산·건물처럼 <strong>큰 가림막이 많고 머티리얼이 비싸면</strong> PrePass가 크게 이겨. 그래서 언리얼은 <code>EDepthDrawingMode</code>로 "안 함/가림막만/불투명 전부" 같은 범위를 고를 수 있게 해뒀어.</div></details>
+
+<h4>↳ 그럼 PrePass를 돌지 말지는 코드에서 뭐가 정하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>ShouldRenderPrePass()</code>가 정하는데, 판단은 아주 짧아. <code>EarlyZPassMode</code>가 <code>DDM_None</code>이 아니거나, movable(움직이는 물체)까지 Early-Z에 넣어야 하면 PrePass를 돌아. 결국 <strong>"번호표 붙이기 모드가 켜져 있냐"</strong>를 묻는 문장이야. 그 손잡이(<code>EDepthDrawingMode</code>)가 곧 비용과 절약을 맞추는 조절기인 거지.</div></details>
+
+<h3>Q3. PrePass는 색을 안 쓴다고 했는데, 그게 왜 중요한가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">PrePass가 BasePass처럼 색을 찍으면 <strong>의미가 없어</strong>. 비싼 색칠을 줄이려는 건데 이미 색칠을 해버리면 헛수고잖아. 그래서 깊이 패스 상태를 <code>CW_NONE</code>(Color Write None, 색상 쓰기 없음)으로 잠가. 대신 깊이 쓰기는 켜. 즉 PrePass는 화면 색을 만드는 시간이 아니라 <strong>칸마다 앞자리 깊이 번호만 적는 시간</strong>이야. 이건 단순 최적화가 아니라 의도 자체가 다른 거지 — 가능하면 위치만 읽는 버텍스 경로, 픽셀 셰이더 생략 같은 가벼운 길을 타려고 해.</div></details>
+
+<h4>↳ 그럼 아무 메시나 다 위치만 읽는 가벼운 길로 처리해도 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 마스크 재질은 조심해야 해. 나뭇잎 텍스처를 떠올려봐 — 폴리곤은 크지만 알파 마스크 때문에 실제 잎사귀 부분만 보이고 나머지는 구멍이야. 이걸 <strong>위치만 보고 깊이에 꽉 채우면 잎사귀 사이 구멍까지 막힌 걸로 기록</strong>돼서, BasePass에서 뒤쪽 물체가 잘못 사라져. 그래서 <code>Material.WritesEveryPixel</code>이나 <code>DDM_MaskedOnly</code> 같은 조건으로 걸러. 싼 길(<code>bPositionOnly</code>)을 타되, 깊이 장부가 BasePass와 정확히 맞아야 해. 서버로 치면 "대상 ID 존재"만으로 공격 성공 처리하면 안 되고 스텔스·무적·이동중 같은 조건을 더 봐야 하는 거랑 같아.</div></details>
+
+<h3>Q4. PrePass랑 오클루전 컬링은 같은 거 아닌가요? 둘 다 깊이 쓰잖아요.</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">이어지지만 같은 말은 아니야. <strong>PrePass는 깊이 장부를 채우는 일</strong>이고, <strong>오클루전 컬링은 그 장부나 HiZ를 이용해 "아예 안 보이는 물체"를 더 크게 거르는 일</strong>이야. PrePass는 픽셀 단위로 "이 픽셀이 앞이냐"를 정리해서 Early-Z를 돕고, 오클루전 컬링은 프리미티브 단위로 "이 물체는 draw 후보에서 빼자"를 판단해. 층위가 달라 — 하나는 픽셀 낭비를 줄이고, 하나는 물체 자체를 파이프라인에서 빼.</div></details>
+
+<h4>↳ 그럼 PrePass가 만든 깊이는 그 뒤로 누가 어떻게 쓰나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">두 방향으로 쓰여. 하나는 바로 다음 <strong>BasePass</strong>가 그 깊이 장부를 믿고 진짜 보이는 픽셀 위주로 GBuffer를 채워(Early-Z로 뒤쪽 픽셀 셀프 제거). 또 하나는 그 깊이를 <code>SceneDepthTexture</code>로 들고 <strong><code>HiZ</code>(계단식 요약본)</strong>로 접어둬서, 큰 물체가 화면을 얼마나 가리는지 큰 칸부터 빠르게 검사하는 오클루전 쪽에서 참고해. 실행 자체는 <code>EMeshPass::DepthPass</code>로 도는데, 이건 앞 장에서 배운 "미리 구워둔 그리기 명령을 패스에서 실행한다"랑 바로 이어져.</div></details>
+
+<h4>↳ 두 번째 단계 깊이 패스(SecondStageDepthPass)는 왜 또 있나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">기본은 <code>DepthPass</code> 한 번이면 충분해. 근데 일부 뷰가 요구하면, 첫 단계 결과를 <code>FirstStageDepthBuffer</code>로 <strong>따로 복사해 보관한 뒤</strong> <code>SecondStageDepthPass</code>를 한 번 더 돌아. 어떤 효과는 "PrePass 도중 시점의 깊이"와 "전체 깊이"를 둘 다 필요로 하거든 — 예를 들어 특정 물체를 뺀 상태의 깊이 스냅샷이 뒤 패스 입력으로 필요할 때야. 항상 도는 게 아니라 <code>bUsesSecondStageDepthPass</code>가 켜진 뷰가 있을 때만 붙는 <strong>조건부 추가 단계</strong>라, 큰 그림에선 "필요하면 깊이를 두 판 만든다" 정도로 잡으면 돼.</div></details>
+</div>
 <div class="conversation"><h2>이 챕터에서 끝내는 말</h2>
 <ul><li>PrePass는 색을 그리는 패스가 아니라 깊이 장부를 먼저 채우는 패스야.</li><li><code>ShouldRenderPrePass()</code>는 Early-Z 모드가 켜져 있는지 보고 실행 여부를 정한다.</li><li><code>SetupDepthPassState()</code>는 <code>CW_NONE</code>으로 색상 쓰기를 끄고 깊이 쓰기를 켠다.</li><li><code>RenderPrePass()</code>는 overdraw를 줄이려고 <code>EMeshPass::DepthPass</code>를 실행한다.</li><li><code>FDepthPassMeshProcessor</code>는 재질 조건을 보고 어떤 메시가 깊이에 들어갈지 고른다.</li></ul>
 </div>

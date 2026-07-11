@@ -269,6 +269,41 @@ Diffuse GI 접수
 <div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
 <ul><li>Lumen은 간접광을 실시간으로 다루려는 관제센터야.</li><li>예전 bake는 빠르지만 정적인 지도라 움직이는 장면을 잘 못 따라온다.</li><li>Lumen이 켜지려면 프로젝트, Scene, View, GI 설정, tracing data를 전부 통과해야 해.</li><li>tracing data는 hardware ray tracing 또는 software distance field 쪽으로 준비돼야 한다.</li><li>"설정상 켜짐"과 "실제로 렌더 가능"은 다른 문제야.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. Lumen은 왜 필요한가요? 예전에 하던 bake로는 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">간접광(튕긴 빛)을 200만 픽셀마다 정직하게 여러 번 추적하면 한 프레임 16.6ms 안에 못 끝내. 그래서 예전엔 <strong>bake</strong>를 했어 — 맵이 고정이면 에디터에서 미리 빛 튐을 계산해 텍스처로 저장하고 게임 중엔 읽기만. 근데 문이 열리고, 벽이 부서지고, 낮이 밤 되고, 손전등 든 플레이어가 뛰면 <strong>미리 구운 지도가 금방 거짓말이 돼</strong>. <code>Lumen</code>은 간접광을 런타임 장면 데이터와 트레이싱으로 계속 갱신하려는 시스템이야. 서버 캐시로 치면 bake는 서버 시작 전 스폰 테이블을 파일로 다 저장하는 오프라인 프리컴퓨트, Lumen은 라이브 서버에서 필드 보고 지역 캐시를 갱신하는 방식이지.</div></details>
+
+<h4>↳ 그럼 Lumen은 매 프레임 도시 전체를 완벽히 다시 계산하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그건 못 해 — 그래서 <strong>섞어</strong> 쓰는 거야. 완전한 정답을 매번 계산하는 대신 screen probe, radiance cache, surface cache, distance field, hardware ray tracing을 조합해서 "지금 화면에 필요한 간접광"만 갱신해. 관제센터가 도시 전체를 시뮬레이션하진 못해도, 지금 필요한 배달 경로를 추적하고 쓸 수 있는 지도 조각을 캐시하는 거지. 캐시를 섞는 게 핵심이지 물리적 완전 재계산이 아니야.</div></details>
+
+<h3>Q2. Lumen이 실제로 켜지려면 큰 그림에서 어떤 관문들을 통과해야 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">여러 겹의 문이 있어. ① 프로젝트가 <code>r.Lumen.Supported</code>로 Lumen을 허용해야 하고 ② Scene에 <code>DefaultLumenSceneData</code>가 있어야 하고 ③ View가 planar reflection·reflection capture 같은 <strong>보조 뷰가 아니어야</strong> 하고 ④ GI 설정이 <code>EDynamicGlobalIlluminationMethod::Lumen</code>이어야 하고 ⑤ 마지막으로 <strong>추적할 데이터</strong>(hardware ray tracing 또는 software distance field)가 있어야 해. 관제센터 전원 → 이 화면이 진짜 대상인지 → 간접광 배달 요청인지 → 도로/거리 지도 있는지 순으로 거르는 거야.</div></details>
+
+<h4>↳ 왜 카메라 뷰마다 허가증을 다시 확인하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">플레이어 화면 말고도 <strong>평면 반사, 리플렉션 캡처, 보조 뷰가 잔뜩</strong> 있거든. 그 CCTV마다 간접광 배달 경로를 다 짜면 16.6ms 안에 주문이 터져. 그래서 <code>IsLumenFeatureAllowedForView</code>가 "이 뷰가 진짜 배달 대상인가"를 거르는 거야. 프로젝트가 허용해도 모든 뷰가 Lumen을 받는 건 아니라는 거지. 비용이 큰 시스템이니까 입구를 좁게 잡는 설계야.</div></details>
+
+<h3>Q3. "설정에서 Lumen 켰는데 화면이 이상하다"는 왜 생기나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>"설정상 켜짐"과 "실제로 렌더 가능"은 다른 문제</strong>라서 그래. Lumen은 빛을 실시간으로 추적하려면 반드시 <strong>추적할 데이터</strong>가 있어야 해 — 프로젝트에서 Mesh Distance Fields를 생성해 software distance field 추적을 쓰거나, hardware ray tracing 지원을 켜서 ray tracing scene을 쓰거나. 둘 다 없으면 "켜짐"은 표지판뿐이고 배달원이 도시 모양을 몰라 출발을 못 해. 언리얼은 이 상황까지 코드로 구분해서 <code>WriteWarnings</code>가 화면에 "Lumen is enabled, but has no ray tracing data..." 경고문을 띄워.</div></details>
+
+<h4>↳ 그 경고를 굳이 코드로 구분해서 띄우는 게 왜 중요한가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">사용자가 Lumen을 <strong>"켜면 예쁜 간접광 나오는 옵션" 하나로 오해</strong>하기 쉽거든. 실제로는 관제센터·지도·차량이 같이 있어야 도는 큰 기능 묶음이야. 그래서 언리얼은 <code>bSkipTracingDataCheck</code> 같은 스위치로 "켜고 싶었는데 추적 데이터가 없어서 못 켠 건지" vs "프로젝트에서 막힌 건지"를 나눠서 판단해. 원인을 정확히 짚어줘야 사용자가 Distance Field를 켤지 하드웨어 RT를 켤지 알잖아. 서버로 치면 "기능 플래그는 켰는데 DB 테이블이 없어서 안 도는" 상황을 로그로 구분해주는 거랑 같아.</div></details>
+
+<h3>Q4. hardware ray tracing이랑 software distance field는 큰 그림에서 어떻게 갈리나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">둘 다 "빛길을 실제로 따라갈 재료"인데 방식이 달라. hardware ray tracing이 있으면 <strong>실제 도로를 레이로 직접 훑는 특수 차량</strong>을 써. 없거나 비싸면 Lumen은 메시를 "이 지점에서 표면까지 거리"로 압축한 <strong>거리 지도(distance field)</strong>로 대체 추적해. 거리 지도는 "여기 서면 가장 가까운 벽까지 몇 걸음"이 적혀 있어서, 레이를 성큼성큼 건너뛰며 가늠할 수 있지. <code>UseGlobalSDFObjectGrid</code>를 보면 모든 기능이 hardware RT를 쓰면 voxel lighting 지도 갱신이 필요 없으니 끄고, 아니면 SDF grid를 유지해.</div></details>
+
+<h4>↳ Lumen이 후처리 필터 하나가 아니라는 게 왜 실무에서 중요한가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">Lumen을 끄면 <strong>shader compile과 load time overhead까지 같이 피할 수 있다</strong>고 코드 설명에 적혀 있어. 즉 셰이더·장면 데이터·추적 리소스가 줄줄이 따라오는 큰 묶음이야. 서버로 치면 실시간 전장 매칭 플래그 하나 켰더니 DB 테이블·메모리 캐시·매칭 큐·타이머·클라 알림 패킷까지 다 붙는 상황이지. 그래서 입구에 <code>r.Lumen.Supported</code> 같은 <strong>큰 차단기</strong>를 둬서 아예 안 쓸 프로젝트는 컴파일 비용부터 통째로 끄게 한 거야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>Lumen은 미리 구운 간접광 지도를 읽는 대신, 런타임 장면 데이터와 레이/거리장 추적을 써서 지금 화면에 필요한 전역 조명을 계속 갱신하는 시스템이야.</strong></p>
 <hr>

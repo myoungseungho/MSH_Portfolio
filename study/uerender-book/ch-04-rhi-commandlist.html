@@ -318,6 +318,45 @@ RHICommandList.h:3962
 <div class="conversation"><h2>10. 이 챕터에서 딱 이것만</h2>
 <ul><li><code>RHICommandList</code>는 RHI 호출을 바로 실행하는 물건이 아니라, 보통 명령 객체를 쌓는 주문서야.</li><li><code>ALLOC_COMMAND</code>는 명령 객체를 만들고 <code>CommandLink</code>/<code>Next</code>로 리스트에 붙인다.</li><li><code>Bypass()</code>가 켜지면 바로 <code>GetContext().RHI...</code>로 가지만, 정상 경로는 기록이다.</li><li><code>Execute()</code>는 기록된 명령을 iterator로 훑으며 <code>ExecuteAndDestruct</code>를 부른다.</li><li>제출 끝에는 <code>GDynamicRHI-&gt;RHISubmitCommandLists(...)</code>가 있고, 그 아래가 D3D12/Vulkan 같은 실제 백엔드다.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>RHICommandList</code>가 왜 필요해요? RHI 함수를 바로 실행하면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">렌더러가 수천 개 드로우콜을 매 프레임 즉석에서 다 처리하면, 렌더 스레드 하나가 "상태 세팅 → 드로우 → 배리어 → 복사"를 전부 직접 때리느라 막혀. 60fps면 16.6ms뿐인데 그중 몇 ms를 명령 포장에만 태우면 <strong>GPU는 놀고 CPU는 줄 서는</strong> 이상한 상황이 나와. 그래서 RHI 함수를 부르면 대부분 바로 실행 안 하고 <strong>명령 객체를 리스트에 쌓아둬</strong>. 식당으로 치면 웨이터가 주문 받을 때마다 주방으로 뛰어가지 않고, 주문서에 적어서 모아 넘기는 거야. 바로 소리치지 않는다 — 적고, 모으고, 번역하고, 제출한다.</div></details>
+
+<h4>↳ 그러면 <code>DrawPrimitive()</code>를 불렀는데 왜 GPU가 바로 안 움직여요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">이름이 "그려"라서 헷갈리는데, 보통 의미는 <strong>"나중에 그릴 명령을 기록해"</strong>야. <code>DrawPrimitive</code>는 실제로 <code>FRHICommandDrawPrimitive</code>라는 명령 객체를 리스트에 쌓을 뿐이고, 여기선 GPU 호출이 안 일어나. 아직 주문서에 적은 단계라서 그래. 예외는 <code>Bypass()</code> 모드 — 이땐 기록 안 하고 바로 <code>GetContext().RHIDrawPrimitive</code>로 때려. 근데 그건 특수 경로고, 정상 영업 모드는 주문서에 적는 모드야.</div></details>
+
+<h3>Q2. 기록·실행·제출을 왜 굳이 나눠놨나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">핵심은 <strong>병렬성</strong>이야. 기록(recording)은 여러 곳에서 빠르게 할 수 있고, 실행(execute/translate)은 정해진 순서로 밀어 넣을 수 있어. 이 둘이 분리돼야 <strong>병렬 기록과 순서 보장이 같이</strong> 돼. 만약 <code>DrawPrimitive</code>를 부른 그 스레드에서 바로 하드웨어 API까지 내려가면, 그 스레드가 그 자리에서 묶여서 병렬도 안 되고 순서도 꼬여. 기록해두면 나중에 상황 보고 "누가 번역할지, 어느 스레드에 배치할지"를 고를 수 있어.</div></details>
+
+<h4>↳ 그럼 실제로 누가 그 쌓인 주문서를 읽어서 처리하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>Execute()</code>가 iterator로 리스트를 첫 줄부터 훑으면서 명령마다 실행하고 버려(<code>ExecuteAndDestruct</code>). 아까 쌓아둔 <code>FRHICommandDrawPrimitive</code>도 여기서 자기 차례가 오면 RHI context 말로 재생돼. 그리고 병렬이 가능한 주문서는 여러 작업 스레드가 나눠서 번역(translate)하고, 순서가 중요한 건 RHI thread 한 줄로 보내. 드로우콜이 수천 개일 때 접수대 한 명이 다 읽으면 병목이 되니까, 안전한 주문서는 여러 명이 나눠 번역하는 거야.</div></details>
+
+<h4>↳ 접수대가 여러 명이면 순서가 꼬이지 않나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그래서 <strong>주문서 종류에 따라 어느 레일(pipe)로 보낼지</strong>를 골라. 병렬 자체가 금지면 render thread로, 병렬은 되지만 이 작업이 병렬 대상이 아니면 RHI thread 한 줄로, 병렬 가능하고 대상이면 고우선순위 작업 스레드로 보내. 즉 "빨리 처리해도 되는 줄"과 "차례를 지켜야 하는 줄"을 나눠 보내서 덜 기다리게 하는 거야. 시험지를 여럿이 나눠 채점하되 번호표 순서가 중요한 건 한 사람이 하는 거랑 같아.</div></details>
+
+<h3>Q3. 마지막 제출(<code>Submit</code>)은 왜 별도 단계인가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">번역까지 끝나도 <strong>실제 플랫폼 RHI에 안 넘기면 GPU는 일을 못 받아</strong>. 접수대 직원이 주문을 "파스타, 샐러드"로 정리만 해두고 주방장에게 안 넘기면 음식이 안 나오는 거랑 같아. 그래서 완성된 플랫폼 command list들을 모아서 <code>GDynamicRHI-&gt;RHISubmitCommandLists(...)</code>로 넘기는 마지막 손길이 필요해. 이 줄이 종착지고, 그 아래가 D3D12·Vulkan 같은 실제 백엔드야.</div></details>
+
+<h4>↳ 앞 장 <code>RHI</code> 창구랑 이번 장 커맨드 리스트는 역할이 어떻게 갈리나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>RHI</code>는 "CPU가 GPU에게 말 거는 <strong>공용 언어</strong>"였고, <code>RHICommandList</code>는 그 말을 <strong>어떤 종이에 적고, 누가 들고 가고, 언제 주방에 넘기는지</strong>를 맡아. 층으로 보면 언어(RHI) 위에 "그 언어로 쓴 명령을 쌓고 번역·제출하는 파이프라인(CommandList)"이 얹힌 거야. 그리고 <code>RHISubmitCommandLists</code>가 내려가는 실제 백엔드는 다음 장 <code>d3d12-backend</code>에서 봐.</div></details>
+
+<h3>Q4. DirectX 12 직접 짜던 거랑 대응시키면 어떻게 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">거의 그대로 겹쳐. DX12에서 command list에 <code>DrawIndexedInstanced</code> 기록 → close → queue에 submit 하던 흐름을, 언리얼은 <code>ALLOC_COMMAND</code>로 기록 → <code>FinishRecording()</code>으로 완료 → <code>RHISubmitCommandLists</code>로 제출로 해. 언리얼은 그 위에 <strong>"엔진 공용 RHI 명령 리스트"를 하나 더</strong> 둔 셈이야. 우리 서버 관점으로 보면 작업 큐랑 같아 — IOCP 워커가 패킷 받자마자 게임 로직 다 실행하면 락도 순서도 꼬이니까 큐를 두잖아. <strong>받는 것과 처리하는 것을 분리하듯, RHI 호출도 기록과 제출을 분리</strong>하는 거야.</div></details>
+
+<h4>↳ 그럼 <code>Bypass()</code> 모드는 왜 있는 거예요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">기록 단계를 건너뛰고 <strong>호출하자마자 바로 실행</strong>하는 특수 경로야. 웨이터가 주문서에 안 적고 주방에 바로 뛰어가는 모드지. DX12로 치면 "즉시 context식 사고" — 편하지만 <strong>병렬 기록과 순서 최적화의 이득을 다 포기</strong>하는 거라 병목이 돼. 그래서 평소엔 안 쓰고, 디버깅이나 특정 상황에서만 켜. 정상 영업 모드는 어디까지나 "적고, 모으고, 번역하고, 제출한다"야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong><code>RHICommandList</code>는 "GPU에게 바로 소리치는 코드"가 아니라, 렌더 명령을 주문서처럼 쌓고 병렬로 정리한 뒤 플랫폼 RHI에 제출하게 해주는 기록·번역·제출 파이프라인이다.</strong></p>
 <hr>

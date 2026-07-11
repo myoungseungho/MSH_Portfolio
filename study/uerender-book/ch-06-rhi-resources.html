@@ -292,6 +292,45 @@ a.xref:hover { background:#e1bee7; }
 <p>이 다섯 개만 잡으면 다음 장 PSO가 훨씬 잘 읽힌다. PSO는 "어떤 셰이더와 상태로 그릴까"이고, 이 장은 "그 셰이더가 읽고 쓸 물건이 어디 있나"니까.</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. RHI 리소스라는 게 왜 따로 필요한가요? Draw 명령만 있으면 되는 거 아닌가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">Draw 명령은 "그려"라는 지시일 뿐이고, <strong>그릴 재료가 GPU 쪽에 이미 있어야</strong> 삼각형이 나와. 정점 버퍼, 인덱스 버퍼, 텍스처, 렌더타깃이 GPU 창고에 올라가 있어야 하는 거지. 서버로 치면 <code>CM_ATTACK</code> 핸들러만 있고 플레이어 위치·인벤토리 같은 상태 저장소가 없으면 로직이 못 도는 거랑 같아. <code>FRHIBuffer</code>, <code>FRHITexture</code>가 그 GPU 창고 물건이고, 명령은 그 물건을 만들고 채우고 갱신하는 주문서야.</div></details>
+
+<h4>↳ 그 재료를 매 프레임 CPU에서 GPU로 올리면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">되긴 되는데 <strong>배달비가 병목</strong>이 돼. 정점 100만 개짜리 맵을 매 프레임 다시 GPU로 밀어 넣으면 PCIe 전송 줄이 생기고, 60FPS면 16.6ms 안에 로직·배달·그림을 다 해야 하는데 배달만 하다 끝나. 그래서 자주 읽을 정적 데이터는 창고에 박스로 미리 넣어두는 거고, 그 긴 박스가 <strong>버퍼</strong>야. 서버로 치면 "변경분만 보내라"랑 같은 감각이야 — 안 바뀐 걸 매 tick 통째로 다시 보내면 대역폭 터지잖아.</div></details>
+
+<h3>Q2. 버퍼랑 텍스처는 큰 그림에서 뭐가 다른가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">버퍼는 <strong>길게 줄 세운 데이터 박스</strong>야 — 정점 목록, 인덱스, 구조화 데이터처럼 한 줄로 이어진 거. 텍스처는 <strong>가로·세로 칸이 있는 트레이</strong>고, 색·깊이·GBuffer·shadow map처럼 픽셀 칸이 있는 거야. 그래서 텍스처는 버퍼랑 달리 크기(Extent), 형식(Format), mip, array 같은 "칸 모양"을 같이 들고 있어. 1024×1024 트레이를 그냥 긴 줄로만 보면 "몇 번째 칸"인지 매번 따져야 하니까 트레이라는 별도 개념이 필요한 거지.</div></details>
+
+<h4>↳ 그럼 생성할 때 크기만 맞으면 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그게 초보가 제일 헷갈리는 지점이야. 주문서에는 크기뿐 아니라 <strong>용도 플래그(usage)와 초기 상태(state)</strong>가 같이 들어가. 렌더타깃으로 쓸 텍스처는 <code>TexCreate_RenderTargetable</code> 같은 플래그가 붙어야 하고, 안 붙으면 나중에 색을 찍으려 해도 백엔드에서 막혀. "텍스처니까 읽기도 쓰기도 렌더타깃도 되겠지"가 아니라, <strong>만들 때 정한 용도대로만</strong> 쓸 수 있어.</div></details>
+
+<h4>↳ 초기 상태(InitialState)는 왜 신경 써요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">GPU는 리소스를 아무 상태로나 못 써. 방금 렌더타깃으로 색을 찍은 텍스처를 곧바로 셰이더에서 읽으려면 <strong>상태 전환(barrier)</strong>이 필요하거든. "처음 태어날 때 어느 상태냐"가 그 뒤 barrier 비용의 출발점이 돼. 이 장에선 깊게 안 파지만, 리소스가 CPU와 GPU라는 다른 시간축에서 공유되니까 소유권과 상태를 챙겨야 한다는 감각만 잡으면 돼.</div></details>
+
+<h3>Q3. SRV, UAV, RTV는 왜 나눠져 있나요? 텍스처 하나면 되는 거 아닌가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">리소스 실물은 그대로 두고 <strong>"어떻게 볼지" 라벨을 따로 붙인 게 뷰</strong>야. 같은 고기 박스라도 "얇게 썰어 읽기(SRV)", "작업대에서 다시 다지기(UAV)", "오늘 메인 접시로 담기(RTV)"처럼 보는 법이 다르잖아. SRV는 셰이더가 읽는 라벨, UAV는 컴퓨트가 읽고 쓰는 라벨, RTV는 픽셀 셰이더 출력이 들어가는 접시 라벨이야. 같은 물건이라도 <strong>읽기·쓰기·출력은 권한이 다르다</strong>는 걸 뷰로 갈라놓은 거지.</div></details>
+
+<h4>↳ 이거 예전에 DirectX 직접 짜던 거랑 어떻게 대응돼요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">거의 그대로 매핑돼. <code>FRHIBuffer</code>/<code>FRHITexture</code>는 <code>ID3D12Resource</code>고, SRV·UAV·RTV는 D3D12의 각 descriptor 감각이야. 차이는 언리얼이 D3D12 구조체를 바로 안 들이민다는 거야. <code>FRHIViewDesc</code>라는 <strong>공통 주문서로 한 번 감싸고</strong>, D3D12/Vulkan/Metal 백엔드가 자기 말로 번역해. RTV도 결국 D3D12 백엔드에서 진짜 <code>CreateRenderTargetView</code> 호출로 내려가고. 그래서 상위 렌더러 코드는 플랫폼 차이를 덜 보게 되는 거지.</div></details>
+
+<h3>Q4. CPU에서 GPU로 데이터 올리는 게 왜 비싸다고 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그냥 <code>memcpy</code>가 아니라서 그래. CPU와 GPU는 다른 세계에 있고, 중간에 드라이버·command queue·upload heap·동기화가 껴. 그래서 이 장이 비용 지점을 딱 세 군데로 짚어 — 생성 시 초기 데이터 업로드, <code>LockBuffer</code>/<code>UnlockBuffer</code> 같은 CPU 접근 동기화, <code>UpdateTexture2D</code> 같은 직접 갱신. 큰 텍스처를 매 프레임 통째로 업데이트하면 <strong>병목이 셰이더가 아니라 업로드</strong>가 될 수 있어.</div></details>
+
+<h4>↳ 그럼 lock을 아무 때나 걸면 안 되는 이유는요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">CPU가 아무 시점에나 GPU 리소스에 손을 넣을 수 있는 게 아니거든. 코드에도 "명령 <strong>기록 중</strong>에만 lock 가능, 실행 중엔 안 됨"이라는 검사가 박혀 있어. 명령을 쌓는 시점과 실행되는 시점이 나뉘어 있으니까. 서버로 치면 IOCP 워커가 쓰는 recv buffer를 게임 로직 스레드가 락 없이 바로 덮으면 터지는 거랑 똑같아 — CPU와 GPU가 같은 물건을 서로 다른 시간축에서 보니까 lock/unlock과 상태 전환으로 소유권을 정리하는 거야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>RHI 리소스는 GPU 창고의 물건이고, 업로드는 CPU 배달이며, SRV/UAV/RTV는 같은 물건에 붙이는 읽기·쓰기·출력 라벨이다.</strong></p>
 <hr>

@@ -341,6 +341,45 @@ RHIExit (:432)</div>
 <div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
 <ul><li>RHI는 렌더러가 GPU 백엔드에게 말하는 공용 창구야.</li><li><code>FDynamicRHI</code>는 그 창구가 지켜야 할 인터페이스고, <code>GDynamicRHI</code>는 오늘 선택된 창구 손잡이야.</li><li><code>RHIInit</code>은 <code>PlatformCreateDynamicRHI()</code>로 실제 백엔드를 만들고, Windows는 <code>D3D12RHI</code>나 <code>VulkanRHI</code> 같은 모듈을 고른다.</li><li>상위 렌더러의 <code>RHICreatePixelShader</code> 같은 공용 함수는 직접 D3D12를 부르지 않고 <code>GDynamicRHI-&gt;...</code>로 넘긴다.</li><li>다음 장 <a class="xref" href="ch-04-rhi-commandlist.html">rhi-commandlist</a>는 이 창구에 제출할 명령 묶음을 어떻게 쌓는지 보는 장이야.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>RHI</code>가 정확히 뭐고, 왜 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>RHI(Render Hardware Interface)</code>는 렌더러가 GPU 백엔드에게 말하는 <strong>공용 창구</strong>야. 렌더러는 "픽셀 셰이더 만들어", "백버퍼 줘", "프레임 끝났어" 같은 공용 언어로만 말하고, 실제 번역은 선택된 백엔드(D3D12·Vulkan·Metal)가 해. 안 나누면 텍스처 하나 만들 때도 D3D12면 <code>ID3D12Resource</code>, Vulkan이면 <code>VkImage</code> 식으로 갈라져서, 기능 하나 고칠 때 플랫폼 수만큼 버그가 늘어. 공항의 공용 출국 창구랑 같아 — 승객은 창구에 "이 나라로 보내줘"라고만 말하고, 창구 뒤 직원이 항공사별 양식을 알아서 처리하는 거지.</div></details>
+
+<h4>↳ 앞 장 <code>render-thread</code>에서 봤던 렌더 스레드랑은 어떻게 이어지나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">렌더 스레드는 "게임 스레드와 분리된 CPU 쪽 주방"이었잖아. 그 주방이 <strong>GPU에게 명령을 내릴 문</strong>이 바로 RHI야. 렌더 스레드가 만든 렌더 명령이 결국 이 공용 창구를 통해 GPU로 내려가. 그래서 순서가 "게임 스레드 → 렌더 스레드 → RHI 창구 → 실제 백엔드"로 이어지는 거야.</div></details>
+
+<h3>Q2. <code>FDynamicRHI</code>랑 <code>GDynamicRHI</code>는 뭐가 다른가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>FDynamicRHI</code>는 <strong>창구가 지켜야 할 약속표(인터페이스)</strong>야. "RHI라면 최소한 <code>Init</code>, <code>Shutdown</code>, <code>GetName</code>은 해야 해" 하고 빈칸(<code>virtual</code>)을 적어둔 설계도지. <code>GDynamicRHI</code>는 그 설계도를 실제로 채운 <strong>오늘 선택된 창구 손잡이(전역 포인터)</strong>야. BasePass·Shadow·Lumen 같은 코드가 전부 "오늘 D3D12야? Vulkan이야?"를 반복해서 물으면 안내판이 수백 장으로 흩어지니까, "오늘 열린 창구는 여기야"라고 가리키는 손잡이 하나를 둔 거야.</div></details>
+
+<h4>↳ 그 손잡이는 언제, 어떻게 채워지나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">엔진 시작 때 <code>RHIInit</code>에서 딱 한 번 정해져. 렌더링을 아예 못 하는 환경이면 <code>NullRHI</code>(아무것도 안 그리는 빈 창구)를 열고, 할 수 있으면 <code>PlatformCreateDynamicRHI()</code>로 실제 창구를 만들어. Windows면 그 안에서 <code>D3D12RHI</code>·<code>VulkanRHI</code> 같은 모듈 이름을 골라 로드해. 첫 주문이 오기 전에 창구가 비어 있으면 바로 터지니까, 시작할 때 "렌더링 가능해? 어느 플랫폼이야? 어느 창구 열까?"를 한 번에 정하는 거야.</div></details>
+
+<h3>Q3. Windows에서 D3D12냐 Vulkan이냐 하는 차이는 어디서 가려지나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">Windows 전용 코드가 엔진 선택지(<code>EWindowsRHI::D3D12</code> 같은)를 <strong>실제 모듈 이름</strong>(<code>"D3D12RHI"</code>, <code>"VulkanRHI"</code>)으로 바꿔서 로드해. 여기서 D3D12/Vulkan 차이가 창구 뒤로 밀려나. 앞면은 엔진 공용 선택지고, 뒷면은 실제 나라별 항공사 카운터야. 승객은 공용 창구로 가고, 공항이 내부 항공사 이름표를 찾아가는 셈이지. 그래서 공통 <code>RHIInit</code>은 Windows가 뭘 골랐는지 몰라도 <code>GDynamicRHI = PlatformCreateDynamicRHI()</code> 한 줄로 받아올 수 있어.</div></details>
+
+<h4>↳ 그럼 <code>RHICreatePixelShader</code> 같은 공용 함수를 부르면 실제로 뭐가 일어나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그 함수가 직접 D3D12 API를 부르는 게 아니라 <code>GDynamicRHI-&gt;RHICreatePixelShader(...)</code>로 <strong>넘겨</strong>. D3D12 창구가 열렸으면 D3D12 방식으로 만들고, 다른 창구면 그쪽 방식으로 만들어. 덕분에 BasePass·Shadow·Lumen 같은 상위 코드는 "픽셀 셰이더 필요해"라고만 말하면 되고, D3D12 루트 시그니처나 Vulkan 디스크립터 셋 같은 디테일은 백엔드로 내려가. 이게 상위 렌더러를 플랫폼 분기 지옥에서 살려주는 거야.</div></details>
+
+<h3>Q4. 우리 서버나 DirectX 직접 짜던 경험이랑 비교하면요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">서버로 치면 RHI는 <strong>게임 로직과 실제 IO 구현 사이의 어댑터</strong>야. 로직은 "이 유저에게 이동 패킷 보내"라고 말하지, 그게 TCP send buffer에 몇 바이트로 쪼개지는지는 전송 계층이 처리하잖아. RHI도 렌더러가 "픽셀 셰이더 만들어"라고만 말하고, D3D12 루트 시그니처·PSO 캐시를 어떻게 엮는지는 <code>D3D12RHI</code>가 처리해. DirectX 직접 짜봤으면 <code>ID3D12Device</code>·<code>ID3D12CommandQueue</code>부터 떠오르겠지만, 언리얼 상위 렌더러는 그 이름들을 매번 직접 만지지 않고 <code>FRHITexture</code>·<code>FRHICommandList</code> 같은 언리얼식 단어를 먼저 봐.</div></details>
+
+<h4>↳ 그럼 창구는 닫을 때도 순서가 중요한가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">응, <strong>GPU 명령이 남아 있는데 디바이스를 먼저 부수면 사고</strong>가 나. 그래서 종료(<code>RHIExit</code>) 때는 PSO 캐시 정리 → 밀린 명령 플러시 → 백엔드 리소스 정리(<code>Shutdown</code>) → 손잡이 비우기 순서를 지켜. 공항으로 치면 승객 줄 다 처리하고, 카운터 장비 반납하고, 안내판에서 창구 번호를 지우는 순서야. 서버에서 세션 버퍼를 아직 쓰는 중에 free하면 터지는 거랑 똑같은 감각이지.</div></details>
+
+<h4>↳ 그럼 <code>RHI</code>는 "언제·무슨 순서로"까지 정하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 거기서 층을 구분해야 해. <code>RHI</code>는 <strong>"무슨 장비 언어로"(통역)</strong>만 맡아 — "픽셀 셰이더 만들어", "삼각형 그려" 같은 말을 D3D12/Vulkan 말로 바꾸는 거지. "언제·무슨 순서로 실행할지"(진행표)는 위쪽의 RDG가, 그 명령을 어떤 종이에 쌓아 제출할지는 다음 장 <code>rhi-commandlist</code>가 맡아. RHI 창구는 <strong>어느 나라 말로 번역하느냐</strong>만 책임진다고 보면 돼.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>RHI는 CPU 쪽 렌더러가 D3D12/Vulkan 차이를 직접 떠안지 않게 해주는 공용 출국 창구고, <code>GDynamicRHI</code>는 시작 때 선택된 실제 창구로 모든 RHI 호출을 넘기는 손잡이다.</strong></p>
 <hr>

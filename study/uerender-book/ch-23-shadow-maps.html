@@ -303,6 +303,45 @@ Deferred lighting
 <p>이게 잡히면 다음 장 <a class="xref" href="ch-24-virtual-shadow-maps.html">virtual-shadow-maps</a>는 "이 깊이표를 거대한 가상 페이지 시스템으로 바꾼 것"으로 읽히기 시작한다.</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 섀도맵이 뭐고, 왜 그림자에 이런 방식이 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">라이트가 그냥 범위 안 픽셀을 다 밝게 하면 <strong>벽 뒤·기둥 뒤 픽셀까지 빛을 받아서</strong> 그림자가 사라져. 그래서 먼저 <strong>빛의 눈으로 장면을 한 번 더 그려서</strong> "방향마다 빛이 처음 만난 거리"를 저장해 — 이게 섀도맵이야. 색 지도가 아니라 <strong>깊이(거리) 지도</strong>라는 게 핵심. 밤 운동장에서 선생님이 손전등 자리에서 CCTV 사진을 한 장 찍는데, 그 사진엔 색이 없고 방향마다 <strong>제일 가까운 학생까지 거리</strong>만 적혀 있는 거지.</div></details>
+
+<h4>↳ 그럼 그 거리표로 실제 그림자 판정은 어떻게 하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">화면 픽셀을 <strong>빛 좌표로 옮긴 다음</strong> 그 방향의 거리표를 봐. 표에 "처음 보인 사람은 5m"인데 이 픽셀이 8m면 앞에 뭔가 막고 있는 거라 <strong>그림자</strong>야. 5m쯤이면 빛이 처음 본 그 표면이니 <strong>빛을 받아</strong>. 그래서 이름은 그림자지만 본질은 <code>SampleDepth</code>(빛이 본 첫 거리)와 <code>SceneDepth</code>(내 거리)의 <strong>깊이 비교</strong>일 뿐이야.</div></details>
+
+<h4>↳ <a class="xref" href="ch-19-prepass-depth.html">prepass-depth</a>의 카메라 깊이버퍼랑은 뭐가 달라요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">둘 다 깊이표야, 만든 <strong>시점만 달라</strong>. 프리패스는 <strong>카메라 눈</strong>으로 깊이를 만들어서 화면 가림(누가 앞이냐)에 쓰고, 섀도맵은 <strong>빛 눈</strong>으로 깊이를 만들어서 빛 가림(빛이 여기까지 닿냐)에 써. DirectX 깊이버퍼 개념 그대로인데, 그 깊이표를 어디에 쓰느냐만 바뀐 거야.</div></details>
+
+<h3>Q2. 태양(방향광) 그림자는 왜 섀도맵을 여러 장 쓰나요? (CSM)</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">태양은 화면 전체를 덮는데, <strong>섀도맵 한 장</strong>에 발밑 1m와 먼 산 1km를 같이 넣으면 가까운 발 그림자는 칸(해상도)이 모자라 <strong>계단처럼 깨져</strong>. 그래서 카메라 앞 공간을 가까운/중간/먼 구역으로 쪼개서 <strong>구역마다 거리표를 따로</strong> 찍어. 층층이 이어진 그림자 지도라 Cascaded Shadow Maps, CSM이야. 가까운 구역엔 촘촘한 지도, 먼 구역엔 넓은 지도를 배정하는 거지.</div></details>
+
+<h4>↳ 몇 번째 구역인지는 코드 어디서 정해져요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그림자 하나를 들고 있는 <code>FProjectedShadowInfo</code>에 <code>CascadeSettings</code>가 붙고, 그 안 <code>ShadowSplitIndex</code>가 사진 번호야. 방향광이고 이 인덱스가 0 이상이면 <code>GetShadowSplitBounds</code>로 <strong>이 조각이 담당할 카메라 공간 범위</strong>를 계산해. 큰 흐름만 잡으면 돼 — "번호 = 사진, bounds = 그 사진이 맡는 운동장 범위".</div></details>
+
+<h3>Q3. 그림자 만드는 데 왜 두 번(패스가 둘)이나 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">1차는 <strong>빛의 눈으로 깊이만 쓰는 패스</strong>야 — 색 렌더타깃이 아니라 <code>DepthStencil</code>에 <code>ShadowDepthTexture</code>를 묶고 거리 숫자만 적어. 2차는 <strong>카메라 화면에서 그 거리표를 조회하는 패스</strong>야 — 화면 픽셀을 빛 좌표로 보내고, 깊이를 비교해서 화면 크기의 <strong>그림자 마스크</strong>를 만들어. 1차 없이 바로 판정할 수 없고, 2차 없이 라이팅이 그림자를 못 써. 그래서 만들기와 조회를 나눈 거야.</div></details>
+
+<h4>↳ "만들 때랑 읽을 때 같은 변환을 써야 한다"는 게 왜 그렇게 중요해요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">깊이를 <strong>쓸 때 쓴 기준자</strong>와 화면 픽셀을 <strong>읽을 때 옮기는 기준자</strong>가 조금만 어긋나면, 같은 자리인데 다른 칸을 보게 돼서 <strong>그림자가 뜨거나 지글거리거나 카메라 움직임에 떨려</strong>. <code>GetScreenToShadowMatrix</code>가 화면 픽셀을 빛의 섀도맵 좌표로 옮기는데, 코드 주석도 "shadow depth를 렌더할 때 쓴 것과 <strong>같은 변환이어야 한다</strong>"고 못 박아. 교실 자리를 "내 왼쪽 두 번째"라 부르는 나랑 "오른쪽 두 번째"라 부르는 친구가 같은 기준자로 통일해야 서로 정확히 짚는 거랑 같아.</div></details>
+
+<h3>Q4. 한 픽셀당 섀도맵 한 칸만 보고 앞/뒤 딱 자르면 안 되나요? (PCF)</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그러면 그림자 경계가 <strong>톱니처럼 계단</strong>이 돼. 거리표 칸은 네모인데 실제 그림자 경계는 비스듬하거든. 한 칸 차이로 0(그림자)과 1(빛)이 딱 갈리니까. 그래서 <strong>주변 칸을 여러 번 샘플링</strong>해서 "빛 쪽에 더 가까운 칸이 몇 퍼센트인지" 평균내 — 이게 PCF(Percentage Closer Filtering)야. 예/아니오 하나 대신 <strong>0.7 같은 중간값(Visibility)</strong>이 나와서 경계가 부드러워져.</div></details>
+
+<h4>↳ 코드에 <code>SampleDepthBias</code> 같은 게 있던데 그건 왜 필요해요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">같은 표면이 <strong>자기 자신을 그림자로 오해</strong>하는 걸 막는 작은 여유값이야. 빛으로 찍은 거리표와 화면에서 다시 복원한 깊이는 정밀도 차이로 미세하게 어긋나는데, bias 없이 비교하면 평평한 바닥이 자기 그림자로 얼룩덜룩해져(shadow acne). 그래서 비교할 때 살짝 여유를 줘서 오판을 줄이는 거야. PCF가 계단을 줄인다면, bias는 <strong>자기 그림자 오판</strong>을 줄이는 거지.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>섀도맵은 빛의 눈으로 먼저 만든 깊이표이고, 화면 픽셀은 자기 빛-space 깊이를 그 표와 비교해서 앞에 가로막은 것이 있으면 빛을 줄인다.</strong></p>
 <hr>

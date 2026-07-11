@@ -390,6 +390,45 @@ RenderBasePass (:1071)
 <div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
 <ul><li>BasePass는 디퍼드 경로에서 최종 조명을 완성하는 패스가 아니라, 재질 정보를 GBuffer 식판에 눕히는 패스야.</li><li>C++은 <code>GBUFFER_LAYOUT</code>과 렌더타깃 출력 포맷을 셰이더 컴파일 환경에 알려줘.</li><li><code>SceneTextures.GetGBufferRenderTargets</code>가 SceneColor와 GBufferA~E, Velocity 후보를 렌더타깃 배열에 꽂아.</li><li><code>PassParameters-&gt;RenderTargets = BasePassRenderTargets</code> 때문에 BasePass 메시 드로우가 그 여러 칸에 동시에 쓴다.</li><li>픽셀 셰이더 끝에서는 <code>EncodeGBuffer</code> 결과가 <code>Out.MRT[]</code> 슬롯들로 나뉘어 들어간다.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. BasePass가 하는 일이 뭔가요? 최종 화면 색을 만드는 패스인가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>디퍼드에서 BasePass는 최종 조명 색을 완성하는 패스가 아니야</strong>. 화면 픽셀마다 <strong>재질 신분증</strong>을 여러 텍스처(GBuffer)에 나눠 적어두는 배식 시간이야. 색·노멀·러프니스·metallic·셰이딩 모델 같은 정보를 GBufferA, B, C... 여러 칸에 나눠 담아. 빛은 나중에 Lighting 패스가 이 GBuffer를 읽어서 계산해. 급식 식판에 반찬을 칸별로 눕혀두는 거고, 소스(빛)는 뒤에서 뿌리는 거지.</div></details>
+
+<h4>↳ 왜 재질 정보를 미리 눕혀둬요? 조명 때 그때그때 구하면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">도시 밤 장면처럼 라이트가 1024개라고 해봐. 재질 정보를 미리 저장 안 하면 <strong>라이트마다 "이 픽셀 노멀 뭐야? 러프니스는?"을 다시 물으려고 모든 메시를 또 그려야</strong> 해. 같은 밥을 매번 새로 푸는 꼴이지. 서버로 치면 <code>CM_ATTACK</code> 하나 처리할 때마다 DB에서 캐릭터 전체 상태를 다시 조인해 긁어오는 느낌이야. 그래서 보이는 픽셀의 재질을 GBuffer 식판에 <strong>딱 한 번</strong> 눕혀두고, 조명 패스는 그걸 읽기만 하는 거야.</div></details>
+
+<h3>Q2. GBuffer에 정보를 나눠 담는데, C++과 셰이더가 칸 번호를 어떻게 맞추나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>GBUFFER_LAYOUT</code>이라는 <strong>식판 배치표</strong>를 셰이더 컴파일 단계에 <code>#define</code>으로 박아. "이번 식판은 5칸이냐, Velocity 칸이 강제로 붙느냐"를 컴파일 주문서에 적는 거지. 이게 단순 설명용 이름이 아니라, 셰이더가 실제로 분기하고 어떤 MRT 슬롯에 쓸지 결정하는 기준이야. C++과 셰이더가 <strong>같은 배치표를 봐야</strong> 김치를 국칸에 붓는 사고가 안 나. 서버로 치면 <code>wID</code>에 맞는 패킷 구조체 크기와 필드 배치까지 같이 정하는 느낌이야.</div></details>
+
+<h4>↳ 배치표가 한쪽만 다르면 실제로 어떤 사고가 나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">플랫폼마다 Velocity 칸이 붙거나 Substrate가 칸을 더 쓰거든. C++은 "노멀을 3번 칸에 꽂아라"라고 준비했는데 셰이더가 "3번은 러프니스"라고 알고 있으면, 조명 패스가 <strong>노멀 자리에서 러프니스를 읽어</strong> 화면이 이상해져. 김치를 국칸에 부은 거지. 그래서 이번 프레임 배치표를 컴파일 주문서(<code>GBUFFER_LAYOUT</code>)에 박아서 양쪽이 강제로 같은 표를 보게 만드는 거야.</div></details>
+
+<h3>Q3. BasePass가 픽셀 셰이더 한 번으로 여러 텍스처에 동시에 쓴다는데, 그게 어떻게 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">DirectX의 <strong>MRT(Multiple Render Targets)</strong>야. 보통은 RTV 하나 묶고 픽셀 셰이더가 <code>SV_Target0</code> 하나를 쓰지만, BasePass는 <strong>RTV 배열을 묶고</strong> 픽셀 셰이더가 여러 <code>SV_Target</code>에 값을 써. 한 번 붓질로 같은 칸에 SceneColor·GBufferA·B·C를 한꺼번에 나눠 적는 거지. 코드에선 <code>PassParameters-&gt;RenderTargets = BasePassRenderTargets</code> 이 한 줄 때문에, 뒤에 그려지는 모든 BasePass 메시가 그 여러 식판 칸에 동시에 기록돼.</div></details>
+
+<h4>↳ MRT 없이 GBuffer 채우려면 어떻게 되는데요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">GBufferA·B·C·D를 따로 채우려고 <strong>메시를 네 번 그려야</strong> 해. 같은 학생을 네 번 줄 세우는 거라 BasePass 배식 줄이 네 배로 길어지지. MRT는 픽셀 셰이더 한 번 실행으로 여러 식판 칸에 동시에 쓰는 출구라서, 한 번 줄 세워 한 번에 다 담는 거야. 셰이더 끝에서 <code>EncodeGBuffer</code>가 재질 도시락을 나누고 <code>Out.MRT[1]</code>, <code>[2]</code>, <code>[3]</code>...에 꽂는 게 그 장면이야.</div></details>
+
+<h3>Q4. 렌더타깃 바인딩이 "이 지점부터 고정돼야 한다"는 주석이 있던데, 왜 그런가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">BasePass 안에서 <strong>수많은 메시 드로우가 같은 렌더타깃 묶음을 보고 달리기</strong> 때문이야. 드로우 중간에 식판 칸 구성이 흔들리면 메시마다 다른 식판에 배식해버려서 GBuffer가 엉켜. 그래서 오늘 쓸 칸들(SceneColor, GBufferA~E, Velocity, Depth)을 한 묶음(<code>FRenderTargetBindingSlots</code>)으로 잠가서 패스에 넘겨. 서버로 치면 <strong>패킷 처리 중간에 세션 send buffer 구조를 바꾸면 안 되는</strong> 거랑 같아. 한 프레임 BasePass 동안은 배치표가 고정돼 있어야 해.</div></details>
+
+<h4>↳ 이 챕터랑 앞의 PrePass가 어떻게 이어지나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">BasePass 픽셀 셰이더는 재질 값 계산하고 여러 MRT에 쓰니까 <strong>안 싸</strong>. 그래서 앞 장 PrePass가 깔아둔 깊이 정보가 있으면 <strong>안 보이는 픽셀을 덜 칠할 수 있어</strong> — Early-Z로 뒤쪽 픽셀을 셰이더 돌기 전에 떨어뜨리는 거지. 서버에서 락 잡기 전에 "이 요청 처리 대상인가"를 빠르게 거르는 감각이랑 같아. 비싼 일은 대상이 확정된 뒤에 한다. PrePass가 깊이 장부 만들고 → BasePass가 그 장부 믿고 진짜 보이는 픽셀만 GBuffer에 눕히는 흐름이야.</div></details>
+
+<h4>↳ 왜 GBuffer를 한 텍스처에 다 우겨넣지 않고 굳이 여러 칸으로 나누나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">한 접시에 밥·국·김치·고기를 다 섞어 담으면 나중에 "고기만 조금 더"가 안 되잖아. GBuffer도 <strong>조명 패스가 빠르게 골라 읽기 좋게</strong> 종류별로 칸을 나눠. 조명은 어떤 픽셀의 노멀만 보고 빛 방향과 dot 하고, 러프니스만 보고 하이라이트 폭 정하고, 베이스 컬러만 보고 반사 색 정하거든. 서버로 치면 전투 로그를 JSON 통째로 한 곳에 안 넣고 <strong>현재 HP·마지막 피격 시간·어그로 점수·로그 테이블로 나눠 저장</strong>하는 거랑 같아 — "어그로만 빠르게 읽기"가 필요하니까. 뒤에서 골라 읽을 걸 아니까 미리 칸으로 정리해두는 거야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>BasePass는 화면 픽셀마다 재질 신분증을 한 번 계산해서, SceneColor 하나가 아니라 GBufferA/B/C/D/E 같은 여러 MRT 식판 칸에 나눠 눕혀두는 디퍼드 렌더링의 배식 시간이다.</strong></p>
 <hr>

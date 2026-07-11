@@ -421,6 +421,45 @@ SceneColor에 더하기
 <ol><li>픽셀 셰이더는 <code>GetScreenSpaceData</code>로 GBuffer를 읽고 <code>OutColor += Radiance</code>로 이번 라이트를 SceneColor에 더한다.</li></ol>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 디퍼드 라이팅은 왜 라이트가 많을 때 유리한가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">포워드로 단순하게 가면 물체를 그릴 때마다 <strong>재질 질문을 라이트 수만큼 반복</strong>하게 돼. 라이트 300개면 같은 벽돌 재질 질문을 300번 다시 하는 꼴이야. 디퍼드는 순서를 뒤집어 — BasePass에서 재질 신분증(GBuffer)을 화면에 한 번 눕혀두고, 라이팅 패스는 <strong>메시를 다시 안 묻고 화면 픽셀의 GBuffer만 읽어서</strong> "이 라이트 하나 더하면 얼마냐"만 계산해. 투명 셀로판을 밑그림 위에 한 장씩 얹는 거지, 밑그림을 다시 그리지 않아. 우리 서버로 치면 매 패킷마다 DB를 다시 조인하지 않고 <strong>메모리에 펴둔 캐릭터 스냅샷</strong>을 읽는 거랑 같아.</div></details>
+
+<h4>↳ 그럼 디퍼드는 공짜인가요? 단점은요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">공짜 아니야. GBuffer를 저장하고 읽는 <strong>메모리 대역폭 비용</strong>이 들어. 반투명은 픽셀 하나에 여러 표면이 겹쳐서 GBuffer 한 칸에 눕히기 어려우니 <strong>별도 경로</strong>가 필요하고(→ translucency). 라이트가 화면 전체를 크게 덮으면 라이트 패스 비용도 커져. 그러니까 디퍼드는 "항상 빠름"이 아니라 <strong>복잡한 재질과 많은 라이트를 분리해서 반복 질문을 줄이는 구조</strong>야.</div></details>
+
+<h4>↳ 라이트를 바로 <code>RenderLight</code> 부르지 않고 먼저 줄 세우는(SortKey) 이유는요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">특징이 제각각인 셀로판을 <strong>온 순서대로 얹으면 매번 "너는 어느 길이야?"를 다시 물어봐야</strong> 하거든 — 그림자 있는 라이트, IES 무늬 라이트, 특정 채널만 칠하는 라이트가 섞여 있으니까. 그래서 <code>SortKey</code>에 그림자 여부·라이트 타입·채널 같은 꼬리표를 먼저 적어서 <strong>비슷한 것끼리 줄 세우고 경로를 가른다</strong>(clustered로 묶을지, 표준 디퍼드로 하나씩 갈지). 주방에서 주문서마다 냄비를 바꾸지 않고 같은 조리법끼리 모아 처리하는 거랑 같아.</div></details>
+
+<h3>Q2. "디퍼드 = 라이트마다 화면을 무조건 한 번 더 훑는다"가 맞나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">현대 UE에서는 <strong>절반만 맞아</strong>. 그림자·라이트 함수·방향광 같은 라이트는 여전히 표준 디퍼드로 셀로판 한 장씩(<code>RenderLight</code>) 얹어. 하지만 작고 조건 단순한 라이트가 수백 개면, 화면을 작은 격자 상자로 나누고 <strong>각 상자에 들어오는 라이트만 꽂아두는 Clustered Deferred</strong>로 묶어서 한 번에 처리해. 골목 전등 500개를 라이트마다 화면 훑기로 하면 낭비니까, 픽셀이 실제 만나는 몇 개만 격자에서 꺼내 쓰는 거야.</div></details>
+
+<h4>↳ 그 갈림길(clustered로 갈지 표준으로 갈지)은 뭘 보고 정해요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>RenderLights</code>에 들어오기 전에 라이트를 먼저 <strong>줄 세워(SortKey)</strong> — 그림자 있나, IES 무늬 있나, 특정 라이팅 채널만 칠하나 같은 특징을 꼬리표로 적어. 그리고 clustered 설정·플랫폼 조건이 되고 라이트가 격자에 제대로 주입됐으면 clustered 패스가 먼저 그 라이트들을 먹고, <code>StandardDeferredStart</code>를 앞으로 당겨서 표준 디퍼드가 <strong>이미 처리된 라이트는 다시 안 건드리게</strong> 해. 격자에 못 넣거나 특수 조건이면 표준 디퍼드로 남겨.</div></details>
+
+<h3>Q3. 로컬 라이트(포인트·스폿) 하나 칠하려고 화면 전체 픽셀을 다 깨우나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야, 그러면 낭비야. 방 구석 전구 하나 때문에 4K 화면 전체를 깨우면 안 닿는 하늘·벽 뒤까지 계산하잖아. 그래서 <strong>방향광(태양)만 화면 전체 사각형</strong>(<code>DrawRectangle</code>)으로 덮고, 포인트/렉트는 <strong>구(<code>DrawSphere</code>)</strong>, 스폿은 <strong>원뿔(<code>DrawCone</code>)</strong> 같은 영향권 기하를 그려서 그 안에 든 픽셀만 픽셀 셰이더가 돌게 해. 여기에 depth bounds test까지 걸어서 깊이 범위 밖 픽셀도 덜 건드려.</div></details>
+
+<h4>↳ 그럼 라이트가 많아지면 결국 "화면크기 × 라이트수"로 터지는 거 아닌가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그래서 안 그런 거야. 작은 라이트는 작은 셀로판(구·원뿔)만 얹으니 화면 전체가 아니라 <strong>영향권 픽셀만</strong> 든다. 게다가 작은 라이트가 많으면 clustered path가 먼저 격자로 묶어서 먹어버려. 그래서 디퍼드는 라이트 수가 늘어도 무조건 <code>전체화면 × 라이트수</code>로 폭발하지 않는 거지.</div></details>
+
+<h3>Q4. 픽셀 셰이더 안에서 실제로 "빛을 얹는다"는 게 무슨 연산인가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">핵심은 딱 <code>OutColor += Radiance</code>, 즉 <strong>더하기(누적)</strong>야. 픽셀 위치에서 <code>GetScreenSpaceData</code>로 GBuffer 신분증을 읽고 → <code>ShadingModelID &gt; 0</code>인 조명 받을 픽셀만 통과시키고 → 라이트 데이터와 그림자·감쇠 마스크를 만들어 → <code>GetDynamicLighting</code>으로 이번 라이트 색을 구해 → SceneColor에 더해. 셀로판을 한 장씩 얹으면 밝기가 쌓이는 그 비유가 여기서 정확히 맞아. 다음 라이트도 들어와서 같은 일을 반복하는 게 디퍼드의 핵심 반복문이야.</div></details>
+
+<h4>↳ 그 픽셀 셰이더의 입력이 포워드랑 뭐가 다른가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">포워드 픽셀 셰이더 입력은 보통 <strong>정점에서 보간된 재질·노멀·UV</strong>야 — 그리는 그 메시의 정보지. 디퍼드 라이팅 픽셀 셰이더 입력은 <strong>화면 좌표와 GBuffer 텍스처</strong>야 — 이미 눕혀진 화면을 읽는 거야. 그래서 라이트마다 재질을 다시 평가하지 않아. DirectX 감각으로는, MRT에 재질을 먼저 쓰고 나중에 fullscreen quad나 sphere/cone draw로 SceneColor에 <strong>additive blending</strong>을 하는 구조야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>디퍼드 라이팅은 BasePass가 남긴 GBuffer 신분증을 재사용해서, 라이트마다 메시를 다시 그리지 않고 화면 픽셀 위에 빛 셀로판을 한 장씩 더하는 구조다.</strong></p>
 <hr>

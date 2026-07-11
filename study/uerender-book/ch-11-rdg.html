@@ -295,6 +295,49 @@ a.xref:hover { background:#e1bee7; }
 <div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
 <ul><li>RDG는 패스를 바로 실행하지 않고 먼저 그래프에 등록한다.</li><li>패스 파라미터는 RDG가 리소스 읽기/쓰기를 아는 주문표다.</li><li><code>SetupPassResources</code>가 access와 reference count를 모으고, <code>SetupPassDependencies</code>가 producer/consumer 관계를 만든다.</li><li><code>Compile()</code> 뒤에 culling, 리소스 수명, barrier가 계산된다.</li><li>실제 실행 때는 prologue/epilogue에서 RDG가 만든 barrier batch가 RHI command list에 제출된다.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>RDG</code>는 왜 있나요? 패스를 그냥 순서대로 호출하면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">작은 예제면 "렌더타깃 만들고, 패스 A, 패스 B, Present" 이렇게 손으로 순서 적어도 돼. 근데 UE 한 프레임은 PrePass, BasePass, Shadow, Lumen, Translucency, PostProcess가 줄줄이 붙어서 패스가 수십 개, 임시 텍스처가 수백 개야. 사람이 모든 읽기/쓰기 순서랑 barrier를 기억할 수가 없어. <code>RDG(Render Dependency Graph)</code>는 패스를 바로 실행하지 않고 <strong>먼저 그래프에 등록만</strong> 하고, 전체를 본 뒤 실행 순서·barrier·리소스 수명을 엔진이 계산해. 식당 주방의 <strong>주문 보드</strong>랑 같아 — 요리사가 주문 받자마자 불 앞으로 뛰는 게 아니라 보드에 다 적고 순서를 정해.</div></details>
+
+<h4>↳ 그럼 코드에서 <code>GraphBuilder.AddPass</code>를 호출하면 그 순간 GPU가 도는 건가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그게 핵심 착각 포인트야. <code>AddPass</code>로 패스를 추가하는 건 "이 주문을 보드에 붙인다"지 "지금 GPU 때린다"가 아니야. 내부적으로 <code>SetupPassResources</code>가 이 패스가 무슨 텍스처를 읽고 쓰는지 주문표만 훑어. 진짜 실행은 나중에 <code>Execute()</code>가 보드를 닫고 컴파일한 뒤에 몰아서 돼. 그래서 "텍스처를 만들었는데 왜 아직 RHI texture가 없지?" 하면, 답은 <strong>아직 보드에 적는 중이라</strong>야.</div></details>
+
+<h4>↳ 우리 서버로 치면 어떤 구조랑 같나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">IOCP 워커가 패킷 받았다고 바로 게임 로직 다 락 잡고 처리하지 않고, 세션/액터 큐에 넣어 순서를 정리하잖아. RDG도 렌더러 곳곳의 패스 주문을 즉시 GPU에 안 때리고 그래프에 모아 "누가 만들고, 누가 읽고, 누가 마지막으로 쓰는지"를 선명하게 만들어. 등록 시점과 실행 시점이 분리된 게 똑같아.</div></details>
+
+<h3>Q2. RDG가 "패스 파라미터"를 그렇게 중요하게 보는 이유가 뭔가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>PassParameters</code>는 그냥 C++ 인자 묶음이 아니라 <strong>주방장이 보는 주문표</strong>야. RDG는 이 주문표 안의 텍스처·SRV·UAV·렌더타깃을 훑어서 "이 패스가 뭘 읽고 뭘 쓰는지"를 안다. 이 읽음/씀 기록이 있어야 나중에 의존성, barrier, 리소스 수명을 자동으로 계산할 수 있어. 그래서 규칙이 하나 생겨 — 패스가 실제로 쓰는 리소스는 <strong>반드시 파라미터에 넣어야</strong> 해.</div></details>
+
+<h4>↳ 람다 안에서 파라미터에 안 적은 RDG 리소스를 몰래 만지면 어떻게 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">RDG는 그걸 몰라. 주문표에 안 적힌 팬을 몰래 쓰면 주방장이 언제 씻어 넘길지 모르는 거랑 같아. 그러면 barrier가 안 걸려서 GPU가 아직 더러운(용도가 안 바뀐) 리소스를 읽거나, 수명 계산이 틀려서 이미 반납된 텍스처를 읽는 사고가 나. 서버에서 락 규칙 밖으로 전역 상태 몰래 바꾸는 거랑 똑같은 종류의 버그야. RDG의 자동화는 "규칙을 지키면"이라는 전제 위에 있어.</div></details>
+
+<h3>Q3. RDG가 자동으로 챙겨주는 게 구체적으로 뭐뭔가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">크게 셋이야. ① <strong>의존성/culling</strong> — 어떤 패스가 텍스처를 쓰고 다음 패스가 읽으면 순서를 잇고, 최종 화면(back buffer)에서 거꾸로 따라가 안 쓰이는 중간 패스는 아예 안 만들어. ② <strong>리소스 수명(lifetime)</strong> — 임시 텍스처가 수백 개라 프레임 끝까지 다 들고 있으면 GPU 메모리가 터지니까, reference count가 0 되는 순간 반납 목록에 올려. 접시를 마지막 요리가 다 쓰자마자 회수하는 거지. ③ <strong>자동 barrier</strong> — 렌더타깃으로 쓴 리소스를 다음에 셰이더 읽기용으로 바꿀 때 필요한 transition을 주문표 보고 알아서 넣어.</div></details>
+
+<h4>↳ culling으로 안 그려도 되는 패스를 잘라낸다는데, 부작용 있는 패스도 잘리면 안 되잖아요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">맞아, 그래서 예외 표시가 있어. 최종 화면이나 extraction 되는 history texture로 이어지지 않는 패스는 "손님한테 안 나갈 소스"라 잘라도 되지만, DB 저장처럼 결과가 화면 밖으로 새는 부작용이 있는 패스는 <code>NeverCull</code> 같은 표시로 살려둬. 서버에서 아무한테도 안 보낼 로그는 지워도 되지만, 감사 로그는 남겨야 하는 거랑 같아.</div></details>
+
+<h4>↳ 리소스 수명을 사람이 직접 관리하면 뭐가 문제예요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">기능 하나 추가될 때마다 수명이 바뀌어서 정말 잘 터져. "이 텍스처는 8번 패스까지만 쓰이니까 9번에서 풀어도 됨"을 매번 손으로 세다가, 중간에 패스 하나 끼면 그 계산이 다 틀어져. 너무 일찍 반납하면 다음 패스가 빈 텍스처를 읽고, 너무 늦게 반납하면 메모리가 새. RDG는 파라미터의 reference count로 세니까, 패스가 추가/삭제돼도 수명 장부를 다시 계산할 수 있어. DirectX에서 aliasing heap 직접 굴려봤으면 이 "끝난 시점 확실히 알기"가 얼마나 빡센지 알 거야.</div></details>
+
+<h3>Q4. RDG 코드를 읽을 때 길 안 잃는 요령이 있나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">함수 이름보다 <strong>"지금 어느 시점이냐"</strong>를 먼저 봐. RDG는 세 시점이 있어 — <strong>등록</strong>(AddPass, CreateTexture로 주문표 적는 중), <strong>컴파일</strong>(Execute가 보드 닫고 dependency·culling·lifetime·barrier 계산), <strong>실행</strong>(살아남은 패스의 람다가 실제로 GPU 명령 쓰는 중). 같은 <code>GraphBuilder</code>가 나와도 등록 중인지 실행 중인지에 따라 의미가 완전히 달라. 이 시점만 구분하면 안 헷갈려.</div></details>
+
+<h4>↳ DirectX 직접 짜던 거랑 대응시키면요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">DX12에서 손으로 맞추던 <strong>render target 상태 전환, shader resource 상태, UAV barrier, aliasing acquire/discard</strong>를 RDG가 패스 파라미터에서 모은 정보로 자동화한 거야. 네가 <code>ResourceBarrier</code>를 여기저기 박고 리소스 수명을 머릿속으로 세던 일을, 이제 "파라미터에 정확히 적기"만 지키면 엔진이 대신 계산해줘. 대신 그 규칙을 어기면 자동화가 무너지는 것도 DX 때 barrier 하나 빠뜨리면 터지던 거랑 똑같아.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>RDG는 한 프레임의 렌더 패스를 주문 보드처럼 모아, 의존성·barrier·임시 리소스 수명을 사람이 아니라 그래프 계산으로 맞추게 하는 UE 렌더러의 실행 방식이다.</strong></p>
 <hr>

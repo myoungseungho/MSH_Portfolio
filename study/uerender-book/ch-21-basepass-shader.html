@@ -293,6 +293,45 @@ SV_TargetN 렌더타깃에 기록</div>
 <div class="conversation"><h2>8. 이 챕터에서 딱 이것만</h2>
 <ul><li><code>FPixelShaderInOut_MainPS</code>는 BasePass 픽셀 셰이더의 실제 작업대다.</li><li><code>FGBufferData</code>는 나중 라이팅이 읽을 픽셀 송장이다.</li><li><code>SetGBufferForShadingModel</code> 뒤에야 최종 셰이딩 모델 기준 GBuffer 값을 믿을 수 있다.</li><li><code>ComputeF0</code>, <code>DiffuseColor</code>, <code>GBufferAO</code> 같은 보정은 렌더타깃에 쓰기 전 단계에서 일어난다.</li><li>진짜 기록 지점은 <code>EncodeGBufferToMRT(Out, GBuffer, QuantizationBias)</code>다.</li></ul>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. BasePass 픽셀 셰이더는 최종 화면 색을 만드나요? 아니면 뭘 만드나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">최종 색을 만드는 게 아니야. <strong>나중에 라이팅이 읽을 재질 송장</strong>을 만들어. 픽셀 하나가 들어오면 바로 빛을 계산하는 게 아니라, "이 픽셀은 색이 뭐고, 표면 방향(노멀)은 어디고, 거칠기·금속성은 얼마고, 셰이딩 모델은 뭐다"를 <code>FGBufferData</code>라는 송장에 적어. 택배 분류장으로 치면 상자를 트럭에 바로 안 싣고 <strong>송장부터 붙이는 장면</strong>이야. 빛은 다음 장 라이팅 패스가 이 송장을 읽어서 얹어.</div></details>
+
+<h4>↳ 그럼 <code>FGBufferData</code>가 곧바로 렌더타깃(텍스처)인가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야. <code>FGBufferData</code>는 셰이더 <strong>내부의 임시 구조체</strong>야. 텍스처가 아니라 그냥 값 묶음. 이걸 다 채운 다음 <code>EncodeGBufferToMRT</code>로 실제 렌더타깃 칸(<code>Out.MRT[]</code>)에 압축해서 베껴 써야 비로소 텍스처가 돼. "송장 양식지에 다 적는 것"과 "그 송장을 여러 장부 칸에 옮겨 적는 것"은 다른 단계야.</div></details>
+
+<h3>Q2. 왜 재질 값을 <code>FGBufferData</code>에 한 번 모았다가 쓰나요? 나온 값을 렌더타깃에 바로 적으면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">항목이 10개 넘게 늘면 바로 적기가 위험해서야. 어떤 경로는 노멀을 쓰고 어떤 경로는 셰이딩 모델을 빼먹으면, 라이팅 직원이 <strong>찢어진 송장</strong>을 받게 돼. 그래서 먼저 한 장짜리 임시 송장(<code>FGBufferData</code>)에 전부 모아서 정합성을 맞추고, 그다음 한 번에 인코딩해. 우리 서버로 치면 클라가 보낸 <code>CM_ATTACK</code> 원문을 그대로 안 믿고 <strong>서버 검증 뒤 내부 명령 구조체로 정규화</strong>하는 거랑 같아. 코드 주석도 <code>SetGBufferForShadingModel</code> 뒤의 <code>GBuffer.ShadingModelID</code>를 쓰라고 하잖아 — 입력이 중간에 바뀔 수 있으니까.</div></details>
+
+<h4>↳ 그럼 재질에서 나온 <code>BaseColor</code>랑 GBuffer의 <code>DiffuseColor</code>가 같은 값 아닌가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">달라. <code>BaseColor</code>는 재질의 원래 색에 가깝고, <code>DiffuseColor</code>는 물리 규칙을 반영한 뒤 <strong>빛 계산에 실제로 쓸 확산색</strong>이야. 금속은 확산 반사가 거의 없으니까 <code>BaseColor - BaseColor * Metallic</code> 같은 계산으로 diffuse 몫을 깎아. 러프니스도 그냥 입력을 믿지 않고 노멀 곡률 aliasing 줄이려고 올릴 수 있어. 즉 BasePass는 단순 저장소가 아니라 <strong>"나중에 읽기 좋은 형태로 재질을 가공하는 접수대"</strong>야.</div></details>
+
+<h4>↳ 언릿(unlit) 재질은 이 흐름에서 어떻게 처리돼요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">인코딩할 때 <code>ShadingModelID</code>가 <code>SHADINGMODELID_UNLIT</code>이면 일부 GBuffer 칸을 0으로 밀거나 <code>SetGBufferForUnlit</code>을 써. 언릿은 <strong>나중에 디퍼드 라이팅이 보통 재질처럼 빛을 얹으면 안 되거든</strong>. 송장에 "이 상자는 배송(조명) 계획에서 빼라"는 특별 스티커를 붙이는 셈이야. 셰이딩 모델 번호표가 뒤 라이팅 경로를 가른다는 게 여기서 드러나.</div></details>
+
+<h3>Q3. 픽셀 하나에 렌더타깃을 여러 장 쓰는 MRT는 왜 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">GBuffer는 같은 픽셀 위치에 노멀, 베이스컬러, 러프니스 같은 장부를 <strong>여러 장 써야</strong> 하거든. 컨베이어 벨트가 하나뿐이면 장부마다 화면을 따로 돌려야 해서 손이 너무 많이 가고 송장도 어긋나. MRT(Multiple Render Targets)는 한 번 픽셀을 처리할 때 <strong>여러 렌더타깃에 동시에 뱉는</strong> 길이야. DirectX 감각으로는 픽셀 셰이더가 <code>SV_Target0</code>, <code>SV_Target1</code>…에 한 번에 값을 쓰는 거고, <code>Out.MRT[n]</code>이 결국 그 <code>SV_TargetN</code>으로 이어져.</div></details>
+
+<h4>↳ 예전에 DirectX로 직접 짜던 픽셀 셰이더랑 뭐가 제일 다른가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우리가 손으로 짠 샘플은 보통 <code>return float4(color, 1)</code> 하나로 끝났지. 언리얼 BasePass는 픽셀 하나에 <code>BaseColor</code>, <code>Roughness</code>, <code>ShadingModelID</code>, <code>Velocity</code> 같은 걸 <strong>여러 장으로 나눠</strong> 써. 그리고 서버랑 달리 여기선 락이 문제가 아니야 — GPU가 픽셀 수만큼 병렬로 이 함수를 돌리는데 각 픽셀은 자기 위치 칸만 건드리거든. 그래서 핵심 비용은 공유 락이 아니라 <strong>"어떤 값을 어느 포맷에 어떻게 압축하느냐"</strong>야. <code>QuantizationBias</code> 같은 계단 현상 방지도 그래서 나오는 거고.</div></details>
+
+<h4>↳ 그럼 렌더독에서 GBufferA가 노멀인지 B가 러프니스인지, 그 배치는 어디서 정해져요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그건 <code>EncodeGBufferToMRT</code>가 <code>FGBufferData</code>의 어느 필드를 어느 <code>Out.MRT[n]</code>의 어느 채널에 압축하느냐로 정해져 — <strong>인코딩 규칙이 곧 텍스처 레이아웃</strong>이야. 그래서 렌더독에서 색깔 맞추기로 추측할 게 아니라, 이 인코딩 쪽을 보면 "A=노멀, C=베이스컬러" 같은 배치를 확정할 수 있어. 라이팅 장에서 <code>GetScreenSpaceData</code>가 그 반대로 <strong>디코딩</strong>해서 읽으니까, 쓰는 쪽과 읽는 쪽 규칙이 짝이 맞아야 값이 안 깨져.</div></details>
+
+<h3>Q4. 이 챕터에서 "진짜 GBuffer에 쓰는 그 한 줄"을 딱 짚어보라면요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>EncodeGBufferToMRT(Out, GBuffer, QuantizationBias)</code>야. 이 줄 <strong>이전은 전부 "송장 작성"</strong>이고, 이 줄부터가 "장부 기록"이야. 렌더독에서 보이는 GBufferA/B/C 텍스처들은 다 이 출력 경로의 결과물이지, 마법 텍스처가 아니야. BasePass 직원이 픽셀마다 손으로 쓴 송장 묶음인 거야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>BasePassPixelShader는 픽셀마다 재질 송장(<code>FGBufferData</code>)을 작성하고, <code>EncodeGBufferToMRT</code>로 그 송장을 여러 <code>Out.MRT[]</code> 칸에 나눠 써서 다음 라이팅 패스가 읽을 GBuffer를 만든다.</strong></p>
 <hr>
