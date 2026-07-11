@@ -129,25 +129,38 @@
   function render() {
     layer.innerHTML = '';
     var m = metrics(), isWide = wide();
-    var docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+    countEl.textContent = '📝 ' + state.length;
     if (isWide) {
       strip.style.display = 'block';
       strip.style.left = m.left + 'px';
       strip.style.width = Math.max(0, m.avail - GAP) + 'px';
-      strip.style.height = docH + 'px';
-      var sorted = state.slice().sort(function (a, b) { return anchorTop(a.aIdx) - anchorTop(b.aIdx); });
-      var lastBottom = -1e9;
-      sorted.forEach(function (n) {
-        var card = buildCard(n); layer.appendChild(card);
+      strip.style.height = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight) + 'px';
+      // 각 카드를 자기 앵커 위치에 붙여 생성 (앵커는 dataset에 보관 → 재정렬은 항상 이 값 기준)
+      state.slice().sort(function (a, b) { return anchorTop(a.aIdx) - anchorTop(b.aIdx); }).forEach(function (n) {
+        var card = buildCard(n);
         card.style.left = m.left + 'px'; card.style.width = m.width + 'px';
-        var top = anchorTop(n.aIdx);
-        if (top < lastBottom + 10) top = lastBottom + 10;
-        card.style.top = top + 'px';
-        lastBottom = top + card.offsetHeight;
+        card.dataset.anchor = anchorTop(n.aIdx);
+        card.style.top = card.dataset.anchor + 'px';
+        layer.appendChild(card);
       });
+      stackCards();
+      requestAnimationFrame(stackCards); // 레이아웃 확정 후 한 번 더(높이 측정 타이밍 보정)
     } else { strip.style.display = 'none'; }
-    countEl.textContent = '📝 ' + state.length;
     if (pendingFocus) { var ta = layer.querySelector('.mshn-card[data-id="' + pendingFocus + '"] textarea'); if (ta) ta.focus(); pendingFocus = null; }
+  }
+
+  // 겹치지 않게 아래로 밀어 쌓기 — 항상 dataset.anchor(고정)에서 다시 계산하므로 접었다 펴도 누적되지 않음
+  function stackCards() {
+    var cards = Array.prototype.slice.call(layer.querySelectorAll('.mshn-card'));
+    cards.sort(function (a, b) { return (parseFloat(a.dataset.anchor) || 0) - (parseFloat(b.dataset.anchor) || 0); });
+    var lastBottom = -1e9;
+    cards.forEach(function (c) {
+      if (c.classList.contains('mshn-dragging')) { lastBottom = (parseFloat(c.style.top) || 0) + c.offsetHeight; return; }
+      var top = parseFloat(c.dataset.anchor) || 0;
+      if (top < lastBottom + 10) top = lastBottom + 10;
+      c.style.top = top + 'px';
+      lastBottom = top + c.offsetHeight;
+    });
   }
 
   function buildCard(n) {
@@ -201,7 +214,8 @@
     function end() {
       if (!dragging) return; dragging = false; card.classList.remove('mshn-dragging');
       var finalTop = parseFloat(card.style.top) || 0;
-      n.aIdx = nearestIdx(finalTop); persist(); render();
+      if (Math.abs(finalTop - startTop) > 6) { n.aIdx = nearestIdx(finalTop); persist(); } // 실제로 옮겼을 때만 재앵커(오클릭 방지)
+      render();
     }
     handle.addEventListener('pointerup', end);
     handle.addEventListener('pointercancel', end);
