@@ -45,7 +45,7 @@
     + '.mshn-strip:hover{background:linear-gradient(90deg,rgba(246,201,69,0),rgba(246,201,69,.08));}'
     + '.mshn-card{position:absolute;z-index:60;box-sizing:border-box;background:#fffdf2;border:1px solid #efe4a6;border-left:4px solid #f6c945;border-radius:10px;padding:10px 12px;box-shadow:0 2px 10px rgba(0,0,0,.09);font-family:inherit;}'
     + '.mshn-card .mshn-txt{font-size:.85rem;line-height:1.55;color:#4a3d00;white-space:pre-wrap;word-break:break-word;cursor:text;}'
-    + '.mshn-card textarea{width:100%;box-sizing:border-box;min-height:66px;font-family:inherit;font-size:.85rem;line-height:1.55;border:1px solid #e6d98f;border-radius:6px;padding:6px 8px;resize:vertical;background:#fff;color:#3a3000;outline:none;}'
+    + '.mshn-card textarea{width:100%;box-sizing:border-box;min-height:48px;font-family:inherit;font-size:.85rem;line-height:1.55;border:1px solid #e6d98f;border-radius:6px;padding:6px 8px;resize:vertical;overflow:hidden;background:#fff;color:#3a3000;outline:none;}'
     + '.mshn-card textarea:focus{border-color:#f6c945;box-shadow:0 0 0 2px rgba(246,201,69,.25);}'
     + '.mshn-card .mshn-meta{font-size:.66rem;color:#b3a25a;margin-top:5px;}'
     + '.mshn-card .mshn-tools{display:flex;gap:6px;justify-content:flex-end;margin-top:7px;}'
@@ -168,6 +168,9 @@
     if (n.editing) {
       var ta = document.createElement('textarea');
       ta.value = n.text; ta.placeholder = '여기에 메모… (예: 이 부분 왜 이렇게 되는지 헷갈림)';
+      var autosize = function () { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; stackCards(); }; // 내용 높이만큼 펼침
+      ta.addEventListener('input', autosize);
+      requestAnimationFrame(autosize); // DOM에 붙은 뒤 초기 높이 맞추기
       var tools = document.createElement('div'); tools.className = 'mshn-tools';
       var ok = document.createElement('button'); ok.textContent = n.text ? '저장' : '추가';
       var cancel = document.createElement('button'); cancel.textContent = '취소';
