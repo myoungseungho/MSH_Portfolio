@@ -52,6 +52,13 @@
     + '.mshn-card button{font-family:inherit;font-size:.72rem;border:1px solid #e0d38a;background:#fff;color:#7a5c00;border-radius:6px;padding:3px 9px;cursor:pointer;}'
     + '.mshn-card button:hover{background:#fff7d6;}'
     + '.mshn-card .mshn-del:hover{background:#ffe5e5;border-color:#f3b0b0;color:#b71c1c;}'
+    + '.mshn-card .mshn-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}'
+    + '.mshn-card .mshn-fold{border:0;background:transparent;cursor:pointer;font-size:.72rem;color:#a07d00;padding:0;line-height:1;}'
+    + '.mshn-card .mshn-fold:hover{color:#6b5300;text-decoration:underline;}'
+    + '.mshn-card .mshn-grip{cursor:grab;color:#cbb968;font-size:1rem;line-height:1;user-select:none;-webkit-user-select:none;touch-action:none;padding:0 2px;}'
+    + '.mshn-card .mshn-grip:active{cursor:grabbing;}'
+    + '.mshn-card.mshn-dragging{opacity:.9;box-shadow:0 6px 18px rgba(0,0,0,.2);}'
+    + '.mshn-card .mshn-txt.collapsed{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;}'
     + '.mshn-bar{position:fixed;right:16px;bottom:16px;z-index:90;display:flex;gap:4px;align-items:center;background:#fff;border:1px solid #e0e0e0;border-radius:999px;padding:5px 8px 5px 12px;box-shadow:0 3px 14px rgba(0,0,0,.13);font-family:inherit;font-size:.8rem;color:#555;}'
     + '.mshn-bar .mshn-count{font-weight:700;color:#6a1b9a;font-variant-numeric:tabular-nums;margin-right:2px;cursor:pointer;}'
     + '.mshn-bar button{border:0;background:transparent;cursor:pointer;font-size:1rem;line-height:1;padding:5px;border-radius:8px;}'
@@ -112,7 +119,7 @@
 
   /* ---------- actions ---------- */
   function addNote(docY) {
-    var n = { id: uid(), aIdx: nearestIdx(docY), y: docY, text: '', ts: Date.now(), editing: true };
+    var n = { id: uid(), aIdx: nearestIdx(docY), y: docY, text: '', ts: Date.now(), editing: true, collapsed: false };
     state.push(n); pendingFocus = n.id; persist(); render();
     if (!wide()) openDrawer();
   }
@@ -157,16 +164,47 @@
       tools.appendChild(cancel); tools.appendChild(ok);
       card.appendChild(ta); card.appendChild(tools);
     } else {
-      var txt = document.createElement('div'); txt.className = 'mshn-txt'; txt.textContent = n.text; txt.title = '클릭하면 편집';
-      txt.onclick = function () { n.editing = true; pendingFocus = n.id; render(); };
-      var meta = document.createElement('div'); meta.className = 'mshn-meta'; meta.textContent = fmt(n.ts);
-      var tools = document.createElement('div'); tools.className = 'mshn-tools';
-      var ed = document.createElement('button'); ed.textContent = '✏️ 편집'; ed.onclick = txt.onclick;
-      var del = document.createElement('button'); del.className = 'mshn-del'; del.textContent = '🗑 삭제'; del.onclick = function () { if (confirm('이 메모를 삭제할까요?')) remove(n.id); };
-      tools.appendChild(ed); tools.appendChild(del);
-      card.appendChild(txt); card.appendChild(meta); card.appendChild(tools);
+      var head = document.createElement('div'); head.className = 'mshn-head';
+      var fold = document.createElement('button'); fold.className = 'mshn-fold'; fold.textContent = n.collapsed ? '▸ 펼치기' : '▾ 접기';
+      fold.onclick = function () { n.collapsed = !n.collapsed; persist(); render(); };
+      var grip = document.createElement('span'); grip.className = 'mshn-grip'; grip.textContent = '⠿'; grip.title = '드래그해서 위아래로 이동';
+      head.appendChild(fold); head.appendChild(grip);
+      var txt = document.createElement('div'); txt.className = 'mshn-txt' + (n.collapsed ? ' collapsed' : ''); txt.textContent = n.text; txt.title = n.collapsed ? '클릭하면 펼치기' : '클릭하면 편집';
+      txt.onclick = function () { if (n.collapsed) { n.collapsed = false; persist(); render(); return; } n.editing = true; pendingFocus = n.id; render(); };
+      card.appendChild(head); card.appendChild(txt);
+      if (!n.collapsed) {
+        var meta = document.createElement('div'); meta.className = 'mshn-meta'; meta.textContent = fmt(n.ts);
+        var tools = document.createElement('div'); tools.className = 'mshn-tools';
+        var ed = document.createElement('button'); ed.textContent = '✏️ 편집'; ed.onclick = function () { n.editing = true; pendingFocus = n.id; render(); };
+        var del = document.createElement('button'); del.className = 'mshn-del'; del.textContent = '🗑 삭제'; del.onclick = function () { if (confirm('이 메모를 삭제할까요?')) remove(n.id); };
+        tools.appendChild(ed); tools.appendChild(del);
+        card.appendChild(meta); card.appendChild(tools);
+      }
+      enableDrag(card, grip, n);
     }
     return card;
+  }
+
+  /* ---------- 카드 드래그(위아래 이동) ---------- */
+  function enableDrag(card, handle, n) {
+    var startY = 0, startTop = 0, dragging = false;
+    handle.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      dragging = true; startY = e.clientY; startTop = parseFloat(card.style.top) || 0;
+      card.style.zIndex = 70; card.classList.add('mshn-dragging');
+      try { handle.setPointerCapture(e.pointerId); } catch (x) {}
+    });
+    handle.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      card.style.top = (startTop + (e.clientY - startY)) + 'px';
+    });
+    function end() {
+      if (!dragging) return; dragging = false; card.classList.remove('mshn-dragging');
+      var finalTop = parseFloat(card.style.top) || 0;
+      n.aIdx = nearestIdx(finalTop); persist(); render();
+    }
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
   }
 
   /* ---------- drawer (narrow) ---------- */
