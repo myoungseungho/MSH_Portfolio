@@ -1,25 +1,38 @@
 /* ============================================================
-   MSH study — 여백 메모 (margin notes)
-   - 브라우저 localStorage에만 저장 (서버/깃 아님, 기기·브라우저별)
-   - 오른쪽 여백을 클릭하면 그 스크롤 위치에 메모를 붙인다
-   - 내보내기/가져오기(JSON)로 백업·이전 가능
-   페이지 끝에 <script src="../notes.js"></script> 한 줄만 넣으면 동작.
+   MSH study — 여백 메모 (margin notes) + 비밀 Gist 동기화
+   - 기본: 브라우저 localStorage에 즉시 저장 (오프라인에서도 동작)
+   - 동기화 켜면: 메모를 GitHub 비밀 Gist에 자동 백업 → 다른 기기에서 불러옴
+   - 토큰(gist 권한)은 이 브라우저 localStorage에만 저장, 절대 커밋 안 됨
+   페이지 끝에 <script src="../notes.js"></script> 한 줄이면 동작.
    ============================================================ */
 (function () {
   'use strict';
   if (window.__mshNotes) return; window.__mshNotes = true;
-  if (window.top !== window.self) return;               // iframe 안에선 실행 안 함
+  if (window.top !== window.self) return;
   var container = document.querySelector('.container');
-  if (!container) return;                                // 학습 문서 레이아웃이 아니면 skip
+  if (!container) return;
 
-  var PAGE = 'mshnotes:' + decodeURIComponent(location.pathname);
+  var PATH = decodeURIComponent(location.pathname);
+  var PAGE = 'mshnotes:' + PATH;
   var HINT = 'mshnotes:hint-seen';
+  var TOKEN_KEY = 'mshnotes:gh-token';
+  var GISTID_KEY = 'mshnotes:gist-id';
+  var META_PRE = 'mshnotes:meta:';
+  var GIST_FILE = 'msh-study-notes.json';
+  var TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=gist&description=MSH%20study%20notes';
   var GAP = 18, CARDW = 270, MINSPACE = 200;
 
-  function load() { try { return JSON.parse(localStorage.getItem(PAGE) || '[]'); } catch (e) { return []; } }
+  /* ---------- storage ---------- */
+  function loadPage(path) { try { return JSON.parse(localStorage.getItem('mshnotes:' + path) || '[]'); } catch (e) { return []; } }
+  function load() { return loadPage(PATH); }
+  function getMeta(path) { return parseInt(localStorage.getItem(META_PRE + path) || '0', 10) || 0; }
+  function setMeta(path, ts) { localStorage.setItem(META_PRE + path, String(ts)); }
   function persist() {
-    try { localStorage.setItem(PAGE, JSON.stringify(state)); }
-    catch (e) { alert('메모 저장 실패 — localStorage가 꽉 찼거나 차단됐어요.'); }
+    try {
+      localStorage.setItem(PAGE, JSON.stringify(state));
+      setMeta(PATH, Date.now());
+    } catch (e) { alert('메모 저장 실패 — localStorage가 꽉 찼거나 차단됐어요.'); return; }
+    scheduleSync();
   }
   var state = load();
   function uid() { return 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -43,9 +56,18 @@
     + '.mshn-bar .mshn-count{font-weight:700;color:#6a1b9a;font-variant-numeric:tabular-nums;margin-right:2px;cursor:pointer;}'
     + '.mshn-bar button{border:0;background:transparent;cursor:pointer;font-size:1rem;line-height:1;padding:5px;border-radius:8px;}'
     + '.mshn-bar button:hover{background:#f0f0f0;}'
-    + '.mshn-hint{position:fixed;right:16px;bottom:64px;z-index:91;max-width:280px;background:#fffbe6;border:1px solid #f3e2a0;border-radius:10px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,.12);font-size:.8rem;line-height:1.6;color:#6b5300;}'
+    + '.mshn-bar .mshn-sync{position:relative;}'
+    + '.mshn-hint{position:fixed;right:16px;bottom:64px;z-index:91;max-width:290px;background:#fffbe6;border:1px solid #f3e2a0;border-radius:10px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,.12);font-size:.8rem;line-height:1.6;color:#6b5300;}'
     + '.mshn-hint b{color:#4e3600;}'
     + '.mshn-hint button{margin-top:8px;border:1px solid #e0d38a;background:#fff;color:#7a5c00;border-radius:6px;padding:4px 10px;font-size:.75rem;cursor:pointer;}'
+    + '.mshn-pop{position:fixed;right:16px;bottom:64px;z-index:96;width:260px;background:#fff;border:1px solid #e0e0e0;border-radius:12px;box-shadow:0 6px 22px rgba(0,0,0,.16);padding:12px 14px;font-family:inherit;font-size:.82rem;color:#444;}'
+    + '.mshn-pop h4{margin:0 0 6px;font-size:.9rem;color:#222;}'
+    + '.mshn-pop p{margin:0 0 8px;line-height:1.55;color:#666;}'
+    + '.mshn-pop .row{display:flex;gap:6px;flex-wrap:wrap;}'
+    + '.mshn-pop button,.mshn-pop a.btn{flex:1;text-align:center;border:1px solid #d9c98a;background:#fffdf2;color:#7a5c00;border-radius:7px;padding:6px 8px;font-size:.78rem;cursor:pointer;text-decoration:none;}'
+    + '.mshn-pop button:hover,.mshn-pop a.btn:hover{background:#fff4cf;}'
+    + '.mshn-pop input{width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:7px;padding:7px 8px;font-size:.8rem;margin:6px 0;}'
+    + '.mshn-pop .warn{color:#a25b00;font-size:.72rem;line-height:1.5;}'
     + '.mshn-drawer{position:fixed;top:0;right:0;bottom:0;width:min(92vw,380px);z-index:95;background:#fff;box-shadow:-4px 0 22px rgba(0,0,0,.2);transform:translateX(102%);transition:transform .22s;display:flex;flex-direction:column;font-family:inherit;}'
     + '.mshn-drawer.open{transform:none;}'
     + '.mshn-drawer header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #eee;font-weight:700;color:#333;}'
@@ -55,10 +77,10 @@
     + '.mshn-drawer .mshn-item .t{font-size:.85rem;white-space:pre-wrap;word-break:break-word;color:#4a3d00;}'
     + '.mshn-drawer .mshn-item .r{display:flex;gap:6px;justify-content:flex-end;margin-top:8px;}'
     + '.mshn-drawer .mshn-item button{font-size:.72rem;border:1px solid #e0d38a;background:#fff;color:#7a5c00;border-radius:6px;padding:3px 9px;cursor:pointer;}'
-    + '@media print{.mshn-bar,.mshn-strip,.mshn-hint,.mshn-drawer{display:none!important;}}';
+    + '@media print{.mshn-bar,.mshn-strip,.mshn-hint,.mshn-drawer,.mshn-pop{display:none!important;}}';
   var styleEl = document.createElement('style'); styleEl.textContent = css; document.head.appendChild(styleEl);
 
-  /* ---------- anchor helpers (스크롤 위치 = 문서 블록에 앵커) ---------- */
+  /* ---------- anchors ---------- */
   var ANCHOR_SEL = 'h1,h2,h3,h4,p,li,.code-block,table,.note';
   function anchors() { return Array.prototype.slice.call(container.querySelectorAll(ANCHOR_SEL)); }
   function topOf(el) { return el.getBoundingClientRect().top + window.scrollY; }
@@ -79,14 +101,13 @@
   strip.addEventListener('click', function (e) { if (e.target === strip) addNote(e.pageY); });
 
   var bar = document.createElement('div'); bar.className = 'mshn-bar'; document.body.appendChild(bar);
-  var countEl = document.createElement('span'); countEl.className = 'mshn-count';
-  var addBtn = mkBtn('＋', '이 화면 위치에 메모 추가', function () { addNote(window.scrollY + window.innerHeight * 0.4); });
-  var expBtn = mkBtn('⬇', '모든 메모 내보내기(JSON 백업)', exportAll);
-  var impBtn = mkBtn('⬆', '메모 가져오기(JSON)', importAll);
-  countEl.title = '메모 목록';
+  var countEl = document.createElement('span'); countEl.className = 'mshn-count'; countEl.title = '메모 목록';
   countEl.addEventListener('click', function () { if (!wide()) openDrawer(); });
-  bar.appendChild(countEl); bar.appendChild(addBtn); bar.appendChild(expBtn); bar.appendChild(impBtn);
-
+  var addBtn = mkBtn('＋', '이 화면 위치에 메모 추가', function () { addNote(window.scrollY + window.innerHeight * 0.4); });
+  var syncBtn = mkBtn('☁', '메모 동기화', toggleSyncPop); syncBtn.className = 'mshn-sync';
+  var expBtn = mkBtn('⬇', '모든 메모 내보내기(JSON 파일 백업)', exportAll);
+  var impBtn = mkBtn('⬆', '메모 가져오기(JSON)', importAll);
+  bar.appendChild(countEl); bar.appendChild(addBtn); bar.appendChild(syncBtn); bar.appendChild(expBtn); bar.appendChild(impBtn);
   function mkBtn(label, title, fn) { var b = document.createElement('button'); b.textContent = label; b.title = title; b.addEventListener('click', fn); return b; }
 
   /* ---------- actions ---------- */
@@ -97,7 +118,7 @@
   }
   function remove(id) { state = state.filter(function (n) { return n.id !== id; }); persist(); render(); if (drawerOpen) renderDrawer(); }
 
-  /* ---------- render (wide: 여백 카드) ---------- */
+  /* ---------- render ---------- */
   function render() {
     layer.innerHTML = '';
     var m = metrics(), isWide = wide();
@@ -117,11 +138,9 @@
         card.style.top = top + 'px';
         lastBottom = top + card.offsetHeight;
       });
-    } else {
-      strip.style.display = 'none';
-    }
+    } else { strip.style.display = 'none'; }
     countEl.textContent = '📝 ' + state.length;
-    if (pendingFocus) { var ta = layer.querySelector('.mshn-card[data-id="' + pendingFocus + '"] textarea'); if (ta) { ta.focus(); } pendingFocus = null; }
+    if (pendingFocus) { var ta = layer.querySelector('.mshn-card[data-id="' + pendingFocus + '"] textarea'); if (ta) ta.focus(); pendingFocus = null; }
   }
 
   function buildCard(n) {
@@ -150,7 +169,7 @@
     return card;
   }
 
-  /* ---------- narrow: 서랍(drawer) ---------- */
+  /* ---------- drawer (narrow) ---------- */
   var drawer = null, drawerOpen = false;
   function openDrawer() { if (!drawer) buildDrawer(); drawer.classList.add('open'); drawerOpen = true; renderDrawer(); }
   function closeDrawer() { if (drawer) drawer.classList.remove('open'); drawerOpen = false; }
@@ -176,10 +195,10 @@
     });
   }
 
-  /* ---------- export / import (백업) ---------- */
+  /* ---------- export / import ---------- */
   function exportAll() {
     var all = {};
-    for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k.indexOf('mshnotes:') === 0 && k !== HINT) all[k] = localStorage.getItem(k); }
+    for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (isPageKey(k)) all[k] = localStorage.getItem(k); }
     var blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = 'msh-notes-backup.json'; a.click(); URL.revokeObjectURL(a.href);
@@ -191,8 +210,8 @@
       fr.onload = function () {
         try {
           var obj = JSON.parse(fr.result); var cnt = 0;
-          Object.keys(obj).forEach(function (k) { if (k.indexOf('mshnotes:') === 0) { localStorage.setItem(k, obj[k]); cnt++; } });
-          state = load(); render();
+          Object.keys(obj).forEach(function (k) { if (isPageKey(k)) { localStorage.setItem(k, obj[k]); setMeta(k.slice(9), Date.now()); cnt++; } });
+          state = load(); render(); scheduleSync();
           alert(cnt + '개 페이지의 메모를 가져왔어요.');
         } catch (e) { alert('가져오기 실패 — 올바른 백업 파일이 아니에요.'); }
       };
@@ -201,10 +220,139 @@
     inp.click();
   }
 
+  /* ============================================================
+     비밀 Gist 동기화
+     ============================================================ */
+  function token() { return localStorage.getItem(TOKEN_KEY) || ''; }
+  function gistId() { return localStorage.getItem(GISTID_KEY) || ''; }
+  function isPageKey(k) { return k.indexOf('mshnotes:') === 0 && k.indexOf(META_PRE) !== 0 && k !== TOKEN_KEY && k !== GISTID_KEY && k !== HINT; }
+  var syncState = 'off'; // off | syncing | ok | error
+
+  function setSync(s) {
+    syncState = s;
+    syncBtn.textContent = s === 'syncing' ? '⏳' : (s === 'error' ? '⚠️' : '☁');
+    syncBtn.style.opacity = (s === 'off') ? '.45' : '1';
+    syncBtn.title = s === 'off' ? '동기화 꺼짐 — 클릭해서 켜기'
+      : s === 'syncing' ? '동기화 중…'
+      : s === 'error' ? '동기화 오류 — 클릭' : '동기화 켜짐 ✓ — 클릭';
+  }
+
+  function api(method, path, body) {
+    return fetch('https://api.github.com' + path, {
+      method: method,
+      headers: { 'Authorization': 'token ' + token(), 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) { if (!r.ok) throw new Error('GitHub ' + r.status); return r.status === 204 ? {} : r.json(); });
+  }
+
+  function findGist() {
+    if (gistId()) return Promise.resolve(gistId());
+    return api('GET', '/gists?per_page=100').then(function (list) {
+      for (var i = 0; i < list.length; i++) { if (list[i].files && list[i].files[GIST_FILE]) { localStorage.setItem(GISTID_KEY, list[i].id); return list[i].id; } }
+      return '';
+    });
+  }
+
+  function readGist() {
+    return findGist().then(function (id) {
+      if (!id) return { pages: {} };
+      return api('GET', '/gists/' + id).then(function (g) {
+        try { return JSON.parse(g.files[GIST_FILE].content); } catch (e) { return { pages: {} }; }
+      });
+    });
+  }
+
+  function localPages() {
+    var out = {};
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i); if (!isPageKey(k)) continue;
+      var p = k.slice(9);
+      try { out[p] = { notes: JSON.parse(localStorage.getItem(k)), updatedAt: getMeta(p) }; } catch (e) {}
+    }
+    return out;
+  }
+
+  // 원격 → 로컬 (페이지별 최신 승리)
+  function pullAll() {
+    if (!token()) return Promise.resolve();
+    setSync('syncing');
+    return readGist().then(function (remote) {
+      var pages = (remote && remote.pages) || {};
+      Object.keys(pages).forEach(function (p) {
+        var r = pages[p]; if (!r) return;
+        if ((r.updatedAt || 0) > getMeta(p)) {
+          localStorage.setItem('mshnotes:' + p, JSON.stringify(r.notes || []));
+          setMeta(p, r.updatedAt || Date.now());
+        }
+      });
+      state = load(); render();
+      setSync('ok');
+    }).catch(function (e) { setSync('error'); });
+  }
+
+  // 로컬 → 원격 (다른 페이지는 원격 유지하며 병합)
+  var pushTimer = null;
+  function scheduleSync() { if (!token()) return; clearTimeout(pushTimer); pushTimer = setTimeout(pushAll, 1500); }
+  function pushAll() {
+    if (!token()) return Promise.resolve();
+    setSync('syncing');
+    return readGist().then(function (remote) {
+      var merged = (remote && remote.pages) ? Object.assign({}, remote.pages) : {};
+      var lp = localPages();
+      Object.keys(lp).forEach(function (p) {
+        if (!merged[p] || (lp[p].updatedAt || 0) >= (merged[p].updatedAt || 0)) merged[p] = lp[p];
+      });
+      var content = JSON.stringify({ v: 1, updatedAt: Date.now(), pages: merged });
+      var files = {}; files[GIST_FILE] = { content: content };
+      var id = gistId();
+      if (id) return api('PATCH', '/gists/' + id, { files: files });
+      return api('POST', '/gists', { description: 'MSH study — margin notes (auto)', public: false, files: files })
+        .then(function (g) { localStorage.setItem(GISTID_KEY, g.id); });
+    }).then(function () { setSync('ok'); }).catch(function (e) { setSync('error'); });
+  }
+
+  /* ---------- sync popover ---------- */
+  var pop = null;
+  function toggleSyncPop() { if (pop) { pop.remove(); pop = null; return; } openSyncPop(); }
+  function openSyncPop() {
+    pop = document.createElement('div'); pop.className = 'mshn-pop';
+    if (!token()) {
+      pop.innerHTML =
+        '<h4>☁ 메모 동기화 켜기</h4>' +
+        '<p>토큰 한 번만 붙여넣으면, 이후엔 메모 저장 시 <b>자동으로</b> GitHub 비밀 Gist에 백업돼요. 다른 기기에서도 같은 토큰만 넣으면 그대로 보여요.</p>' +
+        '<div class="row"><a class="btn" href="' + TOKEN_URL + '" target="_blank" rel="noopener">① 토큰 만들기(gist 권한)</a></div>' +
+        '<input type="password" placeholder="② 토큰 붙여넣기 (ghp_...)" />' +
+        '<div class="row"><button class="cancel">취소</button><button class="go">③ 켜기</button></div>' +
+        '<p class="warn">⚠ 토큰은 이 브라우저에만 저장돼요. 공용 PC에선 쓰지 마세요. 유출돼도 gist 권한뿐이라 레포·계정은 안전.</p>';
+      pop.querySelector('.cancel').onclick = toggleSyncPop;
+      pop.querySelector('.go').onclick = function () {
+        var t = pop.querySelector('input').value.trim();
+        if (!t) { alert('토큰을 붙여넣어 주세요.'); return; }
+        localStorage.setItem(TOKEN_KEY, t);
+        toggleSyncPop(); setSync('syncing');
+        // 검증 + 최초 병합(원격 불러오고 → 로컬 밀어넣기)
+        pullAll().then(pushAll).then(function () { if (syncState !== 'error') alert('동기화 켜졌어요 ✓ 이제 저장하면 자동 백업돼요.'); else alert('토큰이 잘못됐거나 gist 권한이 없어요. 다시 확인해 주세요.'); });
+      };
+    } else {
+      pop.innerHTML =
+        '<h4>☁ 동기화 ' + (syncState === 'error' ? '⚠️ 오류' : '켜짐 ✓') + '</h4>' +
+        '<p>메모를 저장하면 자동으로 비밀 Gist에 백업돼요.' + (syncState === 'error' ? ' <b>지금 오류 상태</b> — 토큰이 만료됐을 수 있어요.' : '') + '</p>' +
+        '<div class="row"><button class="now">🔄 지금 동기화</button><button class="pull">⬇ 다시 불러오기</button></div>' +
+        '<div class="row"><button class="off">🔌 동기화 끄기</button><button class="close">닫기</button></div>';
+      pop.querySelector('.now').onclick = function () { toggleSyncPop(); pushAll(); };
+      pop.querySelector('.pull').onclick = function () { toggleSyncPop(); pullAll(); };
+      pop.querySelector('.close').onclick = toggleSyncPop;
+      pop.querySelector('.off').onclick = function () {
+        if (confirm('이 브라우저에서 동기화를 끌까요? (토큰 삭제, 메모 자체는 남아요)')) { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(GISTID_KEY); toggleSyncPop(); setSync('off'); }
+      };
+    }
+    document.body.appendChild(pop);
+  }
+
   /* ---------- first-run hint ---------- */
   if (!localStorage.getItem(HINT)) {
     var hint = document.createElement('div'); hint.className = 'mshn-hint';
-    hint.innerHTML = '<b>📝 여백 메모</b><br>오른쪽 <b>빈 여백을 클릭</b>하면 그 위치에 메모를 남길 수 있어요. 좁은 화면에선 오른쪽 아래 <b>＋</b> 버튼을 쓰세요.<br><span style="color:#a08800;">이 브라우저에만 저장돼요(⬇로 백업).</span><br><button>알겠어요</button>';
+    hint.innerHTML = '<b>📝 여백 메모</b><br>오른쪽 <b>빈 여백을 클릭</b>하면 그 위치에 메모를 남겨요. 좁은 화면은 아래 <b>＋</b> 버튼.<br>다른 기기와 <b>동기화</b>하려면 <b>☁</b> 를 눌러 켜세요.<br><button>알겠어요</button>';
     hint.querySelector('button').onclick = function () { localStorage.setItem(HINT, '1'); hint.remove(); };
     document.body.appendChild(hint);
   }
@@ -214,5 +362,7 @@
   function reflow() { clearTimeout(rt); rt = setTimeout(render, 120); }
   window.addEventListener('resize', reflow);
   window.addEventListener('load', render);
+  setSync(token() ? 'ok' : 'off');
   render();
+  if (token()) pullAll();
 })();
