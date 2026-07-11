@@ -288,5 +288,44 @@ void APlayerController::ServerExec(const FString&amp; Msg)
 <p>막히면 → <a class="xref" href="ch-21-rpc-types.html">rpc-types</a> · <a class="xref" href="ch-22-rpc-reliable-validation.html">rpc-reliable-validation</a> · <a class="xref" href="ch-09-handshake.html">handshake</a> · <a class="xref" href="ch-08-packethandler.html">packethandler</a> 다음 → <a class="xref" href="ch-41-net-tooling.html">net-tooling</a> (안티치트를 실제로 관측·디버깅하는 도구 표면)</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. "서버 권위"가 정확히 뭐고, 왜 안티치트의 뿌리인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">한 줄로 <strong>"클라는 의도만, 결정은 서버가"</strong>야. 클라가 "나 몹 때려서 1000골드 먹었어"라고 쏴도 서버는 곧이곧대로 믿고 주면 안 돼 — "때린 게 맞나? 그 몹이 거기 있었나? 데미지가 말이 되나?"를 서버가 다시 계산해서 진짜 상태를 정해. 이걸 안 하면 클라가 데미지 999999나 순간이동 좌표를 넣어도 서버가 장부를 대신 망가뜨려주는 꼴이야. 안티치트가 전부 여기서 나와.</div></details>
+
+<h4>↳ UE는 이걸 개발자가 매번 손으로 짜게 두나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 재밌는 게 <strong>철학이 엔진 코드에 아예 박혀 있어</strong>. "클라가 서버 함수 못 부르게" 같은 걸 개발자가 매번 짜는 게 아니라, RPC를 부르는 순간 엔진이 자동으로 가로막아. 방향 라우팅·검증 짝함수·권위 게이트를 <strong>엔진 타입 시스템에 넣어서 빼먹기 어렵게</strong> 만든 거야. 우리 서버가 <code>CM_</code> 핸들러마다 손으로 재검증을 짜는 것과 대비되는 지점이지.</div></details>
+
+<h3>Q2. 방어선이 4겹이라는데, 왜 한 겹으로 안 되고 여러 겹인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">각 겹이 <strong>서로 다른 시점·다른 질문</strong>을 막거든. ④ 스테이트리스 쿠키는 "커넥션 만들기도 전에 IP가 진짜냐", ① Callspace 라우팅은 "이 호출을 어디로 보낼까(방향이 맞냐)", ③ <code>_Validate</code>는 "서버에 도착한 인자가 정상이냐", ② <code>HasAuthority</code>는 "진짜 상태를 바꿀 자격이 있냐". 바깥(④)에서 안(②)으로 갈수록 <strong>더 믿을 수 있는 상태</strong>가 돼. IP 검증 → 방향 검증 → 인자 검증 → 권위 검증을 차례로 통과한 다음에야 실제 상태를 건드려.</div></details>
+
+<h4>↳ 클라가 서버 전용 RPC를 자기 컴퓨터에서 로컬 실행하면 어떻게 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">조용히 버려져 — 엔진 용어로 <code>Absorbed</code>(흡수)야. 에러도 안 나. 근데 <strong>에러를 안 내는 게 오히려 방어</strong>야. 공격자한테 "여기 막혔다"는 힌트조차 안 주고, 서버는 애초에 그 호출을 받지도 않아. RPC는 방향이 단방향으로 못박혀 있어서(<code>FUNC_NetServer</code>는 클라→서버, <code>FUNC_NetClient</code>는 서버→클라), 잘못된 방향으로 쏘려는 건 replicate 자체를 안 해.</div></details>
+
+<h3>Q3. 서버 RPC가 서버에 진짜 도착했으면 이제 믿어도 되나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>"서버에 도착했다 ≠ 인자가 정상이다"</strong>야. 도착한 인자를 그냥 믿으면 데미지 음수, 인벤 범위 밖 슬롯, 10MB짜리 문자열이 그대로 실행돼 서버 메모리를 터뜨려. 그래서 Server RPC는 엔진이 <strong>둘로 쪼개</strong> — 실행 전에 인자를 검사하는 <code>_Validate</code>(bool 리턴), 그리고 통과해야만 불리는 <code>_Implementation</code>(실제 본체). <code>_Validate</code>가 <code>false</code>면 실행 거부 + 그 커넥션은 처벌(강제 종료) 대상이야.</div></details>
+
+<h4>↳ 그럼 _Validate 짝함수가 있으면 자동으로 안전한 건가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그게 이 챕터의 함정이야. <strong>틀은 엔진이 강제하지만 내용물은 개발자 몫</strong>이야. <code>_Validate</code> 본문을 <code>return true</code>로 비워두면 사실상 문을 활짝 열어둔 셈 — 우리가 <code>CM_</code> 핸들러에서 재검증 빼먹은 거랑 똑같이 뚫려. 구조가 강제된다는 게 방어의 절반이고, 실전 RPC에선 여기서 "데미지 음수 아냐?", "슬롯 범위 안이야?"를 진짜로 검사해서 <code>false</code>를 리턴해야 나머지 절반이 채워져.</div></details>
+
+<h4>↳ 인자 검증 말고, 애초에 위험한 기능은 어떻게 막나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">두 가지 더 있어. 하나는 <strong>보내기 전에 입력 크기를 잘라버리는</strong> 거야 — <code>ServerExec</code>이 문자열을 <code>Left(128)</code>로 128자 사전 절단해서, 클라가 10MB짜리 문자열을 쏴 서버 메모리를 터뜨리는 걸 원천 차단해. "입력 크기를 절대 믿지 마라"의 구현이지. 다른 하나는 콘솔 명령 같은 위험한 기능을 <strong>배포 빌드에서 컴파일 자체를 빼버리는</strong>(<code>#if !UE_BUILD_SHIPPING</code>) 거야 — 코드가 없으면 뚫을 수도 없으니까.</div></details>
+
+<h3>Q4. 접속하기 "전" 단계가 왜 제일 취약한가요? 아직 커넥션도 없는데요.</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">바로 그래서 취약해. UDP는 발신 IP를 위조할 수 있어서, 공격자가 <strong>가짜 IP로 "접속하고 싶다" 패킷을 초당 수십만 개</strong> 쏘면 서버는 각각에 커넥션 상태(메모리)를 잡으려다 고갈돼서 뻗어. 진짜 유저는 접속조차 못 해. IP를 밴하려 해도 다 가짜라 소용없어. 그래서 <strong>스테이트리스 핸드셰이크 쿠키</strong>로, 상태를 저장하지 않고 챌린지-응답 토큰을 주고받아 "이 IP로 답장이 실제로 돌아온다 = 위조가 아니다"를 먼저 검증한 다음에야 커넥션을 만들어줘.</div></details>
+
+<h4>↳ 그렇게 IP가 검증된 후에 홍수 공격이 오면요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그건 별개 문제로 다뤄. 방어가 두 층으로 갈려 — <strong>커넥션 전(IP 위조 가능)</strong>은 <code>FDDoSDetection</code>이 탐지·완화하고 IP 밴은 무의미해. <strong>핸드셰이크 통과 후(IP 검증됨)</strong>는 이제 IP가 진짜니까 문제 생기면 IP 밴이 먹혀. 쿠키 핸드셰이크가 이 두 층을 가르는 칼이야. 그래서 쿠키 검증 컴포넌트를 커넥션의 <strong>최외곽(outermost) 레이어</strong>로 끼워 — 패킷이 게임 로직에 닿기 전에 제일 먼저 통과하게.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>서버 권위 = "클라는 의도만, 결정은 서버가" — UE는 이걸 4겹(방향 라우팅 → 접속 전 IP 검증 → 인자 검증 → 권위 게이트)으로 엔진에 못박아, 개발자가 검증을 빼먹기 어렵게 만든다. 단, <code>_Validate</code> 본문은 여전히 개발자가 채워야 뚫리지 않는다.</strong></p></div><nav class="booknav"><a href="ch-39-connection-lifecycle.html"><span class="lbl">← 이전</span>연결 생명주기: 접속부터 끊김까지</a><a class="nx" href="ch-41-net-tooling.html"><span class="lbl">다음 →</span>터졌을 때 보는 법: 네트워크 디버깅</a></nav></div></body></html>

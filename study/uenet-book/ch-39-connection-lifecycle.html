@@ -321,5 +321,44 @@ a.xref:hover { background:#bbdefb; }
 <div class="note">이 협상 과정에서 오가는 저수준 핸드셰이크 패킷의 정체가 궁금하면 → <a class="xref" href="ch-09-handshake.html">handshake</a><br>끊김 이후 커넥션 객체가 GC로 실제로 소멸하는 디테일 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a><br>막히면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a><br>다음 → <a class="xref" href="ch-40-security.html">security</a></div>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 클라가 소켓 붙는 순간 바로 정식 유저로 처리하면 안 되나요? 왜 단계를 잘게 쪼갰죠?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">소켓 붙자마자 캐릭터 붙이고 게임에 앉히면 간단하지. 근데 그 사이 <strong>DB 심사가 실패하거나 클라가 맵 로딩 중에 끊기면?</strong> 아직 유저도 아닌데 로그아웃 저장을 태우거나, 없는 캐릭터를 정리하려 들어 터져. "접속 중"과 "게임 중"이 뒤섞여. 그래서 접속을 <strong>문 앞 판정 → 신원 협상 → 맵 로딩 → 조인 → 정리</strong>로 잘게 쪼개서 단계마다 문지기를 둔 거야. 손님을 문 열자마자 밥상에 앉히지 않는 것과 같아.</div></details>
+
+<h4>↳ 그럼 소켓이 붙는 것과 PlayerController가 생기는 건 같은 시점인가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>한참 떨어져 있어</strong>. 소켓 연결과 PlayerController 생성 사이에 로그인 협상·게임코드 심사·클라의 맵 로딩이 다 껴 있어. PlayerController는 거의 <strong>마지막에</strong>, 클라가 "나 맵 다 깔았어"(<code>NMT_Join</code>)라고 보고한 다음에야 태어나. 클라가 몇 GB짜리 맵 까는 동안 미리 만들어두면 낭비고, 그 사이 끊기면 도로 부숴야 하니까 — "만들기 전엔 만든 척 안 하기"야.</div></details>
+
+<h3>Q2. 로그인이 통과했으면 바로 게임에 들어온 거 아닌가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야, <strong>로그인(신원 확인)과 조인(입장)은 별개</strong>야. 로그인 통과 후에 클라가 맵을 다운로드/로드하고, 그게 끝나야 조인으로 넘어가. 이 <strong>"협상 → 로딩 → 조인" 2박자</strong>가 UE 접속의 핵심 리듬이야. 서버가 <code>NMT_Welcome</code>으로 "이 레벨로 접속 준비해"라고 쏘면 클라가 그때부터 맵을 로드하기 시작하고, 다 깔면 <code>NMT_Join</code>을 보내 — 그때 비로소 PlayerController가 스폰돼.</div></details>
+
+<h4>↳ 밴 체크·정원 체크 같은 심사는 왜 비동기(Async)로 하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">밴 체크·정원 체크는 DB를 때리거나 시간이 걸릴 수 있거든. 게임 스레드에서 그걸 동기로 기다리면 <strong>프레임이 멈춰</strong>. 그래서 <code>PreLoginAsync</code>는 비동기로 던지고, 심사 끝나면 콜백으로 이어받아. 우리 서버가 로그인 패킷 받고 AccountDB에 조회 던진 뒤 응답 오면 이어서 처리하는 것과 똑같아. 단, 콜백 도는 사이 커넥션이 끊겼을 수 있어서 <strong>약참조(<code>WeakObjectPtr</code>)</strong>로 받아 죽었으면 조용히 관두는 게 정석이야.</div></details>
+
+<h3>Q3. PlayerController랑 Pawn은 뭐가 다른가요? 왜 따로 만들죠?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>PlayerController = 접속한 플레이어 그 자체</strong>(입력·명령의 주체, 커넥션과 1:1). <strong>Pawn = 그 컨트롤러가 조종하는 게임 속 캐릭터.</strong> 순서가 있어 — 컨트롤러가 먼저 태어나고(<code>Login</code>), 그 뒤에 폰이 붙어(<code>PostLogin</code>). 사람이 먼저 게임에 들어오고, 그 사람이 조종할 몸뚱이는 그다음에 배정되는 거야. 이 <code>PreLogin → Login → PostLogin</code> 세 이름의 순서가 곧 생명주기 단계고, 심사·생성·후처리로 역할이 갈려.</div></details>
+
+<h4>↳ 이 PlayerController가 우리 조선 서버로 치면 뭐랑 비슷한가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>TCharacter</code>가 붙는 <strong>세션 개념 + 입력 주체를 합친 것</strong>에 가까워. 우리가 <code>SetClient</code>로 세션에 캐릭터를 결합하듯, UE는 <code>SpawnPlayActor</code>가 컨트롤러를 만들고 <code>SetPlayer</code>로 커넥션(<code>UPlayer</code>)과 1:1로 묶어 — 이제 입력이 오면 어느 컨트롤러로 갈지 정해진 거야. 다만 UE는 "사람(컨트롤러)"과 "몸(폰)"을 더 엄격하게 쪼갰다는 게 차이지.</div></details>
+
+<h3>Q4. 연결이 끊길 때 처리가 왜 하나가 아니라 두 갈래인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">끊긴 <strong>시점이 다르기 때문</strong>이야. 정식 입장한 유저(PC 있음)냐, 협상/로딩 중에 튄 손님(PC 없음)이냐로 갈려. PC가 있으면 정상 정리를 태워 — PC 파괴하고 <code>GameMode-&gt;Logout</code>으로 들어올 때 태웠던 <code>Login → PostLogin</code>을 <strong>대칭적으로 되감아</strong>. PC가 없으면 만들 PC가 애초에 없었으니 파괴할 것도 <code>Logout</code> 태울 것도 없어 — 그냥 "대기 중 연결 끊김" 알림만 쏘고 끝.</div></details>
+
+<h4>↳ 그 두 갈래를 어떻게 구분하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>ReceivedJoin</code> 플래그 하나야. 조인이 성공하면 로그인 상태가 <code>ReceivedJoin</code>으로 올라가는데, 이 플래그가 <strong>"정식 입장한 유저의 정상 종료"와 "대기 중 이탈한 손님"을 가르는 기준</strong>이야. 로그인 협상만 하다 튕긴 놈한테 <code>Logout</code> 이벤트를 쏘면 <strong>명단에 없는 유저를 로그아웃시키는 꼴</strong>이라 사고가 나거든. 그걸 이 플래그 검사 한 줄로 막아.</div></details>
+
+<h4>↳ 이 흐름 전체가 우리 IOCP 서버랑 뭐가 제일 다른가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>동시성 모델</strong>이야. 우리는 워커 N개가 병렬로 굴러서 락·경합을 늘 신경 써야 해(호출 순서 검증이 늘 붙는 이유가 이거지). UE는 소켓 수락부터 컨트롤 메시지 처리까지 <strong>게임 스레드 한 줄로 순차</strong>라 그 스트레스가 적어. 대신 무거운 심사는 스레드를 째는 게 아니라 <strong>콜백 델리게이트</strong>로 잘게 쪼개 넘겨야 프레임이 안 멈춰 — <code>PreLoginAsync</code>가 딱 그 설계야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>UE 접속은 "문 앞 판정 → 신원 협상 → (클라 맵 로딩) → 조인해야 비로소 PlayerController 탄생 → 끊기면 ReceivedJoin 여부로 정식 Logout이냐 조용한 이탈이냐가 갈린다" — 값싼 게이트를 앞에, 무거운 생성을 뒤에 둔 대칭 생명주기다.</strong></p></div><nav class="booknav"><a href="ch-38-travel.html"><span class="lbl">← 이전</span>Travel: 맵/방을 오가는 법</a><a class="nx" href="ch-40-security.html"><span class="lbl">다음 →</span>보안: 서버 권위와 안티치트 표면</a></nav></div></body></html>

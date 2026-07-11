@@ -292,5 +292,44 @@ int32 Health;</div>
 <p>막히면 → <a class="xref" href="ch-13-actorchannel-replicate.html">actorchannel-replicate</a> (이 명단을 누가/언제 들고 도는지), <a class="xref" href="ch-12-server-replicate-actors.html">server-replicate-actors</a> (복제 큰 그림) 다음 → <a class="xref" href="ch-15-replayout.html">replayout</a> (등록된 명단으로 실제 값을 어떻게 비교·전송하는지), <a class="xref" href="ch-18-rep-conditions.html">rep-conditions</a> (COND_* 필터 전모), <a class="xref" href="ch-17-repnotify.html">repnotify</a> (값 바뀌면 콜백), <a class="xref" href="ch-19-push-model.html">push-model</a> (bIsPushBased의 정체)</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>DOREPLIFETIME</code>이 하는 일을 한 문장으로 말해보세요.</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">"이 변수는 복제 대상이다"라고 <strong>명단에 이름 한 줄 올리는 등록 도장</strong>이야. 딱 못 박을 게 하나 있어 — 이건 <strong>값을 보내는 코드가 아니야.</strong> HP가 100→90으로 바뀌었다고 여기서 90을 전송하는 게 아니라, "HP라는 변수는 복제 후보다"라고 표만 붙이는 단계지. 실제 값 비교·전송은 나중 챕터(RepLayout·changelist)가 해. 파티로 치면 초대장 발송이 아니라 손님 명단 작성이야.</div></details>
+
+<h4>↳ 그 명단은 왜 필요한가요? 그냥 액터 변수 다 보내면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">액터엔 HP·위치·소유자뿐 아니라 서버 전용 값, 임시 계산 캐시 같은 게 다 섞여 있어. 이걸 전부 보내면 대역폭이 터지고, 밖에 나가면 안 되는 서버 값까지 새. 반대로 꼭 필요한 걸 빼먹으면 HP가 안 깎이고 권한 판단이 꼬여. 그래서 "클라가 알아야 하는 값"만 골라 명단에 올리는 거야. 조선 서버로 치면 <code>SP_*</code> 송신 구조체에 어떤 필드를 실을지 미리 정해두는 표랑 같아 — 표에 없으면 버스에 못 탄다.</div></details>
+
+<h3>Q2. 오버라이드 첫 줄의 <code>Super::</code>는 왜 거의 법인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">명단을 <strong>부모→자식으로 누적</strong>시키려고. 폰(APawn)은 액터(AActor)의 자식이라 Owner·Role·bHidden 같은 부모 속성도 다 필요해. <code>Super::</code>를 먼저 부르면 부모가 같은 명단 종이에 자기 몫을 채워주고, 그 아래에 자식이 자기 것을 이어 적어. 이게 없으면 자식마다 부모 속성을 손으로 또 베껴야 하고, 부모가 속성 하나 추가할 때 모든 자식을 다 고쳐야 해. 상속으로 자동 누적시켜서 베끼기도 빠뜨림도 없애는 거지.</div></details>
+
+<h4>↳ <code>Super::</code>를 빼먹으면 컴파일 에러라도 나나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그게 무서운 점이야. <strong>에러도 없이 조용히</strong> 부모 속성이 통째로 명단에서 빠져. 그럼 위치·소유자 복제가 소리 없이 안 돼서 "왜 캐릭터 위치가 클라에 안 뜨지?" 하고 한참 헤매게 돼. 그래서 오버라이드 첫 줄 <code>Super::</code>는 문법이 강제하진 않지만 사실상 지켜야 하는 규칙인 거지.</div></details>
+
+<h3>Q3. 헤더에 <code>Replicated</code> 안 붙이고 .cpp에서 <code>DOREPLIFETIME</code>만 쓰면 왜 게임이 <code>Fatal</code>로 죽나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">복제는 <strong>두 곳이 반드시 짝</strong>이어야 하거든. 헤더의 <code>UPROPERTY(Replicated)</code>가 그 변수에 "나 복제돼도 됨" 딱지를 세우는 선언이고, .cpp의 <code>DOREPLIFETIME</code>이 명단 등록이야. 딱지 없이 명단에만 올리면 "등록은 했는데 정작 변수는 네트워크 채비가 안 된" 반쪽 상태라, 나중에 조용히 복제가 안 돼서 원인 찾느라 반나절 날려. 그걸 개발 중에 즉시 크래시로 알려주려고 일부러 세게 막는 거야. 이건 거의 항상 실수니까.</div></details>
+
+<h4>↳ 그 검사가 출시 빌드에도 들어가면 성능 낭비 아닌가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그래서 그 검사는 <strong>개발 빌드에서만</strong> 돌고 출시 빌드에선 아예 빠져. 개발 중에 다 잡으라는 취지지, 출시된 게임에서 매번 확인하려는 게 아니거든. 그리고 애초에 이 명단 등록 전체가 <strong>게임 시작 때 클래스당 딱 한 번</strong>만 도는 코드야 — 매 프레임 도는 게 아니라. 그러니 검사 비용도 사실상 한 번뿐이야.</div></details>
+
+<h3>Q4. "누구한테 보낼지"까지 명단에 적는다는 게 무슨 뜻인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">명단에 변수 이름만 적는 게 아니라 <strong>복제 조건(COND_)</strong> 필터도 같이 적는다는 거야. 그냥 <code>DOREPLIFETIME</code>은 전원에게 보내지만, <code>COND_SkipOwner</code> 같은 조건을 달면 "본인은 빼고 남들한테만"이 돼. 예를 들어 내 캐릭터가 어디 보는지(ViewPitch)는 나 자신은 이미 아는 값이라 서버가 나한테 되돌려주면 순수 낭비거든. 접속한 전원에게 다 보내면 대역폭을 헛쓰니까, 변수마다 받을 사람을 좁히는 필터를 같은 명단에 함께 적는 거지.</div></details>
+
+<h4>↳ 명단을 짧게 유지하고 조건을 거는 게 왜 성능이랑 직결되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">UE의 복제 계산은 <strong>단일 게임 스레드</strong>가 프레임 안에 모든 액터를 순회하며 처리하거든. 우리 서버가 여러 IOCP 워커로 나눠 부담을 푸는 것과 달리, UE는 그 한 스레드가 다 짊어져. 그러니 명단에 쓸데없는 변수가 많거나 전원에게 다 뿌리면 그 한 스레드가 그만큼 더 일해야 해. "필요 없는 변수는 명단에서 빼고, 조건으로 대상을 좁히는" 게 곧 그 스레드를 지키는 방법이야 — 우리가 빈번한 경로에 무거운 작업 금지하는 거랑 같은 문제, 정반대 무기지.</div></details>
+
+<h4>↳ 이 명단 등록은 언제, 몇 번 도나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>게임 시작 시 클래스당 딱 한 번</strong>만 돌아. <code>DOREPLIFETIME</code> 한 줄 뒤에 검색→검증→등록 3단이 숨어 있긴 한데, 그건 "복제 명단"을 한 번 만들어두는 작업이지 매 프레임 도는 게 아니야. 명단이 완성되면 그때부터는 RepLayout이 그 명단을 들고 실제 값 비교·전송을 반복해. 그러니 명단 등록 자체의 비용은 걱정할 게 아니고, 정작 매 프레임 무거운 건 그 뒤의 값 비교·전송 단계인 거지.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong><code>GetLifetimeReplicatedProps</code>는 "복제할 변수 명단"을 신고하는 창구고, <code>DOREPLIFETIME</code>은 그 명단에 이름 한 줄 적는 등록 도장이다 — 값 전송이 아니라 손님 명단 작성이다.</strong></p></div><nav class="booknav"><a href="ch-13-actorchannel-replicate.html"><span class="lbl">← 이전</span>ActorChannel — 액터 하나가 복제되는 입구</a><a class="nx" href="ch-15-replayout.html"><span class="lbl">다음 →</span>RepLayout: 프로퍼티를 비트로 눕히는 법</a></nav></div></body></html>

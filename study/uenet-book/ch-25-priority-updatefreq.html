@@ -217,6 +217,45 @@ a.xref:hover { background:#bbdefb; }
 <ul><li><strong>"NetPriority 높이면 더 자주 보내진다"</strong> → ✗. 우선순위는 <strong>포화 시 생존 경쟁용</strong>이야. 안 붐비면 우선순위 낮아도 다 나간다. "자주"는 <code>NetUpdateFrequency</code> 담당.</li><li><strong>"NetPriority는 1등, 2등 순번이다"</strong> → ✗. <strong>배수 가중치</strong>다. <code>NetPriority * Time</code>의 곱이라, <code>Time</code>(굶은 시간)이 커지면 낮은 우선순위도 역전한다.</li><li><strong>"MinNetUpdateFrequency는 최소로 보장되는 빈도"</strong> → ✗. <strong>가장 느릴 때의 하한(=대역폭 절약 바닥)</strong>이야. 이름과 반대로 "이보다 더 뜸해지진 않게" 막는 값.</li><li><strong>"포화되면 우선순위 낮은 액터는 못 받는다"</strong> → ✗. <code>bPendingNetUpdate</code>가 붙어 다음 틱 우회 재고려된다. 뜸할 뿐 굶진 않아.</li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 우선순위와 갱신빈도, 왜 둘 다 필요한가요? 하나로 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">완전히 다른 축이라서야. <strong>갱신빈도(NetUpdateFrequency)</strong>는 "얼마나 자주" — 시간 간격이야. 벽·문처럼 천천히 변하는 건 가끔만 보면 되고 플레이어 위치는 자주 봐야 하니까. <strong>우선순위(NetPriority)</strong>는 "누가 먼저" — 대역폭이 꽉 찼을 때 생존 순번이야. 갱신빈도는 시계, 우선순위는 줄 세우기. 아무리 순서를 공정하게 맞춰도 보낼 수 있는 양 자체가 모자라면 공정함만으로는 해결이 안 되거든.</div></details>
+
+<h4>↳ "NetPriority 높이면 더 자주 보내진다"가 맞나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">틀려. 우선순위는 <strong>포화 시 생존 경쟁용</strong>이야. 대역폭이 안 붐비면 우선순위 낮아도 다 나가. "자주"는 갱신빈도 담당이고. 흔히 헷갈리는데, 우선순위를 올린다고 전송 빈도가 늘진 않아 — 막혔을 때 컷라인 위에 살아남을 확률만 올라가는 거야.</div></details>
+
+<h3>Q2. 서버는 매 틱 이걸 큰 그림에서 어떤 순서로 처리하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">세 단계야. <strong>시간으로 거르고 → 점수로 줄 세우고 → 대역폭 찰 때까지 위에서부터 보낸다.</strong> ① 갱신빈도 게이트로 "아직 네 차례 아니면 이번 틱 후보에서 빼"고, ② 남은 후보를 연결별로 점수 매겨 내림차순 정렬하고, ③ 정렬 순서대로 보내다가 연결이 포화되면 그 자리서 끊어. 갱신빈도가 파이프라인 맨 앞 수도꼭지라, 여기서 잠그면 뒤따르는 점수계산·정렬·전송이 통째로 말라.</div></details>
+
+<h4>↳ 안 움직이는 문짝을 갱신빈도 2로 깔면 부하가 절반쯤 주나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">절반이 아니라 반전이야. 기본 100에서 2로 내리면 갱신 시도가 <strong>1/50로</strong> 줄어. 이 액터가 후보 리스트에 오르는 횟수 자체가 50배 뜸해지니까, 뒤따르는 점수계산·정렬·전송 비용이 통째로 절약돼. 갱신빈도는 항상 역수로 뒤집혀 써 — 빈도 100이면 0.01초마다, 2면 0.5초마다. 맨 앞 수도꼭지를 잠그면 하류 전체가 마르는 거지.</div></details>
+
+<h3>Q3. 우선순위 점수는 큰 그림에서 어떻게 계산되나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">핵심 식이 <strong><code>NetPriority × Time</code></strong>이야. <code>NetPriority</code>는 액터가 들고 있는 고정 가중치(기본 1.0, 캐릭터는 높게 장식은 낮게) — 절대 순번이 아니라 배수야. <code>Time</code>은 "마지막으로 보낸 뒤 굶은 시간"인데, 여기에 거리·시야 보정이 곱해져 — 내가 보는 대상이면 ×4, 정면으로 쳐다보면 ×2, 등 뒤 + 멀면 ×0.2. 그리고 점수는 연결별로 계산돼. 우선순위는 "그 플레이어 시점에서 얼마나 중요한가"라 보는 사람마다 다르거든(내 코앞의 적 vs 지도 반대편의 적).</div></details>
+
+<h4>↳ 그럼 우선순위 낮은 배경 액터는 영영 안 보내지나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야, 여기가 이 설계의 묘수야. <code>Time</code>이 "굶은 시간"으로 계속 커지니까, <code>NetPriority</code>가 낮은 액터도 오래 못 보내면 <code>Time</code>이 부풀어서 언젠가 상위로 치고 올라와. <strong>기아 방지(starvation)가 공짜로 딸려오는</strong> 거지. 우선순위 낮다고 영영 굶는 게 아니라 뜸하게라도 반드시 차례가 와.</div></details>
+
+<h3>Q4. 대역폭 예산은 실제로 누가 집행하나요? 우선순위가 자르는 건가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">집행자는 우선순위가 아니라 <strong>연결의 포화 여부(IsNetReady)</strong>야. 정렬된 순서대로 보내다가 "이 연결 이번 틱 예산 다 썼어?"를 물어서, 다 썼으면 그 자리서 멈추고 남은 저우선순위 액터는 미련 없이 버려. 즉 <strong>컷라인은 대역폭이 긋고, 그 컷라인 위에 누가 남을지를 점수가 정해.</strong> 이제 정렬이 왜 중요했는지 보이지 — 포화가 오면 위에서부터 살아남고 아래는 통째로 이번 틱 탈락이니까.</div></details>
+
+<h4>↳ 포화로 잘린 액터는 다음 틱에 또 뒤로 밀리나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">안 밀려. 포화로 못 보낸 놈은 <code>bPendingNetUpdate</code> 플래그가 붙어서, 다음 틱엔 <strong>시간 게이트를 우회</strong>해 무조건 재고려돼. 시간 게이트 조건이 "강제 대기 상태가 아니고 AND 아직 시각 안 됐으면 skip"인데, 이 플래그가 true면 "아직 시각 안 됐어도 skip 안 함"이 되거든. 시간 게이트와 기아 방지가 여기서 맞물리는 거야.</div></details>
+
+<h4>↳ 우리 IOCP 서버엔 왜 이런 "우선순위 점수"가 없죠?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우리는 줄이 없어서야. 우리는 이벤트/패킷 생기면 그 자리서 <code>WSASend</code>로 밀어넣는 <strong>push</strong> 모델이라 "누굴 먼저"라는 전역 경쟁 개념이 없어 — 대역폭 배분도 사실상 OS TCP 스택에 맡기지. UE는 정반대로 매 틱 전 액터를 한 줄로 세워 예산만큼 자르는 <strong>pull + budget</strong> 모델이야. 줄을 세우는 순간 순번이 필요하니까 "우선순위 점수"가 존재할 자리가 생기는 거지. IOCP 모델엔 그 고민이 로직 쪽으로 흩어져 있어.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>갱신빈도(1/Freq)가 "얼마나 자주 후보에 올릴지"를 시간으로 잠그고, 우선순위(NetPriority × 굶은시간)가 "대역폭이 찰 때 누가 컷라인 위에 남을지"를 정한다 — 두 축이 좁은 문 앞의 배분을 나눠 맡는다.</strong></p>
 <div class="note">막히면 → <a class="xref" href="ch-24-relevancy.html">relevancy</a> (애초에 후보가 되는 조건)<br>다음 → <a class="xref" href="ch-26-dormancy.html">dormancy</a> (안 변하는 액터는 아예 복제 정지)</div></div><nav class="booknav"><a href="ch-24-relevancy.html"><span class="lbl">← 이전</span>관련성: 누구에게 보낼지 (Relevancy)</a><a class="nx" href="ch-26-dormancy.html"><span class="lbl">다음 →</span>Dormancy: 안 바뀌는 액터는 재운다</a></nav></div></body></html>

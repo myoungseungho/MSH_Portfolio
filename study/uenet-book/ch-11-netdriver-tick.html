@@ -271,5 +271,44 @@ a.xref:hover { background:#bbdefb; }
 <ul><li>소켓에서 올라온 raw가 번치로 풀려 위로 전달되는 <strong>받는 쪽 계단</strong> → <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a></li><li>이 클론에 없던 <strong>IpNetDriver 소켓 층</strong>(실제 <code>recvfrom</code> while 루프) → <a class="xref" href="ch-10-ipnetdriver-socket.html">ipnetdriver-socket</a></li><li>커넥션 1개가 번치를 봉투에 담아 내보내는 <strong>보내는 쪽 계단</strong> → <a class="xref" href="ch-06-send-callchain.html">send-callchain</a></li><li><code>TickFlush</code> ①이 부르는 무거운 "누구한테 뭘 복제할지" 계산 → <a class="xref" href="ch-12-server-replicate-actors.html">server-replicate-actors</a></li><li>애초에 NetConnection이 뭔지, <code>ClientConnections</code>가 어떻게 생기는지 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a></li><li><code>TickFlush</code> 래핑에 자꾸 튀어나오던 Iris(새 리플리케이션 시스템) → <a class="xref" href="ch-28-iris.html">iris</a></li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 네트워크를 매 프레임 딱 두 번 편다는데, 왜 아무 때나 처리하지 않고 박자로 나누나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">박자가 없으면 네트워크가 난장판이 돼. 어떤 클라는 이번 프레임 결과를 받고 어떤 클라는 지난 프레임 결과를 받고, 어떤 패킷은 액터 복제 전에 나가고 어떤 건 복제 뒤에 나가. 같은 월드인데 사람마다 다른 영화를 보게 되는 거지. 그래서 엔진은 프레임 앞에서 <code>TickDispatch</code>로 받고, 뒤에서 <code>TickFlush</code>로 내보내. "받기 → 게임 로직 → 보내기"로 줄을 세우는 거야. 우리 조선 서버가 "받는 곳"과 "처리하는 곳"을 나눠 한 박자 안에서 순서를 정리하는 거랑 같은 정신이야.</div></details>
+
+<h4>↳ 그럼 받은 즉시 그 자리에서 게임 상태를 고치면 뭐가 문제죠?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">몬스터 이동 중인데 데미지 패킷이 끼어들고, 인벤 저장 중인데 교환 패킷이 들어오고 — 결국 락을 여기저기 붙이다 서버가 실타래처럼 꼬여. 프레임 경계로 "지금은 받는 시간, 지금은 로직 시간"을 딱 자르면 그런 끼어들기가 없어지고 순서가 정리돼. 그래서 UE는 조선 서버의 큐 대신 <strong>프레임 경계</strong>를 쓴다고 보면 큰 그림이 맞아.</div></details>
+
+<h3>Q2. 월드가 NetDriver를 어떻게 부르나요? 직접 부르나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">직접 안 불러. 월드는 그냥 "수신 단계 시작!" 하고 <strong>방송(Broadcast)만</strong> 하고, 거기 귀 기울이던 NetDriver가 알아서 반응해. NetDriver가 초기화될 때 월드 방송(<code>OnTickDispatch</code>/<code>OnTickFlush</code>)에 자기 함수를 등록(<code>AddUObject</code>)해두는 거지. 이 방송-구독 장치가 <strong>멀티캐스트 델리게이트</strong>야.</div></details>
+
+<h4>↳ 그냥 월드가 <code>netDriver-&gt;TickDispatch()</code>를 직접 부르면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그러면 월드 코드가 NetDriver라는 존재를 속속들이 알아야 해. 네트워크 없는 모드도 있고 드라이버가 여러 개일 수도 있는데, 월드가 걔들을 일일이 이름으로 부르면 서로 꽉 묶여서 갈아끼우기 힘들어져. 방송-구독으로 하면 월드는 누가 듣는지 몰라도 되고 NetDriver만 자기를 등록하면 돼 — <strong>느슨한 결합</strong>이지. 이게 델리게이트를 쓰는 이유야.</div></details>
+
+<h3>Q3. 받기 펌프 <code>TickDispatch</code>인데 정작 소켓을 안 읽는다던데, 그럼 뭘 하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">베이스 <code>UNetDriver::TickDispatch</code>는 <strong>받기 펌프의 뼈대/관리</strong>만 해 — 시간 갱신, 히치(뚝 끊김) 감지, 닫힌 커넥션 청소, 각 커넥션 <code>PreTickDispatch</code>로 수신 준비. "펌프질 그 자체"(<code>recvfrom</code>을 while로 퍼올리기)는 <strong>서브클래스 <code>IpNetDriver</code>가 오버라이드해서</strong> 끼워 넣어. 앞 챕터의 계약/구현 분리가 여기서도 반복되는 거야. 이름만 보고 "여기서 소켓 읽겠지" 하면 헷갈리는 지점이라 딱 박아둬야 해.</div></details>
+
+<h4>↳ 히치 감지는 왜 굳이 하나요? 받기랑 무슨 상관인가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">프레임 사이가 5초씩 벌어지면 클라 입장에선 연결이 끊긴 것처럼 보여. 근데 진짜 끊긴 건지 서버가 잠깐 얼어붙은 건지 나중에 로그만 봐선 구분이 안 돼 — 둘 다 "타임아웃"이거든. 그래서 매 틱 지난 프레임과의 시간 차를 재서 5초 임계를 넘으면 "이번 프레임 히치났다"고 표시(<code>bDidHitchLastFrame</code>)해둬. 이게 나중에 "네트워크 문제냐 서버 문제냐"를 갈라줘.</div></details>
+
+<h3>Q4. 보내기 펌프 <code>TickFlush</code>의 핵심은 뭔가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">두 단계야. ① 서버면 액터 상태를 각 커넥션 채널에 <strong>쌓고</strong>(복제 계산), ② <code>ClientConnections</code> 배열을 <strong>전부 돌면서</strong> <code>Connection-&gt;Tick()</code>을 불러 쌓인 번치를 패킷으로 묶어 소켓에 밀어내(flush). 이 for 루프가 "모든 NetConnection을 도는 상위 루프"의 정체야. ①이 "짐 쌓기", ②가 "짐 내보내기"라 반드시 ①이 ② 앞에 와야 해.</div></details>
+
+<h4>↳ 커넥션마다 보낼 게 생길 때 바로바로 소켓에 쏘면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그러면 한 프레임 안에서도 커넥션 여기저기가 제각각 소켓을 때려 — 누구는 이번 프레임 결과를, 누구는 반쯤 된 결과를 받아. <code>send()</code> 횟수도 헛되이 늘고 접속자마다 다른 박자로 패킷이 나가지. 그래서 짐 쌓기를 프레임 앞에서 다 끝낸 뒤 프레임 <strong>끝에서 한 번</strong> 전원에게 몰아서 flush하는 거야. 우리 조선 서버에서 Nagle 끄고 프레임 단위로 묶어 보내는 배칭이랑 정확히 같은 동기 — syscall 아끼려고 모아서 한 방.</div></details>
+
+<h4>↳ 조선은 IOCP 워커가 별도 스레드로 항상 recv하는데, UE는 다르지 않나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">달라. UE는 수신도 <strong>게임 스레드에서 프레임 단위로</strong> 편다 — <code>TickDispatch</code> 한 방에 "지난 프레임 동안 도착한 거 몰아서" 처리해. 어차피 한 스레드니까 재진입 방지도 락이 아니라 <code>bInTick</code> <strong>플래그</strong>로 충분하지. 오히려 조선의 싱글스레드 액터 철학이랑 더 닮았어. 조선은 큐로 IO 스레드와 로직 스레드를 잇고, UE는 프레임 경계로 받는 순간과 처리하는 순간을 자른 차이일 뿐이야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>엔진은 매 프레임 딱 두 번 네트워크를 편다 — 앞에서 <code>TickDispatch</code>로 받고(단, 소켓 read는 서브클래스가 채움), 뒤에서 <code>TickFlush</code>가 <code>ClientConnections</code>를 전부 도는 상위 루프로 접속자 전원에게 이번 프레임 몫을 한 방에 내보낸다.</strong></p></div><nav class="booknav"><a href="ch-10-ipnetdriver-socket.html"><span class="lbl">← 이전</span>IpNetDriver: 소켓과 실제로 만나는 곳</a><a class="nx" href="ch-12-server-replicate-actors.html"><span class="lbl">다음 →</span>서버가 액터를 뿌린다: ServerReplicateActors</a></nav></div></body></html>

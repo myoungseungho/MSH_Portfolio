@@ -260,5 +260,48 @@ FlushNet: 종료비트 박고 봉투 마감     (FlushNet)
 <ul><li><strong>막히면 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a></strong> (Bunch랑 패킷이 왜 다른 물건인지)</li><li><strong>막히면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a></strong> (커넥션이 뭘 들고 있는 객체인지)</li><li><strong>다음 → <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a></strong> (지금 봉해 보낸 걸 반대편이 어떻게 까는지 — 종료 비트 되읽기)</li><li>곁가지: 조각내기 상세 <a class="xref" href="ch-04-datachannel-nextbunch.html">datachannel-nextbunch</a> / ack·재전송 <a class="xref" href="ch-07-reliability-ack.html">reliability-ack</a> / 정기 flush 타이밍 <a class="xref" href="ch-11-netdriver-tick.html">netdriver-tick</a> / 소켓 write 실물 <a class="xref" href="ch-10-ipnetdriver-socket.html">ipnetdriver-socket</a></li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. Bunch를 만들었으면 바로 소켓으로 보내면 되잖아요. 왜 버퍼에 모았다 보내나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">편지 한 통마다 우체국까지 뛰어가면 다리부터 부러지거든. 사람 500명이 한 프레임에 좌표·채팅·전투를 <strong>와르르</strong> 쏟아내면 <code>send()</code>(=커널 진입) 수천 번이야 — 느려터져. 그래서 편지(Bunch)를 <strong>우체통(SendBuffer)에 모아뒀다가</strong> 정해진 순간에 트럭 한 번으로 걷어가. 이게 <strong>Flush</strong>야. 핵심은 <strong>"Bunch를 만들었다"가 곧 "소켓을 때렸다"가 아니라는 것.</strong> 우리가 Nagle 끄고 프레임 단위로 send 묶는 그 배칭이랑 같은 동기야.</div></details>
+
+<h4>↳ 우리 서버의 send 큐 배칭이랑 완전히 같은 건가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">발상은 같아. 다만 우리는 <strong>바이트</strong> 단위로 큐에 쌓고, UE는 <strong>비트</strong> 단위로 <code>SendBuffer</code>에 누적한다는 게 차이. 그리고 우리 배칭은 우리가 직접 짠 최적화지만, UE는 <code>TimeSensitive</code> 깃발 + Tick flush로 <strong>엔진에 이미 박혀</strong> 있어. 개념이 같으니 낯설지 않은 거지.</div></details>
+
+<h3>Q2. 그 "정해진 순간", 즉 Flush가 언제 터지나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">방아쇠가 넷이야. (A) 쓰고 났더니 버퍼가 <strong>딱 꽉 참</strong>, (B) 다음 데이터가 <strong>지금 버퍼에 안 들어감</strong>, (C) <strong>프레임 끝 Tick</strong>에서 보낼 게 있으면(주 경로), (D) 종료·오버플로 같은 급한 상황의 <strong>강제 flush</strong>. 실전에선 편지 대부분이 (C)로 나가 — 한 프레임 동안 Bunch를 쌓기만 하다가 프레임 끝에 한 방에 내보내. A/B는 버퍼가 넘칠 때 어쩔 수 없이 프레임 도중에 나가는 예외고.</div></details>
+
+<h4>↳ 그 (C) 주 경로는 뭘 보고 "보낼 게 있다"를 판단하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>TimeSensitive</code>라는 깃발이야. Bunch를 하나라도 버퍼에 쓰면 <code>SendRawBunch</code>에서 이 깃발이 1로 서. 그럼 프레임 끝 <code>Tick</code>에서 "깃발 섰네 → Flush"로 흘러. 매 flush 후엔 0으로 리셋되고. 그러니까 "이번 프레임에 뭐라도 쌓였으면 프레임 끝에 나간다"가 정상 흐름이야.</div></details>
+
+<h4>↳ 보낼 게 하나도 없으면 그 프레임엔 아무것도 안 나가나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">보통은 안 나가는데, <code>KeepAliveTime</code>이 지나면 얘기가 달라. 보낼 데이터가 없어도 그 시간이 넘으면 <strong>keepalive 패킷을 한 번</strong> flush해서 "나 아직 살아있다"를 알려. 안 그러면 상대가 연결이 죽은 줄 알고 타임아웃으로 끊어버리거든. 그래서 완전 침묵은 아니고, 최소한의 생존 신호는 보내.</div></details>
+
+<h3>Q3. 버퍼에 쓸 때, 일단 쓰고 넘쳤나 확인하는 게 아니라 쓰기 전에 자리를 먼저 확인한다던데 왜죠?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">비트 스트림에선 <strong>반쯤 쓰다가 "넘쳤네" 하고 되돌리는 게 지옥</strong>이거든. 바이트 정렬이 아니라 비트 단위로 눌러 담으니까, 중간까지 쓴 걸 깔끔히 롤백하기가 까다로워. 그래서 <code>Prepare...</code>로 <strong>자리부터 확보</strong>하고 — 안 들어가면 먼저 flush해서 빈 우체통을 열고 — 그다음에 실제로 기록해. "일단 memcpy하고 사이즈 체크"하는 우리 흔한 패턴이랑 반대 순서인 게 반전이야.</div></details>
+
+<h4>↳ 그럼 자리 확인 중에 flush가 튀면 <code>TimeSensitive</code> 깃발은 안전한가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그래서 코드가 <code>Prepare...</code> <strong>전에</strong> <code>TimeSensitive=1</code>을 먼저 세워둬. 주석도 친절하게 "Prepare가 패킷을 flush할 수 있으니 그 전에 깃발부터"라고 적어놨어. 순서가 뒤바뀌면 flush가 깃발을 지우고 지나가 이번 프레임 송신이 누락될 수 있거든. 미묘하지만 중요한 순서지.</div></details>
+
+<h3>Q4. FlushNet이 실제 소켓 write까지 다 하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <code>FlushNet</code>은 봉투를 봉하는 데까지만 해 — 패킷 끝에 <strong>종료 비트</strong>를 박아 마감하고, 소켓 자원이 유효한지 확인하고, <code>LowLevelSend</code>를 불러. 근데 <code>UNetConnection::LowLevelSend</code>는 <strong>순수 가상이라 본문이 없어</strong>. 진짜 <code>sendto</code>는 <code>UIpConnection</code> 같은 자식이 채워. 소켓 유효성 검사 같은 공통 처리는 부모가 한 번에 하고, 진짜 write만 자식에게 맡기는 구조야.</div></details>
+
+<h4>↳ 마지막에 박는다는 그 종료 비트, 어디서 본 것 같지 않아요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">맞아, 수신 챕터의 <strong>터미네이터 비트</strong>랑 짝이야. 여기 송신에서 "여기까지가 이 패킷"이라고 심어둔 그 마지막 1비트를, 받는 쪽이 되읽어서 진짜 비트 길이를 역산해. 송신·수신이 <strong>거울처럼 맞물리는</strong> 거지 — 한쪽이 봉하는 방식과 다른 쪽이 뜯는 방식이 정확히 대응돼.</div></details>
+
+<h4>↳ flush 끝나면 버퍼는 매번 새로 할당하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>malloc 새로 안 하고 Reset만</strong> 해(<code>InitSendBuffer</code>). 커넥션당 우체통은 딱 1개라 재사용하거든. 그래서 매 패킷마다 할당이 안 생겨 — 시퀀스 번호 올리고 통계 갱신한 뒤 버퍼만 비워서 다음 편지 받을 준비를 하는 거야. 게임 서버에서 alloc 신경 쓰는 감각이면 반가운 디테일이지.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <div class="note"><strong>Bunch는 소켓으로 바로 안 간다 — SendBuffer에 비트로 쌓였다가, "꽉 찰 때(A)·안 들어갈 때(B)·프레임 끝 TimeSensitive(C, 주경로)·강제(D)" 넷 중 하나가 걸려야 FlushNet이 종료비트로 봉해 LowLevelSend로 밀어낸다. 즉, 프레임 단위로 모았다가 한 번에.</strong></div></div><nav class="booknav"><a href="ch-05-channel-types.html"><span class="lbl">← 이전</span>Channel 종류: Control / Actor / Voice</a><a class="nx" href="ch-07-reliability-ack.html"><span class="lbl">다음 →</span>안 잃게: 시퀀스·ack·재전송</a></nav></div></body></html>

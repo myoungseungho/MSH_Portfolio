@@ -241,6 +241,45 @@ a.xref:hover { background:#bbdefb; }
 <ul><li>막히면(NetConnection·NetDriver가 애초에 뭔지) → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a></li><li>막히면(연결이 처음 어떻게 수립되는지 — seamless가 이걸 "안 다시 하는" 거야) → <a class="xref" href="ch-09-handshake.html">handshake</a></li><li>막히면(NetDriver가 소켓 위에 어떻게 얹히는지) → <a class="xref" href="ch-10-ipnetdriver-socket.html">ipnetdriver-socket</a></li><li>다음(연결이 태어나서 죽기까지 전체 생애 — travel은 그 중간의 한 사건) → <a class="xref" href="ch-39-connection-lifecycle.html">connection-lifecycle</a></li><li>다음(NetDriver가 매 틱 무슨 일을 하는지 — Tick 기반 진행의 큰 그림) → <a class="xref" href="ch-11-netdriver-tick.html">netdriver-tick</a></li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. UE에서 "맵을 바꾼다"는 게 왜 그냥 좌표 바꾸는 것보다 무거운 일인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">UE에서 맵 이동은 <strong>월드(<code>UWorld</code>/Level)를 통째로 갈아끼우는 일</strong>이야. 옛 맵을 메모리에서 지우고 새 맵을 로드해. 근데 그 위에 얹혀 있던 네트워크 연결·소켓·복제 상태는 다 옛 월드에 붙어 있었단 말이지. 아무 준비 없이 갈아엎으면 접속이 끊기고, 못 보낸 복제 데이터가 날아가고, PlayerController가 어느 월드 소속인지 헷갈려. 우리 서버 워프처럼 좌표 숫자만 바꾸는 게 아니라서 무거운 거야.</div></details>
+
+<h4>↳ 그래서 seamless travel이 뭘 해결하는 건가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">맵을 갈아끼우면서도 <strong>연결(NetConnection)은 안 끊는</strong> 길이야. 그냥 끊고 다시 붙는 hard travel은 매번 로그인·핸드셰이크부터 다시 해서 로딩이 뚝뚝 끊겨. 보스방 버튼 30명이 눌렀는데 매번 재접속이면 낭비잖아. seamless는 회선은 그대로 두고 집만 새로 짓는 이사처럼, 로그인을 다시 안 하니까 전환이 매끄러워.</div></details>
+
+<h3>Q2. 그럼 "맵은 바뀌는데 연결은 유지"가 어떻게 가능한가요? 마법 같은데요.</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">알고 보면 딱 한 수야. <strong>옛 월드에서 <code>NetDriver</code>를 꺼내서 새 월드에 그대로 붙이는</strong> 포인터 이사. <code>NetDriver</code>는 실제 소켓·각 클라 연결·복제 상태를 통째로 쥔 객체인데, 얘는 <strong>한 번도 파괴되지 않아</strong>. 옛 월드에서 떼서 새 월드에 옮겨 꽂을 뿐이야. 소켓은 계속 열려 있고 핸드셰이크도 다시 안 해. 인터넷 회선을 해지 안 하고 새 집에 옮겨 꽂는 거지. seamless의 전부가 이 이식이야.</div></details>
+
+<h4>↳ 그 포인터 이사만 하면 옛 월드가 GC될 때 NetDriver도 딸려 죽지 않나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그래서 소유권을 넘기는 처리를 같이 해. 새 월드 쪽 컬렉션엔 <code>NetDriver</code>를 붙이고, <strong>옛 쪽은 <code>nullptr</code>로 끊어</strong>. 이렇게 옛 월드에서 손을 떼놔야 옛 월드가 GC로 사라질 때 <code>NetDriver</code>까지 딸려 죽는 걸 막을 수 있어. 이식 한 수의 진짜 디테일이 바로 이 "옛 쪽 소유권 비우기"야.</div></details>
+
+<h3>Q3. 이 여행은 누가 시작하나요? 클라가 맵을 바꿀 수도 있나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">방아쇠는 <strong>항상 서버가 당겨</strong>. 서버가 <code>ServerTravel</code>로 "다들 이 맵으로 가자" 명령을 내리고, 클라들은 서버가 쏘는 신호(<code>ClientTravel</code>)를 받아 따라가. 클라가 제멋대로 맵을 바꾸는 게 아니라 서버 권위로 움직여 — 우리 서버 워프도 서버가 좌표를 확정해 내려주지 클라가 우기는 게 아닌 것과 같아. 그리고 진입점 <code>ServerTravel</code>이 <code>GetAuthGameMode()</code>를 꺼내는 것 자체가 "너 서버 맞아?"를 은근히 확인하는 거라, 클라에서 부르면 튕겨.</div></details>
+
+<h4>↳ 근데 seamless로 따라가려면 조건이 붙던데, 아무 이동이나 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>seamless이면서 이동 타입이 Relative일 때만</strong> 돼. Relative는 "지금 붙어 있는 서버 기준 상대 이동"이라 <strong>연결 상대(서버)가 그대로</strong>거든 — 그러니 연결을 살릴 수 있어. 반대로 Absolute면 서버 주소 자체가 바뀔 수 있어서 연결을 살릴 근거가 없어. 그래서 Absolute는 hard travel로 빠져. "연결 상대가 안 바뀌는 이동만 연결을 살릴 수 있다"는 게 규칙이야.</div></details>
+
+<h4>↳ 목적지로 곧장 안 가고 중간에 빈 맵을 거친다던데, 왜죠?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">트랜지션 맵(빈 임시 맵) 얘기야. 옛 맵을 GC로 지우는 일과 무거운 새 맵을 로드하는 일이 <strong>동시에 겹치면</strong> 메모리가 출렁이고 버벅여 — 무거운 짐 둘을 한 손에 드는 꼴이지. 사이에 텅 빈 맵을 하나 껴서 "숨 돌릴 시간"을 버는 거야. 이삿짐 옮길 때 빈 임시 창고를 한 번 거치는 것과 같아.</div></details>
+
+<h3>Q4. 서버가 48시간 넘게 떠 있으면 seamless를 강제로 끈다던데, 왜 그런 방어가 있나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">월드 누적 시간(<code>TimeSeconds</code>)이 너무 커지면 <strong>float 정밀도 한계</strong>로 시간 계산이 깨져서 "모든 게 부서질" 수 있어. 그래서 오래 켜진 서버는 매끄러움을 포기하고 안전한 hard travel로 떨어뜨려. <strong>"매끄러움보다 안 터지는 게 우선"</strong>이라는 판단이야 — 라이브 서버 장기 가동하면서 카운터 오버플로 겪어봤으면 뼈저리게 공감할 방어 코드지.</div></details>
+
+<h4>↳ 우리 조선 서버엔 이 NetDriver 이식 트릭이 왜 없나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우린 애초에 그 문제가 안 생기는 구조라서. Gate가 클라 연결을 물고, 뒤의 Game 서버들이 존/맵을 나눠 맡아. 유저가 워프하면 <strong>연결을 옮기는 게 아니라 좌표·존만 바꿔</strong> 내려줘 — 클라↔Gate 소켓은 그대로고 "월드 전체를 파괴"하는 개념이 없어. UE는 "월드 = 프로세스 안의 것"이라 갈아끼울 때 연결이 딸려 죽을 위험이 있어서 이식 트릭이 필요한 거고, 우린 연결과 월드를 프로세스로 이미 쪼개놨으니 그 위험 자체가 없는 거야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>Seamless travel은 "옛 월드에서 NetDriver를 꺼내(<code>CurrentWorld-&gt;GetNetDriver()</code>) 새 월드에 그대로 붙이는(<code>LoadedWorld-&gt;SetNetDriver(NetDriver)</code>, World.cpp:8404)" 딱 그 한 수로 연결을 안 끊고 맵만 갈아끼우며, 서버(<code>ServerTravel</code>)가 방아쇠를 당기고 클라(<code>ClientTravel</code>)가 Relative일 때만 짝 맞춰 따라가는 서버 권위 이동이다 — 회선은 그대로 두고 집만 새로 짓는 이사다.</strong></p>
 <div class="note">다음 → <a class="xref" href="ch-39-connection-lifecycle.html">connection-lifecycle</a></div></div><nav class="booknav"><a href="ch-37-voip.html"><span class="lbl">← 이전</span>VoIP: 인게임 음성 채널</a><a class="nx" href="ch-39-connection-lifecycle.html"><span class="lbl">다음 →</span>연결 생명주기: 접속부터 끊김까지</a></nav></div></body></html>

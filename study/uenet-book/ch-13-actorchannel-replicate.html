@@ -277,5 +277,44 @@ a.xref:hover { background:#bbdefb; }
 <ul><li>막히면 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a> (Bunch가 뭔지), <a class="xref" href="ch-12-server-replicate-actors.html">server-replicate-actors</a> (누가 이 함수를 부르나)</li><li>다음 → <a class="xref" href="ch-14-lifetime-props.html">lifetime-props</a> (어떤 프로퍼티가 Replicated인지 등록), <a class="xref" href="ch-20-subobject-replication.html">subobject-replication</a> (서브오브젝트 복제 전체), <a class="xref" href="ch-15-replayout.html">replayout</a> · <a class="xref" href="ch-16-changelist.html">changelist</a> (diff가 실제로 어떻게 일어나나)</li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 액터마다 <code>UActorChannel</code>을 하나씩 두는 이유가 뭔가요? 연결은 하나뿐인데.</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">액터마다 <strong>따로 기억할 복제 상태</strong>가 있기 때문이야. 몬스터 42번은 "지난번 HP 어디까지 보냈지?", 문짝 7번은 "얘 처음 보내는 거였나?"가 다 달라. 한 연결에 모든 액터 소식을 그냥 섞어 흘리면 누구 몫인지, 어디까지 보냈는지가 뒤엉켜. 그래서 액터 한 마리마다 <strong>전용 우편 창구(채널)</strong>를 하나씩 두고 걔의 복제 상태를 따로 관리하는 거지. 창구마다 자기 봉투(Bunch)만 싼다.</div></details>
+
+<h4>↳ 그 채널의 <code>ReplicateActor()</code>가 큰 그림에서 하는 일을 한 문장으로요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">액터 한 마리의 <strong>스폰정보 → 바뀐 프로퍼티 → 서브오브젝트</strong>를 봉투(Bunch) 하나에 순서대로 담고, <strong>뭐라도 담겼을 때만</strong> 봉해서 보내는 "복제 입구"야. 앞 챕터에서 서버가 "이 액터 보내!" 하고 골랐으면, 그 결정을 실제 바이트로 포장하는 게 이 함수지.</div></details>
+
+<h3>Q2. 처음 보는 액터면 왜 바뀐 값만 보내면 안 되고 스폰 정보부터 보내나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">클라 입장에선 그 액터 객체 자체가 <strong>아직 없거든.</strong> "HP 80으로 바뀜"만 던져주면 클라는 "그래서 얘가 누군데?" 하고 길을 잃어. 어떤 클래스인지, 네트워크 식별번호(NetGUID)가 몇 번인지, 초기 위치가 어딘지를 모르면 변경분을 받아도 어디다 적용할지를 몰라. 그래서 첫 복제면 스폰 정보를 먼저 봉투에 넣어서 클라가 객체를 만들 수 있게 해주고, 그다음부터 변경분만 보내는 거야.</div></details>
+
+<h4>↳ 그럼 안 바뀐 액터는요? 매 프레임 봉투를 보내나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아무것도 안 바뀌었으면 <strong>봉투 자체를 안 보내.</strong> 봉투에 뭐라도 담겼는지 추적하는 플래그가 하나 있어서, 스폰정보도 없고 바뀐 프로퍼티도 없고 서브오브젝트도 없으면 그 플래그가 꺼진 채라 전송을 건너뛰어. "매 프레임 전체 상태"가 아니라 "바뀐 것만, 바뀐 액터만" — 이게 UE가 대역폭을 아끼는 근본 원리야.</div></details>
+
+<h3>Q3. 봉투 하나에 액터 본체도 있고 컴포넌트도 있고 아이템도 있는데, 받는 쪽은 어떻게 구분하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>콘텐츠 블록</strong>으로 포장하기 때문이야. 오브젝트마다 봉투 안에 <code>[누구냐(헤더)][몇 비트냐(길이)][실제 데이터]</code> 형태로 자기 몫을 싸. 비트가 그냥 줄줄이 붙어 있으면 받는 쪽은 어디까지가 액터고 어디부터 컴포넌트인지 경계를 못 잡아 전부 밀려서 깨져 — 조선 서버에서 구조체 바이트 밀리면 다 깨지던 그거랑 똑같아. 근데 길이표가 앞에 붙어 있으면 받는 쪽은 그 비트만큼 딱 잘라 읽어서 경계를 정확히 맞출 수 있어.</div></details>
+
+<h4>↳ "재진입 가드"라는 게 나오던데, 그건 왜 필요한가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">봉투를 <strong>반쯤 쓰던 도중에</strong> 같은 액터 복제가 또 걸리면(예: 값 쓰다가 콜백이 실수로 복제를 다시 트리거) 반쯤 담긴 봉투에 새 데이터가 끼어들어 봉투가 깨져. 그래서 "지금 이 액터 복제 중"이라는 팻말을 세워두고, 켜져 있으면 두 번째 진입은 그냥 돌려보내. 조선 서버가 버퍼에 다른 스레드 못 끼어들게 막는 거랑 결과가 같은데, UE는 싱글스레드라 뮤텍스 대신 불리언 하나로 막는 <strong>단일스레드판 락</strong>인 셈이야.</div></details>
+
+<h3>Q4. 개발자가 "이 값 보내"라고 안 짜는데 어떻게 바뀐 프로퍼티만 골라 담나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">액터 하나마다 <strong>복제 담당자(FObjectReplicator)</strong>가 붙어서 <strong>지난번 보낸 값을 기억</strong>하고 있어. 이번 값이랑 비교해서 바뀐 프로퍼티만 골라 봉투에 써. HP만 100→80이면 HP만 담기고 이름·최대HP 같은 안 바뀐 건 안 담겨. 그래서 <code>ReplicateActor</code>의 진짜 두뇌는 이 함수가 아니라 그 안에서 부르는 그 담당자야 — 이 챕터를 "입구"라고 부르는 이유가 그거지.</div></details>
+
+<h4>↳ 조선 서버는 이 부분을 어떻게 하죠? 뭐가 근본적으로 다른가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">조선 서버는 개발자가 "이 필드 이 값 보내"라고 <strong>명시적으로</strong> 패킷을 조립해. 언리얼은 프로퍼티에 <code>Replicated</code> 표시만 해두면 엔진이 <strong>알아서 지난값과 비교해 바뀐 것만</strong> 담아 — 선언적(declarative) 방식이지. 그리고 실행 모델도 정반대야. 조선 서버는 IOCP 워커 여러 개가 병렬로 돌아 락이 필요하지만, 언리얼 복제는 게임 스레드 단일 스레드에서 액터를 한 마리씩 순서대로 도니까 스레드 레이스 걱정이 구조적으로 없어.</div></details>
+
+<h4>↳ 봉투가 한 패킷보다 크면 어떻게 하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">봉투를 보내는 단계(<code>SendBunch</code>)가 <strong>여러 조각(partial bunch)으로 쪼개서</strong> 보내는 것까지 맡아. 액터 한 마리에 서브오브젝트가 잔뜩 딸려서 봉투가 커지면 한 패킷에 안 들어갈 수 있거든. 그래서 조각내 보내고 받는 쪽이 다시 이어붙여. 이 챕터에선 "봉투에 담아 봉해서 보낸다"까지가 핵심이고, 쪼개고 잇는 세부는 송신 콜체인 쪽 이야기야 — 큰 그림에선 "채널이 봉투 하나를 만들면, 전송 계층이 크기에 맞게 알아서 나눠 보낸다" 정도로 잡으면 돼.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><code>ReplicateActor()</code>는 액터 한 마리의 <strong>스폰정보 → 바뀐 프로퍼티 → 서브오브젝트</strong>를 봉투(Bunch) 하나에 순서대로 담아, <strong>뭐라도 담겼을 때만</strong> 봉해서 보내는 "복제 입구"다 — 실제 diff 두뇌는 그 안의 <code>FObjectReplicator</code>가 맡는다.</p></div><nav class="booknav"><a href="ch-12-server-replicate-actors.html"><span class="lbl">← 이전</span>서버가 액터를 뿌린다: ServerReplicateActors</a><a class="nx" href="ch-14-lifetime-props.html"><span class="lbl">다음 →</span>무엇을 복제할까: DOREPLIFETIME</a></nav></div></body></html>

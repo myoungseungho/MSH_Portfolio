@@ -309,6 +309,41 @@ a.xref:hover { background:#bbdefb; }
 <ul><li><strong>PacketHandler</strong>: 한 커넥션에 붙는 "검문소 줄" 관리자. 소켓↔게임로직 사이에서 나가는 패킷은 안→바깥, 들어오는 패킷은 바깥→안 순서로 각 계층을 통과시킨다(양파 껍질). <code>UNetConnection</code>이 <code>TUniquePtr&lt;PacketHandler&gt; Handler</code>로 하나씩 소유(<code>NetConnection.h:444</code>).</li><li><strong>HandlerComponent</strong>: 검문소 하나(암호화·압축·무상태 핸드셰이크 등). 각자 <code>Incoming</code>/<code>Outgoing</code>을 구현하고 자기 헤더용 비트를 예약. <code>AddHandler</code>로 쌓이며, <strong>먼저 추가될수록 더 바깥</strong>.</li><li><strong>StatelessConnectHandlerComponent</strong>: 최외곽 무상태 핸드셰이크 계층. 서버가 접속마다 메모리를 잡지 않고(쿠키/토큰 방식) 진짜 클라인지 검증해 SYN-flood류 공격을 막는다. 이게 끝나야 서버가 실제 데이터를 보냄. (→ <a class="xref" href="ch-09-handshake.html">handshake</a>, <a class="xref" href="ch-40-security.html">security</a>)</li><li><strong>ReservedPacketBits / MaxPacketHandlerBits</strong>: 검문소들이 자기 헤더로 쓸 비트 예약량. 게임 페이로드 최대치 = <code>MaxPacket*8</code> − 이 값(<code>NetConnection.cpp:2035</code>). 검문소를 더할수록 짐칸이 줄어드는 트레이드오프의 근거.</li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>PacketHandler</code>는 왜 필요한 물건인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">소켓에서 올라온 날 바이트를 게임 로직에 바로 던지면 사고가 나. 아직 진짜 클라인지도 모르는 놈의 쓰레기가 게임 로직까지 들어오고, 압축을 안 풀어서 패킷 ID가 엉뚱하게 나오고, 암호가 한 칸만 어긋나도 정상 <code>CM_</code>이 깨진 것처럼 보여. 그래서 소켓과 게임 로직 <strong>사이에 검문소 줄</strong>을 세운 게 <code>PacketHandler</code>야. 핸드셰이크·복호화·압축해제를 순서대로 태워서, 게임 로직은 "온전한 패킷 하나"만 보게 해줘.</div></details>
+
+<h4>↳ 없으면 구체적으로 뭐가 망가지나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">모든 게임 핸들러가 자기 앞에서 방어 코드를 <strong>또</strong> 써야 해. "이거 진짜 유저야?", "복호화 됐나?", "압축 풀렸나?"를 <code>SP_</code>/<code>CM_</code> 처리 함수마다 중복으로 짜야 하는 거지. 검문소 줄이 그 지저분한 일을 한 곳에서 다 흡수해주니까 안쪽은 깨끗하게 로직만 보면 돼. 우리 IOCP 워커가 recv 후처리를 다 하고 완성 패킷만 게임 큐에 올리는 거랑 같은 발상이야.</div></details>
+
+<h3>Q2. "나갈 땐 안→바깥, 들어올 땐 바깥→안"이라는데, 왜 순서가 정반대여야 하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">양파 껍질이라 그래. 내가 A→B→C 순서로 껍질을 <strong>입혀서</strong> 보냈으면, 상대는 정확히 C→B→A로 <strong>벗겨야</strong> 원래 내용이 나와. 예를 들어 압축한 다음 암호화해서 보냈으면, 받는 쪽은 복호화 먼저 하고 그 다음 압축을 풀어야지 순서가 반대면 아무것도 못 읽어. 그래서 송신은 <code>OutgoingHigh</code>→<code>Outgoing</code>(안→바깥), 수신은 <code>Incoming</code>→<code>IncomingHigh</code>(바깥→안)로 대칭이야.</div></details>
+
+<h4>↳ 검문소를 쌓는 순서는 누가 정하죠? 왜 핸드셰이크가 맨 바깥인가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>AddHandler</code>로 쌓는데 <strong>먼저 추가할수록 더 바깥 계층</strong>이야. 핸드셰이크(무상태 연결)를 맨 바깥에 두는 이유는 — 아직 검증도 안 된 낯선 놈의 패킷을 압축 풀고 복호화하느라 CPU 쓰면 손해잖아. 문지기를 맨 앞에 세워서 검증 안 된 놈은 안쪽 검문소(암호화·게임로직)에 닿기도 전에 걸러내는 거야. SYN-flood류 자원소모 공격 방어의 기본이지.</div></details>
+
+<h3>Q3. 암호화는 왜 접속하자마자 안 켜고 나중에 켜나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">닭이 먼저냐 달걀이 먼저냐 문제야. 암호화하려면 양쪽이 같은 열쇠를 들고 있어야 하는데, 접속 첫 순간엔 아직 열쇠 교환도, "너 진짜 우리 클라야?" 확인도 안 끝났어. 처음부터 암호로 잠그면 <strong>열쇠 나눠주는 대화 자체를 못 해</strong>. 그래서 먼저 핸드셰이크·인증으로 신원과 열쇠를 정하고, "이제 암호 통신 시작" 신호가 왔을 때 그제서야 <code>EnableEncryption</code>으로 스위치를 올려.</div></details>
+
+<h4>↳ 커넥션이 AES 알고리즘 세부를 직접 다루나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 커넥션은 AES가 뭔지 키 길이가 몇 비트인지 하나도 몰라. 그냥 핸들러한테 "암호화 담당 컴포넌트 내놔"(<code>GetEncryptionComponent</code>) 하고 꺼내서 "이 데이터로 켜져" 하고 <strong>위임</strong>만 해. 그래서 암호화 알고리즘을 갈아끼워도 커넥션 코드는 한 글자도 안 바뀌어. 검문소를 컴포넌트로 쪼갠 이유가 이거야 — 커넥션은 "누가 하냐"만 알고 "어떻게 하냐"는 몰라도 돼.</div></details>
+
+<h3>Q4. 검문소를 붙이는 데 공짜 비용은 아니라던데, 무슨 대가가 있나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>예약 비트</strong>야. 검문소들도 자기 표식(암호화 IV, 시퀀스 번호, 핸드셰이크 플래그)을 패킷에 적어야 하는데, 패킷 크기는 MTU 때문에 정해져 있어. 그래서 검문소가 쓸 자리를 미리 떼어놓고(<code>GetTotalReservedPacketBits</code>), 게임 데이터엔 "전체 − 예약분"만 허락해. 검문소를 하나 추가할 때마다 게임이 한 패킷에 실을 수 있는 실데이터가 줄어드는 트레이드오프야. 공짜 보안은 없어.</div></details>
+
+<h4>↳ 우리 IOCP 서버의 검문 파이프라인이랑 비교하면 뭐가 다르죠?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우리 서버는 검문 단계가 대체로 손코딩된 <strong>고정 파이프라인</strong>이야 — "복호화 함수 부르고, 그 다음 검증 함수 부르고". UE는 그걸 <code>HandlerComponent</code> 스택으로 <strong>데이터화</strong>했어. <code>AddHandler</code>로 런타임에 끼웠다 뺐다 하고, 순서가 스택 위치로 결정돼. 유연한 대신 예약 비트 회계 같은 부가 복잡도가 붙고, 우리 방식은 단순·빠른 대신 단계 바꾸려면 코드를 고쳐야 해. 어느 쪽이 낫다기보다 "고정 파이프라인 vs 데이터화된 스택"의 취향 차이로 보면 돼.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>PacketHandler는 소켓과 게임로직 사이의 검문소 줄이다 — 나갈 땐 안에서 바깥으로 껍질을 입히고(OutgoingHigh→Outgoing), 들어올 땐 바깥에서 안으로 껍질을 벗기며(Incoming→IncomingHigh), 최외곽 핸드셰이크를 통과한 놈만 진짜 데이터를 주고받는다.</strong></p>
 <div class="note">다음 → <a class="xref" href="ch-09-handshake.html">handshake</a> (무상태 핸드셰이크 상세) · <a class="xref" href="ch-40-security.html">security</a> (암호화·인증 큰 그림)<br>옆으로 → <a class="xref" href="ch-10-ipnetdriver-socket.html">ipnetdriver-socket</a> (최종 Outgoing→LowLevelSend가 소켓에 실리는 곳)</div></div><nav class="booknav"><a href="ch-07-reliability-ack.html"><span class="lbl">← 이전</span>안 잃게: 시퀀스·ack·재전송</a><a class="nx" href="ch-09-handshake.html"><span class="lbl">다음 →</span>핸드셰이크: 연결은 어떻게 맺어지나</a></nav></div></body></html>

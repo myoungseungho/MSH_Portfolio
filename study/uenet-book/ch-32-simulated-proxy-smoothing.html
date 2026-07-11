@@ -266,6 +266,33 @@ enum class ENetworkSmoothingMode : uint8
 <p><strong>(2) 송신 빈도와 렌더 빈도가 다르다는 걸 프로토콜에 반영한다.</strong> UE가 "우리 tick과 다른 속도로 업데이트를 받는다"([F] 주석)를 대놓고 인정하듯, 우리도 남의 위치를 매 프레임 보낼 필요 없어. 초당 몇 번만 보내고 <strong>그 사이를 클라가 메우게</strong> 설계하는 게 대역폭 정답이야. 그리고 UE의 [E]처럼 — <strong>시간 보간을 쓸 거면 서버 타임스탬프를 같이 실어야</strong> 클라가 "이건 언제 것"을 알고 시간축으로 채울 수 있어. 안 쓸 거면 그 필드 빼서 대역폭 아끼고.</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+<h3>Q1. 남의 캐릭터 위치를 서버가 보내주면 그냥 그 자리에 찍어 그리면 되는데, 스무딩(Network Smoothing)이 왜 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">서버는 남 캐릭터 위치를 초당 <strong>10~30번</strong>만 보내는데, 내 화면은 <strong>60~144번</strong> 그려야 하거든. 받은 위치만 찍으면 중간 칸이 텅 비어서 남들이 계단처럼 뚝뚝 끊기거나, 패킷이 조금 늦으면 순간이동 유령처럼 보여 — 5초마다 텔레포트하는 지도 앱 버스 아이콘 그 꼴이야. 그 틈을 부드럽게 채워 그리는 게 스무딩이야.</div></details>
+<h4>↳ 그럼 그냥 서버 위치로 몸 전체를 천천히 밀어주면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">안 돼. 몸 전체를 천천히 밀면 <strong>총알 히트 판정·벽 충돌이 옛 위치로 틀어져</strong> — "쟤 지금 어디 있냐"의 정답이 흐려져. 그래서 UE는 몸을 둘로 나눠. 판정용 몸(<strong>충돌 캡슐</strong>)은 정확한 서버 좌표로 <strong>즉시 스냅</strong>시키고, 눈요기 몸(<strong>메시</strong>)만 천천히 따라붙게 해. 정확성은 즉시, 부드러움은 서서히.</div></details>
+<h3>Q2. 캡슐/메시를 나눴다는 게 큰 그림에서 어떻게 도는 건가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">남의 새 위치가 도착하면 캡슐은 서버 좌표로 <strong>즉시 순간이동</strong>해. 그 순간 "메시가 있어야 할 곳 − 방금 캡슐이 간 곳"의 차이(offset)를 붙잡아둬. 그리고 이후 프레임마다 이 offset을 <strong>조금씩 0으로 깎아서</strong> 메시를 캡슐에 수렴시켜. 그래서 캡슐(판정)은 항상 정확한 자리에 있고, 화면에 보이는 메시만 스르륵 따라오는 거지.</div></details>
+<h4>↳ 그 offset을 0으로 녹이는 방식이 하나가 아니라던데요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">세 모드가 있어. <strong>Disabled</strong>는 스무딩 끔(뚝뚝 스냅). <strong>Linear</strong>는 두 위치 "사이"를 시간축으로 채우는 <strong>보간</strong> — 제일 자연스럽지만 서버 타임스탬프가 있어야 해. <strong>Exponential</strong>은 목표에서 멀수록 빠르게 당겨오는 지수 감쇠 — 타임스탬프 없이도 되고 가벼워. 곡선만 다르지, 셋 다 "offset을 0으로 녹인다"는 목적은 같아.</div></details>
+<h4>↳ 왜 미래를 예측해서(외삽) 앞질러 그리지 않나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">외삽(extrapolation)은 최신 위치에서 속도로 "다음은 여기겠지" 앞질러 찍는 건데, 적이 갑자기 방향을 틀면 <strong>없는 미래를 찍은 거라</strong> 엉뚱한 데로 튀었다 되돌아와 — 오히려 더 흉해. 그래서 UE의 Linear는 <strong>이미 받은 두 위치 사이</strong>만 채우는 보간을 써. 살짝 과거를 재생하지만 절대 안 틀려. 안정성을 택한 거지.</div></details>
+<h3>Q3. Linear 모드일 때만 서버가 타임스탬프를 실어 보낸다던데, 왜 조건부인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">Linear(시간축 보간)는 "이 위치가 서버 시각 몇 초 것인가"를 알아야 두 위치 사이를 <strong>시간으로 나눠</strong> 채울 수 있거든. 근데 이 타임스탬프는 매 업데이트마다 바뀌어서 대역폭을 먹어. Exponential은 그냥 "멀수록 빨리 당겨"라 시각이 필요 없고. 그래서 Exponential/Disabled에선 이 값을 0으로 눌러 <strong>아예 안 보내</strong> — 스무딩 모드 하나가 네트워크 트래픽까지 바꾸는, 정책과 비용이 엮인 예시야.</div></details>
+<h3>Q4. 이 스무딩은 아무 캐릭터한테나 적용되나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>SimulatedProxy(남의 캐릭터)한테만</strong>이야. 내 폰(Autonomous)은 예측/보정으로 처리하고, 서버(Authority)는 원본이라 스무딩 안 해. 진입점(<code>PostNetReceiveLocationAndRotation</code>)에서 제일 먼저 "<code>ROLE_SimulatedProxy</code>냐?" 게이트로 걸러. 남의 위치가 띄엄띄엄 오는 상황에서만 이 문제가 생기니까.</div></details>
+<h4>↳ 우리 조선 서버에 이 원칙을 옮긴다면 뭘 지켜야 하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>스무딩은 표현 계층, 판정은 권위 계층 — 절대 안 섞는다.</strong> 부드럽게 보이려고 서버 권위 좌표를 흐리게 만들면 안 돼. 히트 판정·충돌·거리 계산은 정확한 권위 좌표 하나로만 하고, 부드러운 보간은 클라 표현에만 맡겨. 그리고 남의 위치를 매 프레임 보낼 필요 없이 초당 몇 번만 보내고 그 사이를 클라가 메우게 하되, 시간 보간을 쓸 거면 서버 타임스탬프를 같이 실어야 클라가 "이건 언제 것"을 알아. UE의 캡슐/메시 분리랑 정확히 같은 발상이야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <div class="note"><strong>남의 캐릭터는 충돌 캡슐만 정확한 서버 좌표로 즉시 순간이동시키고, 눈에 보이는 메시는 옛 위치와의 차이(offset)를 저장해뒀다 매 틱 0으로 녹여서 — "정확성은 즉시, 부드러움은 서서히"로 순간이동을 숨긴다.</strong></div>
 <hr>

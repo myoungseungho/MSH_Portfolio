@@ -215,6 +215,45 @@ else
 <ul><li><code>GetLifetimeReplicatedProps</code> = 액터가 "보낼 정보 명단"을 신고하는 창구. 빈 명단(<code>OutLifetimeProps</code>)을 받아 채워 내보낸다.</li><li><code>DOREPLIFETIME(클래스, 변수)</code> = 명단에 한 줄 적는 매크로. <strong>값 전송이 아니라 등록</strong>일 뿐.</li><li>첫 줄 <code>Super::</code>로 <strong>부모 명단을 물려받아 누적</strong>한다(빼먹으면 조용히 버그).</li><li>헤더 <code>UPROPERTY(Replicated)</code>와 .cpp <code>DOREPLIFETIME</code>은 <strong>반드시 짝</strong> — 한쪽만이면 <code>Fatal</code> 크래시.</li><li>"누구에게"는 <code>COND_*</code> 조건으로 같은 명단에 함께 적는다.</li></ul>
 <p>막히면 → <span class="xref">actorchannel-replicate</span> (이 명단을 누가/언제 드는지), <span class="xref">server-replicate-actors</span> (큰 그림) 다음 → <span class="xref">replayout</span> (명단으로 실제 값 비교·전송), <span class="xref">rep-conditions</span> (COND_* 전모), <span class="xref">push-model</span> (Push Model 정체)</p>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 다시 설명할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 더 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>DOREPLIFETIME</code>은 값을 보내는 코드인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야. 이게 제일 헷갈리는 부분인데, 값을 보내는 게 아니라 <strong>"이 변수는 친구한테 보낼 정보다"라고 명단에 이름만 올리는</strong> 단계야. 체력이 100→90으로 바뀌었다고 여기서 90을 보내는 게 아니라, "체력은 보낼 정보"라고 종이에 적어두는 거지. 파티 초대로 치면 초대장 발송이 아니라 손님 명단 작성이야. 진짜 90을 보내는 건 한참 뒤 이야기고.</div></details>
+
+<h4>↳ 그럼 그 명단은 왜 굳이 만들어요? 그냥 다 보내면 안 돼요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">캐릭터 하나에 정보가 수십 개거든 — 체력, 위치, 이름, 임시 계산 숫자까지. 이걸 전부 보내면 통신량이 터지고, 태반은 보낼 필요도 없어(나만 쓰는 임시 숫자를 남한테 왜 보내?). 그래서 파티에 아무나 다 부르지 않듯, <strong>진짜 보낼 것만 골라 명단에 적는</strong> 거야.</div></details>
+
+<h3>Q2. 캐릭터를 복제하는데 왜 부모(<code>Super</code>) 명단부터 챙기나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">캐릭터는 '움직이는 물체(폰)'의 한 종류고, 폰은 '게임 속 물체(액터)'의 한 종류야 — 러시아 인형처럼 겹쳐 있지. 캐릭터를 보내려면 액터가 챙기는 기본 정보(주인, 역할, 숨김...)도 다 필요해. 그래서 자기 것을 적기 <strong>전에</strong> 같은 명단 종이를 부모한테 먼저 넘겨서 부모 몫부터 채우게 해. 그럼 명단이 부모→자식으로 <strong>차곡차곡 쌓여</strong>. 부모 것을 자식이 또 베껴 적을 필요가 없어지는 거지.</div></details>
+
+<h4>↳ 그 <code>Super::</code> 한 줄을 깜빡하면 어떻게 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">부모 몫이 통째로 빠져. 근데 무서운 건 <strong>에러도 안 난다</strong>는 거야. 위치나 주인 정보가 조용히 복제 안 돼서 "왜 캐릭터가 클라에서 이상하지?" 하고 한참 헤매게 돼. 그래서 오버라이드 첫 줄에 <code>Super::</code>는 거의 법이야.</div></details>
+
+<h3>Q3. 헤더에 <code>Replicated</code>를 안 붙였는데 .cpp에서 <code>DOREPLIFETIME</code>만 쓰면 왜 게임이 바로 꺼지나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">복제는 <strong>두 곳이 짝</strong>이어야 하거든. 헤더의 <code>UPROPERTY(Replicated)</code>는 그 변수에 "나 복제돼도 됨" 딱지를 붙이는 거고, .cpp의 <code>DOREPLIFETIME</code>은 명단에 올리는 거야. 딱지 없이 명단에만 올리면 "명단엔 있는데 정작 변수엔 복제 표시가 없는" 반쪽 상태지. 이건 거의 항상 실수라서, 조용히 넘어가 며칠 헤매느니 <strong>그 자리에서 딱 죽여서</strong> 지금 알려주는 거야.</div></details>
+
+<h4>↳ 그렇게 세게 죽이는 검사가 출시된 게임에서도 도나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>개발 빌드에서만</strong> 돌고 출시 빌드에선 빠져. 개발 중에 실수를 다 잡으라는 거지, 출시 게임에서 매번 확인하려는 게 아니거든. 게다가 이 명단 만들기 자체가 게임 시작할 때 한 번만 도는 거라, 검사 비용도 걱정할 게 없어.</div></details>
+
+<h3>Q4. 명단에 이름만 적는 게 아니라던데, 또 뭘 적나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>"누구한테 보낼지"</strong>까지 같이 적어. 그냥 <code>DOREPLIFETIME</code>은 전원에게 보내지만, <code>COND_SkipOwner</code> 같은 조건을 달면 "주인 본인은 빼고 남들한테만"이 돼. 내가 지금 어디 보는지는 나 자신은 이미 아니까, 서버가 나한테 되돌려줄 필요 없이 남들한테만 보내면 되거든. 그래서 명단엔 이름과 함께 "받을 사람" 메모도 붙는 거야.</div></details>
+
+<h4>↳ 그렇게 대상을 좁히는 게 왜 중요해요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">UE의 복제 계산은 <strong>한 스레드</strong>가 모든 액터를 쭉 돌며 처리하거든. 그 한 스레드가 프레임 안에 다 끝내야 하니까, 명단이 쓸데없이 길거나 전원에게 다 뿌리면 그만큼 더 힘들어져. "필요 없는 정보는 명단에서 빼고, 조건으로 대상을 좁히는" 게 곧 그 스레드를 지키는 방법이야. 우리 서버가 바쁜 길목에 무거운 작업을 안 넣어 워커를 지키는 거랑 같은 고민이지.</div></details>
+
+<h4>↳ 이 명단은 매번 새로 만드나요, 아니면 한 번만 만드나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>게임 시작할 때 클래스마다 딱 한 번</strong>만 만들어. 손님 명단을 파티 시작 전에 한 번 적어두면 파티 도중엔 안 고치잖아, 그거랑 같아. 명단이 완성되면 그 뒤론 그 명단을 들고 "실제로 뭐가 바뀌었나" 비교하고 보내는 일을 반복하는 거지 — 매 순간 명단을 새로 쓰는 게 아니야. 그러니 이 등록 작업 자체가 무겁진 않아.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong><code>GetLifetimeReplicatedProps</code>는 "보낼 정보 명단"을 신고하는 창구, <code>DOREPLIFETIME</code>은 거기 이름 한 줄 적는 등록 도장 — 값 전송이 아니라 손님 명단 작성이다.</strong></p></div></div><script>
 (function(){

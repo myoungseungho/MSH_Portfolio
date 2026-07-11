@@ -266,5 +266,35 @@ a.xref:hover { background:#bbdefb; }
 <ul><li>막히면 → <a class="xref" href="ch-13-actorchannel-replicate.html">actorchannel-replicate</a> (이 함수를 누가 부르나 + 콘텐트 블록이 뭔지), <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a> (봉투가 뭔지)</li><li>다음 → <a class="xref" href="ch-18-rep-conditions.html">rep-conditions</a> (넷컨디션 필터 상세), <a class="xref" href="ch-14-lifetime-props.html">lifetime-props</a> (뭘 복제 대상으로 등록하나), <a class="xref" href="ch-19-push-model.html">push-model</a> (안 바뀐 걸 어떻게 건너뛰나)</li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+<h3>Q1. 서브오브젝트 복제, 왜 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">게임 속 액터는 혼자가 아니거든. 캐릭터 하나 보낼 때 본체 프로퍼티만 보내면, 클라 화면엔 무기·인벤·버프 없는 맨손 캐릭터가 서 있어. 그래서 액터 밑에 달린 부품(컴포넌트)과 부품의 부품(서브오브젝트)도 같은 봉투(Bunch)에 같이 실어야 해. 우리 조선 서버에서 <code>SP_PlayerInfo</code>에 장비·인벤 배열을 같이 채워 보내던 그 일을, UE는 엔진이 맡는 거야.</div></details>
+<h4>↳ 그냥 아무 순서로 다 넣으면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">순서가 곧 규칙이라 안 돼. 받는 쪽에서 서랍장(컴포넌트)을 조립할 때, 그 안에 참조로 걸린 물건(서브오브젝트)이 아직 안 왔으면 "이거 몇 번 오브젝트를 가리키는 거지?" 하고 참조가 끊겨. 그래서 <strong>참조당하는 놈(서브오브젝트)을 먼저</strong> 보내 클라에 존재하게 만든 뒤, 그놈을 참조하는 컴포넌트를 나중에 보내. "서브오브젝트 → 컴포넌트" 이 순서 하나가 이 챕터의 핵심이야.</div></details>
+<h3>Q2. 서브오브젝트 목록은 누가 관리하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">두 방식이 있어. 구방식은 게임 코드가 <code>ReplicateSubobjects</code> 가상함수를 오버라이드해서 "내 서브오브젝트는 이것들이야"를 손으로 써넣어 — 즉 <strong>네(게임 코드)</strong>가 관리. 신방식은 <code>AddReplicatedSubObject()</code>로 미리 등록만 해두면 <strong>엔진</strong>이 그 명단을 알아서 순회. UE5.1부터 신방식이 권장이고 구방식은 deprecated 취급인데, 둘 다 아직 살아있어. 진입점에서 액터한테 "등록 리스트 쓰니?" 물어보고 갈림길이 갈려.</div></details>
+<h4>↳ 신방식이 왜 더 낫나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">구방식은 부품이 추가될 때마다 사람이 가상함수를 고쳐야 하고, 하나 빠뜨리면 그 부품이 조용히 복제 안 돼. 순서·조건 필터도 다 손으로 챙겨야 해. 신방식은 "등록만" 하면 순회·순서·필터를 엔진이 처리하니까 누락 사고가 줄어. "누가 목록을 관리하느냐"를 사람에서 엔진으로 넘긴 거지.</div></details>
+<h4>↳ 근데 순서 규칙 자체는 방식마다 다른가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 신·구 완전히 똑같아. 둘 다 "서브오브젝트 먼저, 컴포넌트 나중"을 지켜. 신방식 코드 주석에도 "SubObjects have to be created before the component on the receiving end"라고 못을 박아놨어. 방식(누가 관리하냐)만 바뀌었지 순서 원칙은 공통이야. 참조 무결성이 걸린 문제라 바뀔 수가 없거든.</div></details>
+<h3>Q3. 이번에 아무것도 안 바뀐 서브오브젝트는 안 보내고 건너뛰면 되죠?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">함정이야. 만약 그게 클라가 <strong>처음 보는</strong> 신규 오브젝트라면, 안 보내는 순간 클라엔 그게 영원히 생성 안 돼. 바뀐 게 없다고 안 보냈는데 클라는 애초에 존재하는지도 몰라. 그래서 바뀐 게 없어도 신규면 <strong>빈 페이로드라도 헤더를 억지로 실어</strong> 존재를 알려. 데이터가 아니라 "나 여기 새로 생겼어"를 보내는 게 목적이야. 그 헤더(콘텐트 블록)를 받으면 클라가 그 오브젝트를 인스턴스화하지.</div></details>
+<h4>↳ 그럼 신규가 아니고 값도 안 바뀐 서브오브젝트는요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그건 그냥 건너뛰어도 돼. 이미 클라에 존재하고 바뀐 것도 없으니 보낼 이유가 없어. 강제 기록은 어디까지나 "신규인데 아직 아무것도 안 썼다"는 딱 그 조건일 때만이야. 존재를 알려야 하는 첫 순간에만 빈 봉투라도 실어주는 거지.</div></details>
+<h3>Q4. 이 컴포넌트를 특정 클라한테만 보내고 싶으면요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">컴포넌트 순회 안에 넷컨디션 필터(<code>CanSubObjectReplicateToClient</code>)가 있어. 이 컴포넌트를 지금 이 수신자한테 보낼지를 <code>ConditionMap</code>으로 걸러. 예를 들어 <code>COND_OwnerOnly</code>짜리 컴포넌트는 소유자 클라한테만 통과하고 남한테는 여기서 걸려 안 실려. 앞 챕터 조건부 복제가 프로퍼티 단위였다면, 여기선 같은 필터가 서브오브젝트/컴포넌트 단위로 적용되는 거야.</div></details>
+<h4>↳ 우리 조선 서버(IOCP)랑 가장 큰 사고방식 차이는요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우리는 "부품을 어떤 순서로 실을지"를 <strong>개발자가 책임</strong>져. 패킷 구조체에 필드를 손으로 하나하나 채우고, 순서 틀리면 클라 깨지는 것도 개발자 탓. 게다가 워커 스레드 여러 개가 병렬 조립하니 락도 신경 써야 해. UE는 그 순서 규칙(서브오브젝트 먼저)을 <strong>엔진이 코드로 박아뒀고</strong>, 단일 게임 스레드에서 한 봉투를 순차로 채우니까 순서가 그냥 코드 실행 순서만으로 보장돼. 병렬이었으면 이 순서 보장이 훨씬 골치 아팠을 거야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p>서브오브젝트 복제는 액터 봉투 하나에 <strong>[각 서브오브젝트 → 그 다음 컴포넌트 본체]</strong> 순서로 실어 보내는 것 — 신·구 두 방식 모두 "참조당하는 놈(서브오브젝트)을 먼저, 컴포넌트를 나중에"라는 규칙을 엔진이 강제하고, 신규 오브젝트는 빈 페이로드라도 헤더를 실어 클라 생성을 보장한다.</p></div><nav class="booknav"><a href="ch-19-push-model.html"><span class="lbl">← 이전</span>Push Model — 폴링 대신 수동 dirty</a><a class="nx" href="ch-21-rpc-types.html"><span class="lbl">다음 →</span>RPC — 함수처럼 보이는 원격 호출</a></nav></div></body></html>

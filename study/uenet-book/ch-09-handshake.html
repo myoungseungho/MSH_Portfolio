@@ -244,5 +244,44 @@ a.xref:hover { background:#bbdefb; }
 <p>막히면 → <a class="xref" href="ch-08-packethandler.html">packethandler</a> (컴포넌트 양파 계층이 뭔지), <a class="xref" href="ch-11-netdriver-tick.html">netdriver-tick</a> (TickDispatch가 프레임 어디서 도는지) 다음 → <a class="xref" href="ch-39-connection-lifecycle.html">connection-lifecycle</a> (핸드셰이크 뒤 커넥션이 로그인~종료까지 밟는 생애), <a class="xref" href="ch-40-security.html">security</a> (스푸핑·DDoS 방어 큰 그림)</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 접속 노크가 오면 바로 세션을 만들면 되지, 왜 핸드셰이크를 먼저 하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">노크 중 상당수가 <strong>주소를 위조한 가짜</strong>거든. 노크마다 의자(=플레이어 객체, 락, 세션 맵 자리)를 미리 깔면, 가짜 노크 1만 개가 의자 1만 개를 차지해서 진짜 손님이 못 들어와. 이게 스푸핑(IP 위조) 홍수 공격이야. 그래서 노크가 오면 의자부터 깔지 말고 "이 종이 다시 가져와" 하며 쿠키를 던져서, 진짜 왕복 가능한 실주소인지부터 싼 값에 검증하는 거야.</div></details>
+
+<h4>↳ 위조 IP는 왜 그 쿠키를 되돌려주지 못하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">쿠키가 담긴 응답이 <strong>위조한 주소로 날아가기 때문</strong>이야. 자기가 "부산 사는 척" IP를 위조했으면 서버 응답은 진짜 부산으로 가버려서 정작 공격자는 그 쿠키를 못 받아. 받을 주소가 애초에 자기가 아니니까 되가져올 수가 없는 거지. 그래서 진짜 왕복 가능한 실주소만 자동으로 통과하고 가짜는 걸러져.</div></details>
+
+<h3>Q2. "무상태(Stateless)"라는 게 정확히 뭐가 무상태라는 건가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">서버가 노크마다 메모리(=손님 상태)를 <strong>미리 안 잡는다</strong>는 뜻이야. 쿠키를 어딘가 테이블에 저장했다가 나중에 비교하는 게 아니라, 되돌아온 쿠키가 "내 비밀키로 만든 게 맞나"만 매번 재계산해서 검증해. 저장을 안 하니까 가짜 노크 홍수로 서버 메모리를 고갈시킬 표적 자체가 없어. 저장 없이 검증 — 그래서 무상태고, 그래서 홍수에 안 무너져.</div></details>
+
+<h4>↳ 쿠키를 저장해두고 비교하면 안 되나요? 그게 더 간단할 것 같은데요.</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">저장하는 순간 "무상태"가 깨져. 그 저장 테이블이 곧 가짜 노크로 채워질 표적이 되거든 — 방어하려고 만든 장치가 오히려 공격 대상이 되는 거야. 그래서 비밀키로 매번 재계산하는 방식을 써. 이 재계산·검증 코드가 바로 이 학습 트리에 없는 <code>StatelessConnectHandlerComponent.cpp</code> 안에 있어(엔진 코어가 아니라 PacketHandlers 컴포넌트로 따로 사니까).</div></details>
+
+<h3>Q3. 이 핸드셰이크가 엔진 큰 그림에서 어디에 어떻게 끼는 건가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">패킷이 오면 서버는 <strong>주소→<code>UNetConnection</code> 맵</strong>을 뒤져. 이미 아는 커넥션이면 <code>ReceivedRawPacket</code>으로 흘려보내고, 없으면 "커넥션리스(처음 보는 놈)"로 보고 핸드셰이크를 시작해. 그때 무상태 문지기 컴포넌트를 검문소 줄 <strong>최외곽</strong>에 세워서(<code>AddHandler(..., true)</code>) 그 트래픽을 가장 바깥에서 먼저 거르는 거지. 통과 못 하면 안쪽 암호화·게임로직에 닿지도 못해.</div></details>
+
+<h4>↳ 클라·서버 버전이 안 맞아서 실패하면 그냥 쫓아내나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 특별 대우를 해. 실패 사유가 <code>WrongVersion</code>이면 <code>HandleReceiveNetUpgrade</code>로 버전 협상을 시도하고, 그게 성공하면 <code>NotifyHandshakeBegin</code>으로 핸드셰이크를 <strong>처음부터 다시</strong> 돌려. 이번엔 드라이버가 호환되는 상태니까 통과할 수 있어. 즉 버전 불일치는 "쫓아내기"가 아니라 "맞춰주고 다시 노크시키기"야.</div></details>
+
+<h3>Q4. 왜 로그인 패킷은 반드시 핸드셰이크가 끝난 뒤에야 흐르나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">핸드셰이크가 이제 <strong>패킷 시퀀스 번호 초기화까지 책임지기 때문</strong>이야. 시퀀스 번호가 아직 안 정해졌는데 게임 패킷을 send buffer에 써버리면 순번이 엉켜. 그래서 핸들러가 완전히 초기화되기 전엔(<code>IsFullyInitialized</code>가 아니면) <code>checkf</code>로 send buffer 쓰기를 막아. 문지기가 "이 손님 진짜네" 도장을 다 찍어야 로그인 창구 셔터가 열리는 거지.</div></details>
+
+<h4>↳ 그 시퀀스 번호는 뒤에서 어떤 챕터랑 이어지나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">신뢰성 챕터(<a class="xref" href="ch-07-reliability-ack.html">reliability-ack</a>)에서 다시 나와. 거기서 봤듯이 UDP 위 신뢰성은 봉투 번호(<code>PacketId</code>) 순서로 ack/nak를 처리하잖아. 그 순번의 <strong>시작점</strong>을 핸드셰이크가 정해주는 거야. 그래서 핸드셰이크가 시퀀스 초기화를 끝내야 이후 신뢰성 로직이 올바른 기준선에서 출발할 수 있어. 두 챕터가 시퀀스 번호로 연결돼 있는 셈이지.</div></details>
+
+<h4>↳ 우리 조선 서버는 이런 무상태 방어가 있나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">상대적으로 약해. 우리 Gate는 첫 접속 바이트를 받으면 비교적 <strong>일찍 상태(세션)를 잡는 편</strong>이야. UE는 세션(메모리) 잡기 전에 쿠키 왕복으로 실주소를 먼저 증명시키는데, 이 "최외곽 무상태 문지기" 배치가 스푸핑 홍수 방어에선 우리가 참고할 설계야. 받는 스레드(IOCP 워커)와 처리하는 곳(싱글스레드 액터)을 나누는 철학은 이미 똑같으니, 그 앞단에 무상태 검증 레이어를 얹는 자리로 보면 돼.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>서버는 노크가 오면 의자부터 깔지 않고 "도장 찍은 종이(쿠키)"를 최외곽에서 던져 되받는다 — 진짜 주소만 그걸 돌려줄 수 있어 가짜연결이 걸러지고, 이 왕복이 시퀀스 번호까지 초기화한 뒤에야 로그인 패킷의 셔터가 열린다.</strong></p></div><nav class="booknav"><a href="ch-08-packethandler.html"><span class="lbl">← 이전</span>PacketHandler: 암호화·압축·핸드셰이크의 관문</a><a class="nx" href="ch-10-ipnetdriver-socket.html"><span class="lbl">다음 →</span>IpNetDriver: 소켓과 실제로 만나는 곳</a></nav></div></body></html>

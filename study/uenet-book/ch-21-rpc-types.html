@@ -314,5 +314,44 @@ a.xref:hover { background:#bbdefb; }
 <ul><li>막히면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a> (커넥션·ClientConnections·ServerConnection이 뭔지), <a class="xref" href="ch-06-send-callchain.html">send-callchain</a> (⑤ 이후 번치가 실제로 나가는 길)</li><li>값 복제와의 대비가 헷갈리면 → <a class="xref" href="ch-14-lifetime-props.html">lifetime-props</a> (RPC는 "사건", 프로퍼티 복제는 "상태")</li><li>다음 → <a class="xref" href="ch-22-rpc-reliable-validation.html">rpc-reliable-validation</a></li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. RPC는 왜 필요한가요? 프로퍼티 복제로 다 하면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">복제는 "값이 자동으로 따라오는" 거야 — HP가 서버에서 바뀌면 클라 HP도 슬금슬금 맞춰지는 거지. 근데 게임엔 값이 아니라 <strong>일회성 사건</strong>이 있어. "방금 총 쐈다", "지금 문 열기 눌렀다", "다 같이 폭발 봐라." 이건 변수가 아니라 순간의 동작이라 복제로는 안 잡혀. 조선 서버로 치면 프로퍼티 복제가 상태 sync라면, RPC는 <code>CM_ATTACK</code>/<code>SP_DAMAGE</code> 같은 사건 패킷이야.</div></details>
+
+<h4>↳ 그럼 그냥 클라에서 함수를 직접 실행하면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그러면 치트가 돼. "나 데미지 줬다"를 클라가 자기 맘대로 실행해버리면 서버 권위가 무너져. RPC는 함수처럼 생겼지만 실제 실행 위치를 <strong>엔진이 판정</strong>해서 바다 건너로 보내. 그래서 겉은 <code>ServerFireWeapon()</code> 한 줄인데, 실행은 서버에서 도는 거야.</div></details>
+
+<h3>Q2. RPC가 왜 딱 세 종류(Server/Client/Multicast)뿐인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">네트워크 위상이 <strong>별 모양(star)</strong>이라서야. 서버가 중심, 클라들은 바큇살. 클라끼리는 직접 선이 없어. 그러니 가능한 방향이 딱 셋뿐이야 — 클라→서버(Server), 서버→소유 클라 1명(Client), 서버→전 클라(Multicast). "클라 A→클라 B"는 애초에 불가능하고, 항상 서버를 거쳐야 해. 조선 서버의 <code>CM_</code>(클라→서버)·<code>SP_</code>(서버→클라) 구분을 엔진이 플래그로 강제하는 셈이야.</div></details>
+
+<h4>↳ 그럼 클라가 다른 클라들한테 뭘 보여주고 싶으면요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">2단 릴레이가 정석이야. 클라가 <strong>Server RPC</strong>로 서버에 올리고 → 서버가 그걸 받아 <strong>Multicast</strong>로 전 클라에 뿌려. 클라가 직접 멀티캐스트를 부르면? 방송권이 없어서 자기 화면에서만 돌고 아무한테도 안 가. 별 모양 위상에서 사건이 퍼지는 유일한 길이 이거야.</div></details>
+
+<h3>Q3. "함수 호출인데 원격에서 실행된다"를 엔진은 큰 그림에서 어떻게 처리하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">네 단계야. <strong>판정 → 위임 → 대상선택 → 직렬화.</strong> ① 먼저 이 호출을 여기서 실행할지, 원격으로 부칠지, 버릴지를 판정해(<code>GetFunctionCallspace</code>). ② 원격이면 살아있는 넷드라이버한테 넘겨. ③ 넷드라이버가 대상을 골라 — 멀티캐스트면 전 클라, 아니면 소유 커넥션 1개. ④ 그 커넥션으로 번치 직렬화해서 송신. 회사 우편함 분류원이 도장 보고 "두고/부치고/버리고"를 정하는 그림이야.</div></details>
+
+<h4>↳ 그 판정에서 "버림(Absorbed)"은 왜 필요한 거예요? 그냥 실행하거나 보내면 되지 않나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">권한 없는 클라의 반칙을 안전하게 무시하려고. 예를 들어 넷드라이버가 없는(standalone) 상태에서 권한 없는 쪽이 Server RPC를 부르면 — 부칠 데도 없고 실행할 권한도 없어. 이때 크래시 대신 <strong>조용히 삼켜서 없던 일</strong>로 만드는 게 Absorbed야. RPC는 "부르면 무조건 실행"이 아니라, 판정에서 걸리면 아무 일도 안 일어날 수 있다는 게 포인트야.</div></details>
+
+<h4>↳ 멀티캐스트를 서버가 부르면 서버 자기 화면에도 폭발이 보이나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">보여. 서버 멀티캐스트 판정은 <code>Local | Remote</code> 조합이거든. <code>Local</code> 비트 때문에 서버 자기도 실행하고, <code>Remote</code> 비트 때문에 전 클라한테도 뿌려. 리슨 서버는 결국 화면 있는 플레이어일 수 있으니 자기도 봐야 자연스럽지. 두 비트가 각각 "내 실행"과 "남 전송"을 담당하는 거야.</div></details>
+
+<h3>Q4. 우리 TCP 서버(조선협객전)엔 이런 판정기가 왜 없죠?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우리는 <strong>명시적</strong>이라서야. <code>SP_</code> 구조체 채워서 <code>SendPacket</code>을 손으로 부르고, 대상 세션도 직접 골라. 방향도 <code>CM_</code>/<code>SP_</code> 네이밍 관례로 지키지 엔진이 강제하진 않아 — 실수로 반대로 보내도 컴파일은 돼. UE는 함수 호출 한 줄에 방향을 플래그로 박아서 <strong>엔진이 강제</strong>해. 편한 대신 "왜 안 갔지?"를 디버깅하려면 판정→위임→대상선택 콜체인을 알아야 하는 거고.</div></details>
+
+<h4>↳ 실행 스레드 관점에선 우리랑 비슷한가요, 다른가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">오히려 닮았어. 우리 IOCP는 워커 여러 개가 동시에 받아서 액터 상태에 락이 필요하지만, 게임 로직은 싱글스레드 액터 큐로 순차 처리하잖아. UE도 RPC/복제를 기본적으로 <strong>게임 스레드 한 줄</strong>에서 순차로 처리해서, <code>ClientConnections</code> for 루프가 락 없이 안전해. "IO는 병렬, 로직은 단일 스레드"라는 철학이 양쪽 다 똑같아.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>RPC는 "함수 호출"의 탈을 썼을 뿐 — <code>GetFunctionCallspace</code>가 함수 플래그(방향)와 내 Role을 보고 "로컬/원격/버림"을 판정하고, 원격이면 넷드라이버가 멀티캐스트는 전 클라 루프로, 나머지는 소유 커넥션 1개로 흘려보낸다.</strong></p></div><nav class="booknav"><a href="ch-20-subobject-replication.html"><span class="lbl">← 이전</span>컴포넌트·서브오브젝트 복제 — 부품들이 같이 실려 나가는 법</a><a class="nx" href="ch-22-rpc-reliable-validation.html"><span class="lbl">다음 →</span>RPC 신뢰성과 검증 (reliable vs unreliable, WithValidation)</a></nav></div></body></html>

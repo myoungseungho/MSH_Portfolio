@@ -307,5 +307,48 @@ public:
 <ul><li>막히면 → <a class="xref" href="ch-15-replayout.html">replayout</a> (프로퍼티 복제 뼈대), <a class="xref" href="ch-16-changelist.html">changelist</a> (변경분 추적), <a class="xref" href="ch-19-push-model.html">push-model</a> (dirty만 보내기)</li><li>관계 컬링 궁금하면 → <a class="xref" href="ch-27-replication-graph.html">replication-graph</a>, <a class="xref" href="ch-24-relevancy.html">relevancy</a></li><li>다음 → <a class="xref" href="ch-29-charactermovement-overview.html">charactermovement-overview</a> (이제 "무엇을 어떻게 싸게 보내나"를 봤으니, "이동값을 예측·보정하며 보내는" 실전으로)</li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. Iris, Epic이 복제를 왜 새로 만들었나요? 기존 방식으로는 뭐가 안 됐죠?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">레거시 복제(RepLayout·ActorChannel)는 <strong>커넥션마다 액터 상태를 다시 훑고 다시 직렬화</strong>했거든. 같은 캐릭터의 위치 하나를 보낼 뿐인데, 커넥션 500개면 같은 계산(float 압축·문자열 처리·baseline 비교)을 500번 반복해. 김밥집으로 치면 손님마다 재료 썰고 밥 짓고 처음부터 마는 꼴이야. Fortnite 급 대규모 슈터에서 커넥션 수백 개를 감당하려면 이게 병목이라, Epic이 "무거운 준비는 한 번만 하고 결과를 여러 손님이 나눠 쓰자"로 복제 시스템을 아예 새로 짠 플러그인이 Iris야.</div></details>
+
+<h4>↳ 우리 서버로 치면 어떤 짓을 안 하려는 거예요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우리는 무거운 상태 확정은 싱글스레드에서 <strong>한 번</strong> 하고, 그 결과를 IOCP 워커들이 각 소켓에 나눠서 송신하잖아. "커넥션 500개면 상태를 500번 다시 계산"은 우리가 절대 안 하는 짓이야. 레거시 UE가 딱 그 짓을 하고 있었고, Iris는 그걸 우리처럼 "한 번 확정 → 나눠 송신"으로 고친 거야.</div></details>
+
+<h3>Q2. 그 '한 번만' 하는 게 큰 그림에서 어떻게 돌아가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">"게임값"과 "네트워크 바이트" 사이에 <strong>양자화 버퍼</strong>라는 중간 지대를 하나 끼워넣었어. 흐름이 3계층이야 — 게임 UObject 상태 → (양자화) 양자화 버퍼 → (델타·전송) 네트워크 비트스트림. 핵심은 경계선이야. <strong>양자화 버퍼까지는 커넥션과 무관하게 딱 한 번</strong>(float 압축 같은 무거운 계산은 여기서 끝). 그 아래 델타·전송만 커넥션 수만큼 반복. 그래서 손님이 500명이어도 무거운 계산은 한 번만 돌아.</div></details>
+
+<h4>↳ 그럼 델타(차이만 보내기)도 커넥션 무관하게 한 번만 하면 되겠네요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그게 함정이야. <strong>델타는 커넥션마다 달라.</strong> 커넥션 A는 baseline이 3틱 전이고, 커넥션 B는 방금 접속해서 baseline이 아예 없을 수도 있거든. 기준점이 다르니까 차이도 달라져. 그래서 <strong>양자화(공유)와 델타(개별)를 계층으로 갈라놓은 게</strong> Iris 설계의 뼈야. 양자화된 값이 이전 ack된 값이랑 같으면 <strong>단 1비트</strong>만 쓰고 끝나 — 이게 대역폭이 녹는 이유고.</div></details>
+
+<h3>Q3. 타입마다 복제 방법을 가상함수 대신 '함수포인터 테이블'로 바꿨다는데, 왜 그렇게 했어요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">레거시는 타입마다 "나를 어떻게 실어?"를 <strong>가상함수 오버라이드</strong>로 정했어. 객체지향 정석이지만, 가상함수는 부를 때마다 "이 객체의 진짜 함수가 뭐지?"를 표 뒤져 찾아가는 <strong>디스패치 비용</strong>이 붙어. 이걸 커넥션 × 멤버 수만큼 매 프레임 돌리면 잔비용이 산더미로 쌓여. 그래서 타입 하나가 "양자화·델타·비교·검증" 하는 법을 <strong>함수 손잡이들의 표(POD)</strong> 하나로 미리 등록해두는 방식으로 바꿨어. 가상함수 디스패치 대신 표에서 바로 꺼내 쓰니 빠르고, 데이터라 다루기도 가벼워.</div></details>
+
+<h4>↳ 실제로 값이 얼마나 줄어요? 예를 하나 들면요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">회전값(FRotator)이 Pitch/Yaw/Roll float 3개 = 12바이트인데, 각 축을 <strong>1바이트로 압축</strong>해서 3바이트로 줄여. 회전은 360도라 1도 단위 정밀도면 충분하니까 byte로 뭉갠 거야. 게다가 세 축이 다 0(회전 없음)이면 "안 움직였음"을 극소 비트로 표현하게 미리 접어둬. 이 무거운 계산을 <strong>양자화 단계에서 한 번에</strong> 몰아서 해두는 거지.</div></details>
+
+<h4>↳ 그 양자화 결과 버퍼는 아무렇게나 만들어도 돼요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">안 돼. 반드시 <strong>POD여야 하고 비트결정적</strong>이어야 해. 여러 커넥션이 memcpy로 나눠 쓰니까 — 김밥을 똑같이 말아야 100명한테 똑같이 나눠주지, 매번 모양 다르면 공유가 안 되잖아. 소스도 대놓고 "양자화 상태의 패딩을 조심하라"고 경고해.</div></details>
+
+<h3>Q4. '오브젝트 지향 재설계'가 Fragment 얘기라던데, 그게 무슨 뜻이에요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">레거시는 "이 액터의 이 프로퍼티를 이렇게 복제해"라는 지식을 <code>UNetDriver</code>/<code>RepLayout</code> 같은 <strong>중앙 덩어리</strong>에 다 몰아넣었어. 그럼 액터가 자기 상태를 어떻게 네트워크에 태우는지가 <strong>자기 밖</strong>에 있게 돼 — 새 타입·새 규칙 붙이려면 그 중앙 덩어리를 매번 건드려야 하고, 커지면 얽혀서 손대기 무서워져. Iris는 이걸 <strong>Fragment(파편)</strong>라는 작은 객체로 쪼갰어. Fragment 하나가 "게임 상태 일부를 네트워크 프로토콜에 바인딩하는 단위"고, 각자 자기 책임을 져. "중앙 집중 → 객체 단위 분산"이 핵심이야.</div></details>
+
+<h4>↳ 복제 대상을 가리킬 때 UObject 포인터를 왜 안 쓰고 NetRefHandle을 만들었어요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">포인터는 기계마다 값이 달라서 <strong>네트워크로 못 보내고</strong>, GUID는 커. 복제 시스템은 객체를 해시맵 키로 쓰고, 수백 개를 훑고, 네트워크로 실어나르는데 무거운 식별자면 그게 다 비용이야. 그래서 정체성을 <strong>64비트 숫자 하나</strong>에 통째로 패킹한 가벼운 손잡이로 바꾼 거야. 심지어 최하위 비트 하나로 static/dynamic까지 구분해서 비교 한 번으로 종류를 알아.</div></details>
+
+<h3>Q5. Iris가 있으면 ReplicationGraph는 이제 필요 없나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">역할이 달라서 안 겹쳐. Iris는 relevancy/priority를 없앤 게 아니야. <strong>"누구한테 보낼지"는 상위 계층(Replication Graph 등)이 여전히 정하고</strong>, Iris는 <strong>"정해진 대상에 어떻게 싸게 직렬화하냐"</strong>를 담당해. RepGraph가 "대상 고르기(대역 컬링)"라면 Iris는 "고른 대상에게 값 만들어 보내기"라 층이 달라. 둘은 대체 관계가 아니라 위아래로 붙는 관계야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>Iris = 무거운 양자화를 객체·프레임당 딱 1회만 하고(커넥션 무관 공유), 그 POD 버퍼를 baseline 대비 델타로 커넥션마다 싸게 흘려보내는, 함수포인터 테이블 + 오브젝트 지향 Fragment로 재설계된 복제 시스템.</strong></p></div><nav class="booknav"><a href="ch-27-replication-graph.html"><span class="lbl">← 이전</span>1000명을 감당한다: ReplicationGraph</a><a class="nx" href="ch-29-charactermovement-overview.html"><span class="lbl">다음 →</span>CharacterMovement: 이동 복제의 심장</a></nav></div></body></html>

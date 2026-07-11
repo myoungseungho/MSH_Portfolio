@@ -232,6 +232,45 @@ a.xref:hover { background:#bbdefb; }
 <ul><li><strong>Owner를 안 붙였다</strong> → <code>GetNetConnection()</code>이 <code>nullptr</code> → Server/Client RPC가 <strong>Absorbed 또는 drop</strong>. "RPC가 조용해요"의 1순위 원인. 스폰할 때 <code>SetOwner(내PC)</code> 빠졌는지부터 봐.</li><li><strong>Client RPC를 소유 안 한 PC 액터에서</strong> → 그 클라한테만 가야 하는데 Owner가 딴 데면 엉뚱한 사람한테 가거나 흡수됨.</li><li><strong>RemoteRole == ROLE_None</strong> → 복제 자체가 꺼진 액터. <code>Actor.cpp:5597</code>에서 흡수. 복제 설정부터 확인.</li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. RPC 소유권(Ownership)이 왜 필요한 개념인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">RPC는 함수처럼 보이지만 네트워크로 나가려면 결국 <strong>목적지 커넥션(소켓)</strong>이 필요해. 상자는 다 쌌는데 "어디로 보내지?"가 안 정해지면 창고에 쌓이거나 남의 집으로 가버려. 특히 Client RPC는 "하필 그 한 명"한테만 가야 하는데, 그 한 명을 어떻게 찾느냐가 소유권 문제야. 조선 서버로 치면 "이 <code>SP_</code>를 누구 세션으로 보낼지" 정하는 것과 똑같아.</div></details>
+
+<h4>↳ 그 주소를 어떻게 찾나요? 라우팅 테이블이 따로 있나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">테이블이 아니라 <code>Owner</code> 사슬을 재귀로 타고 올라가. 액터한테 "네 커넥션 뭐냐" 물으면 자기는 몰라 — 대신 자기 주인한테 떠넘겨. 무기 → 그 무기를 든 캐릭터 → 그 캐릭터를 조종하는 PlayerController… 이렇게 올라가다 만나는 PC의 커넥션이 곧 주소야. 액터가 곧 게임 오브젝트이자 "누구 소유인지"를 스스로 아는 구조라, 별도 매핑 테이블 없이 오브젝트 그래프 자체가 라우팅 정보를 품고 있는 셈이지.</div></details>
+
+<h4>↳ 그 재귀는 어디서 멈추나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">PlayerController에서 멈춰. PC는 주인한테 안 떠넘기고 자기가 들고 있는 <code>NetConnection</code>을 직접 내놔. 단 조건이 있어 — <strong>실제 사람(Player)이 붙어 있을 때만.</strong> AI가 굴리는 봇 PC는 Player가 없어서 "보낼 클라 소켓 없음"이 나와. "Server RPC가 소유 연결로 간다"의 정체가 이거야. 특별한 라우팅이 아니라 그냥 Owner 타고 오른 PC의 커넥션.</div></details>
+
+<h3>Q2. 방향과 주소는 각각 뭐가 정하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">역할이 갈려. <strong>방향</strong>(여기서 실행/원격 전송/버림)은 <code>GetFunctionCallspace</code>가 <code>LocalRole</code>·<code>RemoteRole</code>과 Server/Client 플래그를 보고 정하고, <strong>주소</strong>(원격이면 누구에게)는 <code>GetNetConnection</code>이 Owner 사슬로 정해. "보낼지 말지"랑 "보낸다면 누구에게"는 다른 판정이야. 이 둘이 순서대로 물려서 RPC 하나의 운명이 정해져.</div></details>
+
+<h4>↳ Owner를 안 붙이면 어떻게 되나요? "RPC가 조용해요"의 원인이 이건가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그게 1순위 원인이야. Owner를 안 붙이면 <code>GetNetConnection()</code>이 사슬 끝에서 <code>nullptr</code>로 끝나. 갈 곳이 없으니 <strong>Absorbed(흡수)</strong> — 실행도 송신도 안 하고 조용히 삼켜. "내 RPC가 아무 반응이 없어요"의 대표 원인이지. 스폰할 때 <code>SetOwner(내PC)</code> 빠졌는지부터 봐야 해.</div></details>
+
+<h3>Q3. 서버가 소유 커넥션을 구했는데, 클라에서는 왜 그걸 무시하고 덮어쓰나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">클라는 목적지가 언제나 하나뿐이라서야. 내가 클라일 땐 소유 커넥션이 누굴 가리키든 상관없이 갈 곳은 <strong>유일한 서버</strong>야. 클라는 서버로 가는 길(<code>ServerConnection</code>) 하나만 갖고 있거든. 그래서 방금 구한 주소를 무시하고 서버 커넥션으로 덮어써서 무조건 서버로 몰아. 반대로 서버가 Client RPC 보낼 땐 <code>ServerConnection</code>이 없으니, 아까 구한 그 클라의 소유 커넥션이 그대로 목적지가 돼.</div></details>
+
+<h4>↳ 그럼 주소가 아예 없으면요? Absorbed랑 뭐가 다른가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">결과는 같아 — 아무 일도 안 일어나. 넷드라이버 단계까지 왔는데 커넥션이 없으면 경고 로그 찍고 그냥 드롭해. Absorbed는 판정 단계에서 삼키는 거고 이건 라우팅 단계에서 떨어지는 건데, 유저 입장에선 둘 다 "RPC가 조용히 사라짐"으로 똑같이 보여.</div></details>
+
+<h3>Q4. 이 구조가 우리 조선 서버의 세션 조회랑 어떻게 대응되나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">발상은 같고 자료구조만 달라. 우리는 유저한테 패킷 보낼 때 세션 객체를 찾아서 그 안의 소켓 핸들로 <code>WSASend</code> 하잖아. 대상 세션은 캐릭터/유저 인덱스로 세션 테이블을 직접 조회하지. UE의 <code>GetNetConnection()</code>이 하는 일이 정확히 이 "대상 세션 찾기"야. 다만 인덱스로 테이블을 뒤지는 게 아니라 <strong>Owner 포인터를 재귀로 타고 올라가</strong> 커넥션을 찾는 거지. 한 줄로: 우리는 "인덱스로 세션 조회", UE는 "Owner 재귀로 커넥션 조회".</div></details>
+
+<h4>↳ 실행되는 스레드 관점도 우리랑 비슷한가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">판박이야. 우리는 워커 스레드가 받은 패킷을 큐에 넣고 메인 로직 스레드가 순서대로 꺼내 처리하잖아. UE도 수신 측에선 커넥션이 받은 번치를 풀어 해당 액터 위에서 함수를 실행하는데, 이 실행이 게임 스레드에서 벌어져. <strong>라우팅(어느 소켓)은 네트워크 레이어, 실행(어느 스레드)은 로직 레이어</strong> — 이 분리가 양쪽 다 똑같아.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>방향은 <code>LocalRole/RemoteRole</code> + Server/Client 플래그가 정하고(<code>GetFunctionCallspace</code>), 주소는 <code>Owner</code> 사슬을 타고 오른 PlayerController의 <code>NetConnection</code>이 정한다(<code>GetNetConnection</code>) — 그래서 Server RPC는 "소유 연결"로만 간다.</strong></p>
 <hr>

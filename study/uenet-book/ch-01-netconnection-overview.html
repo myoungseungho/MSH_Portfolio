@@ -277,6 +277,49 @@ a.xref:hover { background:#bbdefb; }
 <p>이 넷이 되면 다음으로 넘어가도 돼.</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>UNetConnection</code>, 왜 필요한 물건인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">멀티플레이 서버엔 클라가 <strong>동시에 여러 명</strong> 붙어. 각 클라마다 서버가 챙길 상태가 한 뭉치야 — 전용 소켓, 어디까지 받았는지, 보낼 큐, 암호화 키, 그 클라가 연 채널들. 이걸 한 그릇에 안 묶으면 N명이 붙는 순간 누구 데이터가 누구 건지 뒤죽박죽이 돼. 그래서 <strong>"한 연결에 관한 모든 것"</strong>을 담는 객체가 필요하고, 그게 <code>UNetConnection</code>이야. <strong>클라 1명 = 서버에 이 객체 1개.</strong></div></details>
+
+<h4>↳ 조선 서버로 치면 뭐랑 같은 거예요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>CChosunPlayer</code> 같은 <strong>세션 객체</strong>랑 같아 — 소켓 핸들 + 그 유저 상태를 한 덩어리로 묶어둔 그거. 이름과 엔진만 다르지, "클라 한 명당 상태 뭉치 하나"라는 발상은 완전히 동일해.</div></details>
+
+<h4>↳ 그럼 왜 하필 이게 책의 1번 챕터죠?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">앞으로 배울 거의 전부 — 채널·Bunch·복제·RPC·핸드셰이크 — 가 결국 <strong>이 그릇 안에서, 이 그릇을 통해</strong> 일어나거든. 채널은 이 연결의 배열에 꽂히고, 복제는 이 연결을 타고 그 클라에게 가. 여길 안 잡고 넘어가면 "채널이 어디 붙는지", "복제가 누구한테 가는지"가 전부 주소 없는 골목 이름이 돼버려.</div></details>
+
+<h3>Q2. 그럼 이 객체가 큰 그림에서 어떻게 동작하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">딱 <strong>두 방향</strong>이야. <strong>받을 때</strong> — 드라이버가 소켓에서 긁어온 날 바이트를 던지면 → 암호화·압축 <strong>봉인을 풀고</strong> → 알맹이를 담당 <strong>채널로 배달</strong>한다. <strong>보낼 때</strong> — 반대로 채널이 "이거 보내줘" 하면 → 비트로 눌러 담아 <strong>패킷으로 포장</strong>하고 → 소켓으로 내보낸다. 그 사이 매 프레임 자기를 살피고(타임아웃 감시), 끝나면 정리까지. 한마디로 <strong>"한 클라와 주고받는 모든 바이트가 드나드는 문"</strong>이야.</div></details>
+
+<h4>↳ 방금 말한 '봉인'이 뭔데요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">소켓 날 바이트랑 게임 로직 사이에 낀 <strong>처리 파이프라인(PacketHandler)</strong>이야 — 암호화·압축·핸드셰이크를 담당해. 받을 땐 이 봉인을 뜯어 알맹이를 꺼내고, 보낼 땐 봉인을 붙여 내보내. 자세한 건 뒤 챕터(PacketHandler·핸드셰이크)에서 파.</div></details>
+
+<h3>Q3. <code>UNetConnection</code>을 그냥 생성해서 쓰려니까 안 되던데, 왜 추상 클래스인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">바이트를 <strong>실제로 어디로 내보내느냐</strong>가 전송 수단마다 다르거든 — UDP 소켓, 스팀 소켓, 데모 녹화(파일에 쓰기). 근데 그 위의 일(채널 관리·순서/신뢰성·종료 절차)은 전송 수단이 뭐든 <strong>똑같아</strong>. 그래서 공통부는 부모 <code>UNetConnection</code>에 다 넣고, <strong>"실제 송출" 한 칸만 비워둬서</strong> 자식(<code>UIpConnection</code> 등)이 채우게 했어. 부모 혼자선 그 칸이 비어서 못 쓰는 추상 골격인 거지.</div></details>
+
+<h4>↳ 그럼 새 전송 수단(예: 스팀 소켓)을 추가하려면 뭘 해야 해요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">비워둔 <strong>그 한 칸(실제 소켓 write)만 구현</strong>하면 돼. 채널·Ack·종료 같은 공통 로직은 부모 걸 그대로 재사용하고. 만약 이렇게 안 갈랐으면 전송 수단마다 똑같은 코드를 통째로 복붙해야 하고, 버그 하나 고치려면 세 군데를 다 고쳐야 했겠지.</div></details>
+
+<h3>Q4. 이 연결이 <strong>UDP 위</strong>에서 돈다는 게 설계에 어떤 흔적을 남겼나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">TCP면 순서·신뢰성·"보낼 거 다 보내고 닫기"를 <strong>커널이 대신</strong> 해줘. 근데 UE는 UDP 위라 그걸 <strong>직접</strong> 얹어야 해. 그래서 시퀀스 번호·Ack·재전송, 그리고 종료할 때도 <strong>"못 보낸 중요한 데이터를 다 보냈다는 확인이 올 때까지 기다렸다 닫는"</strong> 절차가 이 연결 객체 안에 다 들어있어. 밑바닥이 UDP라서 생긴 짐인 거지.</div></details>
+
+<h4>↳ 우리 TCP 서버엔 왜 그런 '우아한 종료'가 없어요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">TCP는 커널이 "버퍼에 남은 거 다 보내고 닫기"를 알아서 보장해주니까 우리가 신경 쓸 필요가 없어. UDP는 그런 보장이 없어서, 그냥 끊으면 아직 못 보낸 아이템 지급 패킷 같은 게 영영 유실될 수 있어 — 그래서 UE는 그 절차를 손으로 만들어 넣은 거야.</div></details>
+
+<h4>↳ 연결을 끊는 방식이 왜 하나가 아니라 여러 갈래인가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">끊어야 하는 <strong>상황이 다르기 때문</strong>이야. ① 그냥 즉시 끊어도 되는 경우, ② 못 보낸 데이터 유실을 막고 싶은 경우(확인 기다렸다 끊기), ③ 객체 자체를 파괴하며 자원까지 반납하는 경우. 실제로 연결을 끊는 실행은 한 곳이 맡고, 나머지는 "언제 그 실행을 부를지 / 뒷정리까지 할지"를 감싼 래퍼야. 상황별로 갈래를 나눈 거지 종류가 셋이라 복잡한 게 아니야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong><code>UNetConnection</code>은 클라 한 명당 하나 붙는 "전담 웨이터"다 — 초기화·수신·송신·채널·종료를 다 책임지되, 진짜 소켓질(<code>LowLevelSend</code>)만은 하위 클래스에 위임한 추상 골격이다.</strong></p>
 <hr>

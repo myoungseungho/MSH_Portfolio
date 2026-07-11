@@ -267,5 +267,48 @@ a.xref:hover { background:#bbdefb; }
 <p>인식 차이 딱 하나만 붙잡으면 돼. <strong>우리는 TCP라 "순서 밀린 거 다시 세우기 / 쪼갠 거 붙이기"를 커널이 공짜로 해줬지만, 언리얼은 UDP 위라 그걸 <code>InRec</code> 링크드리스트와 <code>InPartialBunch</code> 버퍼로 손수 짠다.</strong> CH04에서 본 코드의 8할이 "TCP가 해주던 걸 UDP 위에서 재구현"인 셈이야. 왜 TCP를 안 쓰고 이 고생을 하는지는 → <a class="xref" href="ch-07-reliability-ack.html">reliability-ack</a>. 이게 정확히 어느 스레드에서 도는지는 → <a class="xref" href="ch-11-netdriver-tick.html">netdriver-tick</a>.</p>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 패킷을 이미 뜯어서 Bunch를 꺼냈는데, 채널에 또 검문소(<code>ReceivedRawBunch</code>)를 두는 이유가 뭔가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">패킷을 뜯었다고 그 Bunch가 <strong>지금 처리해도 되는 완성품</strong>이란 보장이 없거든. UDP라 5·7·6번 순서로 올 수도 있고, 쪼개진 조각 중 가운데만 늦게 올 수도 있어. 이걸 도착한 순서대로 그냥 던지면 아이템 지급보다 장착 RPC가 먼저 돌거나, 반쪽 데이터로 액터를 만들다 상태가 꼬여. 그래서 채널이 게임 로직에 올리기 전에 <strong>"지금 처리해도 되는 순서인지, 조각이 다 모였는지"</strong>를 먼저 확인해. "패킷을 뜯었다"와 "게임 내용으로 처리한다" 사이에 놓인 검문소야.</div></details>
+
+<h4>↳ 그럼 이 검문소가 하는 두 가지 일이 정확히 뭐죠?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>정렬(순서 맞춰 세우기)</strong>과 <strong>조립(쪼개진 거 붙이기)</strong>이야. <code>ReceivedRawBunch</code>가 번호표를 보고 "지금 들어갈 놈인지, 선반에서 기다릴 놈인지" 가르고, <code>ReceivedNextBunch</code>가 "조각이면 다 붙을 때까지 위층으로 올리지 마"를 맡아. 선생님한테 제출하기 전에 번호순으로 줄 세우고 찢어진 숙제를 테이프로 붙이는 단계지.</div></details>
+
+<h3>Q2. reliable Bunch가 순서 밀려서 왔어요. 기다리는 건 5번인데 7번이 먼저 왔으면, 그냥 처리하나요 버리나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">둘 다 아니야. <strong>선반(<code>InRec</code>)에 보관</strong>했다가 5·6번이 채워지면 그때 순서대로 꺼내. 지금 처리하면 아직 안 온 앞 내용이 빠진 채 뒤 게 먼저 돌아서 상태가 꼬이고, 버리면 어차피 재전송받아야 하니 낭비야. 그래서 순서 밀린 놈은 <code>InRec</code>이라는 링크드리스트에 <strong>시퀀스 오름차순으로 정렬 삽입</strong>해두고, 빠진 번호가 도착해 구멍이 메워지는 순간 밀린 걸 우르르 풀어줘. TCP가 커널에서 해주던 순서 재조립을 앱 레벨로 손수 흉내 내는 거야.</div></details>
+
+<h4>↳ unreliable Bunch도 이렇게 선반에 세우나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 순서 분기는 <strong>reliable일 때만</strong> 걸려. unreliable은 <code>bReliable</code>이 0이라 그 <code>if</code>를 건너뛰고 바로 처리로 가. "안 믿는 물건은 순서 안 따진다"는 거지 — 옛날 좌표 같은 건 순서 좀 틀려도 상관없고, 최신 게 오면 어차피 덮이니까.</div></details>
+
+<h4>↳ 선반이 무한정 쌓이면요? 앞 번호가 영영 안 오면?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">무한정 안 쌓아. 쌓인 개수가 <code>RELIABLE_BUFFER</code> 상한을 넘으면 에러 처리하고 <strong>연결을 끊어.</strong> 선반이 꽉 차도록 구멍이 안 메워진다는 건 = 뭔가 심각하게 잘못된 연결이란 뜻이거든. 그럴 땐 붙잡고 있어봐야 소용없으니 포기하는 거야.</div></details>
+
+<h3>Q3. 순서 검사를 통과한 다음, 쪼개진 조각(partial)은 왜 곧장 위로 안 올리고 붙일 때까지 기다리나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">조각은 <strong>반쪽짜리</strong>거든. 3편 중 1편만 올려서 액터를 만들려 하면 아직 안 온 2·3편 데이터가 비어서 반쪽 상태로 액터가 꼬여. 그래서 조각을 <code>InPartialBunch</code>라는 임시 버퍼에 계속 이어붙여 두고, <strong>마지막 조각(<code>bPartialFinal</code>)이 올 때까지 위층으로 안 올려.</strong> 다 붙어 완성본이 되는 순간에만 문을 열어 위로 보내지 — 보내는 쪽이 쪼갠 걸 받는 쪽이 다시 한 통으로 되돌리는 자리야.</div></details>
+
+<h4>↳ 완성본이 준비됐는지 아닌지는 뭘로 판단하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>HandleBunch</code>라는 포인터 하나로 게이트를 만들어. non-partial이면 처음부터 자기 자신을 가리켜 통과, partial이면 일단 <code>NULL</code>로 비워뒀다가 마지막 조각에서 완성본을 담아. 함수 끝에서 <code>HandleBunch != NULL</code>일 때만 다음 단계로 넘겨 — 그러니까 조립 중이면 <code>NULL</code>이라 못 올라가고, 완성됐을 때만 게이트가 열려.</div></details>
+
+<h4>↳ 조립하다 순서가 깨지거나 하면 어떻게 처리해요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">조립 버퍼를 폐기하고 <code>bOutSkipAck = true</code>로 세워. 이건 "이 패킷 아직 ack 하지 마라" 신호라서, 상대가 <strong>재전송하게 만들어</strong> 신뢰성을 지켜. 반쪽 조립본을 억지로 올리는 게 아니라, 아예 못 받은 셈 치고 다시 받는 거지. unreliable 조각이 reliable 조립본을 오염시키는 것도 신뢰성 플래그 비교로 막고.</div></details>
+
+<h3>Q4. 이 챕터의 순서·조립 로직은 결국 우리 TCP 서버 대비 뭘 재구현한 건가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">코드의 8할이 <strong>"TCP가 공짜로 해주던 걸 UDP 위에서 손수 재구현"</strong>이야. 우리는 TCP라 순서 밀린 거 다시 세우기, 쪼갠 거 붙이기를 커널이 알아서 해줬지. UE는 그걸 <code>InRec</code> 링크드리스트(순서 재조립)와 <code>InPartialBunch</code> 버퍼(조각 재조립)로 앱 레벨에서 직접 짜. 그러고 순서·조립이 끝난 완성본만 <code>ReceivedSequencedBunch → ReceivedBunch()</code>로 채널 밖 컨텐츠 처리에 올려보내.</div></details>
+
+<h4>↳ 그렇게 고생할 거면 그냥 TCP를 쓰면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">TCP는 "전부 순서 보장"이라 <strong>하나 잃으면 뒤가 다 막히는</strong>(head-of-line blocking) 문제가 있어 — 실시간 게임엔 치명적이야. UDP를 쓰면 잃어도 되는 건 그냥 흘려보내고, 꼭 필요한 것만 골라서 reliable로 순서 보장을 얹을 수 있어. 그 "골라서 얹는" 유연함 때문에 이 고생을 감수하는 거지. 안 믿어도 되는 좌표까지 순서 기다리느라 최신 상태가 늦으면 그게 더 손해거든.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong><code>ReceivedRawBunch</code>는 순서 맞는 reliable Bunch만 즉시 통과시키고 밀린 건 <code>InRec</code>에 정렬 보관했다가 구멍이 메워지는 순간 <code>while(InRec)</code>로 우르르 풀어(재정렬), <code>ReceivedNextBunch</code>가 partial 조각을 <code>InPartialBunch</code>에 이어붙여(재조립) 마지막 조각에서 완성하면, 그 완성본만 <code>ReceivedSequencedBunch → ReceivedBunch()</code>로 채널 밖 컨텐츠 처리에 올려보낸다 — UDP 위에 TCP의 순서·완결 보장을 앱 레벨로 손수 얹은 것.</strong></p></div><nav class="booknav"><a href="ch-03-bunch-vs-packet.html"><span class="lbl">← 이전</span>Bunch가 뭐고 패킷과 뭐가 다른가</a><a class="nx" href="ch-05-channel-types.html"><span class="lbl">다음 →</span>Channel 종류: Control / Actor / Voice</a></nav></div></body></html>

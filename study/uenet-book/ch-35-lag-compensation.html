@@ -201,6 +201,33 @@ a.xref:hover { background:#bbdefb; }
 <div class="note">되감을 양의 원료(서버 시각 추정) → <a class="xref" href="ch-34-server-time-sync.html">server-time-sync</a><br>왜 클라가 과거를 보나(부드러운 표시) → <a class="xref" href="ch-32-simulated-proxy-smoothing.html">simulated-proxy-smoothing</a><br>클라가 미리 그리는 반대 방향 보정 → <a class="xref" href="ch-30-client-prediction.html">client-prediction</a> · <a class="xref" href="ch-31-server-reconciliation.html">server-reconciliation</a><br>발사 RPC 검증·악용 방지 → <a class="xref" href="ch-22-rpc-reliable-validation.html">rpc-reliable-validation</a> · <a class="xref" href="ch-40-security.html">security</a></div>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+<h3>Q1. 서버가 히트 판정 권위를 이미 쥐고 있는데, 랙 보상(lag compensation)이 왜 또 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">권위를 쥔다고 문제가 끝나는 게 아니야. 함정은 "<strong>서버가 몇 시점의 위치로 판정하느냐</strong>"거든. 핑 100ms 유저는 100ms 전 옛날 적을 보고 조준해. 발사 패킷이 서버에 닿는 동안 적은 딴 데로 가버려서, 서버가 "지금 현재 위치"로 판정하면 <strong>분명 머리에 맞췄는데 빗나감</strong> 판정이 나와. 유저는 핵도 렉도 아닌데 억울하지. 그래서 서버가 <strong>그 유저가 실제로 보고 쏜 과거 시점으로 되감아</strong> 판정하는 게 랙 보상이야 — 축구 오프사이드 VAR이 패스 나간 프레임으로 영상 되감는 것처럼.</div></details>
+<h4>↳ 그냥 히트박스를 키우거나 판정을 후하게 해주면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그건 부작용(옆사람도 맞음)이 커서 안 돼. 진짜 해법은 훨씬 영리해 — <strong>서버가 시계를 거꾸로 돌려</strong> "이 유저는 100ms 전 세상을 보고 쐈구나" 하고 <strong>모든 적을 그 시점 위치로 되돌려 놓고</strong>, 그 옛날 스냅샷에 대고 판정해. 유저가 봤던 바로 그 장면으로 되감아 채점하는 거지. 히트박스를 억지로 키우는 게 아니라 시간축을 정확히 맞추는 거야.</div></details>
+<h3>Q2. 되감으려면 뭐가 있어야 하고, 얼마나 되감을지는 어떻게 정하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">두 재료가 필요해. ① <strong>히트박스 히스토리 버퍼</strong> — 서버가 매 틱 모든 표적의 위치·충돌바운드를 시계열로 쌓는 링버퍼야. 없는 과거로는 못 되감으니까. ② <strong>되감을 양</strong> — <code>서버현재 − (RTT/2 + 클라 보간 지연)</code>으로 "그 유저가 진짜 본 시점"을 역산해. RTT/2는 편도 지연, 보간 지연은 클라가 부드럽게 그리려고 더 보는 과거야. 그 시점을 버퍼에서 꺼내(없으면 두 틱 보간) 표적들을 되돌리고 레이캐스트를 쏴.</div></details>
+<h4>↳ 되감을 양 계산에 앞 챕터(서버 시각 동기)가 왜 엮이나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">RTT를 잘못 알면 <strong>엉뚱한 틱으로 되감아</strong> 판정이 다 틀어지거든. CH34에서 본 "서버 시각 추정"이 여기서 되감을 양을 계산하는 <strong>원료</strong>로 쓰여 — 그래서 두 챕터가 짝꿍이야. 그리고 클라가 보낸 RTT/타임스탬프를 <strong>그대로 믿으면 안 돼</strong>. "나 500ms 전이었어" 조작하면 이미 코너 뒤로 숨은 적도 맞힐 수 있으니, 서버가 창 상한 안으로 클램프하고 자체 측정 RTT와 대조해 검증해.</div></details>
+<h3>Q3. 되감아 판정하면 쏜 사람은 행복한데, 공짜인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">공짜 아니야. 그 유명한 <strong>"코너 뒤 사망(behind-cover death)"</strong>이 대가야. 나는 코너 돌아 벽 뒤로 완전히 숨었는데, 상대는 100ms 전 <strong>노출돼 있던 옛날 나</strong>를 보고 쏴. 서버가 그 옛날 시점으로 되감으면 벽 뒤에 숨은 내가 맞아 죽어. <strong>쏜 사람 유리 = 맞은 사람 억울</strong>은 동전의 양면이라 완전히 못 없애. 그래서 실무는 되감기 창에 상한(예: 최대 200ms)을 둬 — 그보다 느린 유저는 혜택 못 받되 남을 억울하게도 안 해. 이 상한이 곧 버퍼 깊이고, <strong>공정성 손잡이</strong>야.</div></details>
+<h4>↳ 판정 절차에서 절대 빼먹으면 안 되는 단계가 있다면요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>판정 직후 표적을 현재 위치로 원상복구</strong>하는 거. 되감기는 "잠깐 되돌려 → 레이캐스트 판정 → <strong>반드시 원위치</strong>"가 세트야. 복구를 빼먹으면 표적이 과거에 박제돼서 다음 프레임 물리·이동이 다 깨져. 되감기는 상태 롤백이 아니라 <strong>판정 순간만 몰래 과거로 다녀오는 찰나의 시간여행</strong>이거든. 우리 IOCP 서버로 치면 이 ②되돌림~④복구 구간을 락이나 싱글스레드로 직렬화해야 다른 워커가 그 좌표를 못 건드려서 안전해.</div></details>
+<h3>Q4. 이 랙 보상은 언리얼 엔진이 알아서 해주나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>스톡 엔진 코어엔 없어.</strong> 이건 게임 프로젝트 쪽(예: Lyra/ShooterCore의 랙 보상 컴포넌트)에서 게임 규칙에 맞춰 직접 구현하는 게 관례야. 왜냐면 총게임은 되감기 창을 넉넉히, 대전격투는 짧게, 느린 게임이나 대상 지정형 스킬 위주 MMORPG는 아예 안 쓰거든. <strong>게임 규칙이 되감기 창·버퍼 깊이·해상도 세 손잡이를 정하니</strong>, 엔진이 강제하면 오히려 방해라 프로젝트에 맡기는 거야. "UE가 알아서 해주겠지" 기대하면 낚여.</div></details>
+<h4>↳ 리플레이의 <code>GotoTimeInSeconds</code>도 과거로 되감던데, 그거랑 같은 건가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">이름만 "되감기"지 완전히 달라. 리플레이 되감기는 <strong>월드 전체를 녹화본으로 재생</strong>하는 거고(유튜브 재생바 드래그처럼), 판정도 안 하고 라이브 게임에 영향도 없어. 히트 되감기는 <strong>표적 히트박스만 잠깐 되돌려 판정하고 원위치</strong>시키는 거라 현재 게임 결과를 직접 좌우해. "월드 전체를 재생하려고 되감기 vs 표적만 잠깐 되돌려 판정" — 이 한 줄만 기억하면 안 헷갈려.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>클라는 항상 지연만큼 과거를 보고 조준하니까, 서버가 매 틱 표적들의 위치를 히스토리 버퍼에 쌓아뒀다가, 발사가 오면 "그 유저가 본 시점(≈서버현재−RTT/2−보간지연)"으로 표적 히트박스만 잠깐 되돌려 판정하고 즉시 원위치</strong> — 창 상한으로 "쏜 사람 유리 vs 맞은 사람 억울"을 절충하는 서버 권위 기법. <strong>단, 스톡 엔진 코어엔 없고 게임 프로젝트가 직접 구현하는 영역이야.</strong></p>
 <div class="note">막히면 → <a class="xref" href="ch-34-server-time-sync.html">server-time-sync</a> (되감을 양을 계산하는 서버 시각 동기화)<br>다음 → <a class="xref" href="ch-36-gas-prediction.html">gas-prediction</a> (능력·데미지를 클라가 미리 예측 실행)</div></div><nav class="booknav"><a href="ch-34-server-time-sync.html"><span class="lbl">← 이전</span>서버 시간 맞추기 — 클라와 서버의 시계를 하나로</a><a class="nx" href="ch-36-gas-prediction.html"><span class="lbl">다음 →</span>GAS 예측 — 스킬을 미리</a></nav></div></body></html>

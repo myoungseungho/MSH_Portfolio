@@ -275,6 +275,45 @@ class UVoiceChannel : public UChannel
 <ul><li>막히면(채널이 뭔지, Voice가 Control/Actor와 어떻게 다른지) → <a class="xref" href="ch-05-channel-types.html">channel-types</a></li><li>막히면(Bunch가 raw 패킷과 뭐가 다른지) → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a></li><li>막히면(수신 데이터가 채널까지 어떻게 흘러오나) → <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a></li><li>다음(reliable/unreliable·ack 재전송 원리 — Voice는 unreliable 쪽) → <a class="xref" href="ch-07-reliability-ack.html">reliability-ack</a></li><li>다음(음성 핸드셰이크가 얹히는 연결 수립 전체 흐름) → <a class="xref" href="ch-09-handshake.html">handshake</a></li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 인게임 음성, P2P로 직접 쏘면 되지 왜 서버를 거치나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">P2P가 제일 빠르긴 해. 근데 그럼 <strong>음소거·팀 보이스·거리 제한·차단 목록을 누가 강제</strong>하지? 클라끼리 직접 쏘면 서버가 규칙을 못 잡아. 우리 서버에서 클라가 <code>SP_*</code>를 제멋대로 만들어 뿌리게 두지 않는 것과 똑같아. 그래서 UE 기본 모델은 <strong>내 목소리를 일단 서버로 올리고, 서버가 "이 사람 목소리 저 사람이 들을 자격 있나" 판정한 뒤 되뿌리는</strong> 서버 권위 릴레이야. 결국 채팅 릴레이의 소리 버전인 거지.</div></details>
+
+<h4>↳ 그 "들을 자격 판정"은 코드 어디서 이뤄지나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">서버가 전 연결을 훑을 때 <code>ShouldReplicateVoicePacketFrom</code>이 "이 연결이 저 화자 목소리 받을 자격 있나"를 판정해 — <strong>이 한 줄이 서버 권위의 심장</strong>이야. 여기서 음소거·팀·거리 규칙이 걸러져. 클라가 아니라 서버가 결정한다는 게 핵심이고, P2P 경로(peer)는 코드상 통째로 주석 처리돼 있어서 서버 릴레이만 살아있어.</div></details>
+
+<h3>Q2. 음성이 채팅이랑 흐르는 길이 같다면, 왜 굳이 Voice 전용 채널을 따로 뒀나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">음성은 성격이 아주 달라. 초당 수십 조각씩 쏟아지고, <strong>옛날 소리는 차라리 안 오는 게 나아</strong>. 이걸 액터 복제("하나도 놓치면 안 돼")랑 같은 줄에 태우면 서로 방해돼. 그래서 <strong>소리만 나르는 전용 통로</strong>에 자기 큐 하나를 두고, 틱마다 몰아 내보내. 액터 채널이 복잡한 프로퍼티 복제를 하는 것과 달리, Voice 채널은 그냥 큐에 쌓고 틱마다 비우는 <strong>단순한 컨베이어 벨트</strong>야.</div></details>
+
+<h4>↳ 그럼 음성은 왜 unreliable로 보내나요? 빠짐없이 도착시키면 더 좋지 않나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">음성은 정반대야. 망이 막혔을 때 밀린 조각을 <strong>기어이 다 밀어내면</strong> 옛날 목소리가 뒤늦게 로봇처럼 들려. 1초 밀린 소리는 안 오느니만 못해. "빠짐없이"가 오히려 독이야. 그래서 웬만한 음성 조각은 도착 보장 안 하고, 망 막히면 그냥 버려 — 액터 복제와 정반대 선택이야. "옛것 붙들지 말고 지금 것만."</div></details>
+
+<h4>↳ 그럼 무조건 다 unreliable인가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 예외가 있어. <strong>채널 첫 송신(핸드셰이크 격)</strong>은 무조건 reliable이고, 명시적으로 reliable 표시된 패킷도 reliable로 가. 그 외 일반 음성 조각만 unreliable이야. Tick이 "준비 안 됐으면 버리고 / 망 막히면 멈추고 / 웬만하면 unreliable로 최신 것만"이라는 3대 원칙으로 큐를 비워.</div></details>
+
+<h3>Q3. 서버가 목소리 하나 받을 때마다 전 접속자를 순회한다는데, 여기 함정 없나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">있어. 화자 100명이 각각 떠들면 각 패킷마다 전 연결 100명을 훑으니까 <strong>100 × 100, 거의 만 번에 가까운 O(N²)</strong>이야. 음성은 채팅보다 패킷 빈도가 훨씬 높아서(초당 수십 조각) 이 함정이 더 치명적이야. 그래서 실무에선 거리/팀 기반 <code>ShouldReplicateVoicePacketFrom</code>으로 후보를 확 줄이거나 아예 별도 음성 서버로 빼. 우리 서버 대형 채널 채팅이 겪는 그 O(N²)랑 똑같은 함정이야.</div></details>
+
+<h4>↳ 그 릴레이는 어떻게 한 바퀴 도나요? 받은 코드가 곧 릴레이 출발점이라던데요.</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">받는 <code>ReceivedBunch</code> 안에서 "내가 서버냐?"를 <code>ServerConnection == NULL</code>로 판별해 — 클라는 서버로 가는 연결이 있고, 서버는 그게 없거든. 서버면 방금 받은 목소리를 다시 릴레이로 넘겨. 그래서 <strong>클라A 목소리 → 서버가 받음 → 자격 있는 클라B·C 큐에 적재 → 각자 Tick에서 송출 → B·C가 받음(이번엔 릴레이 안 하고 재생)</strong>으로 한 바퀴 돌아.</div></details>
+
+<h3>Q4. Voice 채널은 액터 채널처럼 그때그때 만들어지나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>연결마다 고정 슬롯에 미리 박혀 있는 정적 채널</strong>이야. Control 채널이 0번에 예약되듯 Voice도 자기 지정석(<code>StaticChannelIndex</code>)을 갖고 있어. 그래서 릴레이 코드가 매번 채널을 새로 만들 필요 없이 그냥 지정석에서 꺼내 쓰면 돼. 릴레이는 목소리 하나에 여러 연결의 큐를 건드려야 하는데, 매번 생성하면 비싸잖아 — 고정 슬롯이라 조회만 하면 되는 거야.</div></details>
+
+<h4>↳ 서버가 화자 30명의 목소리를 뿌릴 때 패킷을 30번 복사하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>레퍼런스 카운트 공유 포인터(<code>TSharedPtr</code>)</strong>로 나눠 들어. 같은 패킷 하나를 여러 채널 큐가 공유 포인터로 나눠 참조하고, 마지막 큐가 다 쓰고 놓으면 그때 자동 해제돼. 30명한테 뿌린다고 30번 복사하면 메모리가 터지니까 — 릴레이할 때 메모리 안 터지게 하는 장치야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>음성은 P2P가 아니라 "내 목소리 → 서버 → 자격 판정 → 되뿌리기"의 서버 권위 릴레이고, <code>UVoiceChannel</code>이 연결마다 고정 슬롯에 앉아 음성 큐를 들고 있다가 Tick에서 "준비 안 됐으면 버리고·망 막히면 멈추고·unreliable로 최신 것만" 원칙으로 내보낸다 — 채팅 릴레이의 소리 버전이다.</strong></p>
 <div class="note">다음 → <a class="xref" href="ch-38-travel.html">travel</a></div></div><nav class="booknav"><a href="ch-36-gas-prediction.html"><span class="lbl">← 이전</span>GAS 예측 — 스킬을 미리</a><a class="nx" href="ch-38-travel.html"><span class="lbl">다음 →</span>Travel: 맵/방을 오가는 법</a></nav></div></body></html>

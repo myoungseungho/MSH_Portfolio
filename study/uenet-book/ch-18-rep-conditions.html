@@ -263,5 +263,35 @@ a.xref:hover { background:#bbdefb; }
 <ul><li>changelist가 뭔지 흐릿하면 → <strong><a class="xref" href="ch-16-changelist.html">changelist</a></strong></li><li>Parent/Cmd, RepLayout 자체 구조가 낯설면 → <strong><a class="xref" href="ch-15-replayout.html">replayout</a></strong></li><li>어떤 프로퍼티를 복제 대상으로 "등록"하는지(<code>DOREPLIFETIME</code> 계열)가 궁금하면 → <strong><a class="xref" href="ch-14-lifetime-props.html">lifetime-props</a></strong></li><li>조건과 짝인 RepNotify(값 바뀌면 콜백) 흐름은 → <strong><a class="xref" href="ch-17-repnotify.html">repnotify</a></strong></li><li>이 필터를 "매 프레임 changelist 계산"에서 "바뀔 때만 알림"으로 뒤집는 최적화가 궁금하면 → <strong><a class="xref" href="ch-19-push-model.html">push-model</a></strong></li><li>COND_보다 더 큰 단위(액터 통째로 이 커넥션에 보낼지)는 → <strong><a class="xref" href="ch-24-relevancy.html">relevancy</a></strong></li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+<h3>Q1. 조건부 복제(<code>COND_</code>), 왜 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">"값이 바뀌었다"와 "그 값을 누구한테 보낼까"는 다른 문제거든. 내 소지금은 나한테만 보여야지 옆 사람 클라에 뜨면 안 되고, 내가 클릭해서 이미 아는 피격모션이 나한테 또 오면 낭비야. 100명 맵에서 사소한 내부 값까지 전부 흘리면 대역폭도 터져. 그래서 프로퍼티마다 "누구한테 갈지" 딱지를 붙여두는 게 <code>COND_</code>야. <code>COND_OwnerOnly</code>=주인만, <code>COND_SkipOwner</code>=주인 빼고.</div></details>
+<h4>↳ 그냥 패킷 핸들러마다 손으로 분기하면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우리 조선 서버가 그렇게 하지 — 소지금 바뀌면 해당 유저 소켓에만 <code>SP_MONEY</code>. 근데 "이건 주인만/이건 주인 빼고"를 핸들러마다 손으로 적기 시작하면 한 군데 빠뜨린 버그를 찾기 어려워. UE는 이 손분기를 <strong>데이터로 선언</strong>해버린 거야. 조건을 프로퍼티에 딱지로 박아두고 전송 순간에 자동으로 걸러내니까, 누락 버그가 구조적으로 줄어.</div></details>
+<h3>Q2. 그럼 프로퍼티 보낼 때마다 <code>if</code>로 조건을 검사하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그럴 것 같지? 반전이야. UE는 매번 if문을 안 돌려. 대신 커넥션마다 "<strong>통과표</strong>"(<code>ConditionMap</code>, bool 테이블)를 한 번 만들어두고, 프로퍼티마다는 그 표를 인덱싱해서 끝내. 검사가 아니라 테이블 룩업이야. "이 커넥션에서 각 <code>COND_</code>는 통과인가?"를 미리 다 계산해서 표로 굳혀놓는 거지.</div></details>
+<h4>↳ 왜 굳이 표를 만들죠? if가 더 단순해 보이는데요.</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">한 커넥션한테 프로퍼티를 <strong>수백 개</strong> 연달아 보내거든. 그때마다 "주인이냐/첫전송이냐/시뮬이냐" 다섯 개 불리언 조합을 다시 계산하면 같은 답을 수백 번 구하는 헛일이야. 그래서 커넥션 상황(RepFlags)이 정해지면 딱 한 번 표를 만들고, 프로퍼티마다는 룩업 한 방. 게임 서버에서 매 틱 반복 계산을 캐싱으로 빼는 거랑 완전히 같은 최적화 감각이야.</div></details>
+<h4>↳ 그 통과표는 매 프레임 새로 만드나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 아까우니까. 커넥션 상황(RepFlags)이 <strong>바뀔 때만</strong> 다시 만들어. 저장해둔 이전 RepFlags랑 지금 걸 통째로 비교해서, 다를 때만 재구성하고 같으면 지난번 명단을 그대로 재활용해. "계산 몰아치기"가 이 가드로 완성되는 거야.</div></details>
+<h3>Q3. 통과표를 만들었으면, 실제로 어떻게 차단하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">통과표를 뒤집어서 "오늘 못 나가는 명단"(<code>InactiveParents</code>)을 채워. 통과표에서 false였던 애가 여기선 true(명단 등록)가 돼. 그다음 changelist(바뀐 핸들 목록)를 훑으면서, 명단에 오른 Parent의 핸들은 최종 전송 목록에서 빼버려. 그럼 그 프로퍼티는 이 커넥션엔 안 나가. 4단이야 — 등록(딱지) → 통과표 → 못 나갈 명단 → 전송 목록에서 제거.</div></details>
+<h4>↳ 값을 지우거나 0으로 만드는 건가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 값은 건드리지 않아. 필터링은 "값"이 아니라 "핸들 목록"에서 일어나. 값은 그대로 있고, 그냥 이번에 보낼 핸들 리스트에서 그 핸들을 골라 빼는 것뿐이야. 그래서 같은 액터라도 커넥션마다 다른 목록이 나가는 거지.</div></details>
+<h3>Q4. 이 필터는 앞 챕터의 changelist랑 어떻게 맞물리나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">changelist는 "이번 프레임에 뭐가 바뀌었나"를 골라낸 <strong>전원 공용 장바구니</strong>야. 근데 그 목록을 그대로 다 보내면 안 되지. 조건부 복제가 그 장바구니를 커넥션별로 한 번 더 걸러. "바뀐 것 중 이 사람에게 갈 것만 남긴다"가 핵심이야. 그래야 다음 전송 단계에서 진짜 보낼 Bunch가 깨끗하게 만들어져. 즉 changelist 위에 필터 한 겹이 더 얹히는 구조.</div></details>
+<h4>↳ <code>COND_Custom</code>이나 <code>COND_Dynamic</code>은 통과표에서 항상 true던데, 그럼 안 걸러지나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">이 표에선 일단 통과시켜. 근데 실제 on/off는 이 표가 아니라 <strong>별도 트래커</strong>(PropertyConditions)가 담당해. "일단 통과시키고 나중에 딴 데서 거른다"는 뜻이야. 특히 Dynamic은 런타임에 조건이 바뀔 수 있어서, 명단 채울 때 <code>GetDynamicCondition()</code>으로 지금 진짜 조건을 다시 물어봐서 판정해. 반대로 <code>COND_Never</code>는 통과표에서 항상 false — 셋업조차 안 하고 처음부터 배제하는 가장 싼 조건이지.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>프로퍼티엔 "누구에게" 딱지(COND_)를 미리 박아두고, 커넥션 상황(RepFlags)으로 만든 통과표(ConditionMap)와 대조해 불통과분을 명단(InactiveParents)에 올린 뒤, 전송 changelist에서 그 핸들만 빼버린다 — 검사(if)가 아니라 테이블 룩업이 조건부 복제의 정체다.</strong></p></div><nav class="booknav"><a href="ch-17-repnotify.html"><span class="lbl">← 이전</span>RepNotify — 값이 도착하면 콜백</a><a class="nx" href="ch-19-push-model.html"><span class="lbl">다음 →</span>Push Model — 폴링 대신 수동 dirty</a></nav></div></body></html>

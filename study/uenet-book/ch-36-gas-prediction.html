@@ -172,5 +172,44 @@ a.xref:hover { background:#bbdefb; }
 <ul><li>막히면 → <a class="xref" href="ch-30-client-prediction.html">client-prediction</a> (같은 낙관적 실행을 "이동"으로. 이 챕터의 자매편, 전제)</li><li>예측을 되감는 쪽 원리 전체 → <a class="xref" href="ch-31-server-reconciliation.html">server-reconciliation</a></li><li>예측 데이터가 왜 RPC에 실리나 → <a class="xref" href="ch-21-rpc-types.html">rpc-types</a>, <a class="xref" href="ch-22-rpc-reliable-validation.html">rpc-reliable-validation</a></li><li>왜 "복제만으론 안 되나"의 복제 쪽 배경 → <a class="xref" href="ch-14-lifetime-props.html">lifetime-props</a>, <a class="xref" href="ch-17-repnotify.html">repnotify</a></li><li>§4 verbatim이 나온 Iris 직렬화 맥락 → <a class="xref" href="ch-28-iris.html">iris</a></li><li>다음 → <a class="xref" href="ch-37-voip.html">voip</a></li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. GAS 예측, 왜 필요한 물건인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">서버 권위 구조에선 스킬 판정을 서버가 해야 맞아. 근데 그럼 클라는 버튼 누르고 서버 응답이 올 때까지 <strong>왕복 지연(RTT)만큼 기다려야</strong> 이펙트가 떠. 핑 80ms만 돼도 반 박자 늦고, 150ms면 "씹혔나?" 하고 또 눌러. 액션감이 죽어. 그래서 <strong>클라가 서버 대답 전에 스킬을 먼저 터뜨려</strong> 기다리는 느낌을 숨기자는 게 예측이야. "대부분 서버가 승인해줄 거야"에 베팅하는 거지.</div></details>
+
+<h4>↳ 그럼 서버 권위를 깨는 거 아닌가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">안 깨. 최종 진실은 여전히 서버가 정해. 클라가 미리 보여준 건 어디까지나 <strong>임시</strong>고, 서버 판정이 오면 맞았으면 조용히 갈아끼우고 틀렸으면 되돌려. 서버 권위는 그대로 두고 <strong>체감 지연만 숨기는</strong> 기술이야 — "클라를 믿자"가 아니라 정반대야.</div></details>
+
+<h3>Q2. 그냥 프로퍼티 복제로 하면 안 되나요? 서버가 마나 깎으면 클라로 내려올 텐데요.</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">복제는 <strong>"서버가 진실, 클라는 수신"</strong>만 해. 클라가 먼저 바꿔놓는 개념이 아예 없어서, 복제만 쓰면 클라는 무조건 RTT만큼 기다려야 마나가 깎여. 예측은 여기에 <strong>"클라가 잠깐 자기 진실을 만들고 나중에 서버 진실로 화해"</strong>하는 한 겹을 더 얹은 거야. 그래서 복제 하나론 부족하고 별도 시스템이 필요해.</div></details>
+
+<h4>↳ 그렇게 미리 깎으면 이중 차감 나지 않나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">바로 그게 핵심 문제야. 클라가 마나 -30을 미리 깎았는데 뒤이어 서버 복제분 -30이 또 내려오면 화면은 <strong>-60</strong>이 돼. 그래서 <strong>장부</strong>가 필요해 — "이 -30은 내가 예측으로 미리 깎은 거다"라고 <strong>번호표(<code>PredictionKey</code>)</strong>를 붙여두면, 서버 진짜 -30이 왔을 때 그 번호표 붙은 예측분만 골라 걷어내고 갈아끼울 수 있어.</div></details>
+
+<h4>↳ 그 번호표가 붙는 범위는 어떻게 정하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">스킬 한 번에 마나 차감·쿨다운·이펙트가 우르르 생기잖아. "여기서부터 여기까지 생긴 변화는 전부 표 #47"이라고 <strong>묶는 구간</strong>이 <code>ScopedPredictionWindow</code>야. 이 창을 안 정하면 나중에 서버가 "표 #47 실패" 해도 그 표에 뭐가 묶였는지 몰라서 되돌릴 걸 못 찾아. 창 안에서 생긴 변화만 예측분으로 딱지가 붙어.</div></details>
+
+<h3>Q3. 그럼 스킬 한 번이 큰 그림에서 어떻게 도나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">세 박자야. ① <strong>발급 + 미리 실행</strong> — 클라가 <code>PredictionKey</code>를 뽑고 창 안에서 마나 차감·쿨다운을 딱지 붙여 미리 보여줘. ② <strong>서버로 던짐</strong> — 같은 키를 들고 서버에 "진짜 써도 되나?" 물어봐. 서버가 진짜 판정. ③ <strong>화해</strong> — 서버 결과가 그 키로 돌아오면, 맞았으면 예측분 걷어내고 서버 걸로 교체, 틀렸으면 롤백. 이동 예측이랑 뼈대가 똑같아 — 대상이 좌표냐 스킬효과냐만 달라.</div></details>
+
+<h4>↳ 예측이 틀리면 정확히 뭐가 어떻게 되돌아가나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">서버가 "그 스킬 못 써"라고 하면, 같은 번호표가 붙은 <strong>예측분만 골라서</strong> 취소해. 미리 깎았던 마나 돌려주고, 미리 시작한 쿨다운 취소하고, 미리 적용한 효과 걷어내. 번호표 덕에 <strong>딴 건 안 건드리고 그놈만</strong> 정확히 걷어낼 수 있는 거야. 맞았을 땐 반대로 깜빡임 없이 서버 버전으로 매끄럽게 이어져.</div></details>
+
+<h3>Q4. 예측 데이터는 복제 변수로 오가나요, RPC로 오가나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">RPC 쪽이야. 예측은 <strong>"한 번의 스킬 발동 이벤트"</strong>를 서버로 던지는 거라, 지속 상태를 계속 맞춰주는 복제 프로퍼티가 아니라 <strong>일회성 RPC</strong>에 실려. 실제로 이 트리에 남은 유일한 GAS 흔적(Iris 직렬화기 주석)도 <code>FGameplayAbilityTargetDataHandle</code> 같은 핸들이 "RPC용으로 쓰려고, 복제 프로퍼티용이 아니게" 설계됐다고 못 박아. 이벤트성 데이터는 RPC, 지속 상태는 복제 — 성격이 갈려.</div></details>
+
+<h4>↳ 우리 조선 서버로 치면 이 예측 레이어가 있나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">없어. 우리는 클라가 <code>CM_SKILL</code> 쏘면 서버가 판정하고 <code>SM_SKILL</code>로 결과를 내려주는 <strong>순수 서버 권위 왕복</strong>이 기본이야 — 그래서 스킬 버튼부터 이펙트까지 핑이 그대로 노출돼. 흉내는 낼 수 있지만(클라가 CM 쏘고 미리 이펙트 재생), 그때 <strong>이중 차감 방지 장부(PredictionKey)</strong>를 직접 만들어야 하는 게 GAS가 엔진 차원에서 대신 해주는 일이야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>클라는 서버를 안 기다리고 스킬을 먼저 터뜨려 PredictionKey 딱지를 붙여두고(ScopedPredictionWindow), 서버가 같은 키로 진짜 판정 결과를 내려주면 그 예측분만 정확히 걷어내 서버 버전으로 화해한다 — 맞으면 매끄럽게, 틀리면 롤백. (단, 예측/롤백 본문 소스는 이 트리에 미포함이라 개념 뼈대까지만.)</strong></p></div><nav class="booknav"><a href="ch-35-lag-compensation.html"><span class="lbl">← 이전</span>랙 보상: 지연을 되감아 과거 시점으로 히트 판정</a><a class="nx" href="ch-37-voip.html"><span class="lbl">다음 →</span>VoIP: 인게임 음성 채널</a></nav></div></body></html>

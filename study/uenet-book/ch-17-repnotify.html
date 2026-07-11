@@ -272,5 +272,35 @@ void OnRep_Health();   // Health가 도착하면 자동으로 불림</div>
 <ul><li>받는 중엔 값만 갱신하고 <strong>콜백은 예약(메모)만</strong> 한다 — 반쪽 데이터로 콜백이 도는 걸 막으려고.</li><li>수신이 끝난 안전한 지점에서 메모지를 순회하며 <code>ProcessEvent</code>로 <strong>한 번에</strong> 콜백을 부른다.</li><li>1-파라미터 OnRep은 섀도 버퍼에 백업해둔 <strong>직전 값</strong>을 인자로 받아 델타 계산이 가능하다.</li></ul>
 <div class="note">막히면 → <a class="xref" href="ch-15-replayout.html">replayout</a> (RepLayout이 프로퍼티를 어떻게 펼쳐 관리하는지), <a class="xref" href="ch-16-changelist.html">changelist</a> (섀도 버퍼/변경 추적의 정체)<br>다음 → <a class="xref" href="ch-18-rep-conditions.html">rep-conditions</a> (Always vs OnChanged, 누구에게 보낼지 조건), <a class="xref" href="ch-19-push-model.html">push-model</a> ("바뀜"을 직접 알려주는 최적화)</div>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+<h3>Q1. RepNotify, 왜 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">클라 입장에서 HP가 새 값으로 도착했을 때 체력바 UI를 갱신하고 싶어. 근데 "HP 바뀌었나?"를 매 프레임 폴링으로 확인하면 100명, 1000개 프로퍼티면 확인만 하다 일을 낭비해. 그래서 값이 도착하는 <strong>그 순간에만</strong> 콜백을 울리게 하는 거야 — 초인종. 택배 왔나 5초마다 문 열어보는 대신 초인종 소리만 듣는 거지. <code>OnRep_Health()</code>가 그 초인종이야.</div></details>
+<h4>↳ 그럼 값이 도착하는 즉시 콜백을 부르나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그게 이 챕터의 핵심 뒤틀림이야. 받는 즉시 안 불러. 받는 도중엔 "이 초인종 눌러야 함"이라고 <strong>메모지에만 적어둬</strong>(<code>RepNotifies</code> 배열). 그리고 번치 수신이 완전히 끝난 뒤에 메모지를 훑으며 몰아서 부르지. 흐름이 딱 두 단계야 — (A) 받는 중엔 값 갱신 + 메모, (B) 수신 끝나면 메모지 순회하며 실제 콜백.</div></details>
+<h4>↳ 왜 굳이 미루나요? 바로 부르면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">서버가 HP·좌표·버프를 한 봉투에 같이 보냈다고 해봐. HP 읽자마자 콜백을 부르면, 그 콜백이 "HP랑 좌표를 같이 보고 화면 그리려" 할 때 좌표는 아직 옛날 값이야. 반쪽짜리 데이터로 그려버려. 그래서 봉투를 다 반영한 안전한 지점에서 몰아 울리는 거야. 우리 조선 서버가 파싱은 워커가 하고 로직은 완성된 상태에서 몰아 처리하는 그 감각과 똑같아.</div></details>
+<h3>Q2. 그럼 "바뀌었나"는 어떻게 판정해서 메모하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">값을 덮어쓰기 <strong>전에</strong> 직전 값을 그림자(shadow) 버퍼에 사진 한 장 백업해둬. 그다음 새 값을 써넣고, 섀도의 직전값과 지금값을 비교해서 다르면 메모지에 등록(<code>AddUnique</code>)해. 같은 프로퍼티는 중복 안 쌓여. 값이 같으면 메모 안 하고 스킵 → 콜백도 안 불림. 이 함수 어디에도 콜백을 부르는 코드는 없어, 오직 메모만.</div></details>
+<h4>↳ 값이 같아도 무조건 울리게 하고 싶으면요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>REPNOTIFY_Always</code>를 쓰면 돼. 기본값은 <code>REPNOTIFY_OnChanged</code>라 실제로 달라야만 메모하는데, <code>Always</code>면 값이 같아도 무조건 메모해. 판정 조건의 앞항이 딱 이거야. 언제 왜 쓰는지는 조건부 복제 챕터로 이어지지.</div></details>
+<h3>Q3. 콜백에 "이전 값"을 왜, 어떻게 넘겨주나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">콜백이 하고 싶은 일이 "얼마나 깎였나"일 때가 많거든. 피가 100→80이면 데미지 20을 빨간 숫자로 띄우고 싶은데, 새 값 80만으론 변화량을 못 구해. 그래서 값을 덮어쓰기 전에 백업해둔 직전 값을 콜백에 인자로 넘겨. <code>OnRep_Health(float OldHealth)</code>의 <code>OldHealth</code>가 그거야. 새 값은 이미 멤버에 들어있고, 이전 값은 인자로 주니까 <code>Health - OldHealth</code>로 델타 계산이 되는 거지.</div></details>
+<h4>↳ 그 인자 없는 <code>OnRep_Health()</code>랑은 뭐가 다른가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">함수 파라미터 개수(<code>NumParms</code>)로 분기해. 0개면 <code>ProcessEvent(func, nullptr)</code>로 그냥 부르고, 1개면 백업해둔 직전 값 자리를 인자로 넘겨 불러. 파라미터 유무는 네가 이전 값이 필요하냐 아니냐의 차이일 뿐, 초인종이 울리는 원리는 같아.</div></details>
+<h3>Q4. C++ 함수 포인터로 바로 부르나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, UE 특유의 지점이야. 함수 포인터로 직접 부르는 게 아니라 <strong>리플렉션으로 이름을 찾아서</strong> 불러. <code>FindFunction</code>으로 "OnRep_Health"라는 이름 문자열을 조회해서 <code>ProcessEvent</code>로 실행하지. 우리 서버가 패킷 ID로 <code>switch</code> 때려서 핸들러를 직접 부르는 거랑 대비돼 — 유연한 대신 조회 비용이 붙어. 그래서 더더욱 매 프레임 폴링이 아니라 "바뀐 것만, 한 번만" 부르도록 아끼는 거야.</div></details>
+<h4>↳ 콜백 다 부른 다음엔요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">메모지를 싹 비워(<code>Empty</code>). 그래서 한 프레임에 같은 프로퍼티 OnRep은 최대 한 번이야. 다음 수신에서 또 바뀌면 다시 메모하고 다시 비우고 — 초인종은 한 번 울리고 초기화되는 거지. 그리고 부르기 전에 문지기가 둘 있어서, 드라이버가 스킵하라 했거나 채널에 순서 기다리는 큐 번치가 남았으면 아직 안 울려(순서 꼬임 방지).</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p>RepNotify는 받는 즉시 부르는 게 아니라, <strong>값 갱신 → 바뀐 것만 메모 → 수신 끝난 뒤 메모지만 몰아서 <code>ProcessEvent</code> → 메모지 비움</strong> — "도착 순간에 딱 한 번" 울리는 지연 콜백이다.</p></div><nav class="booknav"><a href="ch-16-changelist.html"><span class="lbl">← 이전</span>변경분만: Changelist / 델타</a><a class="nx" href="ch-18-rep-conditions.html"><span class="lbl">다음 →</span>조건부 복제 (COND_)</a></nav></div></body></html>

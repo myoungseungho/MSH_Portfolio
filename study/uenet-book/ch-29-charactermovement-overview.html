@@ -300,5 +300,48 @@ bool ACharacter::ServerMove_Validate(float TimeStamp, FVector_NetQuantize10 InAc
 <ul><li>막히면 → <a class="xref" href="ch-21-rpc-types.html">rpc-types</a> (RPC 개념), <a class="xref" href="ch-23-rpc-ownership.html">rpc-ownership</a> (이 RPC를 누가 보내나), <a class="xref" href="ch-22-rpc-reliable-validation.html">rpc-reliable-validation</a> (서버 검증), <a class="xref" href="ch-12-server-replicate-actors.html">server-replicate-actors</a> (남 캐릭터 복제 큰 그림)</li><li>이어서 → <a class="xref" href="ch-30-client-prediction.html">client-prediction</a> (클라가 먼저 움직이는 심장 로직), <a class="xref" href="ch-31-server-reconciliation.html">server-reconciliation</a> (서버가 틀림을 잡아 되돌리는 로직), <a class="xref" href="ch-32-simulated-proxy-smoothing.html">simulated-proxy-smoothing</a> (남 캐릭터 보간), <a class="xref" href="ch-33-root-motion-replication.html">root-motion-replication</a> (애니 이동 보정)</li><li>다음 → <a class="xref" href="ch-30-client-prediction.html">client-prediction</a> (이번 챕터가 "누가 무엇을 주고받나"였다면, 다음은 "클라가 어떻게 먼저 확정하고 되감을 무브를 기록하나"의 심장)</li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 캐릭터 이동은 왜 다른 데이터처럼 "서버에 요청하고 답 기다리기"로 안 하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">방향키 누를 때마다 서버 왕복을 기다리면 <strong>핑 100ms만 돼도 캐릭터가 한 박자 늦게</strong> 움직여. 리모컨 눌렀는데 TV가 0.1초 뒤에 바뀌는 것처럼, 숫자는 작아도 손엔 바로 "끈적하다"로 느껴져. 이동은 초당 수십 번 일어나고 지연에 극도로 민감해서, 보상 지급처럼 응답 기다렸다 화면 바꾸는 문제랑 결이 달라. 그래서 UE는 <strong>클라가 서버 답을 안 기다리고 먼저 움직이고(예측)</strong>, 서버엔 "나 이렇게 움직였어"를 뒤늦게 보고하는 방식을 써.</div></details>
+
+<h4>↳ 그럼 반대로 클라 말을 그냥 믿으면 안 되나요? 더 간단하잖아요.</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그럼 더 크게 터져. 클라가 "나 벽 통과해서 여기 왔어", "1초에 100미터 갔어"라고 보내도 서버가 믿어버리면 게임이 끝장이야. 그래서 클라는 빠르게 그림을 그리되, <strong>서버가 뒤에서 같은 규칙으로 다시 굴려보고 채점</strong>해. 맞으면 통과, 틀리면 정답을 되돌려보내는 거지. 조작감(예측)과 권위(검증)를 둘 다 잡으려는 타협이야.</div></details>
+
+<h3>Q2. 같은 캐릭터인데 컴퓨터마다 Role이 다르다는 게 무슨 말이에요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">싱글플레이면 캐릭터는 그냥 하나야. 근데 멀티에선 <strong>같은 캐릭터가 컴퓨터마다 해야 할 일이 완전히 달라</strong>. 내 화면의 내 캐릭터는 서버 안 기다리고 먼저 움직여야(<code>AutonomousProxy</code>·예측), 서버 컴퓨터에선 그게 진짜 원본이라 검증해야 하고(<code>Authority</code>), 친구 화면에선 복제받은 위치를 흉내만 내(<code>SimulatedProxy</code>·보간). 하나의 코드가 이 셋을 뭉뚱그리면 엉키니까, "이 컴퓨터에서 어떤 자격이냐"를 딱지로 나눈 게 Role이야. 세 배우가 같은 대본의 다른 페이지를 읽는 셈이지.</div></details>
+
+<h4>↳ SimulatedProxy(남 캐릭터)도 예측을 하나요? 입력이 없잖아요.</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">입력 예측은 안 해 — 방향키가 없으니 뭘 예측하겠어. 근데 <strong>일종의 추정은 해</strong>. 서버 패킷은 띄엄띄엄(초당 10~30번) 오는데 화면은 60fps로 그려야 하니까, 마지막 받은 위치에서 새 위치까지 <strong>보간(SmoothCorrection)</strong>으로 그 사이 빈 프레임을 메꿔. 안 그러면 남 캐릭터가 뚝뚝 끊겨 보이거든. "입력 예측"은 아니고 "빈 프레임 메꾸기"야.</div></details>
+
+<h3>Q3. 클라가 서버에 이동을 보고할 때 뭘 보내나요? 왜 그것들이 필요해요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>ServerMove</code>의 인자 목록 자체가 <strong>"클라가 자기 이동을 서버한테 설명하는 문법"</strong>이야. 핵심 셋 — <strong>TimeStamp</strong>(언제 움직였나, 서버가 순서 맞추고 되감기 기준으로 씀), <strong>InAccel</strong>(어떤 입력/가속도로 움직였나, 서버가 이걸로 똑같이 재현), <strong>ClientLoc</strong>(예측으로 도달한 위치, 서버가 자기 재현 결과와 비교해 어긋남 판정). 여기에 점프·웅크리기 같은 입력을 1바이트에 눌러담은 플래그, 발판·이동모드 상태까지. 이걸 다 보내야 서버가 "얘가 언제 뭘 눌러 어디까지 갔나"를 재현해서 벽 통과 치트도 잡아.</div></details>
+
+<h4>↳ 위치 벡터에 붙은 NetQuantize10 / 100은 뭐예요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">대역폭 절약용으로 <strong>float 정밀도를 살짝 깎아 압축</strong>하는 타입이야. 이동 보고는 초당 수십 번 날아가니까 float을 통째로 보내면 대역폭이 아까워. 정확도를 조금 양보하고(소수 1자리/2자리 스케일) 바이트를 아끼는 거지 — 이동은 딱 그 정도 정밀도면 충분하니까.</div></details>
+
+<h4>↳ RPC의 <code>_Validate</code>가 그냥 <code>return true</code>던데, 서버 검증을 포기한 거예요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">포기가 아니라 <strong>뒤로 미룬</strong> 거야. 신형 패킹 버전은 데이터가 비트스트림으로 압축된 상태라 <strong>풀어보기 전엔 검증이 불가능</strong>해. 그래서 "일단 통과시키고, 언팩한 뒤 서버 수신 로직 안에서 진짜 검증한다"는 거야. 우리가 IOCP 워커에서 raw 바이트 받았을 때 파싱 전엔 필드 검증 못 하고 파싱 후에 값 범위 확인하는 거랑 똑같아 — 압축된 바이트는 풀어야 검증한다는 프로토콜 공통 원리.</div></details>
+
+<h3>Q4. RPC가 ACharacter에 선언돼 있는데 실제 로직은 CMC에 있다던데, 왜 그렇게 갈라놨어요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">RPC는 문법상 <strong>AActor 계보에서만 선언 가능</strong>해서 ACharacter에 얹혀 있어. 근데 이동의 실제 로직은 전부 <code>CharacterMovementComponent</code>에 있어. 그래서 Character.cpp의 이동 RPC들은 죄다 <code>GetCharacterMovement()-&gt;...</code>로 <strong>넘기기만 하는 한 줄짜리 전달책(thunk)</strong>이야. 접수 창구는 ACharacter, 실제 심사는 CMC가 하는 구조지. 이동 컴포넌트를 갈아 끼워도 RPC 껍데기는 그대로 둘 수 있는 이점도 있고.</div></details>
+
+<h4>↳ 서버가 "네 예측 틀렸어"라고 답하는 방법이 하나가 아니라 여러 개던데, 왜죠?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>오차 크기에 따라 얼마나 실어보낼지가 다르기 때문</strong>이야. 오차가 크면 위치+속도+발판까지 풀세트로 되돌리고(일반 보정), 오차가 작으면 위치만 보내는 경량판으로 아끼고, 루트모션(애니로 이동 중)이면 애니 트랙 위치까지 포함해. 매번 풀세트로 보내면 대역폭 낭비니까, 상황에 맞게 필요한 만큼만 실어보내는 거지.</div></details>
+
+<h3>Q5. 예측이 성립하려면 클라랑 서버가 뭘 맞춰야 하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>양쪽이 똑같은 물리 공식을 써야</strong> 해. 서버는 재현하려고, 클라는 예측하려고, 둘 다 같은 걷기/낙하/속도 계산을 돌려야 결과가 일치하거든. 이 "같은 공식을 양쪽이 돌린다"가 예측이 성립하는 대전제야. 만약 공식이 조금이라도 다르면 매 프레임 어긋나서 서버가 계속 보정을 쏘고, 캐릭터가 튀는(rubber-banding) 지옥이 돼. 그래서 물리 적분 부분은 세 Role 모두 공통으로 도는 거야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>CharacterMovement = 내 캐릭터는 서버 답을 안 기다리고 먼저 움직인 뒤(예측) <code>ServerMove</code> RPC로 보고하고, 서버는 그걸 재현·검증해 어긋날 때만 <code>ClientAdjustPosition</code>으로 되돌리며, 남 캐릭터는 복제받은 위치를 <code>SmoothCorrection</code>으로 부드럽게 흉내내는 — Role 3분기로 굴러가는 지연 은폐 엔진. (단 이 클론엔 그 심장 로직 본체가 없고, RPC 계약서·수신 스무딩·물리 조각만 실물로 있다.)</strong></p></div><nav class="booknav"><a href="ch-28-iris.html"><span class="lbl">← 이전</span>Iris: Epic이 복제를 새로 만든 이유</a><a class="nx" href="ch-30-client-prediction.html"><span class="lbl">다음 →</span>클라 예측: SavedMove로 먼저 움직이고, ServerMove로 보고하기</a></nav></div></body></html>

@@ -250,6 +250,49 @@ a.xref:hover { background:#bbdefb; }
 <ul><li>막히면(bunch가 뭔지, 패킷과 뭐가 다른지) → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a></li><li>막히면(연결/채널 배열의 큰 그림) → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a></li><li>다음(수신 데이터가 채널까지 어떻게 흘러오나) → <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a></li><li>다음(Control이 다음 Bunch를 어떻게 이어붙이나) → <a class="xref" href="ch-04-datachannel-nextbunch.html">datachannel-nextbunch</a></li><li>다음(ActorChannel이 프로퍼티를 실제로 어떻게 복제하나) → <a class="xref" href="ch-13-actorchannel-replicate.html">actorchannel-replicate</a></li><li>다음(Control이 챙기는 ack/재전송 원리) → <a class="xref" href="ch-07-reliability-ack.html">reliability-ack</a></li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 소켓 하나에 로그인·이동·음성을 다 밀어넣으면 되는데, 왜 채널이라는 걸 여러 개 파나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">한 줄로 다 섞으면 서로 방해하거든. 아직 로그인도 안 끝난 클라의 <strong>이동 패킷이 먼저 처리</strong>되거나, <strong>음성 데이터가 밀려서 이동까지 막</strong>거나. 게다가 "이 데이터가 어느 액터 것이고, 순서는 어디까지 왔고, 뭘 재전송할지" 같은 상태를 전부 손으로 따라다녀야 해. 그래서 소켓 하나 안에 <strong>역할별 논리 스트림을 여러 가닥</strong> 파둬 — 연결관리는 이 선, 액터 복제는 저 선, 음성은 또 다른 선. 겉은 케이블 하나인데 안은 색깔 다른 전선 여러 가닥, 이 한 가닥이 <strong>채널</strong>이야.</div></details>
+
+<h4>↳ 우리 서버의 <code>wID</code>로 switch 하는 거랑 뭐가 다른 거예요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우리는 매번 <code>wID</code> 보고 switch로 갈래를 <strong>고르기만</strong> 해 — 상태가 없어(스테이트리스). UE는 갈래마다 <strong>전담 객체(채널)가 상주</strong>하면서 시퀀스·재전송 큐·담당 액터 같은 상태를 들고 있어(스테이트풀). switch는 분기고, 채널은 그 스트림 전용 상태 보관함까지 겸하는 거지.</div></details>
+
+<h4>↳ 채널 종류는 실제로 뭘로 구분되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">놀랄 만큼 단순해 — <strong>생성자에서 박은 이름표(<code>ChName</code>) 한 줄</strong>이야. Control은 <code>NAME_Control</code>, Actor는 <code>NAME_Actor</code>, Voice는 <code>NAME_Voice</code>. 셋 다 <code>UChannel</code>을 상속하고, 클래스는 달라도 정체성은 이 이름표로 갈려. 우리 서버 패킷 헤더의 <code>wID</code>를 채널 인스턴스에 이름으로 박아둔 셈.</div></details>
+
+<h3>Q2. Actor Channel이 액터 하나만 담당한다던데, 왜 여러 액터를 한 채널에 안 몰아넣나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">한 스트림에 300마리를 뒤섞으면 받는 쪽이 "이 바이트가 어느 액터 것이냐"를 매번 골라내야 하고, 액터 하나가 사라질 때 그 스트림만 깔끔히 닫기도 애매하고, <strong>하나가 꼬이면 옆 액터까지</strong> 영향받아. 그래서 <strong>액터 딱 하나를 전담하는 채널</strong>을 둬 — 멤버 <code>Actor</code>가 단수(포인터 하나)인 이유지. 그 액터의 스폰·프로퍼티·RPC만 이 배달부가 책임지니 서로 안 꼬여. "캐릭터 하나 = 세션 객체 하나"로 격리하는 우리 감각이랑 통해.</div></details>
+
+<h4>↳ 그럼 프로퍼티가 뭐 바뀌었는지 계산하는 것도 채널이 하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 흔한 오해야. <strong>채널은 통로(배달 트럭)</strong>일 뿐이고, "어떤 프로퍼티가 바뀌었나, 뭘 보낼까"를 따지는 건 <code>FObjectReplicator</code>라는 별도 놈(물건 싸는 창고)이 해. 채널은 뜯어서 넘겨주는 역할까지고 복제 값 계산은 리플리케이터 몫 — <strong>채널 ≠ 복제 계산기</strong>. 이 분업을 헷갈리면 안 돼.</div></details>
+
+<h3>Q3. 채널 중에 0번(Control)이 특별하다는데, 왜 하필 0번을 예약해두나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">닭-달걀 문제 때문이야. 연결을 갓 맺은 순간엔 <strong>채널이 하나도 없어</strong>. 근데 로그인·엔디안 협상 같은 첫 대화를 어디로 보내지? 채널을 만들려면 협상이 돼야 하고, 협상하려면 채널이 있어야 하고 — 막혀버려. 그래서 <strong>0번 슬롯을 Control로 미리 예약</strong>하고 "0번 Control만은 채널이 아직 없어도 받아준다"는 예외를 둬서 그 고리를 끊어. 얘가 서야 나머지 채널이 지어져.</div></details>
+
+<h4>↳ 그럼 Control보다 액터 데이터가 먼저 도착하면 어떻게 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">Control(0번)도 아직 없는데 다른 채널 데이터가 먼저 오면 <strong>연결을 아예 끊어버려</strong>(<code>BunchPrematureControlChannel</code>). "컨트롤 채널도 없는데 액터 데이터부터 보내? 너 뭔가 이상해, 끊는다." 정상 순서라면 Control 협상이 먼저 끝난 뒤에 액터 채널이 열려야 하니까, 순서가 뒤집힌 건 비정상 연결로 보는 거지.</div></details>
+
+<h4>↳ Control이 가진 또 다른 특권도 있나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">원칙은 "내가 연 채널만 내가 닫는다"인데, <strong>0번만 예외로 남의 채널도 닫을 수 있어.</strong> 서버가 끊긴 클라에게 "너 연결 종료됐다"고 통보하려면 0번으로 close를 밀어야 하거든. 그리고 Control은 <strong>절대 tick을 안 멈춰</strong> — 다른 채널은 할 일 없으면 쉬는데, 얘는 매 프레임 깨어서 ack 안 온 패킷 재전송을 챙겨. 연결의 생명선이라 한순간도 눈을 안 떼는 거야.</div></details>
+
+<h3>Q4. Voice 채널은 왜 굳이 따로 뒀나요? 그냥 액터 복제에 섞으면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">음성은 <strong>게임 상태 복제랑 성격이 완전히 달라.</strong> 손실이 좀 나도 되고(한두 프레임 끊겨도 대화는 이어짐), 대신 지연에 민감해. 액터 복제는 반대로 상태가 정확히 맞아야 하고 순서가 중요하지. 성격이 다른 트래픽을 한 선에 섞으면 서로 최적화가 안 맞으니까, 음성은 <code>VoiceChannel.cpp</code>에 별동대처럼 떼어놨어. 구현 파일부터 분리돼 있는 게 그 증거야.</div></details>
+
+<h4>↳ 이 채널 구조 전체를 우리 서버 관점에서 한마디로 하면요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우리가 "캐릭터 하나 = 세션 객체 하나"로 상태를 격리하듯, UE는 "액터 하나 = 채널 하나 = 그 액터 전용 상태 보관함"으로 격리해. 거기에 로그인/세션수립 핸들러를 <strong>"절대 안 죽고 항상 도는 전용 채널"로 승격시켜 0번에 고정</strong>한 게 Control이야. 게임 트래픽이 아무리 밀려도 연결 제어선은 독립적으로 살아있게 물리적으로 분리한 거지.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>채널은 "생성자에서 박은 ChName" 하나로 종류가 갈리고, ChIndex 0=Control은 "채널 없어도 받고, 남의 채널도 닫는" 특별 시민이라 얘가 서야 나머지 채널이 지어진다 — Actor 채널은 그중 액터 딱 하나를 전담하는 배달부다.</strong></p>
 <div class="note">다음 → <a class="xref" href="ch-02-receive-callchain.html">receive-callchain</a></div></div><nav class="booknav"><a href="ch-04-datachannel-nextbunch.html"><span class="lbl">← 이전</span>DataChannel: Bunch가 채널에서 풀리는 법</a><a class="nx" href="ch-06-send-callchain.html"><span class="lbl">다음 →</span>보낼 때 — 송신 콜체인</a></nav></div></body></html>

@@ -255,5 +255,29 @@ a.xref:hover { background:#bbdefb; }
 <ul><li>서버는 0.1초마다 <strong>자기 raw 시각</strong>을 복제 변수에 꽂아 방송할 뿐, 시차는 계산 안 한다.</li><li>클라는 값이 도착할 때마다 <strong>"받은값 − 내 시각"으로 delta를 뽑고</strong>, 누적 평균 + 절반 보간으로 <strong>튀지 않게 다듬어</strong> 보관한다. 이 delta는 복제되지 않는다.</li><li>서버 시각이 필요하면 <code>GetServerWorldTimeSeconds()</code> = <strong>내 로컬 시각 + delta</strong>로 스스로 계산한다. 매번 물어보지 않는다.</li></ul>
 <div class="note">막히면 → <a class="xref" href="ch-17-repnotify.html">repnotify</a> (값 도착 시 콜백이 어떻게 자동으로 불리나), <a class="xref" href="ch-14-lifetime-props.html">lifetime-props</a> (DOREPLIFETIME이 뭘 하나), <a class="xref" href="ch-12-server-replicate-actors.html">server-replicate-actors</a> (복제 변수가 어떻게 클라로 날아가나)<br>다음 → <a class="xref" href="ch-35-lag-compensation.html">lag-compensation</a> (이렇게 맞춘 서버 시각으로 "그때 그 순간"의 히트를 어떻게 되감아 판정하나)</div>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+<h3>Q1. 클라가 서버 시각이 궁금하면 그냥 매번 물어보면 되는데, 서버 시간 동기(server time sync)가 왜 따로 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">이벤트 카운트다운·쿨타임을 매 프레임 그리려면 <strong>초당 수십 번</strong> 물어야 하거든 — 뉴욕 친구한테 5분마다 시간 물어보는 꼴이야. 게다가 묻는 사이에도 시간은 흐르고 답이 오는 데 지연도 껴. 그래서 처음에 "시차(delta) = 몇 초" 하나만 알아내서 <strong>내 시계에 더해 쓰는</strong> 방식으로 풀어. 계속 안 묻고 로컬시각 + delta로 서버 시각을 추정하는 거지.</div></details>
+<h4>↳ 애초에 서버랑 클라 시계는 왜 안 맞나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">둘 다 "레벨 시작 후 흐른 초"를 세는데 <strong>출발점이 완전히 달라</strong>. 서버는 새벽에 켰고 클라는 방금 접속했으니까. 게다가 네트워크 지연도 껴 — 서버가 "지금 100.0초야" 하고 쏜 순간, 클라에 도착하면 이미 100.05초야. 그래서 그냥 raw 초를 받아 쓰면 안 되고 시차를 계산해서 보정해야 해.</div></details>
+<h3>Q2. 그 시차(delta)를 서버가 계산해서 클라한테 딱 내려주면 제일 간단하지 않나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">반전인데, <strong>서버는 delta를 계산하지도 내려주지도 않아.</strong> 서버가 클라가 몇 초짜리 시계를 들고 접속했는지, 지연이 얼마인지 모르거든. 클라마다 접속 시점·지연이 다 달라서 시차도 제각각이라, 서버가 남의 시차를 대신 못 구해. 만 명이면 시차 만 개를 서버가 떠안는 꼴이고. 그래서 <strong>서버는 자기 raw 시각만 방송</strong>하고, 시차는 각 클라가 "받은값 − 내 시각"으로 스스로 빼. 확장성에도 유리해 — 서버는 변수 하나만 방송하면 끝.</div></details>
+<h4>↳ 서버가 그 raw 시각을 클라로 어떻게 보내나요? 소켓 코드가 있나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">없어. 그냥 <strong>복제 변수(<code>ReplicatedWorldTimeSecondsDouble</code>)에 대입</strong>하기만 해. 그럼 UE 리플리케이션이 "값 바뀌었네" 하고 알아서 클라들로 실어 날라. 서버는 0.1초마다(<code>ROLE_Authority</code>일 때만) 자기 월드 시각을 그 변수에 꽂는 게 전부고, "보내라"는 명령도 소켓도 안 건드려. <code>DOREPLIFETIME</code>으로 등록해둔 덕분이야.</div></details>
+<h3>Q3. 클라는 "받은값 − 내 시각"을 그냥 delta로 바로 쓰면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">안 돼. 네트워크 지연이 매번 들쭉날쭉이라 그 <strong>한 방울은 노이즈투성이</strong>거든. 그대로 쓰면 delta가 확 튀고, 화면 카운트다운이 뒤로 갔다 앞으로 갔다 덜컹거려. 그래서 두 단계로 눌러 — ① 여러 샘플을 <strong>누적 평균</strong>(250개 넘으면 접고 리셋해서 오래된 기억은 흘려보냄), ② 목표로 한 번에 안 뛰고 <strong>"목표−현재의 절반"만</strong> 다가가는 스무딩 보간. 시계는 튀는 게 제일 나쁘거든.</div></details>
+<h4>↳ 절반씩만 따라가면 굼떠 보이는데, 왜 그렇게 하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">지연 스파이크 한 방에 delta가 확 바뀌면 화면 시계가 튀는데, 그게 매번 목표로 순간이동하는 것보다 <strong>훨씬 나빠</strong>. delta가 3.0인데 목표가 3.4면 3.2까지만 가고, 다음에 또 절반, 또 절반... 목표로 스르륵 수렴해. 이러면 지연이 껴도 부드럽게 흡수돼. 정확도를 조금 늦게 얻는 대신 <strong>안정성</strong>을 사는 교환이야. (단 맨 처음 한 번은 비교할 이전값이 없으니 목표값을 통째로 받아.)</div></details>
+<h3>Q4. 이 delta도 서버가 관리하는 복제 변수인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>delta(<code>ServerWorldTimeSecondsDelta</code>)는 복제 안 돼.</strong> 순전히 클라가 자기 안에서 굴린 값이야. <code>DOREPLIFETIME</code> 목록에 raw 시각만 있고 delta는 없어 — 이 한 줄이 "서버는 raw 시각만 방송, delta는 클라가 만든다"를 증명해. 그리고 <code>GetServerWorldTimeSeconds()</code>는 <strong>내 로컬시각 + delta</strong>로 답하니까, 서버에선 delta가 0이라 자기 진짜 시각이 나오고 클라에선 서버랑 거의 같은 시각이 나와. 서버든 클라든 같은 답이라 리스폰 타이머 같은 걸 양쪽에서 일관되게 그릴 수 있어.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p>서버는 자기 시각만 0.1초마다 방송하고, 클라가 <strong>"받은 서버시각 − 내 로컬시각 = delta"</strong>를 스스로 계산·스무딩해서 들고 있다가, <strong>로컬시각 + delta</strong>로 서버 시각을 매번 물어보지 않고 추정한다.</p></div><nav class="booknav"><a href="ch-33-root-motion-replication.html"><span class="lbl">← 이전</span>애니가 만드는 이동을 복제하기 — Root Motion Replication</a><a class="nx" href="ch-35-lag-compensation.html"><span class="lbl">다음 →</span>랙 보상: 지연을 되감아 과거 시점으로 히트 판정</a></nav></div></body></html>

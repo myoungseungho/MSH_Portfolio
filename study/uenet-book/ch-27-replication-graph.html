@@ -241,5 +241,48 @@ public:
 <ul><li>"관련 있다"의 판정 기준 자체가 애매하면 → <a class="xref" href="ch-24-relevancy.html">relevancy</a></li><li>이 격자가 대체하는 <strong>전통 경로</strong>(매 프레임 전체 훑기)를 먼저 → <a class="xref" href="ch-12-server-replicate-actors.html">server-replicate-actors</a></li><li>우선순위·업데이트 주기로 대역폭 나누는 법 → <a class="xref" href="ch-25-priority-updatefreq.html">priority-updatefreq</a></li><li>안 움직이는 액터를 아예 후보에서 빼는 형제 최적화 → <a class="xref" href="ch-26-dormancy.html">dormancy</a></li><li>정렬 통과한 액터가 실제 채널을 타는 안쪽 → <a class="xref" href="ch-13-actorchannel-replicate.html">actorchannel-replicate</a></li><li><strong>다음</strong> → <a class="xref" href="ch-28-iris.html">iris</a> (RepGraph의 다음 세대, 리플리케이션을 아예 다시 설계한 신형 시스템)</li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. ReplicationGraph, 왜 필요한 물건인가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">매 프레임 "이 액터를 이 플레이어한테 보내야 하나?"(관련성) 판정을 순진하게 하면 <strong>액터 N × 플레이어 M 전수 비교</strong>가 돼. 100명까진 버텨. 근데 1000명이 되면 100만 번짜리 계산이라 CPU가 터져 — 인원이 2배 늘면 계산은 4배로 뛰는 O(N²) 폭발이야. 그래서 월드를 격자로 쪼개서 "플레이어는 자기가 선 셀하고 옆 셀만 보면 돼"로 규칙을 바꾼 게 RepGraph야. 훑는 대상이 999명에서 <strong>내 주변 셀 안 서너 명</strong>으로 확 줄어서 거의 O(N)으로 내려앉아.</div></details>
+
+<h4>↳ 전통 경로(매 프레임 전체 훑기)로는 왜 안 되는데요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">전통 경로는 커넥션마다 전체 액터를 다 훑어. 접속자 적을 땐 문제없지만, 대규모가 되면 패킷을 아무리 예쁘게 압축해도 <strong>보내기 전에 "대상 고르기"에서 이미 프레임 시간을 다 써버려</strong>. 먼저 CPU가 터지고, 그다음 락이 터지고, 마지막으로 게임 느낌이 터지는 순서야.</div></details>
+
+<h3>Q2. 그럼 큰 그림에서 어떻게 O(N²)을 깨나요? 핵심 아이디어가 뭐예요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">절감 축이 <strong>딱 두 개</strong>야. ① <strong>준비(쓰기)를 커넥션 루프 밖으로 뺀다</strong> — 액터를 셀에 배치하는 무거운 작업을 커넥션 루프 돌기 전에 딱 1회만 해. 이건 액터 수 N에만 비례. 그다음 커넥션 루프는 "이미 정리된 셀에서 골라 담기"만 하니 M에 비례. 곱셈(N×M)이 덧셈(N+M)으로 쪼개져. ② <strong>안 움직였으면 계산 안 한다</strong> — 문짝 같은 정적 액터는 셀에 한 번 넣고 끝, 동적 액터도 <strong>셀 경계를 넘었을 때만</strong> 재배치해. 제자리에서 꼼지락대는 놈은 아무 일도 안 일어나.</div></details>
+
+<h4>↳ 좌표를 셀 번호로 바꾸는 건 어떻게 하는데요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그냥 <strong>월드 좌표를 CellSize로 나누면 셀 번호</strong>가 나와. 좌표 12000에 CellSize 5000이면 셀 2번. 근데 액터는 점이 아니라 <strong>관심 반경(CullDistance)</strong>을 가져 — 저격수는 멀리서도 보여야 하니까. 그래서 한 점이 아니라 "위치 ± 컬거리"를 나눠서 여러 셀에 걸치는 <strong>사각형</strong>으로 바뀌어. 컬 거리 큰 액터는 여러 셀에 동시 등록되는 거지.</div></details>
+
+<h4>↳ 커넥션 루프 안에서는 전체 셀을 다 뒤지나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그럼 다시 폭발하지. <strong>그 커넥션의 뷰어가 선 셀만</strong> 골라서 그 셀에게만 "여기 액터 모아줘"라고 위임해. 뷰어 위치를 (위치 − 원점편향) / CellSize로 셀 좌표로 바꾸고, 그 셀 노드만 꺼내서 던져. 전체 액터를 순회하는 코드가 <strong>어디에도 없어</strong> — 이게 100만 번을 서너 번으로 줄이는 바로 그 지점이야.</div></details>
+
+<h3>Q3. 정적 액터랑 동적 액터를 왜 굳이 구분했어요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">문짝·표지판은 <strong>평생 안 움직여</strong>. 얘들 위치를 매 프레임 다시 재고 셀에서 뺐다 넣었다 하는 건 순수 낭비야. 그래서 정적은 셀에 <strong>한 번 넣고 끝</strong>, 아예 동적 순회 루프에 들어오지도 않아. 동적은 매 프레임 위치를 다시 읽긴 하는데, <strong>셀 경계를 넘었을 때만</strong> 재배치해. 대부분의 프레임에서 대부분의 액터는 같은 셀 안에서 꼼지락대니까, 코드도 "이 재배치 분기는 잘 안 일어난다"고 컴파일러한테 힌트를 줄 정도야.</div></details>
+
+<h4>↳ 그럼 안 움직이는 문짝은 매 프레임 위치 비교 산수라도 도나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그것마저 안 돌아. 문짝은 애초에 <strong>정적 액터로 등록</strong>돼서 동적 순회 루프에 들어오지도 않아. 위치 비교를 겪는 건 오직 매 프레임 움직일 수 있는 동적 액터뿐이야. 축②가 "안 움직이면 비교조차 스킵"을 넘어서 "안 움직이는 놈은 아예 명단에서 뺀다"까지 가는 거지.</div></details>
+
+<h3>Q4. RepGraph의 만물이 '노드'라던데, 왜 그렇게 설계했어요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">"이 커넥션한테 보낼 관련 액터 모으기"를 한 덩어리 함수에 if-else로 다 때려박으면 처음엔 돌아. 근데 모으는 규칙이 한둘이 아니야 — 격자로 모으기, "항상 관련" 액터 모으기, 휴면 빼기, 팀별로 모으기… 규칙이 늘 때마다 함수가 비대해지고, <strong>게임마다 규칙을 갈아끼우기가 불가능</strong>해져. 그래서 "관련 액터를 모으는 로직 한 조각"을 부품(<strong>노드</strong>)으로 떼어내서 조립하게 한 거야. 격자·AlwaysRelevant·Dormancy가 다 같은 노드의 형제고, 매 프레임 "준비 + 수집" 두 훅만 맞추면 레고처럼 끼워.</div></details>
+
+<h4>↳ 격자 원점을 왜 월드 (0,0)에 고정 안 하고 SpatialBias를 뒀어요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">맵이 원점보다 <strong>왼쪽·아래(음수 좌표)</strong>로도 펼쳐지면, 위치를 그냥 나눴을 때 음수 셀 번호가 나와. 이걸 0으로 뭉개버리면 서로 다른 위치가 같은 셀 0으로 짓뭉개져서 격자가 깨져. 그래서 격자 (0,0)이 월드 어디에 대응할지를 옮길 수 있는 기준점을 둔 거야. 셀 번호 = (위치 − SpatialBias) / CellSize. 맵이 예상 밖으로 튀면 Bias를 밀고 격자를 다시 지어.</div></details>
+
+<h3>Q5. 우리 조선 서버에도 비슷한 게 있나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">발상은 형제야. 우리도 <strong>맵ID·존(zone)·시야 리스트</strong>로 관심 대상을 잘라서 전체를 매번 안 훑잖아. RepGraph가 격자 셀로 자르는 거랑 "전체를 매번 훑지 않으려고 공간을 미리 갈라둔다"는 골자가 같아. 둘 다 상태 만지는 처리는 락 없이 한 줄(싱글스레드)에서 직렬로 돌고. 차이는 <strong>우린 컨텐츠마다 관심 그룹을 손으로 설계</strong>하고(예측 쉽지만 노가다), UE는 범용 격자 하나로 자동 처리해(짜긴 편하지만 CellSize·CullDistance 잘못 잡으면 셀이 뭉치거나 재구축이 잦아짐). 우리 방식이 "손으로 존 자른 결과물"이면, RepGraph는 "존 자르기를 엔진 레벨로 일반화·자동화한 것"이야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>월드를 CellSize 격자로 갈라 액터를 "움직였을 때만" 셀에 재배치해두고(커넥션 밖 1회·N), 플레이어는 매 프레임 자기가 선 셀만 훑어 관련 액터를 모은다(커넥션마다·M) — N×M 전수 비교를 N+M으로 쪼개는 게 1000명을 감당하는 비결.</strong></p></div><nav class="booknav"><a href="ch-26-dormancy.html"><span class="lbl">← 이전</span>Dormancy: 안 바뀌는 액터는 재운다</a><a class="nx" href="ch-28-iris.html"><span class="lbl">다음 →</span>Iris: Epic이 복제를 새로 만든 이유</a></nav></div></body></html>

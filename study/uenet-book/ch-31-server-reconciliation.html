@@ -240,5 +240,32 @@ void ACharacter::ClientAckGoodMove_Implementation(float TimeStamp)
 <ul><li>막히면 → <a class="xref" href="ch-30-client-prediction.html">client-prediction</a> (SavedMove/ServerMove가 뭔지, 클라가 왜 먼저 움직이는지 — 이 챕터의 전제)</li><li>막히면 → <a class="xref" href="ch-29-charactermovement-overview.html">charactermovement-overview</a> (캐릭터가 애초에 어떻게 움직이는지, 로컬 이동 뼈대)</li><li>막히면 → <a class="xref" href="ch-21-rpc-types.html">rpc-types</a> (ServerMove/ClientAdjustPosition이 어떤 종류의 RPC인지)</li><li>다음 → <a class="xref" href="ch-32-simulated-proxy-smoothing.html">simulated-proxy-smoothing</a> (남이 조종하는 폰은 보정 대신 어떻게 부드럽게 보간되는지)</li><li>곁가지 → <a class="xref" href="ch-34-server-time-sync.html">server-time-sync</a> (TimeStamp가 기준 삼는 서버-클라 시각 동기화)</li><li>곁가지 → <a class="xref" href="ch-35-lag-compensation.html">lag-compensation</a> (서버가 과거 시점으로 되감아 판정하는 히트 보정)</li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+<h3>Q1. 클라가 이미 자기 화면에서 먼저 움직였는데, 서버 보정(server reconciliation)이 왜 또 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">앞 챕터에서 클라는 화면 끊김을 줄이려고 서버를 안 기다리고 <strong>먼저 움직였어</strong>. 근데 서버가 유일한 채점자잖아. 클라 이동이 틀렸을 수도 있는데(벽 뚫기, 말 안 되는 속도) 서버가 속으로 검사만 하고 아무 신호도 안 주면, 틀린 클라는 자기가 틀린 줄 모르고 계속 가. 클라 화면은 문을 지났는데 서버는 문 앞 — <strong>두 세계가 갈라져</strong> 고무줄처럼 튀고, 맞아야 할 공격이 빗나가. 그래서 서버가 채점 결과를 <strong>도로 알려주는</strong> 게 서버 보정이야.</div></details>
+<h4>↳ 그럼 서버가 "틀렸어"라고만 알려주면 충분한 거 아닌가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">반쪽이야. 맞았을 때도 신호를 보내줘야 해. 클라는 서버 확인 안 온 이동(SavedMove)을 버퍼에 계속 쌓아두거든. "그거 통과됐어(<code>ClientAckGoodMove</code>)"가 안 오면 그 기록을 언제 지울지 몰라서 버퍼가 무한정 부풀고, 나중에 되밟을 때 헛되게 다 밟아. 그래서 틀리면 <code>ClientAdjustPosition</code>(되돌려), 맞으면 <code>ClientAckGoodMove</code>(버퍼 비워) — 채점 결과가 <strong>둘 중 하나로 반드시 돌아오는 동전의 양면</strong>이야.</div></details>
+<h3>Q2. 서버가 "정답 위치 여기야" 하면 클라는 그냥 그 좌표로 순간이동시키면 되는 거 아닌가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그렇게 하면 핑 동안 예측으로 밟아둔 최근 이동들이 통째로 날아가서 조작감이 리셋돼 — 툭 튀는 rubber-banding이야. 우리 조선 서버가 <code>SM_순간이동</code>으로 끊어붙일 때 나는 그 거친 튐이지. UE는 대신 <strong>정답 위치로 되감은 다음, 그 뒤에 쌓아둔 입력(SavedMoves)을 정답 위치부터 다시 밟아(replay)</strong> 현재까지 따라잡아. 그래서 서버 권위를 지키면서도 이동이 부드러워.</div></details>
+<h4>↳ 그 "다시 밟기"가 되려면 서버가 뭘 같이 보내줘야 하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>TimeStamp</code>. 각 이동에 붙은 시각 도장이야. 보정/승인이 "<strong>어느 이동</strong>에 대한 건지"를 이걸로 맞춰. 클라는 SavedMoves 큐에서 이 값으로 해당 이동을 찾아서, 그 지점부터 재시뮬레이션하거나(<code>ClientAdjustPosition</code>) 큐에서 지워(<code>ClientAckGoodMove</code>). TimeStamp가 없으면 "몇 번째 걸 되돌리라는 거야?"를 알 수가 없어.</div></details>
+<h3>Q3. 오차가 크게 나면 보정 신호를 여러 번 팡팡 보내서 빨리 따라잡게 하는 게 낫지 않나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야. UE는 <strong>패킷당 최대 1회</strong>만 보정을 보내. 정답 위치는 <strong>가장 최근 것 하나면 충분</strong>하거든 — 낡은 보정을 클라가 받아봤자 어차피 다음 최신 보정이 덮어써. 정답을 두세 번 겹쳐 보내는 건 대역폭만 잡아먹는 낭비야. "최신 정답 한 방"이 제일 싸고 정확해. UE 네트워크 설계의 검약 철학이지.</div></details>
+<h3>Q4. 이 보정 신호가 큰 그림에서 어떤 경로로 흘러가나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">세 칸이야. ① 서버 틱이 <strong>전 커넥션을 돌며</strong> "너 보정 보낼 거 있냐"고 물어(NetDriver). ② 각 <strong>PlayerController가 "이거 그 클라가 조종하는 폰(AutonomousProxy) 맞고, 나는 서버 맞냐"</strong>를 걸러서 이동 컴포넌트로 위임해. ③ 이동 컴포넌트(CMC)가 클라 보고 위치와 서버 권위 위치의 <strong>오차를 재서</strong>, 크면 <code>ClientAdjustPosition</code>, 작으면 <code>ClientAckGoodMove</code>를 클라로 쏴. 실제 오차 판정 심장은 CMC 안에 있어.</div></details>
+<h4>↳ PlayerController는 왜 이동 컴포넌트의 구체 타입을 몰라도 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>INetworkPredictionInterface</code>라는 추상 손잡이만 잡고 부르거든. PC는 "예측/보정 인터페이스"에다 <code>SendClientAdjustment()</code>를 호출할 뿐, 실제로 오차 재고 RPC 쏘는 게 CMC인지 뭔지는 몰라. 다형성으로 CMC 본문을 숨긴 벽이야. 덕분에 이동 방식이 바뀌어도 PC 코드는 안 건드려도 돼.</div></details>
+<h4>↳ 남이 조종하는 폰(SimulatedProxy)한테는 왜 이 보정을 안 쏘나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">남의 폰은 애초에 <strong>예측을 안 하고 서버가 준 위치를 받아 보간만</strong> 하거든. 먼저 움직인 적이 없으니 "틀렸다"고 되돌릴 것도 없어. 보정은 그 클라가 직접 조종하며 먼저 움직이는 자기 캐릭터(AutonomousProxy)한테만 의미가 있어. 남의 폰을 부드럽게 만드는 건 보정이 아니라 다음 챕터 스무딩이 담당해.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>서버가 유일한 채점자다 — 클라는 먼저 움직이고, 서버는 틱마다 오차를 재서 틀렸으면 <code>ClientAdjustPosition</code>으로 정답 위치를 강제하고(클라는 그 지점부터 replay), 맞았으면 <code>ClientAckGoodMove</code>로 통과시킨다. 보정은 최신 한 방이면 족하다.</strong></p></div><nav class="booknav"><a href="ch-30-client-prediction.html"><span class="lbl">← 이전</span>클라 예측: SavedMove로 먼저 움직이고, ServerMove로 보고하기</a><a class="nx" href="ch-32-simulated-proxy-smoothing.html"><span class="lbl">다음 →</span>남을 부드럽게: 보간 / 외삽 / 스무딩 (Simulated Proxy Smoothing)</a></nav></div></body></html>

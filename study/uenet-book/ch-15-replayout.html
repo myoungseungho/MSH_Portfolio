@@ -261,5 +261,44 @@ public:
 <ul><li>무엇이 리플리케이트되는지(표에 뭐가 올라가는지)가 아직 흐리면 → <a class="xref" href="ch-14-lifetime-props.html">lifetime-props</a></li><li>"바뀐 것만 어떻게 골라 보내는지"(섀도 비교 · 변경 핸들)가 궁금하면, 이 표를 실제로 굴리는 다음 이야기 → <a class="xref" href="ch-16-changelist.html">changelist</a></li><li>이 레이아웃이 실제 채널을 타고 나가는 큰 그림은 → <a class="xref" href="ch-13-actorchannel-replicate.html">actorchannel-replicate</a></li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. <code>RepLayout</code>은 애초에 왜 필요한가요? <code>DOREPLIFETIME</code>으로 명단은 이미 있잖아요.</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">명단은 "<strong>무엇을</strong> 보낼까"만 정한 거야. RepLayout은 "그걸 <strong>어떻게</strong> 비트로 눕힐까"를 푸는 물건이지. 순서는 뭐고, 배열은 어떻게 처리하고, 리플렉션 없이 어떻게 빠르게 훑을까 — 이게 별개 문제거든. 이삿짐으로 치면 명단은 "뭘 실을지 목록"이고, RepLayout은 "1번 상자는 트럭 뒤쪽, 몇 kg" 하는 <strong>패킹 리스트</strong>야. 실을 때 그 표 순서대로 번호만 따라가면 되니까 고민이 없어지는 거지.</div></details>
+
+<h4>↳ 그 표(Cmds)를 매 전송마다 안 만들고 왜 클래스당 한 번만 만드나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">매번 만들면 캐싱의 의미가 없으니까. 값을 보낼 때마다 액터를 뒤져 "이 프로퍼티 이름 뭐지, 타입 뭐지, 메모리 어디 있지?"를 리플렉션으로 캐물으면 그게 느려. 액터 수백 개가 매 틱 바뀌는데 전송마다 그걸 반복하면 CPU가 녹아. 그래서 클래스당 <strong>딱 한 번</strong> 프로퍼티를 훑어 "몇 번 칸 = 오프셋 얼마, 타입 뭐"를 미리 표로 적어두고, 전송 땐 그 표를 인덱스로 훑기만 해. 리플렉션은 빌드 때 한 번만 쓰이고 실제 전송 경로엔 아예 없어.</div></details>
+
+<h3>Q2. 프로퍼티 트리를 평탄한 배열로 눕힌다는 게 무슨 뜻이고, 왜 그렇게 하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">프로퍼티 안에 구조체가 있고 그 안에 또 배열이 있는 <strong>트리 구조</strong>를, 빌드 때 재귀로 파고들어 <strong>한 줄로 쭉 편 배열(Cmds)</strong>로 바꾼다는 거야. 편 다음부터는 트리를 몰라도 돼 — 그냥 배열 인덱스만 있으면 되거든. 전송 루프가 리플렉션 순회가 아니라 단순 <code>for</code> 배열 인덱싱으로 도는 이유가 이거야. 그게 빠른 이유의 전부지.</div></details>
+
+<h4>↳ 그럼 배열 같은 건 어떻게 표에서 건너뛰나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">표 한 줄마다 "이게 배열이면 안쪽 요소를 건너뛰려면 몇 번으로 점프해라"는 끝 표지판이 들어 있어. 배열을 만나면 안쪽은 전용 재귀 함수에 맡기고, 돌아와서 그 표지판대로 점프해 안쪽 명령들을 한 방에 건너뛰어. 그리고 배열은 <strong>길이를 먼저</strong> 보내 — 받는 쪽이 몇 개 올지 몰라서 미리 그릇을 그만큼 늘려야 경계가 안 밀리거든. 덤으로 악의적 클라가 "20억 개"라고 뻥치는 것도 길이 검증으로 막고.</div></details>
+
+<h3>Q3. 송신 코드랑 수신 코드를 따로 안 짜고 한 함수로 처리한다던데, 어떻게 그게 되나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">방향을 정하는 게 직렬화 함수가 아니라 <strong>넘겨받은 아카이브(Archive)</strong>거든. 같은 함수에 Writer를 넘기면 값→비트로 <strong>쓰고</strong>, Reader를 넘기면 비트→값으로 <strong>읽어</strong>. 함수 본문은 글자 하나 안 바뀌어 — 방향만 아카이브가 들고 있는 거지. 그래서 송신·수신 코드가 하나라 버그도 한 군데만 고치면 되고, 표를 같은 순서로 훑으니 "보낼 때랑 받을 때 순서가 어긋나는" 사고가 원천적으로 안 나. 이게 RepLayout 설계의 우아한 점이야.</div></details>
+
+<h4>↳ 송·수신 순서가 어긋나면 뭐가 망가지나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">보낸 순서랑 읽는 순서가 조금이라도 다르면 값이 통째로 <strong>밀려서 다 깨져.</strong> HP 자리에 좌표가 들어가고 좌표 자리에 이름이 들어가는 식으로. 조선 서버에서 구조체 필드 순서를 한쪽만 바꾸고 다른 쪽을 안 고쳐서 lockstep이 깨지던 그 사고랑 정확히 같은 원리야. 송신·수신 코드가 따로면 한쪽만 고치고 한쪽 까먹는 실수가 나는데, 한 함수 한 표로 합치면 순서가 자동으로 짝이 맞아서 그 사고가 안 생기는 거지.</div></details>
+
+<h3>Q4. 이 구조를 우리 조선 서버 방식과 비교하면 핵심 차이가 뭔가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우리는 <code>SP_*</code> 구조체를 정의하고 필드 순서를 <strong>사람이 코드로 손수 박아둬.</strong> 구조체 레이아웃이 곧 와이어 포맷이고, 순서 틀리면 받는 쪽에서 밀려 깨져. RepLayout은 그 "손으로 박는 필드 순서"를 <strong>리플렉션에서 자동으로 뽑아 Cmds 배열로 만들어둔 것</strong>이야. 우리가 사람 머리로 유지하던 순서 계약을, 언리얼은 클래스당 한 번 빌드한 표로 유지하는 거지. 한 줄로 하면 "우리가 손으로 하던 필드 순서 계약을 언리얼은 표로 자동화했다."</div></details>
+
+<h4>↳ 이 표를 여러 스레드가 동시에 훑다가 꼬일 걱정은 없나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">거의 없어. 언리얼 복제는 사실상 <strong>단일 흐름(NetDriver Tick)</strong>에서 표를 순차로 훑거든. 우리 IOCP 워커가 여럿이어도 게임 로직은 싱글스레드로 직렬화하는 거랑 같은 구조야. "여러 스레드가 같은 표를 동시에 건드려 순서가 꼬이는" 걱정이 구조적으로 없다는 뜻이지. 표는 빌드 때 한 번 만들어두면 그 뒤론 읽기 전용처럼 쓰이고, 훑는 건 한 흐름이 도맡으니까.</div></details>
+
+<h4>↳ 그럼 "바뀐 것만 골라 보내는" 건 이 표가 하는 일인가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">이 표는 "<strong>어떻게 눕힐까</strong>"(순서·오프셋·타입)까지만 책임져. "<strong>뭐가 바뀌었나</strong>"를 골라내는 건 그 다음 단계인 변경분 복제(델타)야 — 마지막으로 보낸 값의 사본(섀도 메모리)이랑 지금 값을 비교해서 달라진 것만 추려내지. 근데 그 델타 함수들도 결국 <strong>같은 Cmds 표를 훑어.</strong> 표는 "포장 설명서"고, 델타는 그 설명서를 들고 "이번엔 뭐가 달라졌지?"를 판단해 골라 담는 거라, 역할이 나뉘어 있으면서도 같은 표를 공유하는 셈이야.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>RepLayout 은 프로퍼티 트리를 클래스당 한 번 "평탄한 명령표(Cmds)"로 눕혀 두고, 송신·수신이 그 표를 같은 순서로 인덱싱만 하게 만들어 — 리플렉션 없이 빠르고, 방향은 아카이브가 정해 한 함수로 양방향을 처리한다.</strong></p></div><nav class="booknav"><a href="ch-14-lifetime-props.html"><span class="lbl">← 이전</span>무엇을 복제할까: DOREPLIFETIME</a><a class="nx" href="ch-16-changelist.html"><span class="lbl">다음 →</span>변경분만: Changelist / 델타</a></nav></div></body></html>

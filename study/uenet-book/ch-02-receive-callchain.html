@@ -227,6 +227,45 @@ a.xref:hover { background:#bbdefb; }
 <ul><li><strong>왜 비트 단위(FBitReader)냐?</strong> <code>bool</code> 하나를 1비트로 아끼려고. 대역폭이 목숨인 실시간 게임이라 비트까지 짠다. 대신 "진짜 끝"을 표시할 터미네이터 비트가 필요해진 거고.</li><li><strong>패킷 = Bunch 아니다.</strong> 패킷은 UDP 한 방(상자), Bunch는 그 안의 논리 단위(봉투). 1:N. 헷갈리면 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a></li><li><strong>ack는 여기서 안 재전송해.</strong> <code>ReceivedPacket</code>은 "받았다/거부한다" 신호만 보내(AckSeq/NakSeq). 실제 재전송 결정은 송신측 몫 → <a class="xref" href="ch-07-reliability-ack.html">reliability-ack</a></li><li><strong>out-of-order 캐시</strong>가 1층 끝(<code>FlushPacketOrderCache</code>)과 2층(갭 감지)에 걸쳐 있어. 두 군데가 짝이야.</li></ul>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 소켓이 준 날 바이트를 왜 곧장 게임 로직에 넘기지 않고, 함수 세 개를 거치게 만드나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">소켓이 던지는 건 <strong>친절한 "스킬 사용 패킷"이 아니라 그냥 바이트 덩어리</strong>거든. 아직 복호화도 안 됐고, 순서가 꼬였을 수도, 한 방에 여러 메시지가 붙어 있을 수도 있어. 이걸 대충 넘기면 엉뚱한 핸들러가 열리고 잘못된 상태를 만져 사고가 나. 그래서 관문을 나눠 — <code>ReceivedRawPacket</code>이 봉인 풀고, <code>ReceivedPacket</code>이 순서/신뢰성 따지고, <code>DispatchPacket</code>이 채널로 배달. <strong>한 함수 = 한 책임.</strong> 택배 상자를 받자마자 휘두르는 게 아니라 포장 뜯고 송장 보고 부서별로 분류하는 거야.</div></details>
+
+<h4>↳ 그 셋을 한 함수에 몰아넣으면 뭐가 문제인가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">각 단계가 실패 처리 방식이 달라. 복호화 실패는 연결을 끊고, 순서 갭은 잠깐 보관하고, Bunch 하나 썩은 건 ack만 안 하고 넘어가. 이게 한 덩어리로 뭉치면 "지금 어느 단계에서 뭐가 틀어졌는지"를 못 짚어 — 버그 나면 패킷이 어디서 사라졌는지 추적이 안 돼. 관문을 나눠야 각 층의 책임과 실패 지점이 선명해져.</div></details>
+
+<h3>Q2. UE는 왜 바이트 단위가 아니라 비트 단위로 읽나요? 그것 때문에 뭐가 하나 더 필요해졌죠?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">실시간 게임은 대역폭이 목숨이라 <code>bool</code> 하나를 <strong>1비트로</strong> 욱여넣어 아껴. 그래서 진짜 데이터가 "N바이트"가 아니라 "N비트"에서 끝나는데, 소켓은 바이트 단위로만 보내니까 <strong>마지막 바이트의 남는 자리는 쓰레기 비트</strong>로 채워져. 그럼 "어디까지가 진짜고 어디부터가 완충재냐"를 알 수가 없지. 그래서 진짜 데이터 맨 끝에 <code>1</code>을 딱 하나 박아 끝을 표시해 — 이게 <strong>터미네이터 비트</strong>야. 받는 쪽은 마지막 바이트에서 제일 높은 1을 찾으면 거기가 끝.</div></details>
+
+<h4>↳ 그럼 마지막 바이트가 통째로 0이면 어떻게 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">터미네이터 비트조차 없다는 뜻이라 = 손상된 패킷이야. 끝 표시를 못 찾으니 길이를 역산할 수가 없어. 그래서 MalformedPacket으로 처리하고 그냥 버려. "끝을 알 수 없는 편지는 안 읽는다"는 거지.</div></details>
+
+<h3>Q3. 우리 TCP 서버엔 없는데 UE엔 있는 게, 이 수신 경로에 뭐죠? 왜 생겼나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>시퀀스 번호랑 ack 처리</strong>야. TCP면 커널이 순서를 맞춰주니까 우리 서버는 이 고민을 안 해. 근데 UE는 UDP 위라 커널이 안 도와줘 — 3번이 2번보다 먼저 오거나, 2번이 아예 안 오거나, 같은 게 두 번 오기도 해. 그래서 <code>ReceivedPacket</code>이 송장 번호(시퀀스)를 보고 순서를 판정하고, 받았다는 걸 상대에게 ack로 알려줘. TCP가 공짜로 해주던 걸 UDP 위에서 손수 하는 거야.</div></details>
+
+<h4>↳ 순서가 밀린 패킷, 예를 들어 앞 게 안 왔는데 뒤 게 먼저 오면요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">기대값과의 간격(delta)을 봐서 세 갈래로 갈라. 딱 다음 번호면 정상 진행, 중간에 빵꾸가 났으면(delta&gt;1) <strong>out-of-order 캐시에 잠깐 보관</strong>했다가 빈 자리가 채워지면 순서대로 꺼내 처리, 이미 처리한 옛날 번호면 중복 재전송이니 그냥 버려. 순서 뒤바뀐 걸 그냥 처리하면 "장착"이 "아이템 지급"보다 먼저 실행되는 사고가 나니까.</div></details>
+
+<h4>↳ ack를 보낸다고 했는데, 그럼 재전송도 이 수신 함수가 하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 여기선 "받았다(ack)/거부한다(nak)" <strong>신호만</strong> 보내. 실제로 다시 보낼지 말지 결정하는 건 송신측 몫이야. 수신 경로는 "네가 보낸 거 여기까지 잘 왔어"를 알려주는 역할까지고, 그 신호를 받은 상대가 재전송을 판단해. 역할이 갈려 있는 거지.</div></details>
+
+<h3>Q4. 이 콜체인, 우리 IOCP 서버의 수신 처리랑 결정적으로 뭐가 다른가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">우리 IOCP는 <strong>워커 스레드가 N개</strong>라 여러 연결이 동시에 처리돼 — 대신 공유 자원은 락으로 지켜야 하지. UE의 이 수신 경로는 보통 <strong>게임 스레드에서 순차로</strong> 흘러가. 소켓에서 바이트 긁어오는 것만 별개고, 세 함수 → 채널 → 액터 복제까지 한 줄로 도니까 우리로 치면 "싱글스레드 액터 모델"에 가까워. 그래서 Bunch가 액터 상태를 건드릴 때 <strong>락이 필요 없어</strong> — 어차피 한 스레드가 순서대로 처리하거든.</div></details>
+
+<h4>↳ 그 방식의 대가는 뭔가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">락 지옥이 없는 대신 <strong>그 한 스레드가 병목이 되면 전체가 느려져.</strong> 우리는 "동시에 여러 손님"이라 락으로 지키고, UE 수신은 "한 줄로 한 명씩"이라 순서로 지켜 — 트레이드오프야. 그래서 넷드라이버 Tick 최적화가 중요해지는 거고.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <p><strong>소켓 날바이트 → (핸들러 복호화) → 터미네이터로 진짜 비트길이 찾아 FBitReader → 시퀀스/ack로 순서 판정 → 패킷을 Bunch들로 쪼개 채널에 배달</strong> — 세 함수가 각자 한 관문(바이트/순서/분해)만 지키며 릴레이한다.</p>
 <div class="note">막히면 → <a class="xref" href="ch-01-netconnection-overview.html">netconnection-overview</a><br>다음 → <a class="xref" href="ch-03-bunch-vs-packet.html">bunch-vs-packet</a> (봉투 하나의 정체) · 이어서 → <a class="xref" href="ch-04-datachannel-nextbunch.html">datachannel-nextbunch</a> (채널 안에서 조립)</div></div><nav class="booknav"><a href="ch-01-netconnection-overview.html"><span class="lbl">← 이전</span>NetConnection — 한 연결이 담당하는 모든 것</a><a class="nx" href="ch-03-bunch-vs-packet.html"><span class="lbl">다음 →</span>Bunch가 뭐고 패킷과 뭐가 다른가</a></nav></div></body></html>

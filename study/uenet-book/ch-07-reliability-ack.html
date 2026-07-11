@@ -281,6 +281,49 @@ ack(봉투 배달됨)  → OutRec에서 사본 삭제  (앞에서부터)
 nak(봉투 잃음)    → OutRec에서 사본 재전송 (같은 편지, 새 봉투)</div>
 <hr>
 </div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. UE는 UDP 위에서 도는데, 왜 신뢰성을 엔진이 직접 짜야 하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">UDP는 그냥 일반 우편이라서 편지를 잃어도 미안하다 안 하고, 3번보다 4번이 먼저 와도 태연해. 근데 게임에선 "아이템 획득", "몬스터 죽음" 같은 메시지는 절대 잃거나 뒤집히면 안 되잖아. TCP를 깔았으면 커널이 다 해주는데 UDP는 아무도 안 해줘. 그래서 "번호 매기고 · 받았다 회신받고 · 안 오면 다시 보내는" 등기우편 시스템을 엔진이 UDP 위에 손수 얹은 거야.</div></details>
+
+<h4>↳ 그럼 그냥 TCP를 쓰면 이 고생을 안 해도 되잖아요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">TCP는 "전부 순서대로, 하나도 안 잃고"를 강제하는데 그게 게임엔 독이야. 옛날 위치 패킷 하나 잃었다고 뒤 패킷이 전부 밀리는 머리막힘(head-of-line blocking)이 생기면 캐릭터가 순간이동해. UDP를 골라야 <strong>채널마다 reliable을 켜고 끌 수</strong> 있어. "아이템 획득"은 등기(reliable), "매 프레임 위치"는 일반우편(unreliable)로 — 필요한 것만 골라 등기로 만드는 이 선택권 때문에 UDP를 사서 고생하는 거야.</div></details>
+
+<h3>Q2. 그럼 이 신뢰성 시스템이 큰 그림에서 어떻게 도나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">등기우편 3동작이야. 보낼 때 편지에 번호(<code>ChSequence</code>)를 매기고 <strong>사본을 재전송 큐(<code>OutRec</code>)에 남겨둬</strong>. 그리고 봉투(패킷)에 실어 보내고 수령증을 기다려. ack(봉투 배달됨)이 오면 그 봉투에 실렸던 편지 사본을 큐에서 버리고, nak(봉투 잃음)이 오면 그 사본으로 같은 편지를 새 봉투에 다시 부쳐. 받는 쪽은 번호로 순서를 맞추고, 이미 받은 번호는 조용히 폐기해서 "정확히 한 번"을 보장해.</div></details>
+
+<h4>↳ 사본을 <code>OutRec</code>에 남긴다고 했는데, 안 남기면 뭐가 망가지나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">편지를 소켓에 실어 보냈으면 원본은 내 손을 떠났어. 근데 UDP라 도중에 증발할 수 있잖아? 그때 "다시 보내"라고 해도 <strong>다시 부칠 종이가 없어</strong>. 그래서 보낼 때 사본을 한 장 떠서 서랍(<code>OutRec</code>)에 넣어두는 거야. ack 오면 찢고, nak 오면 그 사본으로 재전송. 이게 없으면 손실=영구유실이 돼.</div></details>
+
+<h4>↳ 그 서랍이 무한정 커지면 어떡하죠?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">상한선(<code>RELIABLE_BUFFER</code>=512)이 있어. 상대가 계속 반송만 해서 사본이 이 이상 쌓이면 "연결이 감당 못 하는 상태"로 보고 아예 연결을 끊어(<code>MaxReliableExceeded</code>). 무한 적재로 메모리 터지는 걸 막는 브레이크야. 편지 번호도 무한히 못 올리니까 <code>MAX_CHSEQUENCE</code>(=1024, 버퍼의 2배)에서 되돌아(wrap) — 2배로 잡은 건 늦게 도는 옛 편지와 새 편지가 안 헷갈릴 시간창을 확보하려는 거고.</div></details>
+
+<h3>Q3. 번호가 두 개(ChSequence, PacketId)로 나뉜 이유가 뭔가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">관심사가 둘이라서야. <strong>순서</strong>는 "논리 메시지" 단위 문제라 편지 번호(<code>ChSequence</code>)로 잡아 — 한 봉투에 편지 여러 통이 들어가니까 봉투 번호론 순서를 못 맞춰. <strong>배달 확인</strong>은 "물리 전송" 단위 문제라 봉투 번호(<code>PacketId</code>)로 와 — 소켓이 실제로 던지고 잃는 건 봉투지 편지가 아니거든. 한 축으로 뭉치면 둘 중 하나는 반드시 어긋나.</div></details>
+
+<h4>↳ 그럼 ack이 봉투 번호로 오면 편지 사본은 어떻게 찾나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">"번호 갈아타기"를 <code>OutRec</code>이 해줘. 사본마다 <code>ChSequence</code>(편지 정체성)랑 <code>PacketId</code>(어느 봉투에 실렸나)를 둘 다 들고 있어. 그래서 "37번 봉투 배달됨" ack이 오면 그 <code>PacketId</code>를 실은 사본을 찾아 도장을 찍고, nak이면 <code>ChSequence</code>는 유지한 채 새 봉투에 다시 실어. 두 축을 잇는 경첩이 <code>OutRec</code>인 거지.</div></details>
+
+<h4>↳ ack이 순서가 뒤바뀌어 와도(38번이 37번보다 먼저) 문제없나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">괜찮아. ack이 오면 해당 사본에 "받음" 도장만 찍지, 삭제는 큐 <strong>맨 앞에서부터</strong>만 해. 38번이 먼저 와도 앞에 있는 37번이 아직 ack 안 됐으면 방출 루프가 첫 바퀴에 멈춰서 안 지워져. 나중에 37번 ack이 오면 앞이 뚫리면서 우르르 빠져나가. 도장(개별 표시)과 방출(순서대로 삭제)이 별개 단계라 순서 꼬임에도 안전한 거야.</div></details>
+
+<h3>Q4. 재전송한 편지가 원본이랑 겹쳐서 두 번 도착하면 아이템이 두 번 지급되지 않나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">안 그래. 받는 쪽은 "이 채널 몇 번까지 순서대로 받았다"를 <code>InReliable</code> 카운터로 기억해. 재전송돼서 이미 받은 번호(≤<code>InReliable</code>)가 또 오면 조용히 폐기해버려. 편지 정체성인 <code>ChSequence</code>는 재전송해도 안 변하니까, 받는 쪽이 "어 이거 이미 처리한 번호네" 하고 걸러내는 거지. 이게 신뢰성의 "정확히 한 번" 보장이고, 그래서 재전송이 중복돼도 안전해.</div></details>
+
+<h4>↳ 조선 서버(TCP)엔 왜 이런 게 하나도 없죠?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">TCP를 깔고 앉아서 이 챕터 내용을 통째로 커널에 아웃소싱했거든. 순번·ack·재전송·중복제거·순서보장을 OS가 다 해줘서, <code>ProcessPacket</code>에 도착할 땐 이미 순서 맞고 안 빠진 온전한 스트림이야. 그래서 우리 코드엔 <code>OutRec</code> 같은 재전송 큐 자체가 없어. UE는 UDP를 골랐으니 이 전부를 직접 짜는 거고 — 트레이드오프의 방향이 정반대인 거지.</div></details>
+</div>
 <div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
 <div class="note"><strong>UE는 UDP 위에 등기우편을 손수 짠다 — reliable 편지엔 채널 순번(ChSequence)을 매겨 사본을 OutRec 큐에 보관하고, ack(봉투 PacketId 배달됨)이 오면 앞에서부터 사본을 버리고, nak(봉투 잃음)이 오면 같은 편지를 새 봉투에 다시 부친다. 순서는 편지 번호로, 배달 확인은 봉투 번호로 — 이 두 축을 OutRec이 잇는다.</strong></div>
 <hr>
