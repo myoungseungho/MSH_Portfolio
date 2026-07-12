@@ -62,8 +62,8 @@
     + '.mshn-card .mshn-grip{cursor:grab;color:#cbb968;font-size:1rem;line-height:1;user-select:none;-webkit-user-select:none;touch-action:none;padding:0 2px;}'
     + '.mshn-card .mshn-grip:active{cursor:grabbing;}'
     + '.mshn-card{position:absolute;}'   /* (아래 mshn-resize의 기준) */
-    + '.mshn-resize{position:absolute;left:-3px;top:0;bottom:0;width:10px;cursor:ew-resize;touch-action:none;z-index:2;}'
-    + '.mshn-resize::before{content:"";position:absolute;left:3px;top:50%;transform:translateY(-50%);width:3px;height:34px;border-radius:3px;background:#e6d98f;opacity:0;transition:opacity .12s;}'
+    + '.mshn-resize{position:absolute;right:-4px;top:0;bottom:0;width:12px;cursor:ew-resize;touch-action:none;z-index:2;}'
+    + '.mshn-resize::before{content:"";position:absolute;right:4px;top:50%;transform:translateY(-50%);width:3px;height:34px;border-radius:3px;background:#e6d98f;opacity:0;transition:opacity .12s;}'
     + '.mshn-card:hover .mshn-resize::before{opacity:.9;}'
     + '.mshn-resize:hover::before{background:#f6c945;opacity:1;height:48px;}'
     + '.mshn-card .mshn-headright{display:flex;align-items:center;gap:2px;}'
@@ -468,7 +468,7 @@
   }
 
   /* ---------- 너비 조절(가로 드래그) ---------- */
-  // 카드 왼쪽 모서리를 왼쪽으로 끌면 넓어짐(여백을 채움) → 세로가 짧아진다.
+  // 왼쪽(본문 옆)은 고정. 오른쪽 끝을 잡고 오른쪽으로 끌면 넓어짐 → 세로가 짧아진다.
   function enableResize(handle) {
     var startX = 0, startW = 0, resizing = false;
     handle.addEventListener('pointerdown', function (e) {
@@ -480,12 +480,11 @@
     handle.addEventListener('pointermove', function (e) {
       if (!resizing) return;
       var m = metrics();
-      var w = Math.max(MINW, Math.min(m.maxW, startW - (e.clientX - startX)));  // 왼쪽으로 끌수록 +
+      var w = Math.max(MINW, Math.min(m.maxW, startW + (e.clientX - startX)));  // 오른쪽으로 끌수록 +
       setUserWidth(w);
-      // 즉각 반영(재렌더 없이 폭만 갱신 → 부드럽게)
+      // 즉각 반영(재렌더 없이 폭만 갱신 → 부드럽게). left는 고정이라 왼쪽 모서리가 안 움직임.
       var cards = layer.querySelectorAll('.mshn-card');
-      var left = m.left + (m.width - w) * 0;   // 오른쪽 정렬 유지: left는 고정, 폭만 변경
-      for (var i = 0; i < cards.length; i++) { cards[i].style.width = w + 'px'; cards[i].style.left = left + 'px'; }
+      for (var i = 0; i < cards.length; i++) cards[i].style.width = w + 'px';
       stackCards();
     });
     function end(e) {
