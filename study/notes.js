@@ -146,7 +146,10 @@
   function render() {
     layer.innerHTML = '';
     var m = metrics(), isWide = wide();
-    countEl.textContent = '📝 ' + state.length;
+    var kb = pageBytes();
+    countEl.textContent = '📝 ' + state.length + (kb > 300 * 1024 ? ' · ' + fmtKB(kb) : '');
+    countEl.style.color = kb > 800 * 1024 ? '#c62828' : (kb > 500 * 1024 ? '#ef6c00' : '#6a1b9a');
+    countEl.title = '이 페이지 메모 ' + state.length + '개 · ' + fmtKB(kb) + (kb > 500 * 1024 ? ' (한도 1MB 근접 — 이미지 정리 권장)' : '');
     if (isWide) {
       strip.style.display = 'block';
       strip.style.left = m.left + 'px';
@@ -525,44 +528,59 @@
     return out;
   }
 
+  // 페이지 경로 → gist 파일명 (페이지마다 파일 분리 → 파일당 1MB 한계를 페이지별로 분산)
+  function fileNameFor(path) {
+    return 'note_' + path.replace(/^\/+|\/+$/g, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(-90) + '.json';
+  }
+
   // 원격 → 로컬 (페이지별 최신 승리)
   function pullAll() {
     if (!token()) return Promise.resolve();
     setSync('syncing');
-    return readGist().then(function (remote) {
-      var pages = (remote && remote.pages) || {};
-      Object.keys(pages).forEach(function (p) {
-        var r = pages[p]; if (!r) return;
-        if ((r.updatedAt || 0) > getMeta(p)) {
-          localStorage.setItem('mshnotes:' + p, JSON.stringify(r.notes || []));
-          setMeta(p, r.updatedAt || Date.now());
-        }
+    return findGist().then(function (id) {
+      if (!id) { setSync('ok'); return; }
+      return api('GET', '/gists/' + id).then(function (g) {
+        var files = g.files || {};
+        Object.keys(files).forEach(function (fn) {
+          var f = files[fn]; if (!f || f.truncated || !f.content) return;
+          var obj; try { obj = JSON.parse(f.content); } catch (e) { return; }
+          if (fn === GIST_FILE && obj.pages) {                       // 구버전(통짜) 하위호환
+            Object.keys(obj.pages).forEach(function (p) {
+              var r = obj.pages[p];
+              if (r && (r.updatedAt || 0) > getMeta(p)) { localStorage.setItem('mshnotes:' + p, JSON.stringify(r.notes || [])); setMeta(p, r.updatedAt || Date.now()); }
+            });
+          } else if (obj.path && obj.notes) {                        // 신버전(페이지별 파일)
+            if ((obj.updatedAt || 0) > getMeta(obj.path)) { localStorage.setItem('mshnotes:' + obj.path, JSON.stringify(obj.notes)); setMeta(obj.path, obj.updatedAt || Date.now()); }
+          }
+        });
+        state = load(); render(); setSync('ok');
       });
-      state = load(); render();
-      setSync('ok');
     }).catch(function (e) { setSync('error'); });
   }
 
-  // 로컬 → 원격 (다른 페이지는 원격 유지하며 병합)
+  // 로컬 → 원격: 이 페이지 파일만 갱신 (다른 페이지 파일은 건드리지 않음 = 안전·가벼움)
   var pushTimer = null;
   function scheduleSync() { if (!token()) return; clearTimeout(pushTimer); pushTimer = setTimeout(pushAll, 1500); }
   function pushAll() {
     if (!token()) return Promise.resolve();
     setSync('syncing');
-    return readGist().then(function (remote) {
-      var merged = (remote && remote.pages) ? Object.assign({}, remote.pages) : {};
-      var lp = localPages();
-      Object.keys(lp).forEach(function (p) {
-        if (!merged[p] || (lp[p].updatedAt || 0) >= (merged[p].updatedAt || 0)) merged[p] = lp[p];
-      });
-      var content = JSON.stringify({ v: 1, updatedAt: Date.now(), pages: merged });
-      var files = {}; files[GIST_FILE] = { content: content };
-      var id = gistId();
-      if (id) return api('PATCH', '/gists/' + id, { files: files });
-      return api('POST', '/gists', { description: 'MSH study — margin notes (auto)', public: false, files: files })
-        .then(function (g) { localStorage.setItem(GISTID_KEY, g.id); });
-    }).then(function () { setSync('ok'); }).catch(function (e) { setSync('error'); });
+    var payload = JSON.stringify({ v: 2, path: PATH, updatedAt: getMeta(PATH) || Date.now(), notes: state });
+    if (payload.length > 950 * 1024) {
+      setSync('error');
+      alert('이 페이지 메모가 너무 커요(약 ' + Math.round(payload.length / 1024) + 'KB). Gist 한 파일 한도(1MB)를 넘어 동기화가 안 됩니다.\n이미지 몇 장을 지워주세요.');
+      return Promise.resolve();
+    }
+    var files = {}; files[fileNameFor(PATH)] = { content: payload };
+    var id = gistId();
+    var p = id ? api('PATCH', '/gists/' + id, { files: files })
+               : api('POST', '/gists', { description: 'MSH study — margin notes (auto)', public: false, files: files })
+                   .then(function (g) { localStorage.setItem(GISTID_KEY, g.id); });
+    return p.then(function () { setSync('ok'); }).catch(function (e) { setSync('error'); });
   }
+
+  // 이 페이지 메모 용량(대략) — 바에 표시
+  function pageBytes() { try { return (localStorage.getItem(PAGE) || '').length; } catch (e) { return 0; } }
+  function fmtKB(b) { return b > 1024 * 1024 ? (b / 1024 / 1024).toFixed(1) + 'MB' : Math.round(b / 1024) + 'KB'; }
 
   /* ---------- sync popover ---------- */
   var pop = null;
