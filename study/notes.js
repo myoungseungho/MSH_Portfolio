@@ -58,6 +58,10 @@
     + '.mshn-card .mshn-fold:hover{color:#6b5300;text-decoration:underline;}'
     + '.mshn-card .mshn-grip{cursor:grab;color:#cbb968;font-size:1rem;line-height:1;user-select:none;-webkit-user-select:none;touch-action:none;padding:0 2px;}'
     + '.mshn-card .mshn-grip:active{cursor:grabbing;}'
+    + '.mshn-card .mshn-headright{display:flex;align-items:center;gap:2px;}'
+    + '.mshn-card .mshn-trash{border:0;background:transparent;cursor:pointer;font-size:.8rem;line-height:1;padding:2px 3px;border-radius:5px;opacity:.45;transition:opacity .12s,background .12s;}'
+    + '.mshn-card:hover .mshn-trash{opacity:.85;}'
+    + '.mshn-card .mshn-trash:hover{opacity:1;background:#ffe5e5;}'
     + '.mshn-card.mshn-dragging{opacity:.9;box-shadow:0 6px 18px rgba(0,0,0,.2);}'
     + '.mshn-card .mshn-txt.collapsed{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;}'
     + '.mshn-imgs{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}'
@@ -254,7 +258,11 @@
       fold.textContent = (n.collapsed ? '▸ 펼치기' : '▾ 접기') + (n.collapsed && nimg ? ' 🖼' + nimg : '');
       fold.onclick = function () { n.collapsed = !n.collapsed; persist(); render(); };
       var grip = document.createElement('span'); grip.className = 'mshn-grip'; grip.textContent = '⠿'; grip.title = '드래그해서 위아래로 이동';
-      head.appendChild(fold); head.appendChild(grip);
+      var trash = document.createElement('button'); trash.className = 'mshn-trash'; trash.textContent = '🗑'; trash.title = '이 메모 삭제';
+      trash.onclick = function (e) { e.stopPropagation(); if (confirm('이 메모를 삭제할까요?')) remove(n.id); };
+      var right = document.createElement('span'); right.className = 'mshn-headright';
+      right.appendChild(grip); right.appendChild(trash);
+      head.appendChild(fold); head.appendChild(right);
       var txt = document.createElement('div'); txt.className = 'mshn-txt' + (n.collapsed ? ' collapsed' : ''); txt.title = n.collapsed ? '클릭하면 펼치기' : '클릭하면 편집 (링크는 클릭해서 이동)';
       renderBody(txt, n, false);   // 사진은 그 줄 위치에, URL은 링크로
       txt.onclick = function (e) {
@@ -267,8 +275,7 @@
         var meta = document.createElement('div'); meta.className = 'mshn-meta'; meta.textContent = fmt(n.ts);
         var tools = document.createElement('div'); tools.className = 'mshn-tools';
         var ed = document.createElement('button'); ed.textContent = '✏️ 편집'; ed.onclick = function () { n.editing = true; pendingFocus = n.id; render(); };
-        var del = document.createElement('button'); del.className = 'mshn-del'; del.textContent = '🗑 삭제'; del.onclick = function () { if (confirm('이 메모를 삭제할까요?')) remove(n.id); };
-        tools.appendChild(ed); tools.appendChild(del);
+        tools.appendChild(ed);   // 삭제는 우측 상단 🗑 로 통일
         card.appendChild(meta); card.appendChild(tools);
       }
       enableDrag(card, grip, n);
