@@ -64,6 +64,10 @@
     + '.mshn-imgs .mshn-thumb img{width:100%;height:100%;object-fit:cover;display:block;}'
     + '.mshn-imgs .mshn-thumb .x{position:absolute;top:1px;right:1px;width:15px;height:15px;line-height:14px;text-align:center;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:.62rem;cursor:pointer;opacity:0;transition:opacity .12s;}'
     + '.mshn-imgs .mshn-thumb:hover .x{opacity:1;}'
+    + '.mshn-card .mshn-thumb.inline{display:block;width:100%;height:auto;max-height:150px;margin:6px 0;border:1px solid #e6d98f;border-radius:6px;overflow:hidden;cursor:zoom-in;background:#fff;}'
+    + '.mshn-card .mshn-thumb.inline img{width:100%;height:auto;max-height:150px;object-fit:cover;display:block;}'
+    + '.mshn-card .mshn-thumb.inline:hover{border-color:#f6c945;}'
+    + '.mshn-card .mshn-txt .mshn-imgs{margin-top:4px;}'
     + '.mshn-lightbox{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:24px;}'
     + '.mshn-lightbox img{max-width:96vw;max-height:92vh;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.5);cursor:default;}'
     + '.mshn-lightbox .nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.9);border:0;border-radius:50%;width:40px;height:40px;font-size:1.2rem;cursor:pointer;color:#333;}'
@@ -184,10 +188,10 @@
       var autosize = function () { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; stackCards(); }; // 내용 높이만큼 펼침
       ta.addEventListener('input', autosize);
       requestAnimationFrame(autosize); // DOM에 붙은 뒤 초기 높이 맞추기
-      // 이미지 붙여넣기(Ctrl+V) / 드롭
-      ta.addEventListener('paste', function (e) { handleImageDrop(e.clipboardData, n, e); });
+      // 이미지 붙여넣기(Ctrl+V) / 드롭 — 커서가 있는 줄에 삽입
+      ta.addEventListener('paste', function (e) { handleImageDrop(e.clipboardData, n, e, ta, autosize); });
       ta.addEventListener('dragover', function (e) { e.preventDefault(); });
-      ta.addEventListener('drop', function (e) { handleImageDrop(e.dataTransfer, n, e); });
+      ta.addEventListener('drop', function (e) { handleImageDrop(e.dataTransfer, n, e, ta, autosize); });
       var hintP = document.createElement('div'); hintP.className = 'mshn-paste'; hintP.textContent = '💡 이미지 복사 후 Ctrl+V로 첨부 · URL은 저장하면 링크가 됨';
       var tools = document.createElement('div'); tools.className = 'mshn-tools';
       var ok = document.createElement('button'); ok.textContent = n.text ? '저장' : '추가';
@@ -197,7 +201,6 @@
       ta.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') ok.click(); if (e.key === 'Escape') cancel.click(); });
       tools.appendChild(cancel); tools.appendChild(ok);
       card.appendChild(ta);
-      if (n.imgs && n.imgs.length) card.appendChild(buildThumbs(n, true));
       card.appendChild(hintP); card.appendChild(tools);
     } else {
       var head = document.createElement('div'); head.className = 'mshn-head';
@@ -208,7 +211,7 @@
       var grip = document.createElement('span'); grip.className = 'mshn-grip'; grip.textContent = '⠿'; grip.title = '드래그해서 위아래로 이동';
       head.appendChild(fold); head.appendChild(grip);
       var txt = document.createElement('div'); txt.className = 'mshn-txt' + (n.collapsed ? ' collapsed' : ''); txt.title = n.collapsed ? '클릭하면 펼치기' : '클릭하면 편집 (링크는 클릭해서 이동)';
-      linkify(txt, n.text);   // URL만 <a>로, 나머지는 텍스트 그대로(안전)
+      renderBody(txt, n, false);   // 사진은 그 줄 위치에, URL은 링크로
       txt.onclick = function (e) {
         if (e.target.tagName === 'A') return;   // 링크 클릭은 이동만, 편집 진입 안 함
         if (n.collapsed) { n.collapsed = false; persist(); render(); return; }
@@ -216,7 +219,6 @@
       };
       card.appendChild(head); card.appendChild(txt);
       if (!n.collapsed) {
-        if (n.imgs && n.imgs.length) card.appendChild(buildThumbs(n, false));
         var meta = document.createElement('div'); meta.className = 'mshn-meta'; meta.textContent = fmt(n.ts);
         var tools = document.createElement('div'); tools.className = 'mshn-tools';
         var ed = document.createElement('button'); ed.textContent = '✏️ 편집'; ed.onclick = function () { n.editing = true; pendingFocus = n.id; render(); };
@@ -229,21 +231,20 @@
     return card;
   }
 
-  /* ---------- URL을 클릭 가능한 링크로 (innerHTML 안 씀 = XSS 안전) ---------- */
+  /* ---------- 본문 렌더: [[img:id]]는 그 자리에 사진, URL은 링크 (innerHTML 안 씀 = XSS 안전) ---------- */
   var URL_RE = /(https?:\/\/[^\s<>()[\]{}"']+|www\.[^\s<>()[\]{}"']+)/gi;
-  function linkify(el, text) {
-    el.textContent = '';
+  var IMG_RE = /\[\[img:([a-z0-9]+)\]\]/gi;
+
+  function linkifyInto(el, text) {   // 텍스트 조각에서 URL만 링크로
     var last = 0, m;
     URL_RE.lastIndex = 0;
     while ((m = URL_RE.exec(text)) !== null) {
       if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));
-      var raw = m[0];
-      var trail = '';
-      while (/[.,!?;:)\]]$/.test(raw)) { trail = raw.slice(-1) + trail; raw = raw.slice(0, -1); } // 문장부호는 링크에서 제외
+      var raw = m[0], trail = '';
+      while (/[.,!?;:)\]]$/.test(raw)) { trail = raw.slice(-1) + trail; raw = raw.slice(0, -1); }
       var a = document.createElement('a');
       a.href = /^www\./i.test(raw) ? 'https://' + raw : raw;
-      a.textContent = raw;
-      a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.textContent = raw; a.target = '_blank'; a.rel = 'noopener noreferrer';
       a.title = a.href + ' (새 탭에서 열기)';
       el.appendChild(a);
       if (trail) el.appendChild(document.createTextNode(trail));
@@ -252,10 +253,43 @@
     if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
   }
 
+  // 본문을 [[img:id]] 기준으로 쪼개, 사진을 그 줄 위치에 인라인으로 박는다
+  function renderBody(el, n, editable) {
+    el.textContent = '';
+    var text = n.text || '';
+    var used = {};
+    var last = 0, m;
+    IMG_RE.lastIndex = 0;
+    while ((m = IMG_RE.exec(text)) !== null) {
+      if (m.index > last) linkifyInto(el, text.slice(last, m.index));
+      var im = findImg(n, m[1]);
+      if (im) { used[im.id] = 1; el.appendChild(inlineThumb(n, im, editable)); }
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) linkifyInto(el, text.slice(last));
+    // 자리표시자 없이 남은 이미지(구버전 메모 등)는 맨 아래에
+    var rest = (n.imgs || []).filter(function (i) { return !used[i.id]; });
+    if (rest.length) {
+      var wrap = document.createElement('div'); wrap.className = 'mshn-imgs';
+      rest.forEach(function (im) { wrap.appendChild(inlineThumb(n, im, editable)); });
+      el.appendChild(wrap);
+    }
+  }
+  function findImg(n, id) { var a = n.imgs || []; for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
+
+  function inlineThumb(n, im, editable) {
+    var th = document.createElement('span'); th.className = 'mshn-thumb inline'; th.title = '클릭하면 크게 보기';
+    var img = document.createElement('img'); img.src = im.src; img.alt = '메모 이미지';
+    th.appendChild(img);
+    th.onclick = function (e) { e.stopPropagation(); openLightbox(n, (n.imgs || []).indexOf(im)); };
+    return th;
+  }
+
   /* ---------- 이미지: 붙여넣기 → 압축 → 저장 ---------- */
   var MAX_W = 1000, JPEG_Q = 0.72, MAX_IMG_BYTES = 700 * 1024;
 
-  function handleImageDrop(dt, n, ev) {
+  // 커서가 있던 줄에 [[img:id]] 자리표시자를 넣어, 그 위치에 사진이 박히게 함
+  function handleImageDrop(dt, n, ev, ta, autosize) {
     if (!dt) return;
     var files = [];
     var items = dt.items || [];
@@ -267,11 +301,24 @@
     }
     if (!files.length) return;             // 이미지 아니면 기본 텍스트 붙여넣기 그대로
     ev.preventDefault();
+    var at = (ta && typeof ta.selectionStart === 'number') ? ta.selectionStart : (ta ? ta.value.length : 0);
     files.forEach(function (f) {
       shrink(f).then(function (dataUrl) {
         if (dataUrl.length > MAX_IMG_BYTES * 1.37) { alert('이미지가 너무 커요. 더 작은 이미지를 써주세요.'); return; }
         if (!n.imgs) n.imgs = [];
-        n.imgs.push({ id: uid(), src: dataUrl });
+        var im = { id: uid(), src: dataUrl };
+        n.imgs.push(im);
+        if (ta) {                                    // 커서 위치(그 줄)에 자리표시자 삽입
+          var v = ta.value;
+          var before = v.slice(0, at), after = v.slice(at);
+          var token = (before && !/\n$/.test(before) ? '\n' : '') + '[[img:' + im.id + ']]' + (after && !/^\n/.test(after) ? '\n' : '');
+          ta.value = before + token + after;
+          at += token.length;
+          ta.selectionStart = ta.selectionEnd = at;
+          n.text = ta.value;
+          if (autosize) autosize();
+          ta.focus();
+        }
         n.ts = Date.now(); persist(); render();
       }).catch(function () { alert('이미지를 읽지 못했어요.'); });
     });
