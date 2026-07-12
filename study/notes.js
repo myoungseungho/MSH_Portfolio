@@ -120,8 +120,13 @@
   function wide() { return metrics().avail >= MINSPACE; }
 
   /* ---------- DOM roots ---------- */
-  var layer = document.createElement('div'); document.body.appendChild(layer);
-  var strip = document.createElement('div'); strip.className = 'mshn-strip'; document.body.appendChild(strip);
+  // 카드·스트립이 문서 높이(scrollHeight)를 늘리지 못하게 격리한다.
+  // 안 그러면 [펼침 → 문서 길어짐 → 앵커 밀림 → 접어도 원복 안 됨] 되먹임이 생긴다.
+  var host = document.createElement('div');
+  host.style.cssText = 'position:absolute;top:0;left:0;width:0;height:0;overflow:visible;';
+  document.body.appendChild(host);
+  var layer = document.createElement('div'); host.appendChild(layer);
+  var strip = document.createElement('div'); strip.className = 'mshn-strip'; host.appendChild(strip);
   strip.addEventListener('click', function (e) { if (e.target === strip) addNote(e.pageY); });
 
   var bar = document.createElement('div'); bar.className = 'mshn-bar'; document.body.appendChild(bar);
@@ -151,20 +156,22 @@
     countEl.style.color = kb > 800 * 1024 ? '#c62828' : (kb > 500 * 1024 ? '#ef6c00' : '#6a1b9a');
     countEl.title = '이 페이지 메모 ' + state.length + '개 · ' + fmtKB(kb) + (kb > 500 * 1024 ? ' (한도 1MB 근접 — 이미지 정리 권장)' : '');
     if (isWide) {
+      // 앵커는 본문 기준으로만 계산 (카드는 host로 격리돼 문서 높이에 영향 없음)
+      var tops = state.map(function (n) { return anchorTop(n.aIdx); });
       strip.style.display = 'block';
       strip.style.left = m.left + 'px';
       strip.style.width = Math.max(0, m.avail - GAP) + 'px';
-      strip.style.height = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight) + 'px';
-      // 각 카드를 자기 앵커 위치에 붙여 생성 (앵커는 dataset에 보관 → 재정렬은 항상 이 값 기준)
-      state.slice().sort(function (a, b) { return anchorTop(a.aIdx) - anchorTop(b.aIdx); }).forEach(function (n) {
-        var card = buildCard(n);
+      strip.style.height = (topOf(container) + container.getBoundingClientRect().height) + 'px';
+      var order = state.map(function (n, i) { return { n: n, top: tops[i] }; }).sort(function (a, b) { return a.top - b.top; });
+      order.forEach(function (o) {
+        var card = buildCard(o.n);
         card.style.left = m.left + 'px'; card.style.width = m.width + 'px';
-        card.dataset.anchor = anchorTop(n.aIdx);
-        card.style.top = card.dataset.anchor + 'px';
+        card.dataset.anchor = o.top;
+        card.style.top = o.top + 'px';
         layer.appendChild(card);
       });
       stackCards();
-      requestAnimationFrame(stackCards); // 레이아웃 확정 후 한 번 더(높이 측정 타이밍 보정)
+      requestAnimationFrame(stackCards); // 레이아웃 확정 후 한 번 더(이미지·폰트 로드 타이밍 보정)
     } else { strip.style.display = 'none'; }
     if (pendingFocus) { var ta = layer.querySelector('.mshn-card[data-id="' + pendingFocus + '"] textarea'); if (ta) ta.focus(); pendingFocus = null; }
   }
@@ -283,6 +290,7 @@
   function inlineThumb(n, im, editable) {
     var th = document.createElement('span'); th.className = 'mshn-thumb inline'; th.title = '클릭하면 크게 보기';
     var img = document.createElement('img'); img.src = im.src; img.alt = '메모 이미지';
+    img.addEventListener('load', stackCards);   // 이미지 로드로 카드 높이가 바뀌면 다시 정렬
     th.appendChild(img);
     th.onclick = function (e) { e.stopPropagation(); openLightbox(n, (n.imgs || []).indexOf(im)); };
     return th;
