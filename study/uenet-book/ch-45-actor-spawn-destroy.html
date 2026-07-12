@@ -1,0 +1,458 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>액터 스폰·소멸 복제 — 채널은 언제 열리고 닫히나 - UE 네트워크 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#1a237e; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #e8eaf6; }
+.conversation h3 { font-size:1.08rem; color:#283593; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#3949ab; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#eef1f6; color:#c7254e; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#bbdefb; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
+.note.warn code { background:#ffe0e0; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#1565c0 0%,#0d47a1 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#1565c0; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#1565c0; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#1565c0; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>액터 스폰·소멸 복제 — 채널은 언제 열리고 닫히나</h1><p>언리얼 네트워크 · 45 / 47</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 게임 서버를 짜봤으면 이런 고민을 해봤을 거야. 조선 서버에서 몹이 리젠되면 <code>SP_SPAWN</code> 패킷을 만들어 주변 클라에 뿌리지. 그 안에 오브젝트 번호, 몹 종류, 좌표, 초기 HP를 다 넣어. 클라 핸들러는 그걸 받아서 캐릭터 객체를 하나 새로 만들고 자기 리스트에 등록해. 몹이 죽으면 <code>SP_DESPAWN</code>을 보내고, 클라는 사망 모션을 재생한 뒤 그 객체를 지워.</p>
+<p>여기서 우리가 손으로 처리했던 짜증나는 문제가 하나 있어. <strong>"시야에서 벗어남"과 "진짜 죽음"이 클라 입장에선 똑같이 '사라짐'</strong>이라는 거야. 그냥 멀어진 건데 사망 이펙트가 터지면 안 되잖아. 그래서 우리는 <code>SP_DESPAWN</code>에 사유 필드를 넣거나, 아예 <code>SP_LEAVE_SIGHT</code> 같은 패킷을 따로 팠지. 사유를 안 실어 보내면 클라는 "왜 사라졌는지"를 영원히 모른다.</p>
+<p>언리얼도 똑같은 벽에 부딪혔어. 왜냐면 <strong>복제(replication)는 근본적으로 "값 동기화"</strong>거든. HP가 100→80으로 바뀌었으니 80을 보낸다. 그런데 애초에 <strong>클라에 그 객체가 없으면 80을 보낼 데가 없어.</strong> 값을 담을 그릇이 먼저 있어야 해. 그래서 언리얼은 값뿐 아니라 <strong>객체의 탄생과 죽음 자체를 복제</strong>해야 했고, 그 장치가 이번 챕터 주제야.</p>
+<p>결론부터 말하면 언리얼의 답은 이거야. <strong>액터의 탄생 = 액터 채널이 열리는 것. 액터의 죽음 = 액터 채널이 닫히는 것.</strong> 채널을 열 때 첫 봉투에 "이런 클래스의 액터가 여기 생겼어"를 실어 보내고, 채널을 닫을 때 "왜 닫는지(CloseReason)"를 같이 적어 보낸다. 우리가 <code>SP_SPAWN</code> / <code>SP_DESPAWN(사유)</code>을 손으로 짜던 걸, 엔진이 채널 수명주기로 흡수한 거지.</p>
+<p>그런데 여기서 이 책 전체를 통틀어 <strong>초보가 가장 크게 데는 함정</strong>이 나와. 채널이 닫혔다고 액터가 죽은 게 아니야. 멀어져서 닫힐 수도 있고, 재우려고(dormancy) 닫힐 수도 있어. 그리고 그 셋의 결과가 클라에서 <strong>전부 달라.</strong> 이 구분을 못 하면 "왜 몹이 저 멀리 갔다 오니까 되살아나 있지?" 같은 버그로 며칠을 태운다. 그래서 이 챕터를 지금 배운다.</p>
+</div>
+<div class="conversation"><h2>0. 문 앞에서: 값을 보낼 그릇이 없다</h2>
+<p>앞 챕터들에서 우리는 계속 "바뀐 값을 보낸다"만 봤어. RepLayout이 프로퍼티를 펼치고, changelist가 바뀐 것만 모으고, Push Model이 dirty 비트를 켜고. 전부 <strong>이미 존재하는 객체의 값</strong>을 다루는 이야기였지.</p>
+<p>그럼 질문. <strong>맞춰봐.</strong></p>
+<div class="note">서버가 몹을 하나 <code>SpawnActor</code>했어. 이 몹의 HP는 100, 위치는 (500, 300, 0).<br>클라는 이 몹을 처음 보는 거야. 서버가 "HP=100"이라는 값을 보내면 클라는 그걸 어디다 적용하지?</div>
+<p>...적용할 데가 없어. 클라 메모리 어디에도 그 몹 객체가 없거든. "몇 번 객체의 HP를 100으로 하라"고 해봐야 그 번호에 해당하는 객체가 없으면 그냥 허공에 던지는 값이야.</p>
+<p>그러니까 순서가 이래야 해:</p>
+<ol><li>먼저 클라에 <strong>그릇(객체)을 만들게</strong> 한다 — "이런 클래스의 액터를 여기에 만들어라"</li><li>그 다음부터 <strong>값을 부어 넣는다</strong> — "HP 80으로 바꿔라"</li></ol>
+<p>1번이 <strong>스폰 복제</strong>야. 그리고 그릇이 필요 없어지면 치워야겠지. 그게 <strong>소멸 복제</strong>고. 이 두 개가 이번 챕터의 전부야.</p>
+<hr>
+<p>지금부터 진짜 엔진 코드가 나와. <strong>겁먹지 마</strong> — 낯선 기호는 코드 바로 아래 🔤 상자에서 하나씩 풀어줄게. 코드를 외우는 게 아니라 <strong>"채널이 여기서 열리고, 저기서 닫히는구나"</strong>만 따라가면 돼.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 스폰 복제(초기 번들)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 복제는 값 동기화잖아. 서버 액터의 프로퍼티가 바뀌면 그 값을 클라의 같은 액터에 덮어쓰면 되지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 클라에 <strong>그 액터 자체가 없으면</strong> 덮어쓸 대상이 없어. "42번 몹 HP=80"을 보내봐야 클라엔 42번이라는 객체가 아예 존재하지 않아. 값을 담을 그릇이 먼저 있어야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 그 액터를 처음 보내는 순간, 값 대신 <strong>"이걸로 객체를 만들어라"라는 설계도</strong>를 먼저 보내는 것. 클래스(아키타입), NetGUID, 초기 위치·회전·크기·속도 → 이게 <strong>초기 번들</strong>이야. 클라는 이걸 받아 <strong>직접 SpawnActor를 호출해</strong> 복사본을 만든다. 우리 <code>SP_SPAWN</code>이랑 하는 일이 똑같지.</div>
+</div>
+<div class="conversation"><h2>1. 스폰 1단계 — 관련성 통과하면 채널이 열린다</h2>
+<p>서버가 <code>SpawnActor</code>로 몹을 만들었어. 그럼 곧바로 모든 클라에 뿌릴까? 아니야. <strong>커넥션마다 따로</strong> 판단해.</p>
+<p>매 틱 돌아가는 <code>ServerReplicateActors</code> 루프가 각 커넥션에 대해 "이 액터가 이 클라한테 관련(relevant) 있나?"를 묻고(→ <a class="xref" href="ch-24-relevancy.html">relevancy</a>), 관련 있다고 판정되면 <strong>그제서야</strong> 그 커넥션에 이 액터 전용 채널을 연다.</p>
+<p><strong>NetDriver.cpp:5660-5670</strong></p>
+<div class="code-block">				if ( Channel == NULL &amp;&amp; GetNetGuidCache()-&gt;SupportsObject( Actor-&gt;GetClass() ) &amp;&amp; GetNetGuidCache()-&gt;SupportsObject( Actor-&gt;IsNetStartupActor() ? Actor : Actor-&gt;GetArchetype() ) )
+				{
+					if ( bLevelInitializedForActor )
+					{
+						// Create a new channel for this actor.
+						Channel = (UActorChannel*)Connection-&gt;CreateChannelByName( NAME_Actor, EChannelCreateFlags::OpenedLocally );
+						if ( Channel )
+						{
+							Channel-&gt;SetChannelActor(Actor, ESetChannelActorFlags::None);
+						}
+					}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>Channel = (UActorChannel*)Connection-&gt;CreateChannelByName( NAME_Actor, ... );</code><br>&bull;&nbsp;<strong><code>Channel == NULL</code></strong> = 이 커넥션에 <strong>아직 이 액터용 채널이 없다</strong>는 뜻. <code>NULL</code>은 "아무것도 없음"이라는 옛날식 표시야. 이미 있으면 새로 안 만든다.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = 그리고. 세 조건이 모두 참일 때만 안으로 들어가.<br>&bull;&nbsp;<strong><code>GetNetGuidCache()-&gt;SupportsObject(...)</code></strong> = "이 클래스/아키타입을 네트워크로 가리킬 수 있냐"고 묻는 검사. 클라가 못 알아볼 물건이면 보낼 수 없으니까 미리 거른다.<br>&bull;&nbsp;<strong><code>bLevelInitializedForActor</code></strong> = 이 클라가 <strong>그 액터가 속한 레벨을 다 로드했나</strong>를 담은 참/거짓. 레벨도 아직 안 올라온 클라한테 그 안의 액터를 보내면 받는 쪽이 길을 잃어.<br>&bull;&nbsp;<strong><code>CreateChannelByName( NAME_Actor, ... )</code></strong> = "액터용 채널을 하나 새로 만들어라". <code>NAME_Actor</code>는 채널 종류 이름표야.<br>&bull;&nbsp;<strong><code>EChannelCreateFlags::OpenedLocally</code></strong> = "이 채널은 <strong>내(서버) 쪽에서 열었다</strong>"는 표시. <code>::</code>는 "~안의"라고 읽어.<br>&bull;&nbsp;<strong><code>(UActorChannel*)</code></strong> = 돌려받은 채널을 "액터 채널 모양"으로 맞춰 쓰겠다는 형 변환. <code>*</code>는 원본을 가리키는 주소표.<br>&bull;&nbsp;<strong><code>Channel-&gt;SetChannelActor(Actor, ...)</code></strong> = 방금 만든 빈 채널에 <strong>"네 담당은 이 액터야"</strong>라고 주인을 붙여주는 호출(<code>DataChannel.cpp:2796</code>).</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>Channel == NULL</code>(아직 채널 없음) → <code>SupportsObject(...)</code>(네트워크로 가리킬 수 있는 클래스인가) → <code>bLevelInitializedForActor</code>(클라가 그 레벨을 로드했나) → <code>CreateChannelByName(NAME_Actor, OpenedLocally)</code>(액터 채널 신규 생성) → <code>SetChannelActor(Actor)</code>(그 채널의 담당 액터 지정). 한 줄로 <strong>"관련성 판정을 통과한 액터에게, 이 커넥션 전용 창구를 하나 새로 파준다"</strong>야. 액터의 <strong>탄생 = 채널 열림</strong>이라는 게 여기서 시작돼.</div>
+<p>중요한 건 <strong>채널이 커넥션마다 따로</strong>라는 점이야. 몹 한 마리가 플레이어 5명한테 보이면 채널이 5개 열려. 3명한테만 보이면 3개. "이 몹이 존재하는가"는 서버의 진실이지만, <strong>"이 클라가 이 몹을 아는가"는 커넥션별 사실</strong>이야. 이 구분이 뒤에 나오는 함정의 뿌리다.</p>
+<p>채널 자체가 뭔지 흐릿하면 → <a class="xref" href="ch-13-actorchannel-replicate.html">actorchannel-replicate</a> (액터 하나가 봉투에 실리는 입구).</p>
+<hr>
+</div>
+<div class="conversation"><h2>2. 스폰 2단계 — 첫 봉투엔 "값" 대신 "설계도"가 실린다</h2>
+<p>채널이 열렸어. 이제 첫 봉투(Bunch)를 싼다. 이게 <strong>첫 복제</strong>면 프로퍼티 변경분보다 <strong>먼저</strong> 스폰 정보가 들어가.</p>
+<p><strong>DataChannel.cpp:3800-3807</strong></p>
+<div class="code-block">	if (RepFlags.bNetInitial &amp;&amp; OpenedLocally)
+	{
+		UE_NET_TRACE_SCOPE(NewActor, Bunch, GetTraceCollector(Bunch), ENetTraceVerbosity::Trace);
+
+		Connection-&gt;PackageMap-&gt;SerializeNewActor(Bunch, this, static_cast&lt;AActor*&amp;&gt;(Actor));
+		bWroteSomethingImportant = true;
+
+		Actor-&gt;OnSerializeNewActor(Bunch);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>Connection-&gt;PackageMap-&gt;SerializeNewActor(Bunch, this, ...)</code><br>&bull;&nbsp;<strong><code>RepFlags.bNetInitial</code></strong> = <code>RepFlags</code>라는 상태 묶음 안의 스위치. <strong>"이 커넥션한테 이 액터를 보내는 게 이번이 처음인가?"</strong>를 뜻해. <code>.</code>은 상자 안의 칸을 꺼내는 표시.<br>&bull;&nbsp;<strong><code>OpenedLocally</code></strong> = 이 채널을 내(서버) 쪽에서 열었나. 서버가 연 채널일 때만 스폰 정보를 쓴다.<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = 그리고. 둘 다 참이어야 안으로 들어가.<br>&bull;&nbsp;<strong><code>Connection-&gt;PackageMap</code></strong> = 이 커넥션의 <strong>이름표 장부</strong>. 오브젝트를 네트워크 번호(NetGUID)로 바꿔주는 담당이야. <code>-&gt;</code>는 포인터가 가리키는 물건의 멤버를 꺼내는 화살표.<br>&bull;&nbsp;<strong><code>SerializeNewActor(Bunch, this, ...)</code></strong> = 그 장부에게 <strong>"새 액터 정보를 이 봉투에 써라"</strong>라고 시키는 호출. <code>this</code>는 지금 이 채널 자신.<br>&bull;&nbsp;<strong><code>static_cast&lt;AActor*&amp;&gt;(Actor)</code></strong> = <code>Actor</code>를 함수가 원하는 모양으로 맞춰 넘기는 형 변환.<br>&bull;&nbsp;<strong><code>bWroteSomethingImportant = true</code></strong> = "봉투에 보낼 만한 걸 담았다"는 깃발을 켬. 이게 꺼진 채면 봉투를 아예 안 보내.<br>&bull;&nbsp;<strong><code>Actor-&gt;OnSerializeNewActor(Bunch)</code></strong> = 액터에게 "추가로 더 실을 게 있으면 지금 실어"라고 물어보는 훅.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>bNetInitial &amp;&amp; OpenedLocally</code>(이 커넥션에 첫 복제이고, 서버가 연 채널이면) → <code>SerializeNewActor(Bunch, ...)</code>(스폰 설계도를 봉투에 쓰기) → <code>bWroteSomethingImportant = true</code>(보낼 게 생겼다고 표시). 한 줄로 <strong>"처음 보내는 액터면 변경분보다 먼저 '너 이거 만들어라'를 봉투에 넣는다"</strong>야.</div>
+<p>그럼 <code>SerializeNewActor</code>(<code>PackageMapClient.cpp:490</code>)가 봉투에 정확히 뭘 쓰는데? 이 함수의 몸통을 보면 이렇게 시작해.</p>
+<p><strong>PackageMapClient.cpp:569-577</strong></p>
+<div class="code-block">	if ( NetGUID.IsDynamic() )
+	{
+		UObject* Archetype = nullptr;
+		UObject* ActorLevel = nullptr;
+		FVector Location = FVector::ZeroVector;
+		FVector Scale = FVector::OneVector;
+		FVector Velocity = FVector::ZeroVector;
+		FRotator Rotation = FRotator::ZeroRotator;
+		bool SerSuccess = false;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>if ( NetGUID.IsDynamic() )</code><br>&bull;&nbsp;<strong><code>NetGUID</code></strong> = 서버와 클라가 <strong>같은 오브젝트를 같은 번호로 부르기 위한 네트워크 식별자</strong>. 우리 서버의 <code>wID</code>/오브젝트 번호에 해당해. (→ <a class="xref" href="ch-44-netguid-object-refs.html">netguid-object-refs</a>)<br>&bull;&nbsp;<strong><code>.IsDynamic()</code></strong> = 이 NetGUID가 <strong>런타임에 스폰된 동적 오브젝트</strong>냐고 묻는 함수. 참이면 "맵에 원래 없던, 게임 중에 생긴 놈"이라는 뜻이야.<br>&bull;&nbsp;<strong><code>UObject* Archetype</code></strong> = 이 액터를 찍어낼 <strong>원형(틀)</strong>을 가리키는 포인터. 클래스 기본값 + 블루프린트 설정이 들어있는 도장이라고 보면 돼.<br>&bull;&nbsp;<strong><code>UObject* ActorLevel</code></strong> = 이 액터가 어느 레벨에 속하는지. 스트리밍 레벨이 여럿이면 어디다 만들지를 알아야 하니까.<br>&bull;&nbsp;<strong><code>FVector Location / Scale / Velocity</code></strong> = 위치·크기·속도를 담는 3차원 벡터 칸. <code>FVector::ZeroVector</code>는 (0,0,0), <code>OneVector</code>는 (1,1,1)로 시작값을 정해둔 거야.<br>&bull;&nbsp;<strong><code>FRotator Rotation</code></strong> = 회전을 담는 칸.<br>&bull;&nbsp;<strong><code>= nullptr</code></strong> = "아직 아무것도 안 가리킴"으로 초기화. 쓰레기값이 들어가는 사고를 막는 습관이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>if (NetGUID.IsDynamic())</code>(런타임에 스폰된 액터일 때만) → <code>Archetype</code>(무슨 틀로 찍을지) + <code>ActorLevel</code>(어느 레벨에) + <code>Location</code>/<code>Rotation</code>/<code>Scale</code>/<code>Velocity</code>(어디에 어떤 자세로). 이어 읽으면 <strong>"초기 번들에 담기는 항목 목록"</strong>이 그대로 보여. 그리고 이 <code>if</code>가 <strong>동적 액터일 때만</strong> 걸린다는 게 4절의 핵심 복선이야 — 정적 액터는 이 블록을 통째로 건너뛴다.</div>
+<p>정리하면 <strong>초기 번들에 실리는 것</strong>:</p>
+<ul><li><strong>NetGUID</strong> — "얘는 42번이야". 앞으로 모든 변경분이 이 번호로 배달돼.</li><li><strong>Archetype(아키타입)</strong> — "이 틀로 찍어라". 클래스 + 기본값 뭉치.</li><li><strong>Level</strong> — "어느 레벨에 만들어라".</li><li><strong>Location / Rotation / Scale / Velocity</strong> — 초기 트랜스폼. (기본값과 같으면 아예 안 실어. 0벡터면 비트 아끼려고 생략.)</li><li>그 뒤로 이어서 <strong>초기 프로퍼티 전체</strong> — 첫 복제라 "지난 값"이 없으니, 기본값과 다른 프로퍼티가 몽땅 변경분으로 잡혀 같은 봉투에 실려. 그래서 첫 봉투가 제일 뚱뚱하다.</li></ul>
+<hr>
+</div>
+<div class="conversation"><h2>3. 스폰 3단계 — 클라는 그 설계도로 직접 SpawnActor를 부른다</h2>
+<p>봉투가 클라에 도착했어. 클라의 <code>UActorChannel::ProcessBunch</code>가 같은 <code>SerializeNewActor</code>를 <strong>읽기 모드로</strong> 호출해(<code>DataChannel.cpp:3282</code>). 쓰던 함수가 읽는 함수로 그대로 재활용되는 거지 — 쓰는 순서와 읽는 순서가 어긋날 수 없으니 이게 안전해.</p>
+<p>그리고 그 안에서 <strong>진짜 스폰이 일어난다.</strong></p>
+<p><strong>PackageMapClient.cpp:753-762</strong></p>
+<div class="code-block">						FActorSpawnParameters SpawnInfo;
+						SpawnInfo.Template = Cast&lt;AActor&gt;(Archetype);
+						SpawnInfo.OverrideLevel = SpawnLevel;
+						SpawnInfo.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+						SpawnInfo.bRemoteOwned = true;
+						SpawnInfo.bNoFail = true;
+
+						UWorld* World = Connection-&gt;Driver-&gt;GetWorld();
+						FVector SpawnLocation = FRepMovement::RebaseOntoLocalOrigin(Location, World-&gt;OriginLocation);
+						Actor = World-&gt;SpawnActorAbsolute(Archetype-&gt;GetClass(), FTransform(Rotation, SpawnLocation), SpawnInfo);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>Actor = World-&gt;SpawnActorAbsolute(Archetype-&gt;GetClass(), FTransform(Rotation, SpawnLocation), SpawnInfo);</code><br>&bull;&nbsp;<strong><code>FActorSpawnParameters SpawnInfo</code></strong> = 스폰할 때 붙일 <strong>주문서</strong>. 어떤 틀로, 어느 레벨에, 충돌은 어떻게 처리할지를 담는 상자야.<br>&bull;&nbsp;<strong><code>SpawnInfo.Template = Cast&lt;AActor&gt;(Archetype)</code></strong> = "이 아키타입을 원본으로 삼아 복사해 만들어라". <code>Cast&lt;AActor&gt;</code>는 "이걸 액터로 봐도 되냐" 확인하며 모양을 바꾸는 것.<br>&bull;&nbsp;<strong><code>SpawnCollisionHandlingOverride = ...::AlwaysSpawn</code></strong> = "겹치든 말든 <strong>무조건 스폰해라</strong>". 서버가 이미 만들기로 결정한 액터니까, 클라가 충돌을 이유로 거부하면 서버-클라가 어긋나거든.<br>&bull;&nbsp;<strong><code>bRemoteOwned = true</code></strong> = <strong>"이건 원격(서버)이 주인인 객체다"</strong>라는 표시. 클라는 복사본만 갖고 있고 권한은 서버에 있다는 선언이야.<br>&bull;&nbsp;<strong><code>bNoFail = true</code></strong> = "실패하지 마라". 역시 서버 결정을 클라가 거부하면 안 되니까.<br>&bull;&nbsp;<strong><code>RebaseOntoLocalOrigin(Location, World-&gt;OriginLocation)</code></strong> = 서버가 보낸 좌표를 <strong>이 클라의 월드 원점 기준으로 다시 계산</strong>. 월드 원점 이동(origin rebasing)을 쓰는 대형 맵 때문에 필요해.<br>&bull;&nbsp;<strong><code>World-&gt;SpawnActorAbsolute(...)</code></strong> = <strong>진짜 스폰 호출</strong>. 게임 코드가 쓰는 그 <code>SpawnActor</code>랑 같은 계열 함수야.<br>&bull;&nbsp;<strong><code>FTransform(Rotation, SpawnLocation)</code></strong> = 회전 + 위치를 하나로 묶은 자세 정보.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>SpawnInfo</code>(주문서 작성) → <code>Template = Archetype</code>(서버가 알려준 틀) → <code>AlwaysSpawn</code>/<code>bNoFail</code>(거부 금지) → <code>bRemoteOwned = true</code>(주인은 서버) → <code>SpawnActorAbsolute(...)</code>(클라 월드에 실제 생성). 한 줄로 <strong>"클라는 서버가 보낸 설계도로 자기 손으로 SpawnActor를 호출해 로컬 복사본을 만든다"</strong>야. 그리고 바로 아래에서 <code>RegisterNetGUID_Client(NetGUID, Actor)</code>로 <strong>"이 복사본이 42번이다"</strong>라고 장부에 등록해. 이 등록이 끝나야 비로소 이후의 값 변경분이 이 객체에 배달될 수 있어.</div>
+<p>여기서 감을 잡아. <strong>클라의 액터는 서버 액터가 "날아온" 게 아니야.</strong> 서버 액터의 설계도를 받아 <strong>클라가 자기 손으로 새로 만든 별개의 객체</strong>야. 주소도 다르고 메모리도 다르고, 그냥 <strong>같은 NetGUID를 공유하는 쌍둥이</strong>일 뿐이지. 우리 서버에서 <code>SP_SPAWN</code> 받아 클라가 <code>new CMonster()</code> 하는 거랑 정확히 같은 그림이야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>4. 레벨에 이미 박혀 있는 액터는? — 스폰을 안 보낸다 ⭐</h2>
+<p>여기서 <strong>맞춰봐.</strong></p>
+<div class="note">맵에 가로등 1만 개, 벽, 문, 상점 NPC가 에디터에서 배치돼 있어. 클라가 접속하면 서버는 이 1만 개의 스폰 정보를 전부 보내야 할까?</div>
+<p>...보낼 필요가 없지. <strong>클라도 같은 맵 파일을 로드하니까 이미 다 갖고 있어.</strong> 클라가 레벨을 로드하는 순간 그 가로등들은 클라 메모리에 이미 만들어져 있다고. 서버가 "가로등을 만들어라"를 1만 번 보내는 건 순수한 낭비고, 심지어 <strong>중복 생성</strong> 사고야.</p>
+<p>그래서 언리얼은 액터를 두 부류로 나눠:</p>
+<ul><li><strong>동적(dynamic) 액터</strong> — 게임 중에 <code>SpawnActor</code>로 생긴 놈. 몹, 투사체, 이펙트. 클라는 이런 게 있는지 모름 → <strong>스폰 정보를 보내야 함.</strong></li><li><strong>정적(static / net startup) 액터</strong> — 레벨에 배치돼 맵과 함께 로드된 놈. 가로등, 문, 상점 NPC. 클라가 <strong>이미 갖고 있음</strong> → <strong>스폰 정보를 안 보냄.</strong> 대신 <strong>"경로 이름"</strong>으로 가리키기만 하면 돼. "너 맵에 있는 <code>/Game/Maps/Town.Town:PersistentLevel.StreetLamp_42</code> 그거 있지? 걔야."</li></ul>
+<p>그래서 3절에서 본 <code>if (NetGUID.IsDynamic())</code> 가드가 있는 거야. 정적 액터는 이 블록을 통째로 건너뛰어. 아키타입도, 위치도, 스폰 호출도 없어. <strong>이름만 대면 클라가 알아듣기 때문</strong>이지. (동적 = 번호로 부름, 정적 = 경로로 부름 — 자세한 건 → <a class="xref" href="ch-44-netguid-object-refs.html">netguid-object-refs</a>)</p>
+<p>이걸 켜고 끄는 스위치가 <code>bNetLoadOnClient</code>야.</p>
+<p><strong>Actor.h:443-445</strong></p>
+<div class="code-block">	/** This actor will be loaded on network clients during map load */
+	UPROPERTY(Category=Replication, EditAnywhere)
+	uint8 bNetLoadOnClient:1;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>uint8 bNetLoadOnClient:1;</code><br>&bull;&nbsp;<strong><code>/** ... */</code></strong> = 여러 줄 주석. 컴퓨터는 실행 안 하고, 사람 읽으라고 붙인 설명이야. 여기선 "이 액터는 맵 로드 중에 네트워크 클라에서도 로드된다"는 뜻.<br>&bull;&nbsp;<strong><code>UPROPERTY(...)</code></strong> = 언리얼에게 "이 변수를 엔진이 관리하는 프로퍼티로 등록해라"라고 알려주는 표시.<br>&bull;&nbsp;<strong><code>EditAnywhere</code></strong> = 에디터에서 값을 만질 수 있게 열어둔다는 옵션. 그래서 배치한 액터마다 체크박스로 껐다 켰다 할 수 있어.<br>&bull;&nbsp;<strong><code>uint8</code></strong> = 0~255를 담는 아주 작은 정수 칸.<br>&bull;&nbsp;<strong><code>:1</code></strong> = <strong>비트 필드</strong>. "이 변수는 1비트만 쓴다"는 뜻이야. 참/거짓 하나라 1비트면 충분하니까 메모리를 아끼는 문법이지.<br>&bull;&nbsp;<strong><code>b</code> 접두사</strong> = 참/거짓 값이라는 UE식 이름표.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>bNetLoadOnClient</code>는 <strong>"이 배치 액터를 클라도 맵 로드할 때 같이 만드느냐"</strong>를 정하는 1비트 스위치야. <strong>켜져 있으면</strong>(기본) 클라가 맵에서 알아서 만드니까 서버가 스폰을 안 보내. <strong>꺼두면</strong> 클라는 맵을 로드해도 그 액터를 안 만들어 — "서버에만 존재하는 배치물"(스폰 포인트, 볼륨, AI 마커 같은 서버 전용 물건)을 만들 때 이걸 끈다.</div>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 정적 액터(bNetLoadOnClient)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 클라가 아는 액터는 전부 서버가 스폰 정보를 보내서 만들어준 것이다. 규칙 하나로 통일하면 깔끔하지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 맵에 <strong>이미 배치된</strong> 가로등·벽·문이 수천~수만 개야. 클라도 <strong>같은 맵 파일을 로드</strong>하니까 이미 다 갖고 있는데, 접속할 때마다 이걸 전부 다시 보내면 초기 트래픽이 폭발하고 중복 생성 사고까지 나.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 액터를 <strong>동적(런타임 스폰) / 정적(맵 배치)</strong> 으로 갈라서, 정적 액터는 <strong>스폰 정보 대신 경로 이름으로 가리키기만</strong> 하는 것. → 그게 <strong>net startup actor</strong>이고, 그 스위치가 <code>bNetLoadOnClient</code>야. 우리 서버로 치면 "맵 데이터에 있는 오브젝트는 <code>SP_SPAWN</code> 안 보내고, 클라가 맵 파일에서 읽게 두는" 그 최적화 그대로다.</div>
+<hr>
+</div>
+<div class="conversation"><h2>5. 이제 소멸 — 채널이 닫히는 이유는 5가지다</h2>
+<p>탄생은 끝났어. 이제 죽음. 그런데 여기서 <strong>이 챕터의 진짜 주제</strong>가 나온다.</p>
+<p>언리얼에서 액터가 클라에서 사라지는 계기는 항상 <strong>"그 액터의 채널이 닫혔다"</strong>야. 그런데 채널은 <strong>여러 이유로</strong> 닫혀. 그래서 닫는 봉투에 <strong>"왜 닫는지"</strong>를 같이 적어 보내.</p>
+<p><strong>CoreNetTypes.h:48-57</strong></p>
+<div class="code-block">enum class EChannelCloseReason : uint8
+{
+	Destroyed,
+	Dormancy,
+	LevelUnloaded,
+	Relevancy,
+	TearOff,
+	/* reserved */
+	MAX	= 15		// this value is used for serialization, modifying it may require a network version change
+};</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>enum class EChannelCloseReason : uint8</code><br>&bull;&nbsp;<strong><code>enum class</code></strong> = 고를 수 있는 답을 미리 정해둔 <strong>보기표</strong>. <code>class</code>가 붙으면 <code>EChannelCloseReason::Destroyed</code>처럼 <strong>소속을 꼭 밝혀야</strong> 쓸 수 있어 — 다른 enum 값과 헷갈릴 수 없게 만든 안전장치야.<br>&bull;&nbsp;<strong><code>E</code> 접두사</strong> = "이건 enum이다"라는 UE식 이름표.<br>&bull;&nbsp;<strong><code>: uint8</code></strong> = 속으로는 아주 작은 정수(0~255)로 저장한다는 뜻. 봉투에 실어 보내야 하니 작을수록 좋아.<br>&bull;&nbsp;<strong><code>Destroyed</code></strong> = 서버가 <code>Destroy()</code>로 진짜 죽였다.<br>&bull;&nbsp;<strong><code>Dormancy</code></strong> = 재우려고 닫는다(→ <a class="xref" href="ch-26-dormancy.html">dormancy</a>).<br>&bull;&nbsp;<strong><code>LevelUnloaded</code></strong> = 그 액터가 든 스트리밍 레벨이 내려갔다.<br>&bull;&nbsp;<strong><code>Relevancy</code></strong> = 관련성을 잃었다(멀어졌다).<br>&bull;&nbsp;<strong><code>TearOff</code></strong> = 서버와 연을 끊고 클라에 남긴다(9절).<br>&bull;&nbsp;<strong><code>MAX = 15</code></strong> = 이 값이 <strong>직렬화(전송)에 쓰인다</strong>는 주석이 붙어 있어. 15까지 = 4비트로 실어 보낸다는 뜻이야. 그래서 <strong>바꾸면 네트워크 버전이 깨진다</strong>고 경고한 거고.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 보기표는 <strong>"채널을 왜 닫는가"의 다섯 가지 답</strong>이야. 그리고 <code>MAX = 15</code> 주석이 결정적 힌트를 줘 — 이 값은 <strong>실제로 클라에 전송된다.</strong> 즉 클라는 채널이 닫힌 걸 볼 뿐 아니라 <strong>왜 닫혔는지까지 안다.</strong> 우리가 <code>SP_DESPAWN</code>에 사유 필드를 손으로 넣던 그것을, 엔진이 채널 닫기 봉투에 4비트로 박아둔 거지.</div>
+<p>이 "사유"를 실제로 봉투에 적는 자리가 <code>UChannel::Close</code>야. <code>DataChannel.cpp:302</code>에서 시작하는데, 안을 보면 닫기 봉투를 하나 만들고 <code>CloseBunch.CloseReason = Reason;</code> 한 줄로 사유를 실어 <strong>reliable로</strong> 보낸다(<code>DataChannel.cpp:332-334</code>). 이 봉투는 절대 유실되면 안 되니까 신뢰성 전송이야 — 유실되면 클라에 유령 액터가 영원히 남거든.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — CloseReason(닫는 이유)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 액터가 필요 없어지면 채널을 닫는다. 클라는 채널이 닫힌 걸 보고 그 액터를 지운다. 단순하지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 채널은 <strong>죽어서만</strong> 닫히는 게 아니야. 멀어져서도 닫히고, 재우려고도 닫히고, 레벨이 내려가서도 닫혀. 클라가 이유를 모르면 <strong>전부 "죽었다"로 처리</strong>할 수밖에 없어 — 그럼 재운 액터도 지워지고, 잠깐 멀어진 액터도 지워져서 다시 오면 처음부터 통째로 다시 받아야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 닫기 봉투에 <strong>"왜 닫는지"를 4비트로 같이 실어 보내는 것</strong>. → 이게 <code>EChannelCloseReason</code>이야. 클라는 이유를 보고 <strong>지울지, 남길지, 재울지</strong>를 다르게 처리한다. 우리가 <code>SP_DESPAWN</code>에 "사망 / 시야이탈" 사유 필드를 넣던 것과 정확히 같은 발상이야.</div>
+<hr>
+</div>
+<div class="conversation"><h2>6. ⭐ 핵심 — 클라가 채널 닫힘을 처리하는 그 분기</h2>
+<p>자, 클라에 닫기 봉투가 도착했어. 클라는 이제 뭘 할까? 이 챕터에서 <strong>딱 하나만 기억해야 한다면 이 코드</strong>야. <code>UActorChannel::CleanUp</code> 안, 클라 전용 분기.</p>
+<p><strong>DataChannel.cpp:2690-2713</strong></p>
+<div class="code-block">			if (Actor-&gt;GetTearOff() &amp;&amp; !Connection-&gt;Driver-&gt;ShouldClientDestroyTearOffActors())
+			{
+				if (!bTornOff)
+				{
+					bTornOff = true;
+					Connection-&gt;Driver-&gt;ClientSetActorTornOff(Actor);
+				}
+			}
+			else if (Dormant &amp;&amp; (CloseReason == EChannelCloseReason::Dormancy) &amp;&amp; !Actor-&gt;GetTearOff())
+			{
+				Connection-&gt;Driver-&gt;ClientSetActorDormant(Actor);
+				Connection-&gt;Driver-&gt;NotifyActorFullyDormantForConnection(Actor, Connection);
+				bWasDormant = true;
+			}
+			else if (UE::Net::bSkipDestroyNetStartupActorsOnChannelCloseDueToLevelUnloaded &amp;&amp; (CloseReason == EChannelCloseReason::LevelUnloaded) &amp;&amp; Actor-&gt;IsNetStartupActor())
+			{
+				UE_LOG(LogNetTraffic, Verbose, TEXT("UActorChannel::CleanUp: Skipped Destroying NetStartupActor %s due to EChannelCloseReason::LevelUnloaded"), *Describe());
+			}
+			else if (!Actor-&gt;bNetTemporary &amp;&amp; Actor-&gt;GetWorld() != NULL &amp;&amp; !IsEngineExitRequested() &amp;&amp; Connection-&gt;Driver-&gt;ShouldClientDestroyActor(Actor))
+			{
+				UE_LOG(LogNetDormancy, Verbose, TEXT("UActorChannel::CleanUp: Destroying Actor (ChIndex: %i): %s"), ChIndex, *GetFullNameSafe(Actor));
+
+				DestroyActorAndComponents();
+			}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>if (...) { } else if (...) { } else if (...) { }</code><br>&bull;&nbsp;<strong><code>if / else if</code></strong> = <strong>위에서부터 순서대로</strong> 검사해서 <strong>맨 처음 걸리는 하나만</strong> 실행하는 갈림길. 순서가 곧 우선순위라는 게 중요해.<br>&bull;&nbsp;<strong><code>Actor-&gt;GetTearOff()</code></strong> = "이 액터, 서버와 연을 끊기로 한 놈이냐"고 묻는 함수.<br>&bull;&nbsp;<strong><code>!</code></strong> = 반대로 뒤집기. <code>!ShouldClientDestroyTearOffActors()</code>는 "torn-off 액터를 파괴하지 않기로 했다면".<br>&bull;&nbsp;<strong><code>&amp;&amp;</code></strong> = 그리고. 양쪽이 다 참일 때만 그 가지로 들어가.<br>&bull;&nbsp;<strong><code>CloseReason == EChannelCloseReason::Dormancy</code></strong> = <strong>봉투에 실려온 사유</strong>가 "재우기"였냐고 비교. <code>==</code>는 같은지 묻는 비교(넣기는 <code>=</code> 하나).<br>&bull;&nbsp;<strong><code>ClientSetActorDormant(Actor)</code></strong> = 클라 쪽에서 이 액터를 <strong>"자는 중"으로 표시만</strong> 하는 호출. 지우는 게 아니야.<br>&bull;&nbsp;<strong><code>Actor-&gt;IsNetStartupActor()</code></strong> = "맵에 배치돼 로드된 정적 액터냐"고 묻는 함수(4절).<br>&bull;&nbsp;<strong><code>Actor-&gt;bNetTemporary</code></strong> = "한 번 보내고 끝내는 액터냐"는 스위치. 투사체가 대표적이야(8절).<br>&bull;&nbsp;<strong><code>DestroyActorAndComponents()</code></strong> = <strong>진짜로 액터와 그 컴포넌트를 파괴</strong>하는 호출. 이 챕터에서 유일하게 "죽이는" 줄이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 위에서부터 읽어. <strong>①</strong> TearOff면 → <code>ClientSetActorTornOff</code>, <strong>안 지움</strong>. <strong>②</strong> 사유가 Dormancy면 → <code>ClientSetActorDormant</code>, <strong>안 지움</strong>. <strong>③</strong> 사유가 LevelUnloaded이고 정적 액터면 → 로그만 찍고 <strong>안 지움</strong>. <strong>④</strong> 위 어느 것도 아니고 <code>bNetTemporary</code>도 아니면 → <code>DestroyActorAndComponents()</code>, <strong>지움</strong>. 한 줄로 <strong>"클라는 봉투에 실려온 CloseReason을 보고, 지울지 남길지를 갈라 처리한다. 그리고 아무 예외에도 안 걸리면 마지막 가지에서 파괴된다."</strong></div>
+<p>이제 이 코드가 말하는 <strong>가장 무서운 사실</strong>을 보자. <code>Relevancy</code>라는 이유는 위 분기 어디에도 <strong>이름이 안 나와.</strong> 그럼 어디로 떨어질까?</p>
+<p>...마지막 <code>else if</code>. <strong>파괴 가지</strong>다.</p>
+<div class="note warn">⚠️ <strong>이 챕터 최대 함정 — "채널 닫힘"이 항상 "액터 죽음"은 아니다. 그런데 기본값은 죽음이다.</strong><br><br>
+&bull;&nbsp;<strong>Destroy()</strong> → <code>CloseReason = Destroyed</code> → 마지막 가지 → <strong>클라도 파괴</strong> ✅ (의도대로)<br>
+&bull;&nbsp;<strong>Dormancy</strong> → <code>CloseReason = Dormancy</code> → 두 번째 가지 → <strong>클라 액터는 그대로 살아있음</strong> (자는 것뿐)<br>
+&bull;&nbsp;<strong>관련성 상실(멀어짐)</strong> → <code>CloseReason = Relevancy</code> → <strong>예외 가지에 안 걸림</strong> → 마지막 가지 → <strong>클라에서 파괴됨!</strong> 🔥<br><br>
+그러니까 <strong>"그냥 멀어졌을 뿐인데 클라에선 진짜로 지워진다."</strong> 이게 언리얼 초보가 제일 많이 데는 지점이야. "몹이 시야 밖으로 나갔다가 돌아오니 죽었다 살아난 것처럼 다시 스폰되는데요?" — 버그가 아니야. <strong>설계가 그래.</strong> 관련성을 잃으면 클라의 복사본은 진짜로 파괴되고, 다시 관련성이 생기면 <strong>채널을 새로 열어 초기 번들부터 통째로 다시</strong> 보낸다.<br><br>
+<strong>예외는 셋뿐</strong>: <code>bNetTemporary</code>인 액터(마지막 가지 조건에서 걸러짐), <strong>정적(net startup) 액터</strong>(관련성을 잃어도 애초에 채널을 안 닫아 — <code>NetDriver.cpp:5755</code>), 그리고 <code>bAlwaysRelevant</code>인 액터(관련성을 잃는 일 자체가 없으니 이 이유로 닫힐 일이 없음).</div>
+<hr>
+</div>
+<div class="conversation"><h2>7. 세 가지 경우를 나란히 놓고 보자</h2>
+<p>말로 백 번 설명하는 것보다 표 하나가 낫다.</p>
+<table class="compare-table"><thead><tr><th>계기</th><th>CloseReason</th><th>서버 액터</th><th>클라 액터</th><th>다시 돌아오면</th></tr></thead><tbody>
+<tr><td><code>Destroy()</code> 호출</td><td><code>Destroyed</code></td><td><strong>파괴됨</strong></td><td><strong>파괴됨</strong></td><td>돌아올 게 없음</td></tr>
+<tr><td>관련성 상실(멀어짐)</td><td><code>Relevancy</code></td><td>살아있음</td><td><strong>파괴됨</strong> 🔥</td><td>채널 새로 열고 <strong>초기 번들부터 전부</strong> 다시</td></tr>
+<tr><td>Dormancy(재우기)</td><td><code>Dormancy</code></td><td>살아있음</td><td><strong>살아있음</strong> (자는 중 표시)</td><td>깨우면 <strong>변경분만</strong> 이어서</td></tr>
+<tr><td>레벨 언로드</td><td><code>LevelUnloaded</code></td><td>살아있음</td><td>정적 액터면 <strong>보존</strong></td><td>레벨 다시 올라오면 이어감</td></tr>
+<tr><td>TearOff</td><td><code>TearOff</code></td><td>살아있음(복제 끊김)</td><td><strong>살아있음</strong> (서버와 무관해짐)</td><td>다시 안 이어짐</td></tr>
+</tbody></table>
+<p>이 표에서 뽑아낼 교훈이 두 개야.</p>
+<p><strong>(1) Dormancy와 Relevancy는 겉모습이 똑같은데 결과가 정반대다.</strong> 둘 다 "채널을 닫는다". 근데 dormancy는 <strong>클라 액터를 남겨두고</strong>, relevancy는 <strong>클라 액터를 죽인다.</strong> 왜 이렇게 갈랐냐고? 목적이 다르거든.</p>
+<ul><li><strong>Dormancy</strong> = "얘 안 바뀌니까 <strong>네트워크만</strong> 쉬자". 클라도 서버도 그 자리에 있는 걸 <strong>이미 아니까</strong> 그대로 두고 트래픽만 0으로. 깨우면 변경분만 이어 보내면 돼. (→ <a class="xref" href="ch-26-dormancy.html">dormancy</a>)</li><li><strong>Relevancy 상실</strong> = "얘 이 클라한테 <strong>안 보이니까</strong> 메모리에서도 치우자". 안 보이는 몹을 클라 메모리에 계속 들고 있을 이유가 없어. 다시 보이면 그때 새로 만들면 돼. (→ <a class="xref" href="ch-24-relevancy.html">relevancy</a>)</li></ul>
+<p><strong>(2) 관련성 왕복이 비싸다.</strong> 관련성을 잃었다 되찾으면 <strong>초기 번들을 통째로 다시</strong> 보내야 해(클래스, NetGUID, 트랜스폼, 초기 프로퍼티 전부). 그래서 관련성 경계에서 액터가 <strong>들락날락(채터링)</strong>하면 초기 번들이 반복 전송돼서 트래픽이 새. 그래서 relevancy 판정에 <code>RelevantTimeout</code>(관련성을 잃어도 잠깐 채널을 유지) 같은 유예가 붙어 있는 거야 — dormancy의 히스테리시스랑 같은 발상이지.</p>
+<p>이제 서버 쪽에서 이 두 close가 실제로 어디서 불리는지 보자.</p>
+<h3>Destroy() → 채널을 Destroyed로 닫는다</h3>
+<p>액터를 <code>Destroy()</code>하면 월드가 넷드라이버에게 알려주고, <code>UNetDriver::NotifyActorDestroyed</code>(<code>NetDriver.cpp:4067</code>)가 <strong>모든 클라 커넥션을 돌면서</strong> 처리해.</p>
+<p><strong>NetDriver.cpp:4126-4151</strong></p>
+<div class="code-block">		for( int32 i=ClientConnections.Num()-1; i&gt;=0; i-- )
+		{
+			UNetConnection* Connection = ClientConnections[i];
+			if( ThisActor-&gt;bNetTemporary )
+				Connection-&gt;SentTemporaries.Remove( ThisActor );
+			UActorChannel* Channel = Connection-&gt;FindActorChannelRef(ThisActor);
+			if( Channel )
+			{
+				check(Channel-&gt;OpenedLocally);
+				Channel-&gt;bClearRecentActorRefs = false;
+				Channel-&gt;Close(EChannelCloseReason::Destroyed);
+			}
+			else
+			{
+				const bool bDormantOrRecentlyDormant = NetworkObjectInfo &amp;&amp; (NetworkObjectInfo-&gt;DormantConnections.Contains(Connection) || NetworkObjectInfo-&gt;RecentlyDormantConnections.Contains(Connection));
+
+				if (bShouldCreateDestructionInfo || bDormantOrRecentlyDormant)
+				{
+					// Make a new destruction info if necessary. It is necessary if the actor is dormant or recently dormant because
+					// even though the client knew about the actor at some point, it doesn't have a channel to handle destruction.
+					DestructionInfo = CreateDestructionInfo(ThisActor, DestructionInfo);
+					if (DestructionInfo)
+					{
+						Connection-&gt;AddDestructionInfo(DestructionInfo);
+					}
+				}
+			}
+		}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>UActorChannel* Channel = Connection-&gt;FindActorChannelRef(ThisActor);</code><br>&bull;&nbsp;<strong><code>for( int32 i=ClientConnections.Num()-1; i&gt;=0; i-- )</code></strong> = 클라 커넥션 목록을 <strong>뒤에서 앞으로</strong> 하나씩 도는 반복문. <code>i--</code>는 번호를 1 줄인다는 뜻. 도는 중에 목록에서 빠지는 항목이 있어도 안전하려고 역순으로 도는 흔한 관용구야.<br>&bull;&nbsp;<strong><code>FindActorChannelRef(ThisActor)</code></strong> = <strong>"이 커넥션에 이 액터용 채널이 열려 있냐"</strong>고 찾아보는 호출. 없으면 빈 값이 돌아와.<br>&bull;&nbsp;<strong><code>if( Channel )</code></strong> = 채널이 <strong>있으면</strong>. (있음 = 이 클라는 지금 이 액터를 알고 있다는 뜻)<br>&bull;&nbsp;<strong><code>Channel-&gt;Close(EChannelCloseReason::Destroyed)</code></strong> = 그 채널을 <strong>"죽었다"는 사유를 실어</strong> 닫는다.<br>&bull;&nbsp;<strong><code>else</code></strong> = 채널이 <strong>없으면</strong>. 여기가 핵심 분기야 — 채널이 없는데 어떻게 죽음을 알리지?<br>&bull;&nbsp;<strong><code>DormantConnections.Contains(Connection)</code></strong> = "이 커넥션에 대해 자고 있는 액터냐"고 장부에 물어보는 것. 자는 액터는 채널이 이미 닫혀 있어(→ <a class="xref" href="ch-26-dormancy.html">dormancy</a>).<br>&bull;&nbsp;<strong><code>CreateDestructionInfo(...)</code></strong> = <strong>"사망자 명부"에 한 줄 올리는</strong> 호출(8절).<br>&bull;&nbsp;<strong><code>Connection-&gt;AddDestructionInfo(...)</code></strong> = 그 명부 항목을 이 커넥션의 "보낼 것" 목록에 꽂아 넣기.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 커넥션을 하나씩 돌면서 <strong>두 갈래</strong>로 나눠. <strong>채널이 있으면</strong> → <code>Close(Destroyed)</code>로 그 채널을 통해 죽음을 알린다(정상 경로). <strong>채널이 없으면</strong> → 그 클라는 죽음을 알릴 통로가 없어! 그래서 <code>CreateDestructionInfo</code>로 <strong>사망자 명부</strong>를 만들어 따로 보낸다. 한 줄로 <strong>"채널이 있으면 채널로 알리고, 채널이 없으면 명부로 알린다."</strong> 채널이 없는 경우가 왜 생기는지는 바로 다음 절이야.</div>
+<h3>관련성 상실 → 채널을 Relevancy로 닫는다</h3>
+<p><strong>NetDriver.cpp:5748-5760</strong></p>
+<div class="code-block">			// If the actor wasn't recently relevant, or if it was torn off, close the actor channel if it exists for this connection
+			if ( ( !bIsRecentlyRelevant || Actor-&gt;GetTearOff() ) &amp;&amp; Channel != NULL )
+			{
+				// Non startup (map) actors have their channels closed immediately, which destroys them.
+				// Startup actors get to keep their channels open.
+
+				// Fixme: this should be a setting
+				if ( !bLevelInitializedForActor || !Actor-&gt;IsNetStartupActor() )
+				{
+					UE_LOG( LogNetTraffic, Log, TEXT( "- Closing channel for no longer relevant actor %s" ), *Actor-&gt;GetName() );
+					Channel-&gt;Close(Actor-&gt;GetTearOff() ? EChannelCloseReason::TearOff : EChannelCloseReason::Relevancy);
+				}
+			}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>Channel-&gt;Close(Actor-&gt;GetTearOff() ? EChannelCloseReason::TearOff : EChannelCloseReason::Relevancy);</code><br>&bull;&nbsp;<strong><code>!bIsRecentlyRelevant</code></strong> = "최근에도 관련 없었다"는 뜻. 방금 관련성을 잃었다고 바로 닫는 게 아니라, <strong>잠깐의 유예</strong>가 지난 뒤에야 이 값이 거짓이 돼.<br>&bull;&nbsp;<strong><code>||</code></strong> = 또는. 관련성을 잃었거나, TearOff 됐거나 둘 중 하나면.<br>&bull;&nbsp;<strong><code>Channel != NULL</code></strong> = 채널이 <strong>있을 때만</strong>. 없으면 닫을 것도 없어.<br>&bull;&nbsp;<strong><code>// Non startup (map) actors have their channels closed immediately, which destroys them.</code></strong> = <strong>엔진 개발자가 직접 적어둔 주석</strong>이야. "맵 배치가 아닌 액터는 채널이 즉시 닫히고, <strong>그게 그 액터를 파괴한다</strong>". 6절 경고 상자의 근거가 여기 코드 주석에 그대로 있어.<br>&bull;&nbsp;<strong><code>!Actor-&gt;IsNetStartupActor()</code></strong> = 정적(맵 배치) 액터가 <strong>아니면</strong>. 즉 <strong>정적 액터는 관련성을 잃어도 채널을 안 닫는다.</strong><br>&bull;&nbsp;<strong><code>조건 ? A : B</code></strong> = <strong>삼항 연산자</strong>. "조건이 참이면 A, 아니면 B"를 한 줄로 고르는 문법이야. 여기선 TearOff면 <code>TearOff</code> 사유로, 아니면 <code>Relevancy</code> 사유로 닫아.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>!bIsRecentlyRelevant</code>(유예까지 지나도록 관련 없음) <code>&amp;&amp; Channel != NULL</code>(채널은 열려 있음) → <code>!IsNetStartupActor()</code>(맵 배치물이 아니면) → <code>Close(Relevancy)</code>. 그리고 그 위 주석이 <strong>"채널을 즉시 닫고, 그게 액터를 파괴한다"</strong>고 못 박아둬. <strong>정적 액터만 이 처형을 면제받는다</strong>는 것도 주석에 그대로 적혀 있어("Startup actors get to keep their channels open").</div>
+<hr>
+</div>
+<div class="conversation"><h2>8. DestroyedStartupOrDormantActors — 채널이 없는 상대에게 죽음을 알리는 법</h2>
+<p>7절에서 던져둔 질문. <strong>채널이 없는데 어떻게 "죽었다"를 알리지?</strong></p>
+<p>채널이 없는 경우가 언제 생기는지 먼저 맞춰봐.</p>
+<div class="note">서버가 게임 시작 5초 만에 맵에 배치된 나무 상자(정적 액터)를 부쉈어. 그리고 30분 뒤에 새 플레이어가 접속했어.<br>이 플레이어는 맵을 로드하면서 그 상자를 <strong>당연히 만들어.</strong> 서버엔 없는데 클라엔 있는 거지. 서버는 이 사실을 어떻게 알릴까?</div>
+<p>...채널로는 못 알려. <strong>그 액터는 서버에서 이미 없어졌으니 채널을 열 수가 없거든.</strong> 없는 액터에 채널을 붙일 순 없잖아. 그런데 클라는 맵 로드만으로 그걸 만들어버려. 이대로 두면 <strong>클라에만 존재하는 유령 상자</strong>가 영원히 남는다.</p>
+<p>같은 문제가 <strong>dormant 액터</strong>에도 생겨. 자고 있는 액터는 이미 채널이 닫혀 있잖아(→ <a class="xref" href="ch-26-dormancy.html">dormancy</a>). 그 상태에서 서버가 <code>Destroy()</code>하면? 알릴 통로가 없어.</p>
+<p>그래서 언리얼은 <strong>사망자 명부</strong>를 따로 들고 있어. 이름이 그대로야 — <code>DestroyedStartupOrDormantActors</code> ("파괴된 정적/휴면 액터들"). <code>UNetDriver::CreateDestructionInfo</code>(<code>NetDriver.cpp:4011</code>)가 여기에 한 줄을 올려. 명부에 적히는 건 <strong>NetGUID + 경로 이름 + 소속 레벨 + 닫는 사유</strong>야.</p>
+<p>그리고 이 명부를 클라에 전달할 때가 재밌어. <strong>채널을 하나 열어서, 곧바로 닫기 봉투만 보내고 끝낸다.</strong></p>
+<p><strong>NetDriver.cpp:5843-5858</strong></p>
+<div class="code-block">					// Send a close notify, and wait for ack.
+					FOutBunch CloseBunch(Channel, true);
+					check(!CloseBunch.IsError());
+					check(CloseBunch.bClose);
+					CloseBunch.bReliable = 1;
+					CloseBunch.CloseReason = DestructionInfo-&gt;Reason;
+
+					// Serialize DestructInfo
+					NET_CHECKSUM(CloseBunch); // This is to mirror the Checksum in UPackageMapClient::SerializeNewActor
+					Connection-&gt;PackageMap-&gt;WriteObject(CloseBunch, ObjOuter, DestructionInfo-&gt;NetGUID, DestructionInfo-&gt;PathName);
+
+					UE_LOG(LogNetTraffic, Log, TEXT("SendDestructionInfo: Channel %d. NetGUID &lt;%s&gt; Path: %s. Bits: %" INT64_FMT), Channel-&gt;ChIndex, *DestructionInfo-&gt;NetGUID.ToString(), *DestructionInfo-&gt;PathName, CloseBunch.GetNumBits());
+					UE_LOG(LogNetDormancy, Verbose, TEXT("SendDestructionInfo: Channel %d. NetGUID &lt;%s&gt; Path: %s. Bits: %" INT64_FMT), Channel-&gt;ChIndex, *DestructionInfo-&gt;NetGUID.ToString(), *DestructionInfo-&gt;PathName, CloseBunch.GetNumBits());
+
+					constexpr bool bDontMerge = false;
+					Channel-&gt;SendBunch(&amp;CloseBunch, bDontMerge);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>FOutBunch CloseBunch(Channel, true); ... Channel-&gt;SendBunch(&amp;CloseBunch, bDontMerge);</code><br>&bull;&nbsp;<strong><code>FOutBunch CloseBunch(Channel, true)</code></strong> = 나갈 봉투를 만드는데, 두 번째 재료 <code>true</code>가 <strong>"이건 닫기 봉투다"</strong>라는 표시야.<br>&bull;&nbsp;<strong><code>check(CloseBunch.bClose)</code></strong> = "이 봉투는 정말 닫기 봉투가 맞나" 확인하는 안전장치. 아니면 그 자리에서 터뜨려 버그를 잡아.<br>&bull;&nbsp;<strong><code>CloseBunch.bReliable = 1</code></strong> = <strong>신뢰성 전송</strong>으로 보낸다. 이 봉투가 유실되면 클라에 유령 액터가 영원히 남으니까 반드시 도착해야 해.<br>&bull;&nbsp;<strong><code>CloseBunch.CloseReason = DestructionInfo-&gt;Reason</code></strong> = 명부에 적어둔 <strong>사유</strong>를 봉투에 싣는다.<br>&bull;&nbsp;<strong><code>NET_CHECKSUM(CloseBunch)</code></strong> = 봉투에 검사용 값을 넣는 매크로. 주석대로 <strong><code>SerializeNewActor</code>가 쓰는 형식과 모양을 맞추려고</strong> 넣는 거야 — 받는 쪽이 같은 방식으로 읽을 수 있게.<br>&bull;&nbsp;<strong><code>PackageMap-&gt;WriteObject(..., NetGUID, PathName)</code></strong> = <strong>"이 NetGUID / 이 경로 이름의 물건"</strong>이라고 봉투에 적는 호출. 정적 액터라서 <strong>경로 이름</strong>으로 가리키는 게 포인트야(4절).<br>&bull;&nbsp;<strong><code>constexpr bool bDontMerge = false</code></strong> = "다른 봉투와 합치지 마"를 뜻하는 이름 붙인 상수. <code>constexpr</code>은 컴파일 시점에 값이 정해진다는 표시야.<br>&bull;&nbsp;<strong><code>SendBunch(&amp;CloseBunch, ...)</code></strong> = 그 봉투를 실제로 전송. <code>&amp;</code>는 봉투 원본의 위치를 넘긴다는 뜻.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 코드는 <strong>액터를 실을 필요가 없는, 오직 "닫기"만 담긴 봉투</strong>를 만들어. <code>bClose</code>(닫기 표시) → <code>bReliable = 1</code>(반드시 도착) → <code>CloseReason</code>(왜 닫는지) → <code>WriteObject(NetGUID, PathName)</code>(누구를 닫는지). 한 줄로 <strong>"채널을 열자마자 '이 경로의 물건은 파괴됐다'는 닫기 봉투만 보내고 끝낸다."</strong> 열기 위해 여는 채널이 아니라 <strong>닫기를 배달하려고 잠깐 여는 채널</strong>이야. 우리 서버로 치면 접속 직후에 "이미 파괴된 오브젝트 목록"을 한 방에 뿌리는 것과 같아.</div>
+<p>그리고 이 명부는 <strong>스트리밍 레벨 단위로도 관리</strong>돼(<code>DestroyedStartupOrDormantActorsByLevel</code>). 클라가 어떤 스트리밍 레벨을 다시 보이게 만들면, 그 레벨에 속한 사망자 명부를 <strong>다시 커넥션에 꽂아준다</strong>(<code>NetConnection.cpp:1793-1798</code>). 왜냐면 레벨을 내렸다 다시 올리면 클라는 그 안의 정적 액터를 <strong>또 만들어버리거든.</strong> 그때마다 다시 죽여줘야 해.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — DestroyedStartupOrDormantActors(사망자 명부)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 액터가 죽으면 그 액터의 채널로 닫기 봉투를 보내면 되지. 채널은 액터마다 있으니까.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 근데 <strong>채널이 없는 경우</strong>가 있어. ① 맵에 배치된 정적 액터를 서버가 부쉈는데, 나중에 접속한 클라는 <strong>맵을 로드하며 그걸 또 만든다</strong>. 서버엔 그 액터가 없으니 채널을 열 수도 없어. ② 자고 있는(dormant) 액터는 채널이 이미 닫혀 있어. 둘 다 <strong>"죽었다"를 알릴 통로가 없다.</strong> 그대로 두면 클라에만 남는 <strong>유령 액터</strong>가 생겨.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 서버가 <strong>"이 NetGUID/경로의 물건은 이미 죽었다"는 사망자 명부</strong>를 따로 들고 있다가, 접속하는 클라·레벨을 다시 로드하는 클라에게 <strong>닫기 봉투만</strong> 배달하는 것. → 이게 <code>DestroyedStartupOrDormantActors</code>야. 우리 서버가 접속 직후 "이미 파괴된 오브젝트 목록"을 따로 내려주던 것과 똑같아.</div>
+<hr>
+</div>
+<div class="conversation"><h2>9. TearOff — 서버와 연을 끊고 클라에 남기기</h2>
+<p>마지막 특수 케이스. 이런 상황을 생각해봐.</p>
+<div class="note">플레이어가 죽었어. 서버는 이 캐릭터를 더 이상 복제하고 싶지 않아 — 서버 입장에서 얘는 끝난 객체니까.<br>그런데 클라 화면에선 시체가 남아서 쓰러지는 물리 시뮬레이션이 돌아야 해. 지워버리면 시체가 <strong>뻥 사라진다.</strong><br>어떻게 하지?</div>
+<p>이럴 때 쓰는 게 <strong>TearOff(찢어내기)</strong>야. <strong>"서버와의 연결선만 끊고, 클라의 복사본은 그 자리에 남긴다."</strong> 그 뒤로 그 액터는 <strong>클라의 로컬 액터</strong>가 돼. 서버가 뭘 하든 클라는 자기 마음대로 물리 굴리고 페이드아웃하고 알아서 정리해.</p>
+<p><strong>Actor.cpp:3291-3298</strong></p>
+<div class="code-block">void AActor::TearOff()
+{
+	const ENetMode NetMode = GetNetMode();
+
+	if (NetMode == NM_ListenServer || NetMode == NM_DedicatedServer)
+	{
+		bTearOff = true;
+		MARK_PROPERTY_DIRTY_FROM_NAME(AActor, bTearOff, this);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>void AActor::TearOff()</code><br>&bull;&nbsp;<strong><code>void</code></strong> = 값을 돌려주지 않는 함수. 안쪽 상태만 바꾸고 끝나.<br>&bull;&nbsp;<strong><code>AActor::</code></strong> = <code>AActor</code>에 딸린 함수라는 소속 표시. <code>::</code>는 "~안의"라고 읽어.<br>&bull;&nbsp;<strong><code>const ENetMode NetMode = GetNetMode()</code></strong> = 지금 실행 중인 곳이 서버인지 클라인지 담는 값. <code>const</code>라서 한 번 정하고 안 바꿔.<br>&bull;&nbsp;<strong><code>NM_ListenServer || NM_DedicatedServer</code></strong> = <strong>서버일 때만</strong> 안으로 들어간다는 뜻. <code>||</code>는 또는. 클라가 자기 마음대로 TearOff를 선언할 순 없어 — <strong>연을 끊을 권한은 서버에만</strong> 있다.<br>&bull;&nbsp;<strong><code>bTearOff = true</code></strong> = "이 액터는 찢어냈다"는 스위치를 켬.<br>&bull;&nbsp;<strong><code>MARK_PROPERTY_DIRTY_FROM_NAME(AActor, bTearOff, this)</code></strong> = <strong>이 플래그 자체를 복제 대상으로 dirty 마킹</strong>하는 매크로(→ <a class="xref" href="ch-19-push-model.html">push-model</a>). 즉 <code>bTearOff</code>는 <strong>복제되는 프로퍼티</strong>라서, 클라도 "나 찢겼구나"를 값으로 전달받아.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>TearOff()</code>는 <strong>서버에서만</strong> 동작하고(<code>NM_*Server</code> 검사), 하는 일은 <code>bTearOff = true</code> 스위치 하나 켜고 그걸 <strong>dirty 마킹해서 클라에 복제</strong>되게 하는 게 전부야. 그러면 다음 틱에 서버 루프가 "TearOff 됐네" 하고 채널을 <code>Close(TearOff)</code>로 닫고(7절의 <code>NetDriver.cpp:5758</code>), 클라는 6절 분기의 <strong>첫 번째 가지</strong>로 떨어져서 <strong>액터를 안 지우고</strong> <code>ClientSetActorTornOff</code>만 부른다. 그 순간부터 그 액터는 클라의 로컬 소유물이야.</div>
+<p>비슷하지만 다른 게 하나 더 있어. <strong><code>bNetTemporary</code></strong>.</p>
+<p><strong>Actor.h:284-286</strong></p>
+<div class="code-block">	/** If true, when the actor is spawned it will be sent to the client but receive no further replication updates from the server afterwards. */
+	UPROPERTY()
+	uint8 bNetTemporary:1;</div>
+<div class="note reread">🔁 <strong>읽는 법.</strong> 주석 그대로야 — <strong>"스폰될 때 클라에 보내지지만, 그 뒤로는 서버로부터 어떤 업데이트도 받지 않는다."</strong> 대표적인 게 <strong>투사체(발사체)</strong>야. 화살 하나를 매 틱 위치 동기화하는 건 낭비고, 어차피 클라가 초기 위치·속도만 알면 <strong>같은 궤적을 스스로 계산</strong>할 수 있거든. 그래서 첫 봉투를 보내면서 아예 <code>Bunch.bClose = Actor-&gt;bNetTemporary</code>로 <strong>봉투에 "닫음" 표시를 같이 실어 보내</strong>(<code>DataChannel.cpp:3787</code>). 열자마자 닫는 거지. 그리고 6절 마지막 가지의 <code>!Actor-&gt;bNetTemporary</code> 조건 덕에 <strong>클라 액터는 파괴되지 않고 남아</strong> 자기 궤적을 마저 날아간다.</div>
+<table class="compare-table"><thead><tr><th></th><th><code>bNetTemporary</code></th><th><code>TearOff</code></th></tr></thead><tbody>
+<tr><td>언제 정해지나</td><td><strong>처음부터</strong> (스폰 시점)</td><td><strong>도중에</strong> (서버가 <code>TearOff()</code> 호출)</td></tr>
+<tr><td>복제 기간</td><td>초기 번들 <strong>딱 한 번</strong></td><td>찢을 때까지는 <strong>정상 복제</strong></td></tr>
+<tr><td>채널</td><td>열자마자 닫음 (<code>bClose</code> 동봉)</td><td><code>Close(TearOff)</code>로 나중에 닫음</td></tr>
+<tr><td>클라 액터</td><td>남음 (로컬에서 계속 시뮬)</td><td>남음 (로컬 소유로 전환)</td></tr>
+<tr><td>대표 사례</td><td>투사체, 일회성 이펙트</td><td>사망한 캐릭터의 시체(래그돌)</td></tr>
+</tbody></table>
+<p>둘의 공통점: <strong>"복제는 끊지만 클라 액터는 살려둔다."</strong> 6절 표에서 이 둘이 "파괴 안 됨"에 들어간 이유야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>10. 콜체인 한 장 정리</h2>
+<div class="code-block">[탄생 — 채널 열기]                                     [죽음 — 채널 닫기]
+
+ServerReplicateActors (매 틱)                          AActor::Destroy()
+  │ 관련성 판정 통과?                                     │
+  ▼                                                      ▼
+CreateChannelByName(NAME_Actor)                        UNetDriver::NotifyActorDestroyed()
+  NetDriver.cpp:5665                                     NetDriver.cpp:4067
+  │                                                      │
+  ▼                                                      ├─ 채널 있음 → Channel-&gt;Close(Destroyed)   [4136]
+UActorChannel::SetChannelActor(Actor)                    │
+  DataChannel.cpp:2796                                   └─ 채널 없음(정적/휴면)
+  │                                                          → CreateDestructionInfo()             [4011]
+  ▼                                                          → Connection-&gt;AddDestructionInfo()    [4149]
+UActorChannel::ReplicateActor()                                  │
+  │ if (bNetInitial &amp;&amp; OpenedLocally)   DataChannel.cpp:3800    ▼
+  ▼                                                          SendDestructionInfo()  NetDriver.cpp:5809
+UPackageMap::SerializeNewActor(Bunch, ...)                     └─ 채널 잠깐 열고 → 닫기 봉투만 전송
+  PackageMapClient.cpp:490
+  │ if (NetGUID.IsDynamic())        [569]  ← 정적이면 이 블록 스킵!
+  │   Archetype / Level / Location / Rotation / Scale / Velocity
+  ▼                                                    [그 밖의 닫힘]
+[네트워크]                                             관련성 상실 → Close(Relevancy)  NetDriver.cpp:5758
+  │                                                    Dormancy   → Close(Dormancy)   (ch-26)
+  ▼                                                    TearOff    → Close(TearOff)    NetDriver.cpp:5758
+UActorChannel::ProcessBunch()                                     │
+  DataChannel.cpp:3282                                            ▼
+  │  SerializeNewActor (읽기 모드)                      [클라] UActorChannel::CleanUp()
+  ▼                                                            DataChannel.cpp:2690
+World-&gt;SpawnActorAbsolute(...)                                  ├─ TearOff        → 안 지움 (로컬 소유로)
+  PackageMapClient.cpp:762                                      ├─ Dormancy       → 안 지움 (자는 중 표시)
+  │                                                             ├─ LevelUnloaded + 정적 → 안 지움
+  ▼                                                             └─ 그 외(=Destroyed, Relevancy)
+RegisterNetGUID_Client(NetGUID, Actor)   [777]                        → DestroyActorAndComponents()  ★
+  → 이제부터 변경분이 이 객체로 배달됨                                   (단, bNetTemporary면 제외)</div>
+<p>왼쪽은 <strong>"관련 있음 → 채널 열림 → 설계도 전송 → 클라가 SpawnActor"</strong>. 오른쪽은 <strong>"닫는 이유를 실어 채널 닫기 → 클라가 이유를 보고 지울지 말지 결정"</strong>. 그리고 <strong>★ 표시</strong>가 이 챕터의 폭탄이야 — 관련성 상실이 파괴 가지로 떨어진다.</p>
+<hr>
+</div>
+<div class="conversation"><h2>우리 서버랑 비교</h2>
+<p>조선 서버 감각으로 번역하면 전부 익숙한 그림이야. 우리가 손으로 짜던 걸 언리얼은 <strong>채널 수명주기</strong>로 흡수한 것뿐이거든.</p>
+<table class="compare-table"><thead><tr><th></th><th>조선 서버 (직접 패킷 조립)</th><th>언리얼</th></tr></thead><tbody>
+<tr><td>탄생 알림</td><td><code>SP_SPAWN</code> 직접 조립 (오브젝트 번호, 종류, 좌표, 초기 스탯)</td><td>ActorChannel 열림 + <strong>초기 번들</strong>(<code>SerializeNewActor</code>)</td></tr>
+<tr><td>클라 객체 생성</td><td>핸들러가 <code>new CMonster()</code> 후 리스트 등록</td><td>PackageMap이 <code>World-&gt;SpawnActorAbsolute()</code> 호출</td></tr>
+<tr><td>식별자</td><td><code>wID</code> / 오브젝트 번호를 직접 발급·관리</td><td><strong>NetGUID</strong> (동적=번호, 정적=경로 이름)</td></tr>
+<tr><td>맵 배치물</td><td>클라가 맵 데이터로 이미 가짐 → <code>SP_SPAWN</code> 안 보냄</td><td><code>bNetLoadOnClient</code> — <strong>발상이 완전히 동일</strong></td></tr>
+<tr><td>진짜 죽음</td><td><code>SP_DESPAWN(사유=사망)</code> → 클라가 사망 연출 후 삭제</td><td><code>Close(EChannelCloseReason::Destroyed)</code></td></tr>
+<tr><td>시야 이탈</td><td><code>SP_DESPAWN(사유=시야)</code> 또는 <code>SP_LEAVE_SIGHT</code> 별도 패킷</td><td><code>Close(EChannelCloseReason::Relevancy)</code> — <strong>결과는 똑같이 클라 삭제</strong></td></tr>
+<tr><td>사유 구분</td><td>패킷을 나누거나 사유 필드를 <strong>손으로</strong> 넣음</td><td>닫기 봉투에 <code>CloseReason</code> <strong>4비트</strong>가 항상 실림</td></tr>
+<tr><td>이미 죽은 배치물</td><td>접속 시 "파괴된 오브젝트 목록"을 별도 전송</td><td><code>DestroyedStartupOrDormantActors</code> — <strong>이것도 동일</strong></td></tr>
+<tr><td>트래픽 절약용 끄기</td><td>브로드캐스트 대상에서 제외 (직접 구현)</td><td><code>Close(Dormancy)</code> — <strong>클라 객체는 유지</strong></td></tr>
+</tbody></table>
+<p>가장 큰 사고방식 차이는 이거야. 우리는 <strong>"패킷 종류"로 사유를 표현</strong>했어. <code>SP_SPAWN</code>, <code>SP_DESPAWN</code>, <code>SP_LEAVE_SIGHT</code>… 사유가 늘어나면 패킷이 늘어나고, 핸들러도 늘어나고, 누가 어떤 사유를 안 보내면 클라는 영원히 모른다.</p>
+<p>언리얼은 <strong>"채널이라는 하나의 통로에 사유를 실었어."</strong> 채널을 여는 것 = 탄생, 닫는 것 = 이 클라와의 관계 종료. 그리고 <strong>왜 종료하는지</strong>를 4비트로 항상 함께 보낸다. 패킷 종류를 늘리는 대신 <strong>enum 값 하나를 늘리면 되게</strong> 설계한 거지.</p>
+<p>대신 대가가 있어. 우리 서버는 <code>SP_DESPAWN(사유=시야)</code>를 받으면 클라 코드가 <strong>명시적으로</strong> "시야 이탈이니까 조용히 지우자"라고 짜여 있어서 <strong>동작이 눈에 보여</strong>. 언리얼은 그 분기가 엔진 <code>CleanUp</code> 안에 숨어 있어서, <strong>"내 액터가 왜 사라졌지?"를 디버깅하려면 CloseReason을 봐야 한다는 걸 알아야만 한다.</strong> 그래서 이 챕터가 필요한 거고.</p>
+<hr>
+</div>
+<div class="conversation"><h2>초보가 걸려 넘어지는 지점 5개</h2>
+<ul>
+<li><strong>채널 닫힘 ≠ 액터 죽음.</strong> 하지만 <strong>기본값은 죽음</strong>이다. 예외(TearOff / Dormancy / LevelUnloaded+정적 / bNetTemporary)에 걸리지 않으면 <strong>전부 <code>DestroyActorAndComponents()</code></strong>로 떨어진다.</li>
+<li><strong>관련성만 잃어도 클라 액터는 진짜 파괴된다.</strong> 엔진 주석이 대놓고 적어놨어 — "Non startup (map) actors have their channels closed immediately, <strong>which destroys them</strong>". 다시 가까워지면 되살아나는 게 아니라 <strong>초기 번들부터 새로 스폰</strong>된다.</li>
+<li><strong>Dormancy는 채널이 닫혀도 클라 액터가 살아있다.</strong> 이게 relevancy와의 결정적 차이야. "잔다 ≠ 지운다"(→ <a class="xref" href="ch-26-dormancy.html">dormancy</a>).</li>
+<li><strong>맵에 배치된 액터는 스폰이 복제되지 않는다.</strong> 클라가 맵 로드로 이미 만들었으니까. 그래서 <strong>파괴를 알리는 데 별도 장치(사망자 명부)가 필요</strong>한 거야. "왜 파괴만 특별 취급하지?"의 답이 여기 있다.</li>
+<li><strong>클라 액터는 서버 액터가 아니다.</strong> 설계도를 받아 <strong>클라가 자기 손으로 만든 별개의 객체</strong>야. 같은 NetGUID를 공유하는 쌍둥이일 뿐. 서버 액터의 포인터가 날아오는 게 아니다.</li>
+</ul>
+<hr>
+</div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 서버에서 몹이 스폰됐다는 걸 클라에 어떻게 알리나요? 복제는 "값 동기화" 아닌가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그게 정확히 문제의 핵심이에요. 복제가 값 동기화인 건 맞는데, <strong>클라에 그 객체가 없으면 값을 보낼 데가 없어요.</strong> "42번 몹 HP=80"을 보내봐야 클라엔 42번이라는 객체 자체가 존재하지 않으니까요. 값을 담을 <strong>그릇이 먼저</strong> 있어야 해요. 그래서 언리얼은 값뿐 아니라 <strong>객체의 탄생 자체를 복제</strong>합니다. 관련성 판정을 통과하면 그 커넥션에 <strong>액터 채널을 새로 열고</strong>, 첫 봉투에 값 대신 <strong>"이걸로 객체를 만들어라"는 설계도</strong>를 실어 보내요. 액터의 탄생 = 채널이 열리는 것, 이게 언리얼의 답입니다.</div></details>
+
+<h4>↳ 그 "설계도(초기 번들)"엔 구체적으로 뭐가 들어가나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>NetGUID</strong>(얘는 42번이야 — 앞으로 모든 변경분이 이 번호로 배달됨), <strong>아키타입</strong>(이 틀로 찍어라 — 클래스 + 기본값 뭉치), <strong>소속 레벨</strong>, <strong>초기 위치·회전·크기·속도</strong>, 그리고 이어서 <strong>초기 프로퍼티 전체</strong>가 들어가요. 첫 복제라 "지난 값"이 없으니 기본값과 다른 프로퍼티가 몽땅 변경분으로 잡혀서 같은 봉투에 실려요. 그래서 <strong>첫 봉투가 제일 뚱뚱합니다.</strong> 참고로 위치·크기·속도가 기본값(0벡터 등)이면 비트 아끼려고 아예 안 실어요.</div></details>
+
+<h4>↳ 클라는 그 설계도로 뭘 하나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>클라가 직접 <code>SpawnActor</code>를 호출해서 로컬에 복사본을 만들어요.</strong> 서버 액터가 "날아온" 게 아니라, 설계도를 받아 클라가 자기 손으로 새로 만든 <strong>별개의 객체</strong>예요. 주소도 메모리도 다르고, 그냥 <strong>같은 NetGUID를 공유하는 쌍둥이</strong>일 뿐이죠. 이때 스폰 파라미터에 "충돌하든 말든 무조건 스폰(<code>AlwaysSpawn</code>)", "실패 금지(<code>bNoFail</code>)", "주인은 원격(<code>bRemoteOwned</code>)"이 붙어요 — 서버가 이미 만들기로 결정한 걸 클라가 거부하면 서버-클라가 어긋나니까요. 스폰 직후 <code>RegisterNetGUID_Client</code>로 번호를 등록해야 비로소 이후 변경분이 이 객체에 배달됩니다.</div></details>
+
+<h3>Q2. 맵 에디터에 미리 배치해둔 액터(가로등, 문)도 스폰 정보를 보내나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">안 보내요. <strong>클라도 같은 맵 파일을 로드하니까 이미 다 갖고 있거든요.</strong> 가로등 1만 개의 스폰 정보를 접속할 때마다 보내면 초기 트래픽이 폭발하고 중복 생성 사고까지 나요. 그래서 언리얼은 액터를 <strong>동적(런타임 스폰) / 정적(맵 배치, net startup)</strong> 으로 갈라요. 동적 액터는 설계도를 보내고, <strong>정적 액터는 "경로 이름"으로 가리키기만</strong> 합니다 — "너 맵에 있는 그 StreetLamp_42 있지? 걔야." 실제로 스폰 정보를 쓰는 코드 전체가 <code>if (NetGUID.IsDynamic())</code> 가드 안에 들어 있어서, 정적 액터는 그 블록을 통째로 건너뜁니다. 이 동작을 켜고 끄는 스위치가 <code>bNetLoadOnClient</code>고요.</div></details>
+
+<h4>↳ 그럼 그 정적 액터를 서버가 게임 시작 5초 만에 부쉈고, 30분 뒤에 새 클라가 접속하면요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그게 바로 이 시스템의 아픈 구멍이에요. 새 클라는 <strong>맵을 로드하면서 그 액터를 당연히 만들어버려요.</strong> 서버엔 없는데 클라엔 있죠. 그런데 서버는 <strong>채널로 알릴 수가 없어요</strong> — 그 액터가 서버에 이미 없으니 채널을 붙일 대상이 없거든요. 그대로 두면 <strong>클라에만 존재하는 유령 액터</strong>가 영원히 남아요.<br><br>그래서 서버가 <strong>사망자 명부</strong>를 따로 들고 있습니다. 이름 그대로 <code>DestroyedStartupOrDormantActors</code>("파괴된 정적/휴면 액터들")예요. 여기에 NetGUID·경로 이름·소속 레벨·사유를 적어두고, 접속하는 클라에게 <strong>채널을 잠깐 열어 닫기 봉투만</strong> 배달합니다. 열려고 여는 채널이 아니라 <strong>닫기를 배달하려고 잠깐 여는 채널</strong>이죠. 스트리밍 레벨을 다시 보이게 할 때도 그 레벨의 명부를 다시 꽂아줘요 — 레벨을 다시 로드하면 클라가 그걸 <strong>또 만들어버리니까요.</strong> 그리고 <strong>자고 있는(dormant) 액터</strong>도 채널이 이미 닫혀 있어서 같은 문제를 겪기 때문에, 명부 이름에 "Dormant"가 같이 붙어 있는 거예요.</div></details>
+
+<h3>Q3. 채널이 닫혔다는 건 액터가 죽었다는 뜻인가요? ⭐</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>아니요. 그런데 기본값은 죽음이에요.</strong> 이게 이 챕터에서 제일 중요한 문장이에요.<br><br>채널은 다섯 가지 이유로 닫혀요 — <code>Destroyed</code>(진짜 죽음), <code>Dormancy</code>(재우기), <code>Relevancy</code>(멀어짐), <code>LevelUnloaded</code>(레벨 내려감), <code>TearOff</code>(연 끊기). 그래서 언리얼은 <strong>닫기 봉투에 "왜 닫는지"를 4비트로 같이 실어 보냅니다</strong>(<code>EChannelCloseReason</code>). 클라는 그 사유를 보고 <strong>지울지, 남길지, 재울지</strong>를 갈라 처리해요. 우리가 <code>SP_DESPAWN</code>에 "사망/시야이탈" 사유 필드를 손으로 넣던 것과 같은 발상이죠.</div></details>
+
+<h4>↳ 클라 쪽 분기가 구체적으로 어떻게 갈리나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>UActorChannel::CleanUp</code> 안에서 <strong>위에서부터 순서대로</strong> 검사해요. ① <strong>TearOff</strong>면 안 지우고 로컬 소유로 전환. ② 사유가 <strong>Dormancy</strong>면 안 지우고 "자는 중"으로 표시만. ③ 사유가 <strong>LevelUnloaded</strong>이고 정적 액터면 안 지움. ④ <strong>위 예외 어디에도 안 걸리고</strong> <code>bNetTemporary</code>도 아니면 → <code>DestroyActorAndComponents()</code>, <strong>파괴</strong>.<br><br>중요한 건 이 구조가 <strong>"예외에 걸리지 않으면 죽인다"</strong>는 거예요. 화이트리스트 방식이죠. 그래서 <strong>기본값은 파괴</strong>입니다.</div></details>
+
+<h4>↳ 그럼 그냥 멀어졌을 뿐인데(Relevancy) 클라 액터가 진짜 파괴돼요? 그게 맞나요? 🔥</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>네, 진짜 파괴됩니다.</strong> <code>Relevancy</code>는 위 예외 목록 어디에도 이름이 없거든요 → 마지막 파괴 가지로 떨어져요. 엔진 소스 주석도 대놓고 적어놨어요: <em>"Non startup (map) actors have their channels closed immediately, <strong>which destroys them</strong>."</em><br><br>버그가 아니라 <strong>설계</strong>예요. 안 보이는 몹을 클라 메모리에 계속 들고 있을 이유가 없으니까요. 대신 대가가 있어요 — 다시 관련성이 생기면 <strong>채널을 새로 열고 초기 번들을 통째로 다시</strong> 보내야 해요(클래스, NetGUID, 트랜스폼, 초기 프로퍼티 전부). 그래서 관련성 경계에서 액터가 들락날락하면 초기 번들이 반복 전송돼서 트래픽이 새고, 그걸 막으려고 <code>RelevantTimeout</code> 같은 유예가 붙어 있어요.<br><br>예외는 셋뿐이에요: <code>bNetTemporary</code> 액터, <strong>정적(net startup) 액터</strong>(관련성을 잃어도 애초에 채널을 안 닫아요), <code>bAlwaysRelevant</code> 액터(관련성을 잃는 일 자체가 없죠).</div></details>
+
+<h3>Q4. Dormancy로 닫힌 채널과 Relevancy로 닫힌 채널, 클라에서 뭐가 다른가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">겉모습은 똑같이 "채널이 닫혔다"인데 <strong>결과가 정반대</strong>예요. 목적이 다르거든요.<br><br><strong>Dormancy</strong>는 "얘 안 바뀌니까 <strong>네트워크만</strong> 쉬자"예요. 클라도 서버도 그 액터가 거기 있는 걸 <strong>이미 아니까</strong> 그대로 두고 트래픽만 0으로 만듭니다. 그래서 클라 액터는 <strong>살아있고</strong>, 깨우면 <strong>변경분만</strong> 이어 보내면 돼요.<br><br><strong>Relevancy 상실</strong>은 "얘 이 클라한테 <strong>안 보이니까</strong> 메모리에서도 치우자"예요. 그래서 클라 액터를 <strong>파괴</strong>하고, 다시 보이면 <strong>초기 번들부터 새로</strong> 만듭니다.<br><br>한 줄로: <strong>dormancy는 "연결만 끊고 그릇은 남긴다", relevancy는 "그릇째 치운다".</strong></div></details>
+
+<h4>↳ TearOff랑 bNetTemporary는 또 뭐가 다른가요? 둘 다 클라 액터를 남기잖아요.</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">"복제는 끊지만 클라 액터는 살려둔다"는 결과는 같은데, <strong>언제 정해지느냐</strong>가 달라요.<br><br><code>bNetTemporary</code>는 <strong>처음부터</strong>예요. 스폰될 때 클라에 보내지지만 그 뒤로는 <strong>어떤 업데이트도 안 받아요.</strong> 대표적인 게 <strong>투사체</strong>죠 — 화살 위치를 매 틱 동기화하는 건 낭비고, 클라가 초기 위치·속도만 알면 같은 궤적을 스스로 계산할 수 있으니까요. 그래서 첫 봉투에 아예 "닫음" 표시를 같이 실어 보냅니다. <strong>열자마자 닫는</strong> 거죠.<br><br><code>TearOff</code>는 <strong>도중에</strong>예요. 정상적으로 복제되던 액터를 서버가 어느 순간 "이제 연 끊어" 하고 찢어내는 거죠. 대표적인 게 <strong>사망한 캐릭터의 시체</strong>예요 — 서버는 더 이상 관리하기 싫은데 클라 화면에선 래그돌이 쓰러지는 물리가 돌아야 하니까요. 지워버리면 시체가 뻥 사라지죠. 참고로 <code>bTearOff</code> 플래그 자체가 <strong>복제되는 프로퍼티</strong>라서, 클라도 "나 찢겼구나"를 값으로 전달받습니다.</div></details>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>복제가 "값 동기화"라면 값을 담을 그릇이 먼저 있어야 한다 — 그래서 언리얼은 액터의 탄생을 "채널 열기 + 초기 번들(클래스·NetGUID·트랜스폼)"로, 액터의 죽음을 "채널 닫기 + CloseReason"으로 복제한다. 채널이 닫혔다고 액터가 죽은 건 아니지만, <em>예외(TearOff·Dormancy·정적 액터·bNetTemporary)에 걸리지 않으면 기본값은 파괴</em>다 — 그래서 그냥 멀어졌을 뿐인 액터도 클라에선 진짜로 지워진다.</strong></p>
+<hr>
+<ul><li>막히면 → <a class="xref" href="ch-13-actorchannel-replicate.html">actorchannel-replicate</a> (채널이 봉투를 싸는 입구), <a class="xref" href="ch-44-netguid-object-refs.html">netguid-object-refs</a> (동적=번호 / 정적=경로, 그 NetGUID 이야기)</li><li>같이 보면 → <a class="xref" href="ch-24-relevancy.html">relevancy</a> (채널이 닫히는 가장 흔한 이유), <a class="xref" href="ch-26-dormancy.html">dormancy</a> (채널이 닫혀도 액터가 사는 유일한 경우)</li><li>다음 → <a class="xref" href="ch-46-network-prediction-mover.html">network-prediction-mover</a> (스폰된 액터를 어떻게 부드럽게 움직일 것인가)</li></ul></div><nav class="booknav"><a href="ch-44-netguid-object-refs.html"><span class="lbl">← 이전</span>NetGUID — 오브젝트 참조를 어떻게 주고받나</a><a class="nx" href="ch-46-network-prediction-mover.html"><span class="lbl">다음 →</span>NetworkPrediction / Mover — 차세대 이동 예측</a></nav></div><script src="/MSH_Portfolio/study/notes.js"></script></body></html>

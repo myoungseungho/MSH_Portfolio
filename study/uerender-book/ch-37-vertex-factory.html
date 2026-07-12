@@ -1,0 +1,513 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Vertex Factory — 같은 머티리얼이 스켈레탈·인스턴스·Nanite에서 다르게 도는 이유 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>Vertex Factory — 같은 머티리얼이 스켈레탈·인스턴스·Nanite에서 다르게 도는 이유</h1><p>언리얼 렌더링 · 37 / 42</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "하나의 머티리얼이 정적 메시·스켈레탈 메시·인스턴스 1000개·Nanite에서 전부 도는 이유"와, "언리얼 셰이더가 <strong>VertexFactory × Material × Pass</strong> 세 축으로 갈라진다"는 게 잡힌다.</div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 정점 하나가 GPU에 도착하기까지</strong><br>&bull;&nbsp;<strong>정점(vertex) = 모서리 점 하나의 숫자 묶음</strong>: 위치 세 개(x, y, z), 표면이 바라보는 방향, 텍스처 좌표, 색… 이런 값들이 한 점에 붙어 있어.<br>&bull;&nbsp;<strong>버텍스 버퍼 = 그 숫자를 죽 늘어놓은 목록칸</strong>: 점 1의 값들, 점 2의 값들… 이렇게 쌓여 있어. GPU는 이 목록칸을 읽어서 정점 셰이더에 한 개씩 밀어 넣어.<br>&bull;&nbsp;<strong>문제는 "어디부터 어디까지가 위치냐"</strong>: 목록칸은 그냥 바이트 덩어리야. 몇 바이트째부터 위치고, 몇 바이트째부터 UV인지 누군가 GPU에게 알려줘야 해. 그 설명서가 DirectX에서 말하는 <strong>Input Layout</strong>이야.<br>이게 잡히면 아래 "정점을 어떻게 가져올지를 누가 책임지나" 이야기가 얹힌다.</div></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>머티리얼 에디터에서 "빨간 금속"을 하나 만들었다고 하자. BaseColor는 빨강, Metallic은 1, Roughness는 0.2. 앞 장 <a class="xref" href="ch-36-material-system.html">material-system</a>에서 봤듯이 이 노드 그래프는 결국 HLSL 코드 조각으로 번역돼.</p>
+<p>이제 이 머티리얼을 세 군데에 붙여보자.</p>
+<ul><li>바닥에 놓인 <strong>정적 메시</strong> 상자 하나</li><li>뼈가 68개 달린 <strong>스켈레탈 메시</strong> 캐릭터의 갑옷</li><li>숲에 흩뿌린 <strong>인스턴스 1000개</strong>짜리 바위</li></ul>
+<p>머티리얼은 하나야. 그런데 <strong>정점을 GPU로 밀어 넣는 방법은 셋 다 완전히 달라.</strong></p>
+<p>정적 메시는 버텍스 버퍼에서 위치를 그냥 읽으면 돼. 스켈레탈 메시는 위치를 읽고 나서 <strong>뼈 4개의 행렬을 가중치로 섞어</strong> 곱해야 진짜 위치가 나와. 인스턴스 1000개는 정점은 하나뿐인데 <strong>인스턴스 번호마다 다른 변환 행렬</strong>을 찾아 곱해야 해. Nanite는 아예 버텍스 버퍼를 안 쓰고, 압축된 클러스터 페이지에서 정점을 직접 뜯어낸다.</p>
+<p>여기서 진짜 질문이 나와. <strong>그럼 "빨간 금속" 머티리얼 코드는 몇 벌이 필요하지?</strong></p>
+<p>순진하게 생각하면 4벌이야. 스태틱용 빨간금속, 스키닝용 빨간금속, 인스턴스용 빨간금속, Nanite용 빨간금속. 아티스트가 머티리얼 하나 만들 때마다 프로그래머가 정점 로딩 코드를 네 번 복붙해야 한다는 뜻이지. 그리고 새 메시 타입(스플라인 메시, 랜드스케이프, 파티클, 헤어…)이 늘어날 때마다 <strong>기존 머티리얼 전부를 다시 손봐야</strong> 해.</p>
+<p>이건 못 버텨. 언리얼도 같은 문제를 만났고, 답이 <strong>Vertex Factory</strong>야. "정점을 어떻게 가져올지"만 따로 떼서 갈아끼울 수 있는 부품으로 만든 거야. 머티리얼은 그 부품이 채워준 값만 읽고, 자기는 색깔 계산에만 집중한다.</p>
+<p>왜 지금 배우냐면 순서가 딱 여기야. 앞 장 <a class="xref" href="ch-36-material-system.html">material-system</a>에서 "머티리얼 그래프가 HLSL이 된다"까지 봤어. 그런데 그 HLSL은 <code>정점 위치</code>를 어디서 받아오는지 스스로 모른다. 그 빈칸을 채우는 게 이번 장이야. 그리고 <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a>에서 "옵션이 곱셈으로 폭발한다"고 배웠지? 그 곱셈의 <strong>가장 큰 항이 바로 VF</strong>야. 마지막으로 <a class="xref" href="ch-17-mesh-draw-command.html">mesh-draw-command</a>에서 그냥 지나쳤던 주석 한 줄 — "vertex factories that support it" — 이 장 끝에서 드디어 말이 된다.</p>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 촬영장의 소품 반입 담당</h2>
+<p>영화 촬영장을 생각해보자. 감독이 이번 컷의 <strong>연출 지시서</strong>를 하나 썼어.</p>
+<p>"이 물체는 빨갛게, 금속처럼 반짝이게, 표면은 매끈하게 찍는다."</p>
+<p>이 지시서가 <strong>머티리얼</strong>이야. 그런데 지시서 어디에도 "그 물체를 어떻게 세트장에 들여오는지"는 안 적혀 있어. 왜냐면 그건 감독 일이 아니거든.</p>
+<p>세트장에 물건을 들이는 건 <strong>소품 반입 담당</strong>이 한다. 그리고 물건 종류마다 반입 방법이 완전히 달라.</p>
+<ul><li><strong>고정 소품 담당</strong>: 상자는 그냥 지게차로 들어서 자리에 놓는다. (LocalVertexFactory)</li><li><strong>배우 담당</strong>: 배우는 못 들어. 뼈대(관절)를 잡고 포즈를 만들어야 그 자리에 선다. (GPUSkinVertexFactory)</li><li><strong>대량 반입 담당</strong>: 똑같은 나무 1000그루를 한 대의 트럭에 싣고 와서, 좌표 목록 보고 하나씩 꽂는다. (InstancedStaticMeshVertexFactory)</li><li><strong>압축 화물 담당</strong>: 산 하나를 통째로 압축 포장해서 들여온 다음, 카메라에서 보이는 조각만 그 자리에서 압축을 푼다. (Nanite)</li></ul>
+<p>핵심은 이거야. <strong>감독의 연출 지시서는 네 경우 모두 똑같다.</strong> 물체가 지게차로 왔든 배우가 걸어왔든, 감독은 "빨갛게, 금속처럼"만 말하면 돼.</p>
+<p>Vertex Factory가 바로 이 소품 반입 담당이야. 반입 방법만 책임지고, 색깔은 안 건드려. 그리고 촬영이 시작되면 "그래서 이 물체가 지금 어디에, 어느 방향으로 서 있는지"를 감독에게 <strong>정해진 양식의 종이 한 장</strong>으로 넘겨준다. 감독은 그 종이만 읽고 색을 계산해.</p>
+<p>그 종이가 <code>FMaterialVertexParameters</code>고, 종이를 채워 넘기는 함수가 <code>GetMaterialVertexParameters</code>야. 이번 장은 이 계약서를 읽는다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Vertex Factory</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 정점 셰이더 하나에 "버텍스 버퍼에서 위치를 읽고 → 월드 행렬을 곱하고 → 머티리얼 색을 계산한다"를 쭉 이어서 쓰면 돼. 작은 데모면 이게 제일 짧아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 스켈레탈 메시가 들어오는 순간 "위치를 읽는 부분"만 뼈 스키닝으로 바뀌어야 해. 그런데 그 뒤의 머티리얼 계산은 한 글자도 안 바뀌어. 이걸 복붙하면 머티리얼 수 × 메시 타입 수만큼 셰이더 소스를 손으로 관리하게 된다. 메시 타입 하나 늘 때마다 기존 머티리얼 전부를 다시 짜야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: "정점을 어떻게 가져오냐"를 <strong>갈아끼울 수 있는 부품</strong>으로 떼내야 해. 그게 Vertex Factory야. 머티리얼은 부품이 채워준 값만 읽고, 부품이 뭐였는지는 알 필요도 없다.</div>
+</div>
+<div class="conversation"><h2>1. ⭐ 언리얼 셰이더의 3축 — VertexFactory × Material × Pass</h2>
+<p>여기가 이번 장에서 제일 중요한 그림이야. 다른 건 다 잊어도 이건 들고 가.</p>
+<p>언리얼에서 실제로 컴파일되는 셰이더 한 벌은 <strong>세 가지가 만나서</strong> 결정된다.</p>
+<div class="info-box"><h4>⭐ 셰이더 한 벌 = VertexFactory × Material × Pass</h4>
+<p><strong>VertexFactory</strong> — 정점을 <em>어떻게 가져올지</em>. (스태틱? 스키닝? 인스턴스? Nanite?)</p>
+<p><strong>Material</strong> — 그 표면이 <em>무슨 색·무슨 성질인지</em>. (빨간 금속? 유리? 물?)</p>
+<p><strong>Pass</strong> — 그 결과를 <em>어디에 쓸지</em>. (BasePass? DepthPass? 그림자? 벨로시티?)</p>
+<p>이 셋은 서로 <strong>독립</strong>이야. 그래서 조합 수는 더하기가 아니라 <strong>곱하기</strong>가 된다.</p></div>
+<p>왜 이게 셰이더 순열 폭발의 진짜 원인일까? <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a>에서는 <code>ALPHA</code>, <code>TONEMAP</code> 같은 bool 도장이 곱해진다고 배웠어. 그건 셰이더 <strong>하나 안의</strong> 옵션이었지.</p>
+<p>그런데 머티리얼 셰이더는 축이 하나 더 크다. 프로젝트에 머티리얼이 300개 있고, VF가 15종이고, 메시 패스가 10개면:</p>
+<div class="code-block">머티리얼 300
+      ×
+VF        15   (Local, GPUSkin, InstancedStaticMesh, Nanite, Spline,
+               Landscape, Particle, Hair, Water, ...)
+      ×
+Pass      10   (Depth, BasePass, Velocity, ShadowDepth, VSM, Lumen, ...)
+      ×
+(그 안의 bool 도장들: 순열 차원)
+─────────────────────────────
+= 셰이더 수만 벌</div>
+<p>실제로는 이 곱셈이 그대로 다 컴파일되진 않아. 뒤에 나올 <code>ShouldCompilePermutation</code>과 VF 플래그가 대부분을 잘라내거든. 하지만 <strong>왜 언리얼 프로젝트에서 "Compiling Shaders 12000"이 뜨는지</strong>, 그 12000이라는 숫자가 어디서 나오는지는 이 그림 하나로 설명된다.</p>
+<p>그리고 반대로 생각해봐. <strong>이 3축 구조가 없었다면</strong> 셰이더 수는 줄었을까? 아니. 프로그래머가 손으로 그 조합을 다 짜야 했을 뿐이야. 3축은 폭발을 만든 게 아니라, <strong>어차피 필요했던 폭발을 자동으로 생성해주는 구조</strong>야. 아티스트가 머티리얼 하나 추가하면 15 × 10벌이 자동으로 생기는 대신, 프로그래머가 150번 복붙할 일이 없어진 거지.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 셰이더 한 벌은 (정점 가져오는 법) × (색 계산법) × (어디에 쓸지)로 정해진다. 이 셋이 독립이라서 조합이 곱셈으로 터지고, 그게 순열 폭발의 뿌리야. VF는 그 세 축 중 <strong>첫 번째 축</strong>이고, 이번 장이 다루는 게 그거야.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — "독립적인 축"이 왜 곱셈이 되나</strong><br>&bull;&nbsp;<strong>축이 하나면 그냥 개수</strong>: 머티리얼만 300개면 300벌.<br>&bull;&nbsp;<strong>축이 둘이면 표가 된다</strong>: 가로에 머티리얼 300, 세로에 VF 15를 놓으면 칸이 300 × 15 = 4500개. 각 칸이 실제 셰이더 한 벌이야.<br>&bull;&nbsp;<strong>축이 셋이면 상자가 된다</strong>: 거기에 Pass 10을 깊이로 쌓으면 4500 × 10 = 45000칸.<br>&bull;&nbsp;<strong>"독립"이라는 게 핵심</strong>: VF를 뭘 쓰든 머티리얼 종류가 줄지 않고, 머티리얼이 뭐든 Pass 종류가 줄지 않아. 그래서 서로 나눠 먹지 않고 그대로 곱해진다.<br>이게 잡히면 아래 "VF 하나 추가 = 셰이더 수천 벌 추가" 얘기가 얹힌다.</div>
+</div>
+<div class="conversation"><h2>2. <code>FVertexFactoryType</code> — VF들의 등록 장부</h2>
+<p>먼저 C++ 쪽이야. 언리얼은 VF 종류마다 <strong>장부에 이름을 올린다</strong>. 그 장부 항목이 <code>FVertexFactoryType</code>이야.</p>
+<p>왜 장부가 필요할까? 셰이더 컴파일러가 "이 머티리얼을 어떤 VF들로 구워야 하지?"를 알아야 하거든. 그리고 각 VF가 뭘 지원하는지(스태틱 라이팅? 레이트레이싱? <strong>MeshDrawCommand 캐싱?</strong>)도 물어봐야 해. 그 질문에 답하는 게 장부야.</p>
+<p><strong><code>VertexFactory.h:135</code></strong></p>
+<div class="code-block">enum class EVertexFactoryFlags : uint32
+{
+	None                                  = 0u,
+	UsedWithMaterials                     = 1u &lt;&lt; 1,
+	SupportsStaticLighting                = 1u &lt;&lt; 2,
+	SupportsDynamicLighting               = 1u &lt;&lt; 3,
+	SupportsPrecisePrevWorldPos           = 1u &lt;&lt; 4,
+	SupportsPositionOnly                  = 1u &lt;&lt; 5,
+	SupportsCachingMeshDrawCommands       = 1u &lt;&lt; 6,
+	SupportsPrimitiveIdStream             = 1u &lt;&lt; 7,
+	SupportsNaniteRendering               = 1u &lt;&lt; 8,
+	SupportsRayTracing                    = 1u &lt;&lt; 9,
+	SupportsRayTracingDynamicGeometry     = 1u &lt;&lt; 10,
+	SupportsRayTracingProceduralPrimitive = 1u &lt;&lt; 11,
+	SupportsLightmapBaking                = 1u &lt;&lt; 12,
+	SupportsPSOPrecaching                 = 1u &lt;&lt; 13,
+	SupportsManualVertexFetch             = 1u &lt;&lt; 14,
+	DoesNotSupportNullPixelShader         = 1u &lt;&lt; 15,
+	SupportsGPUSkinPassThrough            = 1u &lt;&lt; 16,
+	SupportsComputeShading                = 1u &lt;&lt; 17,
+	SupportsLumenMeshCards                = 1u &lt;&lt; 18,
+	SupportsLandscape                     = 1u &lt;&lt; 19,
+	IncludesFwdShader                     = 1u &lt;&lt; 20,
+	SupportsTriangleSorting               = 1u &lt;&lt; 21,
+};
+ENUM_CLASS_FLAGS(EVertexFactoryFlags);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — VF 능력 플래그<br>&bull;&nbsp;<strong><code>enum class</code></strong> = 이름 붙인 상수 묶음. 여기서는 "이 VF가 할 수 있는 일" 목록이야.<br>&bull;&nbsp;<strong><code>1u &lt;&lt; 6</code></strong> = 숫자 1을 왼쪽으로 6칸 민다는 뜻. 결과는 <code>64</code>. 이렇게 하면 플래그마다 <strong>서로 겹치지 않는 비트 한 칸</strong>을 차지해서, 여러 개를 <code>|</code>로 합쳐 하나의 정수에 담을 수 있어. 지금은 22칸까지 찼다.<br>&bull;&nbsp;<strong><code>ENUM_CLASS_FLAGS(...)</code></strong> = 이 <code>enum class</code>에 <code>|</code>, <code>&amp;</code> 같은 비트 연산자를 쓸 수 있게 열어주는 언리얼 매크로. 이게 없으면 <code>enum class</code>는 비트로 못 합쳐.<br>&bull;&nbsp;<strong><code>UsedWithMaterials</code></strong> = 이 VF가 머티리얼 셰이더와 짝지어질 수 있다는 뜻. 즉 3축의 첫 축으로 참여한다.<br>&bull;&nbsp;<strong><code>SupportsPositionOnly</code></strong> = 위치만 필요한 패스(뎁스 프리패스 등)에서 가벼운 경로를 쓸 수 있다.<br>&bull;&nbsp;<strong><code>SupportsCachingMeshDrawCommands</code></strong> = ⭐ 이 VF로 그리는 메시는 draw 주문표를 <strong>미리 구워둘 수 있다</strong>. <a class="xref" href="ch-17-mesh-draw-command.html">mesh-draw-command</a>의 그 주석이 바로 이 플래그야.<br>&bull;&nbsp;<strong><code>SupportsPrimitiveIdStream</code></strong> = 셰이더가 "나는 지금 몇 번 프리미티브를 그리는 중" 을 스트림으로 받을 수 있다. 동적 인스턴싱의 전제야.<br>&bull;&nbsp;<strong><code>SupportsManualVertexFetch</code></strong> = Input Layout 없이, 셰이더가 버퍼에서 정점을 <strong>직접 손으로 읽어간다</strong>는 뜻.<br>&bull;&nbsp;<strong><code>SupportsGPUSkinPassThrough</code></strong> = 스키닝 결과를 <strong>이미 계산된 버퍼로 받아서</strong> 그냥 통과시킬 수 있다는 뜻. 스킨 캐시가 미리 구워둔 정점을 재활용하는 길이야.<br>&bull;&nbsp;<strong>플래그 목록이 곧 협상 카드</strong> = 렌더러가 최적화 경로(캐싱·인스턴싱·레이트레이싱·Lumen)를 태울지 말지를 <strong>전부 이 목록에 물어봐서</strong> 정한다.</div>
+<p>그리고 VF 클래스를 장부에 실제로 올리는 건 매크로 한 줄이야. <code>LocalVertexFactory</code>는 이렇게 등록한다.</p>
+<p><strong><code>LocalVertexFactory.cpp:577</code></strong></p>
+<div class="code-block">IMPLEMENT_VERTEX_FACTORY_TYPE(FLocalVertexFactory,"/Engine/Private/LocalVertexFactory.ush",
+	  EVertexFactoryFlags::UsedWithMaterials
+	| EVertexFactoryFlags::SupportsStaticLighting
+	| EVertexFactoryFlags::SupportsDynamicLighting
+	| EVertexFactoryFlags::SupportsPrecisePrevWorldPos
+	| EVertexFactoryFlags::SupportsPositionOnly
+	| EVertexFactoryFlags::SupportsCachingMeshDrawCommands
+	| EVertexFactoryFlags::SupportsPrimitiveIdStream
+	| EVertexFactoryFlags::SupportsRayTracing
+	| EVertexFactoryFlags::SupportsRayTracingDynamicGeometry
+	| EVertexFactoryFlags::SupportsLightmapBaking
+	| EVertexFactoryFlags::SupportsManualVertexFetch
+	| EVertexFactoryFlags::SupportsPSOPrecaching
+	| EVertexFactoryFlags::SupportsGPUSkinPassThrough
+	| EVertexFactoryFlags::SupportsLumenMeshCards
+	| EVertexFactoryFlags::SupportsTriangleSorting
+);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 장부 등록 한 줄<br>&bull;&nbsp;<strong><code>IMPLEMENT_VERTEX_FACTORY_TYPE(...)</code></strong> = 이 VF 클래스를 전역 VF 장부에 올리는 매크로야. 프로그램 시작 시 자동으로 등록된다.<br>&bull;&nbsp;<strong><code>FLocalVertexFactory</code></strong> = 등록할 C++ 클래스 이름. 정적 메시가 쓰는 기본 VF야.<br>&bull;&nbsp;<strong><code>"/Engine/Private/LocalVertexFactory.ush"</code></strong> = ⭐ 이 VF의 <strong>셰이더 파일 경로</strong>. C++ 클래스와 <code>.ush</code> 파일이 여기서 짝지어진다.<br>&bull;&nbsp;<strong><code>|</code></strong> = 비트 OR. 플래그 여러 개를 하나의 정수로 합친다. "이것도 되고 저것도 된다"를 한 값에 담는 방법이야.<br>&bull;&nbsp;<strong>플래그가 15개나 붙어 있다</strong> = ⭐ 정적 메시용 <code>FLocalVertexFactory</code>는 <strong>거의 모든 능력을 신고한 우등생</strong>이야. 그래서 렌더러의 최적화란 최적화는 다 태울 수 있다. 아래에서 볼 스키닝 VF와 대조되는 지점이야.<br>&bull;&nbsp;<strong><code>SupportsPSOPrecaching</code></strong> = 게임 시작 전에 이 VF의 PSO를 미리 만들어둘 수 있다는 뜻이야.<br>&bull;&nbsp;<strong><code>SupportsGPUSkinPassThrough</code></strong> = Local VF인데 스키닝을 지원한다고? — 스킨 캐시가 <strong>이미 스키닝을 끝낸 정점 버퍼</strong>를 넘겨주면, Local VF가 그걸 그냥 정적 메시처럼 읽는다는 뜻이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>IMPLEMENT_VERTEX_FACTORY_TYPE</code>은 세 가지를 한꺼번에 묶는다. <strong>(1) C++ 클래스</strong>(<code>FLocalVertexFactory</code>) → <strong>(2) 셰이더 파일</strong>(<code>LocalVertexFactory.ush</code>) → <strong>(3) 능력 플래그 목록</strong>. 이 한 줄이 있어야 셰이더 컴파일러가 "머티리얼 × 이 VF" 조합을 만들 수 있고, 렌더러가 "이 VF는 draw 주문표 캐싱 되나?"를 물어볼 수 있어.</div>
+<p>서버 감각으로 보면 이건 <strong>패킷 핸들러 등록 테이블</strong>이랑 똑같아. <code>REGISTER_HANDLER(CM_ATTACK, HandleAttack)</code> 한 줄로 "패킷 번호 → 처리 함수 → 이 핸들러의 권한 플래그"를 묶어두잖아. 런타임에 디스패처는 그 테이블만 보고 돌지, 함수 이름을 직접 알 필요가 없어. VF 장부도 똑같이 돈다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — VF 능력 플래그</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: VF 종류를 알면 렌더러가 <code>if (VFName == "GPUSkin") ...</code>처럼 이름으로 분기하면 될 것 같아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: VF가 15종이 넘고, 플러그인이 자기 VF를 새로 추가하기도 해. 렌더러 코드 곳곳에 VF 이름 <code>if</code>가 흩어지면, 새 VF를 하나 추가할 때 <strong>렌더러 전체를 뒤져서 분기를 심어야</strong> 해. 하나라도 빼먹으면 조용히 렌더링이 깨져.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: VF가 자기 능력을 <strong>스스로 신고</strong>하게 하자. 렌더러는 "이 VF, 캐싱 되나요?"라고 <strong>능력만 물어본다</strong>. 이름은 몰라도 돼. 그게 <code>EVertexFactoryFlags</code>야.</div>
+</div>
+<div class="conversation"><h2>3. 인터페이스 규약 — <code>/Engine/Generated/VertexFactory.ush</code></h2>
+<p>이제 셰이더 쪽이야. 여기서 진짜 트릭이 나온다.</p>
+<p>BasePass 정점 셰이더를 열어보면, 정점을 읽는 코드가 <strong>아예 없어</strong>. 대신 이런 <code>#include</code>가 있어.</p>
+<p><strong><code>BasePassVertexCommon.ush:15</code></strong></p>
+<div class="code-block">#include "/Engine/Generated/Material.ush"
+#include "BasePassCommon.ush"
+#include "/Engine/Generated/VertexFactory.ush"</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 생성되는 가짜 경로<br>&bull;&nbsp;<strong><code>#include</code></strong> = 컴파일할 때 저 파일 내용을 여기에 통째로 붙여 넣으라는 뜻이야.<br>&bull;&nbsp;<strong><code>/Engine/Generated/</code></strong> = ⭐ 디스크에 <strong>실제로 존재하지 않는 가상 경로</strong>야. 셰이더 컴파일할 때 언리얼이 그 자리에 다른 파일 내용을 꽂아 넣는다.<br>&bull;&nbsp;<strong><code>Generated/Material.ush</code></strong> = 지금 컴파일 중인 <strong>머티리얼</strong>의 HLSL로 치환된다. (빨간 금속이면 빨간 금속 코드)<br>&bull;&nbsp;<strong><code>Generated/VertexFactory.ush</code></strong> = 지금 컴파일 중인 <strong>VF</strong>의 <code>.ush</code>로 치환된다. 스태틱이면 <code>LocalVertexFactory.ush</code>, 스키닝이면 <code>GpuSkinVertexFactory.ush</code>.</div>
+<p>이게 3축 구조의 심장이야. <strong>패스 셰이더는 콘센트 두 개만 뚫어놓는다.</strong> 하나는 머티리얼 구멍, 하나는 VF 구멍. 컴파일할 때 그 구멍에 무슨 플러그가 꽂히느냐에 따라 결과 셰이더가 달라져.</p>
+<p>같은 <code>BasePassVertexShader.usf</code> 한 파일이,</p>
+<ul><li>VF 구멍에 <code>LocalVertexFactory.ush</code>가 꽂히면 → 정적 메시용 BasePass VS</li><li>VF 구멍에 <code>GpuSkinVertexFactory.ush</code>가 꽂히면 → 스켈레탈용 BasePass VS</li></ul>
+<p>로 컴파일되는 거야. 소스는 한 벌, 결과는 여러 벌. <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a>의 김밥 비유로 치면, VF는 <strong>도장이 아니라 아예 레시피 페이지 한 장이 통째로 갈리는</strong> 수준의 축이야.</p>
+<h3>그럼 아무 파일이나 꽂아도 되나? — 계약서가 있다</h3>
+<p>안 되지. 패스 셰이더는 꽂힌 파일 안에 <strong>정해진 이름의 함수와 구조체가 반드시 있다고 믿고</strong> 코드를 짜놨어. 그 약속 목록이 VF 인터페이스 규약이야. 모든 VF의 <code>.ush</code>는 최소한 이걸 갖춰야 해.</p>
+<div class="code-block">// 모든 VF .ush가 반드시 제공해야 하는 것들 (인터페이스 규약)
+
+struct FVertexFactoryInput              // 이 VF가 정점 셰이더 입구에서 받는 것
+struct FVertexFactoryIntermediates      // 계산 중간값 (예: 스키닝 행렬)
+struct FVertexFactoryInterpolantsVSToPS // ⭐ VS가 PS에게 넘길 운송장
+
+FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput Input);
+
+float4 VertexFactoryGetWorldPosition(FVertexFactoryInput Input,
+                                     FVertexFactoryIntermediates Intermediates);
+
+FMaterialVertexParameters GetMaterialVertexParameters(...);  // ⭐ 정점용 재료 상자
+FMaterialPixelParameters  GetMaterialPixelParameters(...);   // ⭐ 픽셀용 재료 상자
+
+FVertexFactoryInterpolantsVSToPS VertexFactoryGetInterpolantsVSToPS(...);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — VF 계약서 항목<br>&bull;&nbsp;<strong><code>FVertexFactoryInput</code></strong> = 이 VF가 GPU 입구에서 받는 정점 데이터 모양. <strong>VF마다 다르다.</strong> 스태틱은 위치·노멀·UV, 스키닝은 거기에 <code>BlendIndices</code>(뼈 번호)·<code>BlendWeights</code>(가중치)가 더 붙어.<br>&bull;&nbsp;<strong><code>FVertexFactoryIntermediates</code></strong> = 정점 하나 처리하면서 만든 중간 계산값 보관함. 스키닝 VF면 여기 뼈 혼합 행렬이 들어있어.<br>&bull;&nbsp;<strong><code>VertexFactoryGetWorldPosition</code></strong> = ⭐ "이 정점의 진짜 월드 위치는?"에 답하는 함수. <strong>VF마다 속이 완전히 다른 게 바로 여기야.</strong><br>&bull;&nbsp;<strong><code>GetMaterialVertexParameters</code></strong> = ⭐ 머티리얼이 읽을 재료 상자를 채워서 넘긴다. 이게 VF와 머티리얼의 <strong>유일한 접점</strong>이야.<br>&bull;&nbsp;<strong><code>FVertexFactoryInterpolantsVSToPS</code></strong> = ⭐ 정점 셰이더가 픽셀 셰이더로 넘기는 운송장. UV, 탄젠트, 버텍스 컬러 같은 게 실려서 삼각형 내부로 <strong>보간(interpolate)</strong>돼 넘어가.<br>&bull;&nbsp;<strong><code>GetMaterialPixelParameters</code></strong> = 그 운송장을 픽셀 쪽에서 다시 풀어서 머티리얼용 재료 상자로 만든다. <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a> 1번 코드에서 봤던 그 함수야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>BasePassVertexShader.usf</code>는 <code>/Engine/Generated/VertexFactory.ush</code>라는 <strong>빈 콘센트</strong>를 뚫어놓는다 → 컴파일할 때 그 자리에 실제 VF의 <code>.ush</code>가 꽂힌다 → 꽂힌 파일은 <code>VertexFactoryGetWorldPosition</code>, <code>GetMaterialVertexParameters</code> 같은 <strong>약속된 이름</strong>을 반드시 제공한다 → 패스 셰이더는 그 이름만 부르면 되니까 VF가 뭔지 몰라도 된다.</div>
+<p><a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>를 다시 떠올려봐. <code>FPixelShaderInOut_MainPS</code>의 첫 인자가 뭐였지? <code>FVertexFactoryInterpolantsVSToPS Interpolants</code>였어. 그때는 그냥 지나갔지만, 이제 그 타입이 <strong>VF마다 내용물이 다른 구조체</strong>라는 게 보일 거야. BasePass 픽셀 셰이더는 그걸 열어보지 않고 <code>GetMaterialPixelParameters(Interpolants, ...)</code>에 통째로 넘겨. 안에 뭐가 들었는지는 VF가 알아서 풀어준다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — <code>FMaterialVertexParameters</code> (재료 상자)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 머티리얼 HLSL이 필요한 값을 직접 읽으면 되지. 월드 위치가 필요하면 <code>Input.Position</code>에 <code>LocalToWorld</code>를 곱하면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 스켈레탈 메시에서는 <code>Input.Position</code>이 <strong>진짜 위치가 아니야</strong>. 뼈 행렬을 섞어 곱하기 <em>전</em>의 원본 위치거든. Nanite에서는 <code>Input.Position</code>이라는 것 자체가 존재하지도 않아. 머티리얼이 정점 버퍼를 직접 만지는 순간 VF 갈아끼우기가 무너진다.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 머티리얼은 <strong>절대 원본 정점을 못 만지게</strong> 막고, VF가 이미 다 계산해서 채워준 <strong>재료 상자</strong>만 읽게 하자. 그게 <code>FMaterialVertexParameters</code> / <code>FMaterialPixelParameters</code>야. 상자를 채우는 책임이 VF, 상자를 읽는 권한만 머티리얼.</div>
+</div>
+<div class="conversation"><h2>4. 같은 함수, 완전히 다른 속 — VF 4종 비교</h2>
+<p>이제 계약서의 같은 칸을 VF들이 각자 어떻게 채우는지 보자. 특히 <strong>"이 정점의 월드 위치는?"</strong> 이 한 질문에 대한 답이 얼마나 다른지 봐.</p>
+<h3>4-1. LocalVertexFactory — 그냥 행렬 한 번 곱한다</h3>
+<p>정적 메시의 기본 VF야. 버텍스 버퍼에서 위치를 읽고, 오브젝트의 <code>LocalToWorld</code> 행렬을 곱하면 끝. 뼈도 없고 인스턴스별 변환도 없어. 가장 단순한 소품 반입이야.</p>
+<p>중요한 건 <code>GetMaterialVertexParameters</code>가 머티리얼 재료 상자를 채우는 부분이야.</p>
+<p><strong><code>LocalVertexFactory.ush:617</code></strong> (앞부분)</p>
+<div class="code-block">/** Converts from vertex factory specific input to a FMaterialVertexParameters, which is used by vertex shader material inputs. */
+FMaterialVertexParameters GetMaterialVertexParameters(
+	FVertexFactoryInput Input,
+	FVertexFactoryIntermediates Intermediates,
+	float3 WorldPosition,
+	half3x3 TangentToLocal,
+	bool bIsPreviousFrame = false)
+{
+	FMaterialVertexParameters Result = MakeInitializedMaterialVertexParameters();
+	Result.SceneData = Intermediates.Common.SceneData;
+	// FIXME: just for compatibility with assets that use custom HLSL expressions, will be removed once we fix up all these assets
+	Result.PrimitiveId = Intermediates.Common.SceneData.PrimitiveId;
+
+	FPrimitiveSceneData PrimitiveData = GetPrimitiveData(Intermediates);
+	FInstanceSceneData InstanceData = GetInstanceData(Intermediates);
+
+	Result.WorldPosition = WorldPosition;</div>
+<p>그리고 같은 함수의 중간. <strong><code>PreSkinnedPosition</code> 칸을 채우는 부분</strong>이 이번 장의 핵심이야.</p>
+<p><strong><code>LocalVertexFactory.ush:708</code></strong></p>
+<div class="code-block">	Result.VertexColor = Intermediates.Color;
+
+	// does not handle instancing!
+	Result.TangentToWorld = Intermediates.TangentToWorld;
+
+	Result.bEvaluateWorldPositionOffset = Intermediates.bEvaluateWorldPositionOffset;
+
+	Result.PreSkinnedPosition = Intermediates.PreSkinPosition.xyz;
+#if SUPPORT_GPUSKIN_PASSTHROUGH
+	if (IsGPUSkinPassThrough())
+	{
+		Result.PreSkinnedNormal = GPUSkinPassThroughVFLooseParameters.PreSkinnedTangentBuffer[Input.VertexId * 2 + 1].xyz;
+	}
+	else
+#endif
+	{
+		Result.PreSkinnedNormal = TangentToLocal[2]; //TangentBias(Input.TangentZ.xyz);
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 재료 상자 채우기<br>&bull;&nbsp;<strong><code>MakeInitializedMaterialVertexParameters()</code></strong> = 빈 재료 상자를 0으로 초기화해서 만든다. <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>의 <code>(FGBufferData)0</code>과 같은 습관이야.<br>&bull;&nbsp;<strong><code>half3x3</code></strong> = 3×3 행렬. 방향(탄젠트/노멀)을 다른 공간으로 돌릴 때 쓴다.<br>&bull;&nbsp;<strong><code>Result.WorldPosition = WorldPosition;</code></strong> = ⭐ 머티리얼 그래프의 <code>WorldPosition</code> 노드가 읽는 바로 그 칸. <strong>VF가 이미 계산해서 인자로 받아온 값</strong>을 상자에 옮겨 적을 뿐이야.<br>&bull;&nbsp;<strong><code>Intermediates.Common.SceneData</code></strong> = 이 정점이 속한 오브젝트/인스턴스의 GPU Scene 정보. 다음 장 <a class="xref" href="ch-38-gpu-scene.html">gpu-scene</a>에서 다룬다.<br>&bull;&nbsp;<strong><code>TangentToWorld</code></strong> = 노멀맵 좌표계를 월드 방향으로 바꾸는 행렬.<br>&bull;&nbsp;<strong><code>PreSkinnedPosition</code></strong> = 스키닝 <em>전</em>의 위치. 이름이 있는 이유는 <strong>스켈레탈에서는 이게 달라지기 때문</strong>이야.<br>&bull;&nbsp;<strong><code>// FIXME:</code> / <code>// does not handle instancing!</code></strong> = 엔진 코드에 진짜로 달려 있는 주석이야. <strong>실제 소스는 이렇게 미완인 구석이 섞여 있다</strong>는 것도 같이 봐둬.<br>&bull;&nbsp;<strong><code>#if SUPPORT_GPUSKIN_PASSTHROUGH</code></strong> = 스킨 캐시가 미리 스키닝을 끝낸 경우의 갈래. 이때는 <code>PreSkinnedNormal</code>을 <strong>별도 버퍼에서</strong> 읽어와야 해.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> Local VF의 재료 상자 채우기는 거의 <strong>단순 복사</strong>야. <code>Result.WorldPosition = WorldPosition;</code> — 이미 계산된 값을 상자 칸에 옮겨 담는다. 그런데도 이 함수가 존재해야 하는 이유는, <strong>머티리얼이 상자만 읽도록 강제하기 위해서</strong>야. 스태틱에서조차 우회로를 열어두면 다른 VF에서 무너지거든. 그리고 <code>PreSkinnedPosition</code> 칸이 <strong>정적 메시 VF에도 이미 있다</strong>는 게 중요해. 계약서 양식은 VF가 뭐든 <strong>똑같아야</strong> 하니까.</div>
+<h3>4-2. GPUSkinVertexFactory — 뼈 4개를 가중치로 섞는다</h3>
+<p>스켈레탈 메시. 여기가 진짜 다르다. 버텍스 버퍼에 위치만 있는 게 아니라, <strong>"이 정점은 몇 번 뼈들에 얼마씩 묶여 있다"</strong>는 정보가 같이 있어.</p>
+<p><strong><code>GpuSkinVertexFactory.ush:510</code></strong></p>
+<div class="code-block">FBoneMatrix CalcBoneMatrix( FVertexFactoryInput Input )
+{
+#if GPUSKIN_UNLIMITED_BONE_INFLUENCE
+	return ComputeBoneMatrixWithUnlimitedInfluences(GPUSkinVF.BoneMatrices, GPUSkinVF.InputWeightStream, GPUSkinVF.InputWeightIndexSize, Input.BlendOffsetCount);
+#else
+	const bool bHasExtraInfluences = GPUSkinVF.NumBoneInfluencesParam &gt; MAX_INFLUENCES_PER_STREAM;
+	FGPUSkinIndexAndWeight In = (FGPUSkinIndexAndWeight)0;
+	In.BlendIndices = Input.BlendIndices;
+	In.BlendWeights = Input.BlendWeights;
+	if (bHasExtraInfluences)
+	{
+		In.BlendIndices2 = Input.BlendIndicesExtra;
+		In.BlendWeights2 = Input.BlendWeightsExtra;
+	}
+	return ComputeBoneMatrixWithLimitedInfluences(GPUSkinVF.BoneMatrices, In, bHasExtraInfluences);
+#endif
+}</div>
+<p>진짜 "가중치로 섞는" 계산은 한 단계 더 들어가야 나와. 공용 헤더에 있다.</p>
+<p><strong><code>GpuSkinCommon.ush:204</code></strong></p>
+<div class="code-block">// Get bone matrix with a bone matrix buffer
+FBoneMatrix ComputeBoneMatrixWithLimitedInfluences(Buffer&lt;float4&gt; InBoneMatrices, FGPUSkinIndexAndWeight In, bool bExtraInfluences = GPUSKIN_USE_EXTRA_INFLUENCES)
+{
+	FBoneMatrix
+	BoneMatrix  = In.BlendWeights.x * InternalGetBoneMatrix(InBoneMatrices, In.BlendIndices.x);
+	BoneMatrix += In.BlendWeights.y * InternalGetBoneMatrix(InBoneMatrices, In.BlendIndices.y);
+#if !GPUSKIN_LIMIT_2BONE_INFLUENCES
+	BoneMatrix += In.BlendWeights.z * InternalGetBoneMatrix(InBoneMatrices, In.BlendIndices.z);
+	BoneMatrix += In.BlendWeights.w * InternalGetBoneMatrix(InBoneMatrices, In.BlendIndices.w);
+	if (bExtraInfluences)
+	{
+		BoneMatrix += In.BlendWeights2.x * InternalGetBoneMatrix(InBoneMatrices, In.BlendIndices2.x);
+		BoneMatrix += In.BlendWeights2.y * InternalGetBoneMatrix(InBoneMatrices, In.BlendIndices2.y);
+		BoneMatrix += In.BlendWeights2.z * InternalGetBoneMatrix(InBoneMatrices, In.BlendIndices2.z);
+		BoneMatrix += In.BlendWeights2.w * InternalGetBoneMatrix(InBoneMatrices, In.BlendIndices2.w);
+	}
+#endif // GPUSKIN_LIMIT_2BONE_INFLUENCES
+	return BoneMatrix;
+}</div>
+<p>그리고 그 섞인 행렬을 원본 위치에 곱하는 곳.</p>
+<p><strong><code>GpuSkinVertexFactory.ush:546</code></strong></p>
+<div class="code-block">/** transform position by weighted sum of skinning matrices */
+float3 SkinPosition( FVertexFactoryInput Input, FVertexFactoryIntermediates Intermediates )
+{
+	float3 Position;
+	if (IsMorphTarget())
+	{
+	#if GPUSKIN_MORPH_BLEND
+		Position = MorphPosition(Input, Intermediates);
+	#endif
+	}
+	else
+	{
+		Position = Intermediates.UnpackedPosition;
+	}
+
+	// Note the use of mul(Matrix,Vector), bone matrices are stored transposed
+	// for tighter packing.
+	Position = mul(Intermediates.BlendMatrix, float4(Position, 1));
+
+	return Position;
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 뼈 스키닝<br>&bull;&nbsp;<strong><code>BlendIndices</code></strong> = 이 정점이 붙어 있는 <strong>뼈 번호 4개</strong>. 예: 팔꿈치 근처 정점이면 (상완뼈, 전완뼈, ...).<br>&bull;&nbsp;<strong><code>BlendWeights</code></strong> = 그 뼈들에 각각 <strong>얼마나 세게 묶여 있는지</strong> 0~1 값 4개. 다 더하면 1이야.<br>&bull;&nbsp;<strong><code>.x .y .z .w</code></strong> = 4칸짜리 값의 첫째, 둘째, 셋째, 넷째 칸. 여기서는 뼈 4개를 하나씩 꺼내는 거야.<br>&bull;&nbsp;<strong><code>InternalGetBoneMatrix(버퍼, 번호)</code></strong> = 그 뼈가 지금 어디로 어떻게 돌아갔는지를 담은 행렬을 버퍼에서 꺼낸다. CPU가 매 프레임 애니메이션 결과로 채워 보낸 값이야.<br>&bull;&nbsp;<strong><code>BoneMatrix += 가중치 * 행렬</code></strong> = ⭐ 뼈들의 변환을 <strong>비율대로 섞은 하나의 행렬</strong>을 만든다. 팔꿈치가 접힐 때 살이 부드럽게 접히는 이유가 이거야.<br>&bull;&nbsp;<strong><code>Buffer&lt;float4&gt; InBoneMatrices</code></strong> = ⭐ 뼈 행렬이 <strong>버퍼(GPU 메모리)로 꽂혀 들어온다</strong>는 게 핵심이야. <strong>매 프레임 새로 채워지는 이 버퍼</strong> 때문에 6절의 "주문표 캐싱 불가"가 나온다.<br>&bull;&nbsp;<strong><code>bExtraInfluences</code> / <code>GPUSKIN_LIMIT_2BONE_INFLUENCES</code></strong> = 뼈 개수는 <strong>4개로 고정이 아니야</strong>. 2개로 줄이거나(모바일), 8개로 늘리거나, 아예 무제한(<code>UnlimitedInfluence</code>) 경로도 있다. 전부 <code>#if</code> 순열이야.<br>&bull;&nbsp;<strong><code>mul(Intermediates.BlendMatrix, float4(Position, 1))</code></strong> = 그 섞인 행렬을 원본 위치에 곱한다. <strong>이제야 진짜 위치가 나온다.</strong> 주석이 말하듯 행렬이 <strong>transposed로 저장</strong>돼 있어서 <code>mul(행렬, 벡터)</code> 순서다.<br>&bull;&nbsp;<strong><code>IsMorphTarget()</code></strong> = 표정 같은 모프 애니메이션이 켜져 있으면, 스키닝 <em>전에</em> 원본 위치부터 이미 변형돼 있다는 뜻.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 스켈레탈 VF에서 <code>Input.Position</code>은 <strong>거짓말</strong>이야. 그건 T포즈 시절의 원본 위치일 뿐이야. 진짜 위치는 <code>CalcBoneMatrix</code> → <code>ComputeBoneMatrixWithLimitedInfluences</code>로 뼈들을 <strong>가중치로 섞어 만든 행렬</strong>(<code>Intermediates.BlendMatrix</code>)을 곱해야(<code>SkinPosition</code>) 나온다. 그래서 <strong>머티리얼이 <code>Input.Position</code>을 직접 읽으면 캐릭터가 T포즈로 굳어버려.</strong> 이게 3번 섹션의 "재료 상자로만 읽어라"가 강제인 이유야.</div>
+<p>이제 <code>PreSkinnedPosition</code>이라는 이름이 왜 있는지 보이지? 스켈레탈에서는 <strong>스키닝 전 위치</strong>와 <strong>스키닝 후 위치</strong>가 다르고, 머티리얼 그래프가 둘 다 필요할 수 있어. (예: 캐릭터가 어떻게 움직이든 몸에 고정된 무늬를 그리고 싶으면 <code>PreSkinned</code>를 써야 해.) VF는 두 칸을 <strong>둘 다 채워서</strong> 넘긴다.</p>
+<h3>4-3. InstancedStaticMeshVertexFactory — 정점은 하나, 변환은 1000개</h3>
+<p>바위 1000개. 메시 데이터는 <strong>딱 한 벌</strong>이야. 대신 GPU에게 "이걸 1000번 그려"라고 시키고, 셰이더는 매번 <strong>"나는 지금 몇 번째 인스턴스지?"</strong>를 물어봐서 그 번호에 맞는 변환 행렬을 찾아 곱해.</p>
+<p>UE5에서 이 인스턴스 변환 목록은 대부분 <strong>GPU Scene</strong>의 인스턴스 데이터 버퍼에 들어있어. VF는 <code>InstanceId</code>로 그 버퍼를 조회한다. (다음 장 <a class="xref" href="ch-38-gpu-scene.html">gpu-scene</a>이 바로 그 얘기야.)</p>
+<div class="code-block">// 개념 흐름 (실제 코드가 아니라 구조 스케치)
+
+LocalVertexFactory:
+    WorldPosition = mul(Input.Position, Primitive.LocalToWorld)
+
+GPUSkinVertexFactory:
+    BlendMatrix   = Σ(BlendWeights[i] * GetBoneMatrix(BlendIndices[i]))
+    WorldPosition = mul(Primitive.LocalToWorld, mul(BlendMatrix, Input.Position))
+
+InstancedStaticMeshVertexFactory:
+    InstanceData  = GPUScene에서 InstanceId로 조회
+    WorldPosition = mul(Input.Position, InstanceData.LocalToWorld)
+
+Nanite:
+    (버텍스 버퍼가 없다)
+    Cluster       = 압축된 클러스터 페이지에서 가져옴
+    Input.Position ← 클러스터에서 비트 단위로 압축 해제
+    WorldPosition = mul(DecodedPosition, InstanceData.LocalToWorld)</div>
+<p>네 줄을 나란히 보면 핵심이 딱 나와. <strong>왼쪽(WorldPosition)은 다 같고, 오른쪽(구하는 방법)은 다 다르다.</strong> 머티리얼은 왼쪽만 본다.</p>
+<h3>4-4. Nanite — VF의 개념을 뒤집는다</h3>
+<p><a class="xref" href="ch-28-nanite-overview.html">nanite-overview</a>에서 봤듯이 Nanite는 정점 파이프라인 자체를 갈아엎었어. 버텍스 버퍼도, Input Layout도, 전통적인 정점 셰이더 단계도 정상적으로 쓰지 않아. 정점은 <strong>압축된 클러스터 페이지</strong> 안에 비트 단위로 구겨져 있고, 컴퓨트 셰이더가 그걸 풀어서 래스터라이즈해.</p>
+<p>그런데도 Nanite에 머티리얼을 붙일 수 있어. 왜? <strong>Nanite도 VF 인터페이스 규약을 지키기 때문</strong>이야. 방식은 완전히 다르지만, 결국 <code>GetMaterialPixelParameters</code>가 채워진 재료 상자를 내놓기만 하면 머티리얼 코드는 아무것도 몰라도 돌아.</p>
+<div class="note warn">⚠️ 대신 Nanite는 <strong>지원하는 머티리얼에 제약이 있어</strong>. World Position Offset(정점을 셰이더에서 흔드는 기능)이나 커스텀 정점 보간처럼, "정점 단계에서 머티리얼이 개입"하는 기능은 제한되거나 별도 경로를 탄다. 3축의 첫 축을 갈아엎었으니, 둘째 축(머티리얼)이 첫 축에게 요구할 수 있는 것도 줄어드는 거야. <strong>축은 독립이지만, 완전히 무관하진 않다.</strong></div>
+<table class="compare-table"><thead><tr><th>Vertex Factory</th><th>쓰이는 곳</th><th>정점을 어떻게 가져오나</th><th>MDC 캐싱</th></tr></thead><tbody>
+<tr><td><code>FLocalVertexFactory</code></td><td>정적 메시</td><td>버텍스 버퍼 읽고 <code>LocalToWorld</code> 곱하기</td><td>⭕ 가능</td></tr>
+<tr><td><code>FGPUBaseSkinVertexFactory</code></td><td>스켈레탈 메시</td><td>뼈 4개 행렬을 가중치로 섞어서 곱하기</td><td>❌ 어렵다 (아래 6절)</td></tr>
+<tr><td><code>FInstancedStaticMeshVertexFactory</code></td><td>포리지·인스턴스 컴포넌트</td><td><code>InstanceId</code>로 인스턴스별 변환 조회</td><td>⭕ 가능</td></tr>
+<tr><td>Nanite VF</td><td>Nanite 메시</td><td>클러스터 페이지에서 압축 해제</td><td>⭕ (전용 경로)</td></tr>
+<tr><td><code>FSplineMeshVertexFactory</code></td><td>도로·케이블</td><td>정점을 스플라인 곡선을 따라 휘게 변형</td><td>⭕ 가능</td></tr>
+</tbody></table>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Manual Vertex Fetch</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: GPU에게 Input Layout(정점 설명서)을 주면, GPU가 알아서 버퍼를 읽어서 정점 셰이더 입구에 값을 꽂아준다. 하드웨어가 해주니까 편해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: Input Layout은 <strong>고정된 모양</strong>이야. "정점 = 위치 12바이트 + 노멀 4바이트 + UV 8바이트"처럼 미리 못 박아야 해. 그런데 Nanite는 정점이 압축돼 있고, 인스턴싱은 정점마다 다른 인스턴스 데이터가 필요하고, 스키닝은 뼈 개수가 상황마다 달라. 고정 설명서로는 감당이 안 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 하드웨어에게 맡기지 말고, <strong>셰이더가 버퍼를 직접 손으로 읽자</strong>. 그게 Manual Vertex Fetch야. 대신 "몇 번째 정점인지"만 하드웨어에게 받고(<code>SV_VertexID</code>), 나머지는 셰이더가 알아서 뜯어. <code>SupportsManualVertexFetch</code> 플래그가 그 신고서야.</div>
+</div>
+<div class="conversation"><h2>5. 역할 분리 — 누가 무엇을 책임지나</h2>
+<p>이제 이 장의 핵심 문장을 정리하자.</p>
+<div class="info-box"><h4>🎬 촬영장 역할표</h4>
+<p><strong>Vertex Factory</strong> = 소품 반입 담당. "이 정점을 <em>어떻게 가져와서 어디에 세울지</em>"만 책임진다.</p>
+<p><strong>Material</strong> = 감독의 연출 지시서. "이 표면이 <em>무슨 색이고 어떤 질감인지</em>"만 책임진다.</p>
+<p><strong>Pass</strong> = 오늘 찍는 컷. "이 결과를 <em>어디에 기록할지</em>"만 책임진다. (GBuffer? 뎁스? 그림자맵?)</p>
+<p>셋은 서로의 속을 <strong>모른다</strong>. 오직 정해진 <strong>재료 상자</strong>로만 대화한다.</p></div>
+<p>이 분리가 실제로 지켜지는 지점을 다시 짚어보자.</p>
+<ul>
+<li><strong>VF → Material</strong>: VF가 <code>GetMaterialVertexParameters</code> / <code>GetMaterialPixelParameters</code>로 재료 상자를 채워 넘긴다. 머티리얼은 <strong>버텍스 버퍼를 직접 만지지 않는다.</strong> 만지는 순간 스켈레탈에서 T포즈로 굳어.</li>
+<li><strong>VF → Pass</strong>: VF가 <code>FVertexFactoryInterpolantsVSToPS</code>라는 운송장을 만들어 VS→PS로 넘긴다. 패스는 <strong>그 안을 열어보지 않고</strong> 통째로 <code>GetMaterialPixelParameters</code>에 다시 넘긴다.</li>
+<li><strong>Material → Pass</strong>: 머티리얼은 <code>FPixelMaterialInputs</code>(BaseColor, Metallic, Roughness…)만 내놓는다. 그걸 GBuffer에 쓸지, 뎁스만 쓸지, 그림자용으로 알파 테스트만 할지는 <strong>패스가 정한다.</strong> (<a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>에서 본 <code>FGBufferData</code> 채우기가 딱 그 지점이야.)</li>
+</ul>
+<p>서버 감각으로 옮기면 이거야. 우리는 <strong>패킷을 어디서 받았는지</strong>(TCP 소켓? 로컬 파이프? 리플레이 파일?)와 <strong>그 패킷을 어떻게 처리하는지</strong>(게임 로직)를 분리해두잖아. <code>HandleAttack(Session&amp;, const CM_ATTACK&amp;)</code>은 그 패킷이 어느 소켓에서 왔는지, 압축돼서 왔는지, 암호화돼서 왔는지 알 필요가 없어. <strong>파싱된 구조체만 받으면 된다.</strong></p>
+<p>VF가 딱 그 <strong>수신·파싱 계층</strong>이고, 머티리얼이 <strong>게임 로직</strong>이야. 새 전송 방식(Nanite)이 생겨도 게임 로직은 안 고쳐도 되는 것과 같아.</p>
+</div>
+<div class="conversation"><h2>6. 🔙 ch-17의 그 주석이 이제야 읽힌다</h2>
+<p><a class="xref" href="ch-17-mesh-draw-command.html">mesh-draw-command</a>에서 우리는 <code>MeshPassProcessor.h</code>의 주석을 읽었어. 그때는 그냥 넘어갔던 한 줄이 있지.</p>
+<p><strong><code>MeshPassProcessor.h:1215</code></strong></p>
+<div class="code-block">/**
+ * FMeshDrawCommand fully describes a mesh pass draw call, captured just above the RHI.
+		FMeshDrawCommand should contain only data needed to draw.  For InitViews payloads, use FVisibleMeshDrawCommand.
+ * FMeshDrawCommands are cached at Primitive AddToScene time for vertex factories that support it (no per-frame or per-view shader binding changes).
+ * Dynamic Instancing operates at the FMeshDrawCommand level for robustness.
+		Adding per-command shader bindings will reduce the efficiency of Dynamic Instancing, but rendering will always be correct.</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 이제 해석 가능한 주석<br>&bull;&nbsp;<strong><code>vertex factories that support it</code></strong> = ⭐ <code>EVertexFactoryFlags::SupportsCachingMeshDrawCommands</code> 플래그를 신고한 VF들.<br>&bull;&nbsp;<strong><code>no per-frame ... shader binding changes</code></strong> = <strong>매 프레임 셰이더에 꽂는 리소스가 바뀌지 않는다</strong>는 조건. 이게 캐싱의 전제야.<br>&bull;&nbsp;<strong><code>no per-view ... changes</code></strong> = 카메라(뷰)마다 바인딩이 달라지지도 않아야 한다.<br>&bull;&nbsp;<strong><code>Dynamic Instancing operates at the FMeshDrawCommand level</code></strong> = 동적 인스턴싱은 <strong>주문표 단위로 합친다</strong>는 뜻. 그래서 주문표에 <strong>커맨드별로 다른 바인딩을 하나라도 붙이면</strong>(<code>per-command shader bindings</code>) 합칠 수 있는 게 줄어들어 <strong>인스턴싱 효율이 떨어진다</strong>. 주석이 그 대가를 정확히 명시해뒀어 — "렌더링은 항상 옳지만, 효율은 준다."</div>
+<p>이제 조건이 무슨 뜻인지 알겠지? <strong>draw 주문표(<code>FMeshDrawCommand</code>)를 미리 구워둘 수 있으려면, 그 주문표에 적힌 내용이 안 바뀌어야 해.</strong></p>
+<p>그런데 주문표에 뭐가 적혀 있었지? <code>VertexStreams</code>(버텍스 버퍼 입구 목록)와 <code>ShaderBindings</code>(셰이더에 꽂을 리소스)였어. <strong>그리고 그걸 채우는 게 VF야.</strong></p>
+<table class="compare-table"><thead><tr><th>VF</th><th>매 프레임 바뀌는 게 있나?</th><th>주문표 캐싱</th></tr></thead><tbody>
+<tr><td>LocalVertexFactory</td><td>없다. 정적 메시의 버텍스 버퍼는 그대로 있고, 오브젝트 변환은 GPU Scene이 따로 관리한다.</td><td>⭕ 씬 등록 때 미리 굽는다</td></tr>
+<tr><td>GPUSkinVertexFactory</td><td>있다. <strong>뼈 행렬 버퍼가 매 프레임 새로 채워진다.</strong> 애니메이션이 돌면 셰이더에 꽂을 리소스가 달라진다.</td><td>❌ 프레임마다 동적으로 처리</td></tr>
+</tbody></table>
+<p>이게 <strong>스켈레탈 메시가 정적 메시보다 CPU 비용이 비싼 구조적 이유</strong>야. 캐릭터가 화면에 100명 있으면, 그 100명분 draw 주문표는 매 프레임 다시 조립돼. 반면 바위 5만 개는 씬에 들어올 때 딱 한 번 구워두고 프레임마다 꺼내 쓰기만 해.</p>
+<div class="note reread">🔁 <strong>이제 다시 보자 (ch-17 → ch-37 연결).</strong> ch-17: "VF가 지원하면 주문표를 캐싱한다" → ch-37: <strong>지원 여부는 <code>SupportsCachingMeshDrawCommands</code> 플래그이고, 그 플래그를 켤 수 있는 조건은 "이 VF가 채우는 버텍스 스트림과 셰이더 바인딩이 프레임마다 안 바뀐다"는 것</strong>이다. 스키닝 VF는 뼈 행렬이 매 프레임 바뀌니까 이 조건을 못 지킨다. 두 챕터가 여기서 맞물린다.</div>
+<p>그리고 하나 더. ch-17에서 <code>PrimitiveIdStreamIndex</code>가 나왔던 거 기억나? 동적 인스턴싱으로 여러 프리미티브를 한 draw call에 합칠 때, 셰이더가 "나는 지금 몇 번 프리미티브지?"를 알아야 한다고 했지. <strong>그 스트림을 읽어서 GPU Scene을 조회하는 것도 VF의 일</strong>이야. 그래서 <code>SupportsPrimitiveIdStream</code>이라는 별도 플래그가 있는 거고, 그 플래그가 없는 VF는 동적 인스턴싱 대상이 안 돼.</p>
+<p>정리하면 이래. <strong>렌더러의 최적화(캐싱·인스턴싱)는 VF의 능력에 발목이 잡힌다.</strong> VF가 "나는 프레임마다 바뀝니다"라고 신고하면, 렌더러는 그 메시에 대해 최적화 경로를 포기하고 느린 길로 간다.</p>
+</div>
+<div class="conversation"><h2>콜/데이터 흐름 한눈에</h2>
+<p>"빨간 금속" 머티리얼이 스켈레탈 캐릭터에 붙어서 BasePass를 도는 한 바퀴야.</p>
+<div class="code-block">[컴파일 타임]
+
+IMPLEMENT_VERTEX_FACTORY_TYPE(FGPUSkinVertexFactory, "GpuSkinVertexFactory.ush", Flags)
+        │  VF를 전역 장부에 등록
+        ▼
+셰이더 컴파일러: "빨간금속" × "GPUSkin" × "BasePass" 조합을 만든다
+        │
+        ├─ /Engine/Generated/Material.ush      ← 빨간금속 HLSL로 치환
+        ├─ /Engine/Generated/VertexFactory.ush ← GpuSkinVertexFactory.ush로 치환
+        │
+        ▼
+컴파일된 셰이더 한 벌 (3축이 만나 결정됨)
+
+
+[런타임 — 정점 하나]
+
+FVertexFactoryInput  (Position, BlendIndices, BlendWeights, UV...)
+        │
+        ▼
+GetVertexFactoryIntermediates()
+        ├─ CalcBoneMatrix()   ← 뼈 4개를 가중치로 섞는다  [VF의 일]
+        │
+        ▼
+VertexFactoryGetWorldPosition()   ← 진짜 월드 위치가 여기서 나온다
+        │
+        ▼
+GetMaterialVertexParameters()     ← 재료 상자를 채워서 넘긴다  [VF → Material 접점]
+        │
+        ▼
+머티리얼 그래프 HLSL              ← BaseColor=빨강, Metallic=1  [Material의 일]
+        │
+        ▼
+VertexFactoryGetInterpolantsVSToPS()  ← VS→PS 운송장 포장
+        │
+        ▼ (래스터라이저가 삼각형 내부로 보간)
+        │
+FVertexFactoryInterpolantsVSToPS
+        │
+        ▼
+GetMaterialPixelParameters()      ← 운송장을 픽셀용 재료 상자로 푼다
+        │
+        ▼
+BasePassPixelShader → FGBufferData → EncodeGBufferToMRT   [Pass의 일]</div>
+<p>이 흐름에서 <strong>가운데 세 줄(머티리얼 그래프)만 갈아끼우면 다른 재질</strong>이 되고, <strong>위쪽 VF 블록만 갈아끼우면 다른 메시 타입</strong>이 되고, <strong>맨 아래만 갈아끼우면 다른 패스</strong>가 돼. 세 축이 서로를 안 건드린다는 게 그림으로 보이지.</p>
+</div>
+<div class="conversation"><h2>우리 서버·DirectX랑 비교</h2>
+<p>DirectX를 직접 만져봤으면 이 장이 사실 <strong>제일 익숙한 장</strong>이어야 해. 왜냐면 VF가 자동화한 그 자리를, 우리는 손으로 짰거든.</p>
+<p>D3D11/12에서 메시를 그리려면 뭘 했지?</p>
+<div class="code-block">D3D12_INPUT_ELEMENT_DESC layout[] =
+{
+    { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, ... },
+    { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, ... },
+    { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 24, ... },
+};
+// → PSO에 박아 넣고
+// → IASetVertexBuffers()로 버퍼 꽂고
+// → VS 안의 struct VSInput { float3 Pos : POSITION; ... } 와 이름을 맞춘다</div>
+<p>이걸 손으로 정의했어. 그런데 스켈레탈 메시를 추가하면? <code>BLENDINDICES</code>, <code>BLENDWEIGHTS</code>를 레이아웃에 추가하고, <strong>정점 셰이더를 새로 짜고</strong>, PSO도 새로 만들어야 해. 그리고 그 스키닝 셰이더 안에 머티리얼 계산 코드를 <strong>복붙</strong>했겠지.</p>
+<p><strong>Vertex Factory는 정확히 그 복붙 지점을 잘라낸 구조야.</strong></p>
+<table class="compare-table"><thead><tr><th>DirectX에서 손으로 하던 것</th><th>언리얼의 대응물</th></tr></thead><tbody>
+<tr><td><code>D3D12_INPUT_ELEMENT_DESC</code> 배열 (Input Layout)</td><td>VF가 만드는 <code>FVertexDeclarationElementList</code></td></tr>
+<tr><td><code>IASetVertexBuffers()</code>로 꽂는 버퍼 슬롯</td><td><code>FMeshDrawCommand::VertexStreams</code> (ch-17)</td></tr>
+<tr><td>VS의 <code>struct VSInput { ... : POSITION; }</code></td><td><code>FVertexFactoryInput</code> (VF마다 다름)</td></tr>
+<tr><td>VS→PS 넘기는 <code>struct PSInput</code></td><td><code>FVertexFactoryInterpolantsVSToPS</code></td></tr>
+<tr><td>스키닝용 정점 셰이더를 <strong>따로 새로 작성</strong></td><td>VF만 <code>GPUSkinVertexFactory</code>로 <strong>갈아끼움</strong></td></tr>
+<tr><td>머티리얼 코드를 셰이더마다 복붙</td><td><code>/Engine/Generated/Material.ush</code>로 주입</td></tr>
+<tr><td>SRV에서 정점을 직접 읽는 트릭</td><td><code>SupportsManualVertexFetch</code> 플래그</td></tr>
+<tr><td>레이아웃 × 셰이더 조합을 손으로 관리</td><td><code>FVertexFactoryType</code> 등록 장부 + 순열 시스템</td></tr>
+</tbody></table>
+<p>서버 쪽으로 옮기면 이렇게 돼. 우리가 <code>CM_ATTACK</code> 핸들러를 짤 때, 그 패킷이 <strong>어느 소켓에서 왔는지·어떻게 역직렬화됐는지</strong>는 안 봐. <code>PacketReader</code>가 파싱해준 구조체만 받지. 새 전송 계층(WebSocket, 리플레이 재생)이 붙어도 <code>HandleAttack</code>은 한 글자도 안 고쳐.</p>
+<p>VF = <strong>수신·파싱 계층</strong>. 머티리얼 = <strong>게임 로직</strong>. 그리고 언리얼은 여기서 한 발 더 나가서, "수신 계층 × 로직 × 출력 대상"의 <strong>모든 조합을 컴파일 타임에 미리 구워둔다</strong>는 게 서버와 다른 점이야. 서버는 런타임 <code>if</code>로 분기하면 되지만, 셰이더는 그럴 수 없거든. 그래서 순열 폭발이 서버보다 훨씬 아프게 돌아온다.</p>
+</div>
+<div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
+<ul>
+<li>언리얼 셰이더 한 벌은 <strong>VertexFactory × Material × Pass</strong> 세 축이 만나서 정해진다. 이 곱셈이 순열 폭발의 뿌리다.</li>
+<li>VF는 <strong>"정점을 어떻게 가져올지"만</strong> 책임진다. "무슨 색인지"는 머티리얼이 책임진다.</li>
+<li>둘의 유일한 접점은 <code>GetMaterialVertexParameters</code> / <code>GetMaterialPixelParameters</code>가 채우는 <strong>재료 상자</strong>다. 머티리얼은 원본 정점 버퍼를 절대 직접 만지지 않는다.</li>
+<li><code>IMPLEMENT_VERTEX_FACTORY_TYPE</code>은 (C++ 클래스 → <code>.ush</code> 파일 → 능력 플래그)를 장부에 묶어 올린다.</li>
+<li>패스 셰이더는 <code>/Engine/Generated/VertexFactory.ush</code>라는 <strong>빈 콘센트</strong>만 뚫어두고, 컴파일 때 실제 VF의 <code>.ush</code>가 꽂힌다.</li>
+<li>ch-17의 "VF가 지원해야 MeshDrawCommand가 캐싱된다"는 <code>SupportsCachingMeshDrawCommands</code> 플래그다. 스키닝 VF는 뼈 행렬이 매 프레임 바뀌어서 이 조건을 못 지킨다.</li>
+<li>DirectX에서 Input Layout을 손으로 정의하던 자리 = VF가 자동화한 자리.</li>
+</ul>
+</div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 같은 "빨간 금속" 머티리얼을 정적 메시에도, 스켈레탈 메시에도, 인스턴스 1000개에도 붙일 수 있잖아요. 정점을 GPU로 넣는 방법은 셋 다 다른데, 어떻게 하나의 머티리얼이 셋 다 지원하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">"정점을 어떻게 가져올지"를 <strong>Vertex Factory라는 갈아끼울 수 있는 부품으로 떼냈기</strong> 때문이야. 머티리얼은 정점 버퍼를 직접 만지지 않고, VF가 이미 다 계산해서 채워준 <strong>재료 상자</strong>(<code>FMaterialVertexParameters</code>)만 읽어. 촬영장으로 치면 감독의 연출 지시서(머티리얼)는 "빨갛게, 금속처럼"만 적혀 있고, 그 물체를 지게차로 들여왔는지 배우가 걸어왔는지는 <strong>소품 반입 담당(VF)</strong>이 알아서 하는 거야. 그래서 컴파일할 때 VF만 갈아끼우면, 같은 머티리얼 코드가 스태틱·스키닝·인스턴스·Nanite에서 전부 돌아.</div></details>
+
+<h4>↳ 그럼 머티리얼이 <code>Input.Position</code>을 직접 읽으면 안 되나요? 그게 정점 위치잖아요.</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">안 돼. <strong>스켈레탈 메시에서 <code>Input.Position</code>은 거짓말</strong>이거든. 그건 T포즈 시절의 원본 위치일 뿐이고, 진짜 위치는 뼈 4개의 행렬을 <code>BlendWeights</code>로 섞어서 곱해야 나와(<code>CalcBoneMatrix</code> → <code>SkinPosition</code>). 머티리얼이 원본 정점을 직접 읽으면 <strong>캐릭터가 T포즈로 굳어버려</strong>. Nanite는 더 심해서 <code>Input.Position</code>이라는 것 자체가 존재하지도 않아 — 정점이 클러스터에 압축돼 있으니까. 그래서 언리얼은 머티리얼이 원본을 못 만지게 막고, VF가 채워준 재료 상자만 읽게 <strong>강제</strong>해.</div></details>
+
+<h4>↳ 그 "재료 상자"를 채우는 함수 이름을 짚어보라면요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">정점 쪽은 <code>GetMaterialVertexParameters</code>, 픽셀 쪽은 <code>GetMaterialPixelParameters</code>야. 이 둘이 <strong>VF와 머티리얼의 유일한 접점</strong>이야. 그리고 중간에 VS가 PS로 넘기는 운송장이 <code>FVertexFactoryInterpolantsVSToPS</code>인데, 이것도 <strong>VF마다 내용물이 다른 구조체</strong>야. 패스 셰이더는 그 안을 열어보지 않고 통째로 <code>GetMaterialPixelParameters</code>에 다시 넘겨 — 안에 뭐가 들었는지는 VF가 알아서 풀어주거든. <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>에서 <code>FPixelShaderInOut_MainPS</code>의 첫 인자가 <code>FVertexFactoryInterpolantsVSToPS Interpolants</code>였던 게 바로 이거야.</div></details>
+
+<h3>Q2. 셰이더 순열 폭발의 진짜 원인이 "3축"이라는 게 무슨 말인가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">언리얼에서 실제로 컴파일되는 셰이더 한 벌은 <strong>VertexFactory × Material × Pass</strong>가 만나서 정해져. 정점을 어떻게 가져올지 × 무슨 색인지 × 어디에 쓸지. 이 셋이 <strong>서로 독립</strong>이라서, VF를 뭘 쓰든 머티리얼 종류가 줄지 않고 머티리얼이 뭐든 패스 종류가 줄지 않아. 그래서 조합이 더하기가 아니라 <strong>곱하기</strong>가 돼. 머티리얼 300 × VF 15 × Pass 10만 해도 45000칸이고, 거기에 <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a>에서 배운 bool 도장(순열 차원)이 <strong>또 곱해져</strong>. "Compiling Shaders 12000"의 12000이 어디서 나오는지가 이 그림 하나로 설명돼.</div></details>
+
+<h4>↳ 그럼 3축 구조가 순열 폭발의 <strong>원인</strong>이니까, 없애는 게 낫지 않나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, 그게 함정이야. 3축이 없었다면 셰이더 수가 줄었을까? <strong>안 줄어.</strong> 프로그래머가 그 조합을 <strong>손으로 다 짜야 했을 뿐</strong>이야. 3축은 폭발을 만든 게 아니라, <strong>어차피 필요했던 폭발을 자동 생성해주는 구조</strong>야. 아티스트가 머티리얼 하나 추가하면 VF 15종 × 패스 10개가 자동으로 생기는 대신, 프로그래머가 150번 복붙할 일이 사라진 거지. 대가로 컴파일 시간을 내는 거고, 그래서 <code>ShouldCompilePermutation</code>과 VF 플래그로 <strong>필요 없는 칸을 잘라내는 게</strong> 그렇게 중요한 거야.</div></details>
+
+<h4>↳ 그 "자르는" 일을 VF 쪽에선 뭐가 하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>EVertexFactoryFlags</code>가 1차 필터야. 예를 들어 <code>UsedWithMaterials</code>가 없는 VF는 <strong>애초에 머티리얼 축과 조합되지 않아</strong> — 그 순간 300개 머티리얼 × 10패스가 통째로 안 구워지는 거지. <code>SupportsRayTracing</code>이 없으면 레이트레이싱 패스 조합이 빠지고, <code>SupportsPositionOnly</code>가 없으면 뎁스 전용 경량 경로가 안 생겨. 그리고 머티리얼 쪽에도 "Used with Skeletal Mesh" 같은 사용처 체크박스가 있어서, 안 켜면 그 VF 조합을 안 굽는다. <strong>체크박스 하나 켜는 게 셰이더 수천 벌을 늘리는 행위</strong>인 이유가 이거야.</div></details>
+
+<h3>Q3. <code>FVertexFactoryType</code> 등록 장부는 왜 필요한가요? VF 이름으로 <code>if</code> 분기하면 안 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">VF가 15종이 넘고, <strong>플러그인이 자기 VF를 새로 추가</strong>하기도 해. 렌더러 코드 곳곳에 <code>if (VFName == "GPUSkin")</code> 같은 분기가 흩어지면, 새 VF 하나 추가할 때 <strong>렌더러 전체를 뒤져서 분기를 심어야</strong> 하고 하나라도 빼먹으면 조용히 렌더링이 깨져. 그래서 VF가 <strong>자기 능력을 스스로 신고</strong>하게 만든 거야 — <code>IMPLEMENT_VERTEX_FACTORY_TYPE</code> 한 줄이 (C++ 클래스 → <code>.ush</code> 파일 → 능력 플래그)를 장부에 묶어 올려. 렌더러는 이름을 모른 채 <strong>"이 VF, 캐싱 되나요?"라고 능력만 물어봐</strong>. 서버의 <code>REGISTER_HANDLER(CM_ATTACK, HandleAttack)</code> 디스패치 테이블이랑 똑같은 구조야.</div></details>
+
+<h4>↳ ch-17에서 "VF가 지원해야 MeshDrawCommand가 캐싱된다"고 했는데, 그게 정확히 무슨 뜻이었나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>EVertexFactoryFlags::SupportsCachingMeshDrawCommands</code> 플래그를 신고한 VF만 draw 주문표를 <strong>씬 등록 시점에 미리 구워둘 수 있다</strong>는 뜻이야. 조건은 주석에 그대로 적혀 있어 — <strong>"매 프레임·매 뷰마다 셰이더 바인딩이 안 바뀔 것"</strong>. 왜냐면 주문표에 적히는 <code>VertexStreams</code>와 <code>ShaderBindings</code>를 <strong>채우는 게 바로 VF</strong>거든. VF가 매 프레임 다른 리소스를 꽂겠다고 하면, 미리 구운 주문표는 다음 프레임에 틀린 종이가 돼버려.</div></details>
+
+<h4>↳ 그럼 스켈레탈 메시는 왜 캐싱이 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>뼈 행렬 버퍼가 매 프레임 새로 채워지기 때문</strong>이야. 애니메이션이 돌면 <code>GetBoneMatrix</code>가 읽는 그 버퍼 내용이 계속 바뀌고, 셰이더에 꽂을 리소스도 달라져. "no per-frame shader binding changes" 조건을 정면으로 위반하는 거지. 그래서 캐릭터가 화면에 100명 있으면 <strong>그 100명분 주문표는 매 프레임 다시 조립</strong>돼. 반면 바위 5만 개는 씬에 들어올 때 딱 한 번 굽고 프레임마다 꺼내 쓰기만 해. <strong>스켈레탈이 스태틱보다 CPU 비용이 비싼 구조적 이유</strong>가 바로 이거야 — 삼각형 수 문제가 아니라 VF의 성질 문제야.</div></details>
+
+<h3>Q4. DirectX 경험이랑 대응시키면 VF는 어느 자리인가요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>Input Layout(<code>D3D12_INPUT_ELEMENT_DESC</code> 배열)을 손으로 정의하던 그 자리</strong>야. D3D에서 우리는 "0바이트부터 POSITION, 12바이트부터 NORMAL, 24바이트부터 TEXCOORD" 같은 설명서를 직접 써서 PSO에 박고, VS의 <code>struct VSInput</code>과 시맨틱 이름을 맞췄잖아. 그런데 스켈레탈을 추가하면 <code>BLENDINDICES</code>·<code>BLENDWEIGHTS</code>를 레이아웃에 넣고 <strong>정점 셰이더를 새로 짜야</strong> 했고, 그 안에 머티리얼 계산 코드를 <strong>복붙</strong>했지. <strong>VF는 정확히 그 복붙 지점을 잘라낸 구조야</strong> — 레이아웃 정의(<code>FVertexDeclarationElementList</code>), 버퍼 슬롯(<code>VertexStreams</code>), VS 입력 구조체(<code>FVertexFactoryInput</code>)를 전부 VF가 들고, 머티리얼 코드는 <code>/Engine/Generated/Material.ush</code>로 주입받아.</div></details>
+
+<h4>↳ Nanite는 버텍스 버퍼도 Input Layout도 안 쓴다면서요. 그럼 VF 개념이 깨지는 거 아닌가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">깨지는 게 아니라, <strong>VF 인터페이스가 그만큼 추상적이었다는 증거</strong>야. Nanite는 정점을 압축된 클러스터 페이지에서 비트 단위로 풀어. 하드웨어 Input Layout을 안 쓰고 셰이더가 버퍼를 직접 뜯는 <strong>Manual Vertex Fetch</strong> 방식이지. 그런데도 머티리얼이 붙는 이유는 <strong>Nanite도 결국 <code>GetMaterialPixelParameters</code>로 채워진 재료 상자를 내놓기 때문</strong>이야. 머티리얼 코드는 그 상자가 어디서 왔는지 모르고 알 필요도 없어. <br><br>다만 <strong>완전 무료는 아니야</strong> — World Position Offset처럼 "정점 단계에서 머티리얼이 개입"하는 기능은 Nanite에서 제한되거나 별도 경로를 타. 3축의 첫 축을 갈아엎었으니, 둘째 축이 첫 축에게 요구할 수 있는 것도 줄어드는 거지. <strong>축은 독립이지만 완전히 무관하진 않다</strong>는 걸 보여주는 지점이야.</div></details>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>Vertex Factory는 "정점을 어떻게 가져올지"만 갈아끼우는 부품이다 — 머티리얼은 VF가 채워준 재료 상자만 읽기 때문에, 하나의 "빨간 금속"이 스태틱·스키닝·인스턴스·Nanite에서 전부 돈다. 그 대가로 셰이더는 VertexFactory × Material × Pass 세 축으로 곱해져 폭발한다.</strong></p>
+<hr>
+<div class="note">막히면(선행 개념) → <a class="xref" href="ch-17-mesh-draw-command.html">mesh-draw-command</a> · <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a> · <a class="xref" href="ch-36-material-system.html">material-system</a> · <a class="xref" href="ch-28-nanite-overview.html">nanite-overview</a><br>다음(VF가 조회하던 그 인스턴스 데이터의 정체) → <a class="xref" href="ch-38-gpu-scene.html">gpu-scene</a></div></div><nav class="booknav"><a href="ch-36-material-system.html"><span class="lbl">← 이전</span>머티리얼 그래프는 어떻게 HLSL이 되는가</a><a class="nx" href="ch-38-gpu-scene.html"><span class="lbl">다음 →</span>GPU Scene — 이제 GPU가 씬을 안다</a></nav></div><script src="/MSH_Portfolio/study/notes.js"></script></body></html>

@@ -1,0 +1,690 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>반사 — 화면 안에서 못 찾으면 어디까지 가는가 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>반사 — 화면 안에서 못 찾으면 어디까지 가는가</h1><p>언리얼 렌더링 · 39 / 42</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "금속 바닥에 비친 상이 SSR → Reflection Capture → Sky Light → Lumen Reflections라는 <strong>폴백 사다리</strong>를 타고 채워진다"가 잡힌다.</div>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 되돌아오는 빛에는 방향이 있다</strong><br>&bull;&nbsp;<strong>거울</strong>: 거울 앞에 서면 <strong>내가 서 있는 자리에 따라 보이는 그림이 바뀐다</strong>. 옆으로 한 발 가면 거울 속 풍경도 같이 미끄러진다. 즉 거울에 비친 상은 "표면의 색"이 아니라 "그 방향에 뭐가 있냐"야.<br>&bull;&nbsp;<strong>흐린 쇠붙이</strong>: 안 닦은 숟가락은 상이 뭉개진다. 매끈하면 한 방향만 딱 되돌리고, 거칠면 여러 방향 빛이 섞여 뿌옇게 돌아온다.<br>&bull;&nbsp;<strong>벽</strong>: 반대로 흰 벽은 어디서 봐도 그냥 하얗다. 사방으로 골고루 흩어 돌려보내니까 보는 자리가 바뀌어도 그림이 안 바뀐다.<br>이게 잡히면 아래 "반사는 <strong>보는 방향(V)</strong>이 있어야 계산된다"가 얹힌다.</div></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>지금까지 우리가 화면에 빛을 채워 넣은 방법을 세어보자.</p>
+<p><a class="xref" href="ch-22-deferred-lighting.html">deferred-lighting</a>에서 <strong>직접광</strong>을 배웠어. 라이트 하나하나가 GBuffer를 읽고 셀로판처럼 빛을 더했지. <a class="xref" href="ch-31-lumen-diffuse.html">lumen-diffuse</a>에서는 <strong>간접 디퓨즈</strong>를 배웠어. 빨간 벽에 튄 빛이 바닥으로 번지는 그 부드러운 번짐.</p>
+<p>그런데 표를 그려보면 칸 하나가 통째로 비어 있어.</p>
+<table class="compare-table">
+<tr><th></th><th>디퓨즈 (사방으로 흩어짐)</th><th>스페큘러 (방향대로 되돌림)</th></tr>
+<tr><th>직접광</th><td>ch-22 라이트 패스</td><td>ch-22 라이트 패스</td></tr>
+<tr><th>간접광</th><td>ch-31 Lumen Diffuse</td><td><strong>??? ← 여기가 빈칸</strong></td></tr>
+</table>
+<p><strong>간접 스페큘러</strong>. 이게 오늘의 빈칸이야.</p>
+<p>말이 어려운데 현상은 네가 매일 보는 거야. 금속 바닥에 비친 캐릭터의 상. 물웅덩이에 비친 하늘. 젖은 아스팔트에 길게 늘어진 네온사인. 유리창에 비친 맞은편 건물.</p>
+<p>이건 라이트가 준 게 아니야. 씬에 포인트 라이트를 아무리 많이 꽂아도 바닥에 캐릭터가 비치진 않거든. 이건 <strong>"그 방향에 뭐가 있는지"를 실제로 가서 봐야</strong> 나오는 값이야. 그리고 <a class="xref" href="ch-20-basepass-gbuffer.html">basepass-gbuffer</a>에는 그 정보가 없어. GBuffer는 "이 픽셀 표면의 성질"만 적힌 송장이지, "이 픽셀에서 위쪽으로 30도 방향에 뭐가 있냐"는 안 적혀 있잖아.</p>
+<p>이걸 안 하면 뭐가 터지냐면, 화면이 통째로 <strong>죽어</strong>. 금속이 금속처럼 안 보이고 그냥 회색 플라스틱이 된다. 러프니스를 0으로 내린 완벽한 거울 바닥이 아무것도 안 비추는 새까만 판때기가 돼. PBR 재질을 아무리 정교하게 찍어도 <a class="xref" href="ch-26-pbr-brdf.html">pbr-brdf</a>의 <code>D * Vis * F</code>가 받을 <strong>들어오는 빛</strong>이 없으면 곱해봤자 0이야.</p>
+<p>언리얼도 같은 문제를 만났고, 답은 하나의 알고리즘이 아니라 <strong>폴백 사다리</strong>야. 싼 것부터 시도하고, 실패하면 한 칸 내려가고, 또 실패하면 또 내려간다.</p>
+<p><strong>SSR → Reflection Capture 큐브맵 → Sky Light → (그리고 요즘은) Lumen Reflections.</strong></p>
+<p>왜 지금 배우냐면 순서가 딱 여기야. ch-31에서 Lumen이 <strong>디퓨즈</strong> 간접광을 모으는 걸 봤으니, 이번엔 그 <strong>스페큘러 짝</strong>을 보는 거야. 그리고 ch-26에서 배운 스페큘러 BRDF 항이 오늘 드디어 <strong>실제로 쓰이는 자리</strong>가 나온다. 그때는 "이 카드가 곱해진다"까지만 봤는데, 오늘은 그 카드가 큐브맵 하나에 어떻게 붙는지를 본다.</p>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 촬영장의 반사 담당 스태프와 4단 사다리</h2>
+<p>영화 촬영장이야. 배우가 잘 닦인 대리석 바닥 위에 서 있어. 감독이 말한다.</p>
+<p>"바닥에 배우가 비쳐야 해. 그리고 바닥 저쪽 끝에는 창밖 하늘도 비쳐야 하고."</p>
+<p>근데 카메라는 배우를 찍었을 뿐이야. 바닥에 비친 상은 <strong>따로 만들어 넣어야</strong> 해. 이걸 담당하는 스태프가 있다고 치자. 이 스태프는 게을러. 제일 싼 방법부터 시도한다.</p>
+<p><strong>1단 — 이미 찍어둔 필름에서 오려 붙인다.</strong> 방금 찍은 그 컷에 배우가 이미 찍혀 있잖아? 그 부분을 오려서 뒤집어 바닥에 붙인다. 공짜야. 이게 <strong>SSR(Screen Space Reflections)</strong>이야.</p>
+<p><strong>2단 — 필름에 없으면, 360도 사진첩을 꺼낸다.</strong> 바닥 저쪽 끝에는 카메라 뒤편 벽이 비쳐야 하는데, 그건 이번 컷 필름에 안 찍혔어. 그래서 스태프는 미리 준비해둔 걸 꺼낸다. <strong>촬영 전에 이 방 한가운데에 삼각대를 세우고 사방을 빙 둘러 찍어둔 360도 사진첩.</strong> 이게 <strong>Reflection Capture</strong> 큐브맵이야.</p>
+<p><strong>3단 — 사진첩도 없으면, 하늘 배경판.</strong> 실내 사진첩조차 안 깔린 야외 구석이면? 마지막으로 하늘 사진 한 장을 그냥 붙인다. 이게 <strong>Sky Light</strong>야.</p>
+<p><strong>4단 — 돈이 있으면, 진짜 촬영을 나간다.</strong> 오려 붙이기도 사진첩도 다 가짜지. 예산이 있으면 카메라를 <strong>실제로 바닥이 바라보는 방향으로 보내서</strong> 그 방향에 뭐가 있는지 찍어온다. 이게 <strong>Lumen Reflections</strong>야.</p>
+<p>이번 장의 비유는 끝까지 이거다.</p>
+<p><strong>필름 오려 붙이기(SSR) → 360도 사진첩(Reflection Capture) → 하늘 배경판(Sky Light) → 진짜 출장 촬영(Lumen Reflections).</strong></p>
+<p>그리고 이 사다리의 핵심은 <strong>"위 칸이 채우고 남은 만큼만 아래 칸이 채운다"</strong>는 거야. 오려 붙이기로 화면의 70%를 채웠으면, 사진첩은 나머지 30%만 메운다. 이 "남은 몫"이 코드에서는 <strong>알파 값</strong>으로 나온다. 이거 하나만 잡아도 오늘 챕터의 절반은 끝이야.</p>
+<hr>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — SSR(Screen Space Reflections)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 반사를 진짜로 하려면 표면이 바라보는 방향으로 레이를 쏘고, 씬 전체 삼각형과 부딪혀 보면 돼. 오프라인 렌더러가 하는 정직한 방법이야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 실시간에서 픽셀마다 씬 전체를 뒤지면 16.6ms 안에 절대 못 끝내. 옛날 GPU엔 레이 트레이싱 하드웨어도 없었고.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 공짜에 가까운 단서가 이미 있잖아 — <strong>방금 그린 SceneColor와 Depth</strong>. 화면에 이미 그려진 픽셀을 거꾸로 뒤져서 "이 반사 방향으로 가면 화면 안 어디에 닿나"만 찾자. 화면 공간에서 추적하니까 <strong>Screen Space</strong> Reflections야.</div>
+</div>
+<div class="conversation"><h2>1. 사다리 전체 지도 — 이 챕터의 뼈대</h2>
+<p>코드로 들어가기 전에 지도를 먼저 박아두자. 언리얼에서 <strong>간접 스페큘러</strong>는 이 순서로 채워진다.</p>
+<div class="code-block">픽셀 하나: "내 반사 방향(R)에 뭐가 있지?"
+        │
+        ▼
+ ┌──────────────────────────────────────────────┐
+ │ 1단  SSR — 화면 안에서 찾기                    │  ScreenSpaceRayTracing.cpp:130
+ │      SceneColor + Depth를 레이마칭            │  싸다 / 정확하다 / 화면 밖은 못 함
+ └──────────────────────────────────────────────┘
+        │  못 찾은 픽셀 (= 남은 알파)
+        ▼
+ ┌──────────────────────────────────────────────┐
+ │ 2단  Reflection Capture — 구워둔 큐브맵        │  ReflectionEnvironmentComposite.ush:12
+ │      미리 캡처한 360도 사진첩을 샘플링         │  화면 밖도 됨 / 위치 고정 → 시차 오류
+ └──────────────────────────────────────────────┘
+        │  큐브맵도 안 깔린 픽셀 (= 또 남은 알파)
+        ▼
+ ┌──────────────────────────────────────────────┐
+ │ 3단  Sky Light — 하늘 큐브맵                   │  ReflectionEnvironmentShared.ush:43
+ │      최후의 배경판. 하늘이라도 비춰준다         │
+ └──────────────────────────────────────────────┘
+
+ ※ 위 사다리 전체를 대체하는 현대 경로:
+ ┌──────────────────────────────────────────────┐
+ │ Lumen Reflections — 진짜로 레이를 쏜다          │  LumenReflections.cpp:750
+ │      화면 추적 → HW RT / SDF → radiance cache  │  ch-31 디퓨즈의 스페큘러 짝
+ └──────────────────────────────────────────────┘</div>
+<p>그리고 이 사다리 전체가 마지막에 <strong>ch-26의 BRDF 스페큘러 항</strong>과 한 번 곱해진다. 이게 <code>EnvBRDF</code>이고, 오늘 챕터의 하이라이트야.</p>
+<p>이걸 진행하는 C++ 쪽 큰 입구가 <code>RenderDeferredReflectionsAndSkyLighting</code>이야. 이름이 길지만 뜯어보면 정직해. <strong>Deferred + Reflections + And + SkyLighting</strong>. "GBuffer 깔아놓고, 반사랑 스카이라이트를 얹는다"는 뜻 그대로야. 이름과 달리 <code>ReflectionEnvironment.cpp</code>가 아니라 <strong><code>IndirectLightRendering.cpp</code></strong>에 산다 — "간접광 렌더링"이라는 더 큰 우산 아래 디퓨즈와 스페큘러가 같이 있는 거야.</p>
+<p><strong><code>IndirectLightRendering.cpp:1967</code></strong></p>
+<div class="code-block">void FDeferredShadingSceneRenderer::RenderDeferredReflectionsAndSkyLighting(
+	FRDGBuilder&amp; GraphBuilder,
+	const FSceneTextures&amp; SceneTextures,
+	FLumenSceneFrameTemporaries&amp; LumenFrameTemporaries,
+	TArray&lt;FRDGTextureRef&gt;&amp; DynamicBentNormalAOTextures)
+{</div>
+<p>그리고 이 함수 안에서 <strong>어느 경로로 갈지</strong>가 갈린다. 이 갈림길 하나만 봐두자.</p>
+<p><strong><code>IndirectLightRendering.cpp:2050</code></strong></p>
+<div class="code-block">		// Standalone Lumen Reflections using HWRT and hit lighting
+		else if (ViewPipelineState.ReflectionsMethod == EReflectionsMethod::Lumen)
+		{
+			FLumenMeshSDFGridParameters MeshSDFGridParameters;
+			LumenRadianceCache::FRadianceCacheInterpolationParameters RadianceCacheParameters;
+			FLumenReflectionsConfig LumenReflectionsConfig;
+
+			ReflectionsColor = RenderLumenReflections(
+				GraphBuilder,
+				View,
+				SceneTextures,
+				LumenFrameTemporaries,
+				MeshSDFGridParameters,
+				RadianceCacheParameters,
+				ELumenReflectionPass::Opaque,
+				LumenReflectionsConfig,
+				ERDGPassFlags::Compute);
+		}
+		else if (ViewPipelineState.ReflectionsMethod == EReflectionsMethod::SSR)
+		{</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 반사의 큰 입구<br>&bull;&nbsp;<strong><code>FDeferredShadingSceneRenderer::</code></strong> = 디퍼드 렌더러 클래스의 멤버 함수라는 뜻. 앞의 <code>::</code>가 "이 클래스에 속한다"는 표시야.<br>&bull;&nbsp;<strong><code>FRDGBuilder&amp; GraphBuilder</code></strong> = <strong>RDG</strong>(Render Dependency Graph). 패스를 바로 실행하지 않고 <strong>그래프에 예약</strong>했다가 나중에 한꺼번에 돌린다.<br>&bull;&nbsp;<strong><code>FSceneTextures</code></strong> = GBuffer·Depth·SceneColor 같은 이번 프레임 텍스처 묶음. <a class="xref" href="ch-20-basepass-gbuffer.html">basepass-gbuffer</a>가 채워둔 그것들이야.<br>&bull;&nbsp;<strong><code>DynamicBentNormalAOTextures</code></strong> = DFAO가 만든 <strong>가림 정보</strong>. 뒤에서 캡처·스카이라이트를 깎는 데 쓴다.<br>&bull;&nbsp;<strong><code>ViewPipelineState.ReflectionsMethod</code></strong> = ⭐ 이 뷰의 <strong>반사 방식</strong>. 여기서 <code>Lumen</code>이냐 <code>SSR</code>이냐로 <strong>경로가 갈린다</strong>.<br>&bull;&nbsp;<strong><code>ERDGPassFlags::Compute</code></strong> = 이 패스를 <strong>컴퓨트 셰이더</strong>로 돌리라는 표시.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 이 함수 하나가 <strong>오늘 챕터 전체의 지붕</strong>이야. GBuffer와 씬 텍스처를 받아서 → 뷰마다 <strong>반사 방식(<code>ReflectionsMethod</code>)을 보고</strong> → <code>Lumen</code>이면 <code>RenderLumenReflections</code>로, <code>SSR</code>이면 SSR 패스로 갈라진다. 그렇게 만든 반사 텍스처가 결국 7절에서 볼 <code>ReflectionInput</code>으로 들어온다.</div>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — "아직 못 채운 몫"을 숫자 하나로 들고 다니기</strong><br>&bull;&nbsp;<strong>남은 몫</strong>: 물통을 채우는데 첫 사람이 70%를 부었어. 그럼 다음 사람은 100%가 아니라 <strong>남은 30%만</strong> 부어야 해. 안 그러면 넘친다.<br>&bull;&nbsp;<strong>0~1로 적기</strong>: 이 "남은 몫"을 1.0(아직 하나도 못 채움)에서 0.0(다 찼음) 사이 숫자 하나로 적어두면 편해.<br>&bull;&nbsp;<strong>곱해서 쓰기</strong>: 다음 사람이 부을 양에 이 숫자를 곱하면, 자동으로 남은 만큼만 들어간다.<br>이게 잡히면 아래 <code>Lighting.a = 1 - ReflectionInput.a</code> 한 줄이 "SSR이 채우고 남은 몫"이라는 게 그냥 읽힌다.</div>
+</div>
+<div class="conversation"><h2>2. 1단 — SSR은 언제 켜지나</h2>
+<p>먼저 문지기부터. SSR은 항상 도는 패스가 아니야. show flag, 뷰 상태, 품질 설정, 포스트프로세스 강도까지 다 통과해야 켜진다.</p>
+<p>촬영장으로 치면 "이번 컷 필름 인화됐냐?", "오려 붙이기 허가 났냐?"를 먼저 묻는 장면이야.</p>
+<p><strong><code>ScreenSpaceRayTracing.cpp:130</code></strong></p>
+<div class="code-block">bool ShouldRenderScreenSpaceReflections(const FViewInfo&amp; View)
+{
+	if(!View.Family-&gt;EngineShowFlags.ScreenSpaceReflections
+		// Note: intentionally allow falling back to SSR from other reflection methods, which may be disabled by scalability
+		|| View.FinalPostProcessSettings.ReflectionMethod == EReflectionMethod::None
+		|| HasRayTracedOverlay(*View.Family)
+		|| View.bIsReflectionCapture)
+	{
+		return false;
+	}
+
+	if(!View.State)
+	{
+		// not view state (e.g. thumbnail rendering?), no HZB (no screen space reflections or occlusion culling)
+		return false;
+	}
+
+	int SSRQuality = CVarSSRQuality.GetValueOnRenderThread();
+
+	if(SSRQuality &lt;= 0)
+	{
+		return false;
+	}
+
+	if(View.FinalPostProcessSettings.ScreenSpaceReflectionIntensity &lt; 1.0f)
+	{
+		return false;
+	}
+
+	const EShaderPlatform ShaderPlatform = View.GetShaderPlatform();
+	if (IsForwardShadingEnabled(ShaderPlatform) &amp;&amp; !IsMobilePlatform(ShaderPlatform))
+	{
+		return false;
+	}
+
+	return true;
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — SSR 문지기<br>&bull;&nbsp;<strong><code>bool</code></strong> = 참/거짓 하나를 돌려주는 함수라는 뜻이야.<br>&bull;&nbsp;<strong><code>const FViewInfo&amp; View</code></strong> = 이번에 그릴 뷰 정보를 복사하지 않고 별명으로 읽겠다는 뜻. <code>const</code>니까 안 고친다는 약속이야.<br>&bull;&nbsp;<strong><code>!</code></strong> = 참/거짓을 뒤집는다. <code>if (!X)</code>는 "X가 아니면"이야.<br>&bull;&nbsp;<strong><code>EngineShowFlags.ScreenSpaceReflections</code></strong> = 에디터/렌더 설정의 SSR 스위치. 꺼져 있으면 바로 나간다.<br>&bull;&nbsp;<strong><code>ReflectionMethod == EReflectionMethod::None</code></strong> = 포스트프로세스에서 <strong>반사를 아예 끔</strong>으로 골랐나. 주석이 말하듯, 반사 방식이 Lumen이어도 SSR로 <strong>내려앉는 걸 일부러 허용</strong>한다 — 사다리 정신 그대로야.<br>&bull;&nbsp;<strong><code>HasRayTracedOverlay(*View.Family)</code></strong> = 패스 트레이싱 같은 <strong>레이트레이스 오버레이</strong>가 화면을 덮고 있나. 그럼 SSR은 헛일이라 끈다.<br>&bull;&nbsp;<strong><code>View.bIsReflectionCapture</code></strong> = <strong>지금 그리는 이 뷰 자체가 큐브맵을 굽는 중</strong>인가. 반사를 굽는 화면에 또 반사를 넣으면 반사의 반사가 되니까 뺀다.<br>&bull;&nbsp;<strong><code>View.State</code></strong> = 프레임을 넘어가며 유지되는 뷰 상태야. SSR은 이전 프레임 정보와 HZB를 쓰니까 이게 없으면 못 한다.<br>&bull;&nbsp;<strong><code>CVarSSRQuality.GetValueOnRenderThread()</code></strong> = <code>r.SSR.Quality</code> 콘솔 변수를 렌더 스레드에서 읽는다. 0이면 끈다는 뜻이야.<br>&bull;&nbsp;<strong><code>FinalPostProcessSettings</code></strong> = 이 뷰에 최종 적용된 포스트프로세스 볼륨 설정 묶음이야.<br>&bull;&nbsp;<strong><code>IsForwardShadingEnabled(...)</code></strong> = 포워드 셰이딩이면(모바일 제외) SSR을 안 돌린다. <a class="xref" href="ch-41-forward-mobile-renderer.html">forward-mobile-renderer</a>에서 볼 그 갈림길이야.<br>&bull;&nbsp;<strong><code>return false</code></strong> = "이번 뷰에서는 SSR 안 돌린다"고 답하고 즉시 빠져나간다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> show flag·반사 방식·레이트레이스 오버레이·캡처 뷰인지 확인 → 뷰 상태(이전 프레임 정보·HZB)가 있나 확인 → 품질 단계가 0인가 확인 → 포스트프로세스 강도가 너무 낮은가 확인 → 포워드 셰이딩인가 확인 → 다 통과하면 <code>true</code>. 스태프가 오려 붙이기를 하기 전에 "필름은 있냐, 허가는 났냐, 할 만한 품질이냐"를 묻는 장면이야.<br><br>참고로 파일 이름이 <code>ScreenSpaceReflections.cpp</code>가 아니라 <strong><code>ScreenSpaceRayTracing.cpp</code></strong>야. SSR·SSGI 같은 <strong>화면 공간 레이 추적</strong>이 한 파일에 같이 산다. 이름부터가 "SSR은 화면에서 레이를 쏘는 것"이라고 말해주는 셈이야.</div>
+<p>여기서 <code>View.State</code> 조건을 잘 봐. SSR은 <strong>이전 프레임 정보에 기대는 기술</strong>이야. 뷰 상태가 없으면(예: 씬 캡처 한 컷짜리) 아예 못 한다. 이 힌트 하나만으로도 SSR의 성격이 드러나. "이미 있는 화면 정보를 재활용하는 기술"이라는 거지.</p>
+<hr>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 화면에 안 그려진 건 애초에 정보가 없다</strong><br>&bull;&nbsp;<strong>사진의 한계</strong>: 사진 한 장에는 렌즈가 본 것만 찍혀 있어. 사진 뒤에 뭐가 있었는지는 사진을 아무리 확대해도 안 나와.<br>&bull;&nbsp;<strong>뒤통수</strong>: 정면을 찍은 사진에는 그 사람 뒤통수가 없어. 그런데 그 사람이 거울을 등지고 서 있으면, 거울에는 <strong>뒤통수가 비쳐야</strong> 해.<br>&bull;&nbsp;<strong>프레임 밖</strong>: 카메라 프레임 밖에 서 있던 사람도, 바닥 거울에는 비칠 수 있어. 하지만 사진에는 그 사람이 없다.<br>이게 잡히면 아래 "SSR은 화면에 없는 건 반사할 수 없다"가 논리적으로 필연이라는 게 보인다.</div>
+</div>
+<div class="conversation"><h2>3. SSR의 근본 한계 — 화면에 없는 건 반사할 수 없다</h2>
+<p>SSR이 하는 일을 한 문장으로 줄이면 이거야.</p>
+<p><strong>"이 픽셀의 반사 방향 <code>R</code>로 레이를 뻗어서, <u>화면에 이미 그려진 픽셀 중</u> 어디에 닿는지 찾는다."</strong></p>
+<p>레이를 한 발짝씩 전진시키면서, 매 발짝마다 그 위치를 화면 좌표로 바꿔서 Depth 버퍼를 찍어봐. "내 레이의 깊이가 저 픽셀의 깊이보다 뒤로 넘어갔나?" 넘어갔으면 뚫고 지나간 거니까, 거기가 부딪힌 지점이야. 그 자리의 SceneColor를 가져다 쓰면 끝. HZB(계층 깊이 버퍼)를 쓰면 이 전진을 성큼성큼 뛸 수 있어서 더 싸다.</p>
+<p>이게 왜 좋냐면 <strong>공짜에 가깝고, 게다가 정확</strong>하기 때문이야. 화면에 있는 픽셀은 진짜 그 프레임의 진짜 색이거든. 미리 구워둔 근사가 아니야. 캐릭터가 움직이면 바닥에 비친 상도 정확히 같이 움직여.</p>
+<p>그런데 이 문장에 밑줄 친 부분이 SSR의 <strong>사형선고</strong>야.</p>
+<div class="note warn"><strong>⚠️ SSR의 근본 한계 — 화면에 없는 건 반사할 수 없다.</strong><br><br>&bull;&nbsp;<strong>뒤통수 문제</strong>: 캐릭터가 등지고 서 있으면, 발밑 금속 바닥에는 <strong>캐릭터의 뒤통수</strong>가 비쳐야 해. 그런데 화면에는 앞모습만 그려져 있잖아. 뒤통수 픽셀이 세상에 존재하질 않아. SSR은 이걸 못 만든다.<br>&bull;&nbsp;<strong>화면 밖 문제</strong>: 화면 위쪽으로 잘려 나간 천장 조명이 바닥에 비쳐야 하는데, 레이가 화면 경계 밖으로 나가버려. 거기서 추적이 끝난다.<br>&bull;&nbsp;<strong>가려짐 문제</strong>: 기둥 뒤에 숨은 물체는 Depth 버퍼에 기둥만 적혀 있어. 레이가 기둥에 막혀서 그 뒤를 못 본다.<br><br>그래서 SSR은 화면 가장자리로 갈수록 반사가 <strong>스르륵 사라지는</strong> 걸 흔히 봤을 거야. 그건 버그가 아니라 <strong>화면 경계에서 정보가 끝나서</strong> 억지로 페이드아웃시키는 거야. 티 안 나게 죽이는 거지.</div>
+<p>여기서 오늘의 핵심 질문이 나온다.</p>
+<p><strong>"그럼 SSR이 못 찾은 픽셀은 어떡해? 새까맣게 둬?"</strong></p>
+<p>안 되지. 새까만 구멍이 화면에 뻥뻥 뚫린다. 그래서 <strong>다음 칸으로 내려가는 사다리</strong>가 필요한 거야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Reflection Capture(큐브맵)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 반사는 SSR처럼 화면에서 찾으면 돼. 이미 그려진 픽셀을 재활용하니까 공짜야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 화면 밖, 뒤통수, 가려진 뒤쪽은 <strong>정보 자체가 세상에 없어</strong>. 새까만 구멍을 남기거나 가장자리에서 반사가 뚝 끊긴다. 실내에서 카메라를 조금만 돌려도 벽 반사가 사라졌다 나타났다 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 화면과 상관없이 <strong>미리 사방을 찍어둔 자료</strong>가 필요해. 레벨 편집 때 그 지점에서 6방향(위·아래·앞·뒤·좌·우)을 찍어 큐브 한 장으로 구워두자. 그 굽는 액터가 <strong>Reflection Capture</strong>고, 결과물이 큐브맵이야.</div>
+</div>
+<div class="conversation"><h2>4. 2단 — Reflection Capture, 미리 구워둔 360도 사진첩</h2>
+<p>Reflection Capture는 레벨에 놓는 액터야. Sphere 또는 Box 모양이고, 반경이 있어. 레벨을 빌드할 때 <strong>그 액터가 놓인 자리에서 사방을 찍어 큐브맵으로 굽는다.</strong> 런타임에는 그냥 텍스처 샘플링 한 번이야. 엄청 싸.</p>
+<p>화면 밖이든 뒤통수든 상관없어. 사진첩에는 사방이 다 찍혀 있으니까. SSR이 못 하는 걸 정확히 메운다.</p>
+<p>그런데 여기서 <strong>거칠기</strong>가 등장해. 매끈한 거울 바닥은 큐브맵의 <strong>선명한 원본</strong>을 봐야 하고, 거친 콘크리트는 <strong>흐릿하게 뭉갠 버전</strong>을 봐야 하잖아. 어떻게 하냐면, 큐브맵을 구울 때 <strong>밉맵(mip)</strong> 여러 단계를 미리 흐리게 만들어 둔다. 그리고 러프니스를 보고 "몇 번째 흐린 단계를 꺼낼까"를 정해.</p>
+<p>그 변환을 하는 함수가 이거야.</p>
+<p><strong><code>ReflectionEnvironmentShared.ush:16</code></strong></p>
+<div class="code-block">#define REFLECTION_CAPTURE_ROUGHEST_MIP 1
+#define REFLECTION_CAPTURE_ROUGHNESS_MIP_SCALE 1.2</div>
+<p><strong><code>ReflectionEnvironmentShared.ush:23</code></strong></p>
+<div class="code-block">/**
+ * Compute absolute mip for a reflection capture cubemap given a roughness.
+ */
+half ComputeReflectionCaptureMipFromRoughness(half Roughness, half CubemapMaxMip)
+{
+	// Heuristic that maps roughness to mip level
+	// This is done in a way such that a certain mip level will always have the same roughness, regardless of how many mips are in the texture
+	// Using more mips in the cubemap just allows sharper reflections to be supported
+	half LevelFrom1x1 = REFLECTION_CAPTURE_ROUGHEST_MIP - REFLECTION_CAPTURE_ROUGHNESS_MIP_SCALE * log2(max(Roughness, 0.001));
+	return CubemapMaxMip - 1 - LevelFrom1x1;
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 러프니스 → 밉 레벨<br>&bull;&nbsp;<strong><code>half</code></strong> = <code>float</code>보다 가벼운 실수. GPU에서 흔히 쓴다.<br>&bull;&nbsp;<strong><code>Roughness</code></strong> = GBuffer에 적힌 그 거칠기(0=거울, 1=완전 무광). <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>에서 송장에 적었던 그 값이야.<br>&bull;&nbsp;<strong><code>CubemapMaxMip</code></strong> = 이 큐브맵이 가진 밉 단계의 최대 번호. 밉이 많을수록 더 선명한 반사를 담을 수 있어.<br>&bull;&nbsp;<strong>밉(mip)</strong> = 같은 텍스처의 점점 작아지고 흐려지는 축소판들. 0번이 원본, 번호가 클수록 뿌옇다.<br>&bull;&nbsp;<strong><code>#define</code></strong> = 컴파일할 때 그 이름을 뒤의 값으로 그대로 갈아 끼운다는 뜻이야. 셰이더의 상수 이름표라고 보면 돼.<br>&bull;&nbsp;<strong><code>REFLECTION_CAPTURE_ROUGHEST_MIP</code></strong>(=1) = <strong>"가장 거친(=가장 뿌연) 밉이 몇 번 칸이냐"</strong>의 기준점.<br>&bull;&nbsp;<strong><code>REFLECTION_CAPTURE_ROUGHNESS_MIP_SCALE</code></strong>(=1.2) = 러프니스가 <strong>몇 배 거칠어질 때 밉을 한 칸씩 올릴지</strong>의 기울기. 이 두 상수가 "러프니스↔밉" 환율을 고정한다.<br>&bull;&nbsp;<strong><code>log2(x)</code></strong> = 2를 몇 번 곱해야 x가 되나. 여기선 러프니스를 밉 단계로 부드럽게 펴는 데 쓴다.<br>&bull;&nbsp;<strong><code>max(Roughness, 0.001)</code></strong> = 러프니스가 0이면 <code>log2(0)</code>이 터지니까 바닥을 깔아준다.<br>&bull;&nbsp;<strong><code>LevelFrom1x1</code></strong> = "가장 뿌연 1×1 밉으로부터 몇 단계 선명한 쪽인가"를 센 값이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 러프니스에 <code>log2</code>를 걸어 → 가장 뿌연 밉(1×1)에서 몇 칸 올라갈지(<code>LevelFrom1x1</code>)를 구하고 → 큐브맵 최대 밉에서 그만큼 빼서 최종 밉 번호를 돌려준다. 사진첩에서 <strong>"선명한 페이지"와 "일부러 뿌옇게 인화한 페이지"</strong> 중 어느 쪽을 펼칠지 러프니스가 정하는 장면이야. 주석이 말하듯, 밉이 몇 개든 <strong>같은 러프니스는 항상 같은 흐림</strong>이 나오게 맞춰져 있어 — 그 약속을 지키는 게 위의 두 <code>#define</code> 상수다.</div>
+<p>이게 왜 중요하냐면, <strong>거칠기 = 흐림</strong>이라는 이 대응이 오늘 챕터 내내 반복되기 때문이야. 뒤에 나올 Lumen Reflections도 결국 "거칠면 여러 방향을 섞어 뿌옇게, 매끈하면 한 방향만 딱"이라는 같은 규칙을 다른 방법으로 지킬 뿐이야.</p>
+<hr>
+<h3>그런데 사진첩에는 치명적인 결함이 있다 — 시차(parallax)</h3>
+<p>사진첩은 <strong>한 자리에서 찍었어</strong>. Reflection Capture 액터가 놓인 그 좌표에서.</p>
+<p>그런데 지금 반사를 계산하는 픽셀은 <strong>거기 없어</strong>. 방 구석 바닥일 수도 있고, 벽에 딱 붙은 자리일 수도 있어.</p>
+<p>거울 앞에서 옆으로 한 발 옮기면 거울 속 풍경이 통째로 미끄러지지? 그게 <strong>시차(parallax)</strong>야. 사진첩은 그걸 못 따라간다. 방 한가운데서 찍은 사진을 방 구석 바닥에 그대로 붙이면, <strong>비친 상의 위치가 어긋나</strong>.</p>
+<div class="note warn"><strong>⚠️ Reflection Capture의 근본 한계 — 위치가 고정이라 시차가 틀린다.</strong><br><br>&bull;&nbsp;<strong>증상</strong>: 캡처 중심에서 멀어질수록 반사에 비친 물체 위치가 어긋난다. 벽이 실제보다 가깝거나 멀게 비친다.<br>&bull;&nbsp;<strong>완화책</strong>: 언리얼은 캡처의 반경(Sphere) 또는 상자(Box) 안에서 반사 벡터를 그 모양에 부딪히도록 다시 꺾어 <strong>시차를 근사 보정</strong>해. 그래서 실내 상자 모양 방에서는 꽤 그럴싸해져.<br>&bull;&nbsp;<strong>근본 해결은 아님</strong>: 근사일 뿐이야. 그리고 <strong>구워둔 시점의 씬</strong>이라서 움직이는 캐릭터는 애초에 안 찍혀 있어. 캡처는 <strong>정적인 배경 전용</strong>이라고 보는 게 맞아.<br>&bull;&nbsp;<strong>그래서 짝이 필요</strong>: 움직이는 것 → SSR이 담당. 정적인 배경·화면 밖 → 캡처가 담당. <strong>둘이 서로의 약점을 정확히 메운다.</strong> 사다리가 이렇게 짜인 이유가 바로 이거야.</div>
+<p>그리고 캡처가 여러 개 겹칠 수 있어. 큰 방 하나에 큰 캡처, 그 안의 작은 골방에 작은 캡처. 이때 언리얼은 <strong>큰 것부터 깔고 작은 것을 위에 덮어</strong>. 작은 캡처가 더 국소적이고 정확하니까 위에 오는 게 맞지. 이 합성도 결국 <strong>알파를 깎아 나가며 남은 몫을 채우는</strong> 방식이야. 주석과 코드가 그대로 말해준다.</p>
+<p><strong><code>ReflectionEnvironmentComposite.ush:29</code></strong></p>
+<div class="code-block">#if REFLECTION_COMPOSITE_USE_BLENDED_REFLECTION_CAPTURES
+	// Accumulate reflections from captures affecting this tile, applying largest captures first so that the smallest ones display on top
+	LOOP
+	for (uint TileCaptureIndex = 0; TileCaptureIndex &lt; NumCapturesAffectingTile; TileCaptureIndex++)
+	{
+		BRANCH
+		if (ImageBasedReflections.a &lt; 0.001)
+		{
+			break;
+		}</div>
+<p>그리고 큐브맵을 실제로 찍는 자리는 여기야. 위에서 구한 <code>Mip</code>으로 <code>SampleLevel</code>을 한 번 하고, <strong>남은 알파만큼만</strong> 더한 다음 알파를 깎는다.</p>
+<p><strong><code>ReflectionEnvironmentComposite.ush:94</code></strong></p>
+<div class="code-block">			{
+				float4 Sample = ReflectionStruct.ReflectionCubemap.SampleLevel(ReflectionStruct.ReflectionCubemapSampler, float4(ProjectedCaptureVector, CaptureArrayIndex), Mip);
+
+				Sample.rgb *= CaptureProperties.r;
+				Sample *= DistanceAlpha;
+
+				// Under operator (back to front)
+				ImageBasedReflections.rgb += Sample.rgb * ImageBasedReflections.a * IndirectSpecularOcclusion;
+				ImageBasedReflections.a *= 1 - Sample.a;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 큐브맵 샘플링과 알파 깎기<br>&bull;&nbsp;<strong><code>LOOP</code></strong>, <strong><code>BRANCH</code></strong> = 셰이더 컴파일러에게 "여긴 진짜 반복문/분기로 만들어라"고 알려주는 힌트야. HLSL 매크로다.<br>&bull;&nbsp;<strong><code>NumCapturesAffectingTile</code></strong> = 이 <strong>타일</strong>에 닿는 캡처 개수. 언리얼은 화면을 타일로 나눠 "여기 영향 주는 캡처만" 미리 골라둔다(컬링).<br>&bull;&nbsp;<strong><code>ImageBasedReflections</code></strong> = 캡처들을 누적하는 상자. <code>.rgb</code>=지금까지 모은 색, <code>.a</code>=<strong>아직 안 채워진 몫</strong>.<br>&bull;&nbsp;<strong><code>if (ImageBasedReflections.a &lt; 0.001) break;</code></strong> = <strong>다 찼으면 즉시 그만둔다</strong>. 남은 몫이 0이면 아래 캡처를 더 봐도 어차피 0이 곱해지니까.<br>&bull;&nbsp;<strong><code>SampleLevel(..., Mip)</code></strong> = 밉 번호를 <strong>직접 지정해서</strong> 큐브맵을 찍는다. 앞 절의 <code>ComputeReflectionCaptureMipFromRoughness</code>가 준 그 <code>Mip</code>이야.<br>&bull;&nbsp;<strong><code>ProjectedCaptureVector</code></strong> = 반사 벡터 <code>R</code>을 캡처의 구/박스 모양에 부딪히게 다시 꺾은 것. 아래에서 말한 <strong>시차 근사 보정</strong>이 여기 들어 있다.<br>&bull;&nbsp;<strong><code>DistanceAlpha</code></strong> = 캡처 경계에 가까울수록 0으로 흐려지는 값. 캡처끼리 <strong>딱딱한 경계 없이</strong> 섞이게 한다.<br>&bull;&nbsp;<strong><code>Under operator</code></strong> = ⭐ <strong>"밑에 깔기"</strong> 합성. 이미 있는 것 <strong>아래로</strong> 새 색을 넣는다. <code>Sample.rgb * ImageBasedReflections.a</code>가 곧 "남은 몫만큼만 넣기"고, <code>a *= 1 - Sample.a</code>가 "남은 몫 깎기"야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 타일에 닿는 캡처를 <strong>큰 것부터</strong> 돌면서 → 남은 몫이 0에 가까우면 <strong>바로 탈출</strong> → 큐브맵을 러프니스가 고른 밉으로 찍고 → <strong>남은 몫만큼만</strong> 색을 더하고 → 그만큼 <strong>남은 몫을 깎는다</strong>. 큰 사진첩을 먼저 깔고, 그 위에 국소적인 작은 사진첩을 덮는 장면이야. 이 <code>Under operator</code> 두 줄이 다음 절에서 볼 <strong>사다리 알파 누적</strong>과 <strong>똑같은 문법</strong>이라는 걸 기억해둬.</div>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Split-sum approximation</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 물리적으로 정확한 간접 스페큘러는 "반구 위의 모든 방향에서 오는 빛 × 그 방향의 BRDF"를 <strong>전부 더하는 적분</strong>이야. 큐브맵 픽셀 수천 개를 BRDF로 가중해 합쳐야 해.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 픽셀 하나당 수천 번 샘플링이면 실시간에서 즉사야. 게다가 그 적분은 러프니스·보는 각도·스페큘러 색이 다 섞여 있어서 미리 표로 만들 수도 없어. 변수가 너무 많거든.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 이 적분을 <strong>두 덩어리로 쪼개서 각각 미리 구워두자</strong>. ① "들어오는 빛"만 러프니스별로 흐리게 구운 큐브맵(= prefiltered environment map), ② "BRDF가 얼마나 통과시키나"만 담은 작은 2D 표(= <code>PreIntegratedGF</code> LUT). 런타임엔 이 둘을 <strong>곱하기만</strong> 하면 돼. 합(sum)을 둘로 쪼갰다고 해서 <strong>Split-sum</strong>이야.</div>
+</div>
+<div class="conversation"><h2>5. ⭐ Split-sum — ch-26의 스페큘러 항이 여기서 진짜로 쓰인다</h2>
+<p>자, 여기가 오늘의 하이라이트야. <a class="xref" href="ch-26-pbr-brdf.html">pbr-brdf</a>를 다시 꺼내자.</p>
+<p>거기서 우리는 스페큘러 BRDF가 <code>D * Vis * F</code>라고 배웠어. <code>D_GGX</code>(작은 거울 조각 방향 분포), <code>Vis_SmithJointApprox</code>(서로 가림), <code>F_Schlick</code>(각도 반사). 이 세 카드를 곱해서 반짝임을 만들었지.</p>
+<p>그런데 그건 <strong>라이트 하나</strong>에 대한 계산이었어. 방향이 딱 하나(<code>L</code>)로 정해져 있으니까 카드 세 장을 곱하면 끝이었지.</p>
+<p>이제 상황이 달라. <strong>간접 스페큘러는 사방에서 빛이 들어와.</strong> 큐브맵 전체가 다 빛이야. 정직하게 하려면 큐브맵의 모든 방향에 대해 <code>D * Vis * F</code>를 계산해서 전부 더해야 해. 픽셀 하나당 수천 번. 죽음이야.</p>
+<p>그래서 나온 트릭이 <strong>Split-sum</strong>이야. 적분을 두 덩어리로 쪼갠다.</p>
+<div class="code-block">정직한 적분 (못 함):
+   ∫ (들어오는 빛) × (BRDF: D·Vis·F) dω     ← 픽셀당 수천 샘플
+
+Split-sum (쪼갠다):
+   [ ∫ 들어오는 빛 ]  ×  [ ∫ BRDF ]
+        │                    │
+        │                    └─ ② BRDF만 미리 적분한 2D 표
+        │                       입력: (NoV, Roughness) → 출력: (A, B) 두 숫자
+        │                       = PreIntegratedGF  ← LUT 텍스처
+        │
+        └─ ① 러프니스별로 미리 흐리게 구운 큐브맵
+           = Reflection Capture / Sky Light 의 밉들
+           (앞 절의 ComputeReflectionCaptureMipFromRoughness가 이 밉을 고름)
+
+런타임: 둘을 꺼내서 곱하기만 하면 끝. 샘플 2번.</div>
+<p>①은 이미 우리가 봤어. <strong>큐브맵의 밉</strong>이 그거야. "러프니스별로 미리 흐리게 구워둔 들어오는 빛." <code>ComputeReflectionCaptureMipFromRoughness</code>가 러프니스를 보고 몇 번 밉을 꺼낼지 정했잖아. <strong>그게 split-sum의 첫 번째 항이었던 거야.</strong></p>
+<p>이제 ②를 보자. BRDF만 따로 적분해서 표로 만든 것. 코드는 <code>BRDF.ush</code>에 있어. 그래, <strong>ch-26에서 봤던 그 파일</strong>이야.</p>
+<p><strong><code>BRDF.ush:606</code></strong></p>
+<div class="code-block">#ifndef PreIntegratedGF
+Texture2D		PreIntegratedGF;
+SamplerState	PreIntegratedGFSampler;
+#endif
+
+// [Karis 2013, "Real Shading in Unreal Engine 4" slide 11]
+half3 EnvBRDF( half3 SpecularColor, half Roughness, half NoV )
+{
+	// Importance sampled preintegrated G * F
+	float2 AB = Texture2DSampleLevel( PreIntegratedGF, PreIntegratedGFSampler, float2( NoV, Roughness ), 0 ).rg;
+
+	// Anything less than 2% is physically impossible and is instead considered to be shadowing
+	float3 GF = SpecularColor * AB.x + saturate( 50.0 * SpecularColor.g ) * AB.y;
+	return GF;
+}</div>
+<p>그리고 LUT 텍스처조차 못 쓰는 자리(모바일 등)를 위해, 같은 표를 <strong>다항식으로 흉내 낸</strong> 버전이 바로 아래에 붙어 있어.</p>
+<p><strong><code>BRDF.ush:630</code></strong></p>
+<div class="code-block">half2 EnvBRDFApproxLazarov(half Roughness, half NoV)
+{
+	// [ Lazarov 2013, "Getting More Physical in Call of Duty: Black Ops II" ]
+	// Adaptation to fit our G term.
+	const half4 c0 = { -1, -0.0275, -0.572, 0.022 };
+	const half4 c1 = { 1, 0.0425, 1.04, -0.04 };
+	half4 r = Roughness * c0 + c1;
+	half a004 = min(r.x * r.x, exp2(-9.28 * NoV)) * r.x + r.y;
+	half2 AB = half2(-1.04, 1.04) * a004 + r.zw;
+	return AB;
+}
+
+half3 EnvBRDFApprox( half3 SpecularColor, half Roughness, half NoV )
+{
+	half2 AB = EnvBRDFApproxLazarov(Roughness, NoV);
+
+	// Anything less than 2% is physically impossible and is instead considered to be shadowing
+	// Note: this is needed for the 'specular' show flag to work, since it uses a SpecularColor of 0
+	float F90 = saturate( 50.0 * SpecularColor.g );
+
+	return SpecularColor * AB.x + F90 * AB.y;
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — Split-sum의 두 번째 항<br>&bull;&nbsp;<strong><code>EnvBRDF</code></strong> = <strong>Env</strong>ironment + <strong>BRDF</strong>. "환경(큐브맵)에서 오는 빛에 곱할 BRDF 몫"을 돌려주는 함수야. 주석의 <strong>[Karis 2013]</strong>이 split-sum을 발표한 그 언리얼 논문이다.<br>&bull;&nbsp;<strong><code>PreIntegratedGF</code></strong> = <strong>미리(Pre) 적분해둔(Integrated) G와 F</strong>. ch-26의 <code>Vis</code>(가림)와 <code>F</code>(Fresnel)를 미리 적분해서 구워둔 작은 2D 텍스처야. <strong>LUT(Look-Up Table, 찾아보기 표)</strong>라고 부른다.<br>&bull;&nbsp;<strong><code>#ifndef PreIntegratedGF</code></strong> = "이 이름이 아직 정의 안 됐으면 여기서 텍스처로 선언해라". 실제로는 부르는 셰이더마다 <code>#define PreIntegratedGF ReflectionStruct.PreIntegratedGF</code>처럼 <strong>자기 유니폼 버퍼의 것으로 갈아 끼운다</strong>. 그래서 같은 코드가 BasePass·리플렉션·Lumen 어디서든 돈다.<br>&bull;&nbsp;<strong><code>float2( NoV, Roughness )</code></strong> = 이 표를 찍는 좌표. 가로축은 <strong>보는 각도</strong>, 세로축은 <strong>거칠기</strong>. 딱 두 개면 표를 만들 수 있어서 split-sum이 성립하는 거야.<br>&bull;&nbsp;<strong><code>.rg</code></strong> = 텍스처의 빨강·초록 채널만 꺼낸다. 여기 두 숫자 <code>A</code>, <code>B</code>가 들어 있어.<br>&bull;&nbsp;<strong><code>SpecularColor * AB.x + ... * AB.y</code></strong> = Fresnel의 형태 그대로야. <code>A</code>는 스페큘러 색에 곱할 몫, <code>B</code>는 가장자리에서 더해질 몫.<br>&bull;&nbsp;<strong><code>saturate( 50.0 * SpecularColor.g )</code></strong> = ch-26의 <code>F_Schlick</code>에 있던 그 줄이랑 <strong>똑같아</strong>. 2% 미만 스페큘러는 물리적으로 불가능하니 그림자로 취급한다. 이 값이 곧 <code>F90</code>(스치는 각도에서의 반사)이야.<br>&bull;&nbsp;<strong><code>EnvBRDFApproxLazarov</code></strong> = LUT 텍스처를 <strong>샘플링조차 안 하고</strong> 다항식 몇 줄로 <code>A</code>,<code>B</code>를 뽑는 함수. <code>EnvBRDFApprox</code>가 이걸 불러 쓴다.<br>&bull;&nbsp;<strong><code>exp2(-9.28 * NoV)</code></strong> = 그 다항식 근사에 나오는 마법의 숫자들. 논문에서 곡선 피팅으로 뽑은 값이야. 외울 필요 없어.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>EnvBRDF</code>는 <code>(NoV, Roughness)</code> 두 값으로 <strong>미리 구워둔 표</strong>를 한 번 찍어서 <code>A</code>, <code>B</code> 두 숫자를 꺼내고 → <code>SpecularColor * A + F90 * B</code>로 조립해 돌려준다. ch-26에서 라이트 하나마다 <code>Vis_Smith...</code>와 <code>F_Schlick</code>을 <strong>매번 계산</strong>했던 그 두 카드가, 여기서는 <strong>텍스처 한 번 찍기</strong>로 압축돼 있어. <code>EnvBRDFApprox</code>는 그 텍스처마저 없애고 <strong>같은 조립식(<code>SpecularColor * A + F90 * B</code>)</strong>을 다항식으로 흉내낸 거고 — 두 함수의 <strong>마지막 줄이 판박이</strong>인 걸 봐.</div>
+<div class="note">💡 <strong>ch-26과의 연결을 한 문장으로.</strong><br>ch-26의 <code>SpecularGGX</code>는 <strong>라이트 하나</strong>에 대해 <code>D * Vis * F</code>를 <strong>매번 계산</strong>했다.<br>ch-39의 간접 스페큘러는 <strong>사방의 빛 전체</strong>에 대해, <code>D</code>는 <strong>큐브맵 밉</strong>으로 굽고 <code>Vis * F</code>는 <strong><code>PreIntegratedGF</code> 표</strong>로 구워서, 런타임에 <strong>곱하기 한 번</strong>으로 끝낸다.<br>→ <strong>같은 BRDF, 다른 시간에 계산했을 뿐이다.</strong> 이게 split-sum의 전부야.</div>
+<p>여기서 <code>D</code>는 어디 갔냐고? <code>D</code>(GGX 분포)는 <strong>큐브맵을 흐리게 굽는 그 과정 자체</strong>에 녹아 있어. 러프니스가 크면 GGX 로브가 넓게 퍼지지? 그래서 큐브맵을 넓게 뭉개서 굽는 거야. <strong>흐림의 모양이 곧 <code>D</code>다.</strong> ch-26에서 "GGX는 꼬리가 예쁘게 길다"고 했던 그 성질이, 큐브맵 밉의 뿌연 모양으로 미리 박혀 있는 거지.</p>
+</div>
+<div class="conversation"><h2>6. 3단 — Sky Light, 마지막 배경판</h2>
+<p>큐브맵도 안 깔린 자리가 있어. 넓은 야외 레벨에 Reflection Capture를 다 놓을 순 없잖아. 그럼 마지막으로 <strong>하늘</strong>이 있다.</p>
+<p>Sky Light는 하늘(또는 지정한 큐브맵)을 캡처해서 <strong>레벨 전체에 깔리는 기본 환경 광</strong>을 만들어. 반사 쪽에서 보면 "다른 아무것도 못 찾았을 때 최소한 하늘이라도 비춰주는 배경판"이야.</p>
+<p>동작 방식은 Reflection Capture랑 똑같아. 큐브맵이고, 러프니스에 따라 밉을 고르고, <code>EnvBRDF</code>랑 곱해진다. 다른 건 <strong>범위가 무제한이고 딱 하나뿐</strong>이라는 것. 그래서 사다리의 <strong>맨 밑바닥</strong>을 맡는다.</p>
+<p>코드를 보면 정말로 <strong>똑같다</strong>. 앞 절의 그 밉 계산 함수를 그대로 부른다.</p>
+<p><strong><code>ReflectionEnvironmentShared.ush:43</code></strong></p>
+<div class="code-block">float3 GetSkyLightReflection(float3 ReflectionVector, float Roughness, out float OutSkyAverageBrightness)
+{
+	float AbsoluteSpecularMip = ComputeReflectionCaptureMipFromRoughness(Roughness, ReflectionStruct.SkyLightParameters.x);
+	float3 Reflection = TextureCubeSampleLevel(ReflectionStruct.SkyLightCubemap, SharedSkyLightCubemapSampler, ReflectionVector, AbsoluteSpecularMip).rgb;
+
+	OutSkyAverageBrightness = GetSkyLightCubemapBrightness() * Luminance(View.SkyLightColor.rgb);
+	return Reflection * View.SkyLightColor.rgb;
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 하늘 큐브맵 찍기<br>&bull;&nbsp;<strong><code>ReflectionVector</code></strong> = 아까 만든 반사 방향 <code>R</code>. "이 픽셀이 하늘의 <strong>어느 쪽</strong>을 보고 있나."<br>&bull;&nbsp;<strong><code>out float OutSkyAverageBrightness</code></strong> = <code>out</code>은 "이 칸에 결과를 <strong>담아서 돌려준다</strong>"는 뜻. 반환값이 두 개인 셈이야.<br>&bull;&nbsp;<strong><code>ComputeReflectionCaptureMipFromRoughness(...)</code></strong> = ⭐ <strong>4절에서 본 그 함수 그대로</strong>야. Reflection Capture든 Sky Light든 <strong>러프니스→밉 환율은 하나</strong>라는 뜻이지.<br>&bull;&nbsp;<strong><code>ReflectionStruct.SkyLightParameters.x</code></strong> = 하늘 큐브맵의 <strong>최대 밉 번호</strong>. 캡처 큐브맵 자리에 하늘 큐브맵을 끼운 것뿐이야.<br>&bull;&nbsp;<strong><code>TextureCubeSampleLevel(...)</code></strong> = 큐브맵을 <strong>밉 번호를 직접 지정해서</strong> 찍는다.<br>&bull;&nbsp;<strong><code>View.SkyLightColor.rgb</code></strong> = 스카이라이트 컴포넌트의 색·세기. 찍어온 하늘색에 곱해진다.<br>&bull;&nbsp;<strong><code>Luminance(...)</code></strong> = RGB를 사람 눈 기준 <strong>밝기 하나</strong>로 줄이는 함수.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> Sky Light 반사는 <strong>새 알고리즘이 하나도 없다</strong>. 러프니스로 밉을 고르고(4절과 <strong>같은 함수</strong>), 큐브맵을 한 번 찍고, 스카이라이트 색을 곱해서 돌려준다. 사진첩 대신 <strong>하늘 사진 한 장</strong>을 꽂았을 뿐이야. 사다리의 맨 아래 칸이 이렇게 싸기 때문에 <strong>최후의 배경판</strong> 노릇을 할 수 있는 거야.</div>
+<p>Sky Light가 없거나 꺼져 있으면? 그 픽셀의 간접 스페큘러는 정말로 <strong>0</strong>이야. 금속 바닥이 새까매진다. 그래서 "왜 내 금속이 시커멓지?"의 절반은 Sky Light가 없거나 Reflection Capture를 안 빌드한 게 범인이야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Sky Light</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 반사할 게 있으면 SSR이나 Reflection Capture로 채우면 돼. 실내 레벨은 이걸로 거의 다 커버돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 넓은 야외에 Reflection Capture를 촘촘히 깔 수는 없어. 산 하나 넘어가면 캡처 반경 밖이야. 그럼 그 자리 금속은 <strong>반사할 게 아무것도 없어서 새까매져</strong>. 현실에서 야외 금속이 새까만 경우는 없는데도.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 레벨 어디에나 항상 깔려 있는 <strong>최후의 배경</strong>이 필요해. 현실에서 그게 뭐냐면 <strong>하늘</strong>이야. 야외에선 하늘이 제일 큰 광원이자 제일 큰 반사 대상이거든. 그걸 큐브맵 하나로 캡처해서 바닥에 깔아둔 게 Sky Light야.</div>
+</div>
+<div class="conversation"><h2>7. 사다리를 합치는 한 줄 — 알파가 남은 만큼만 다음이 채운다</h2>
+<p>이제 진짜 목적지야. 위 세 칸이 <strong>실제로 어떻게 합쳐지는지</strong> 보자. 여기가 이 챕터의 심장이야.</p>
+<p>합성은 <code>ReflectionEnvironmentPixelShader.usf</code>의 <code>ReflectionEnvironment(...)</code> 함수에서 일어나. 순서대로 따라가자. 먼저 <strong>반사 벡터를 만든다</strong>.</p>
+<p><strong><code>ReflectionEnvironmentPixelShader.usf:158</code></strong></p>
+<div class="code-block">	float3 TranslatedWorldPosition = mul(float4(GetScreenPositionForProjectionType(ScreenPosition, GBuffer.Depth), GBuffer.Depth, 1), View.ScreenToTranslatedWorld).xyz;
+	float3 CameraToPixel = GetCameraVectorFromTranslatedWorldPosition(TranslatedWorldPosition);
+	float3 ReflectionVector = reflect(CameraToPixel, GBuffer.WorldNormal);
+    float3 V = -CameraToPixel;
+	float3 N = GBuffer.WorldNormal;
+
+	const float3 SavedTopLayerNormal = N;
+
+#if SUPPORTS_ANISOTROPIC_MATERIALS
+	ModifyGGXAnisotropicNormalRoughness(GBuffer.WorldTangent, GBuffer.Anisotropy, GBuffer.Roughness, N, V);
+#endif
+
+	float3 R = 2 * dot( V, N ) * N - V;
+	float NoV = saturate( dot( N, V ) );
+
+	// Point lobe in off-specular peak direction
+	R = GetOffSpecularPeakReflectionDir(N, R, GBuffer.Roughness);</div>
+<p>다음이 <strong>1단(SSR)의 결과를 읽는 자리</strong>야. 주석을 잘 봐 — 이 텍스처 한 장에 SSR만 오는 게 아니라 <strong>플래나 리플렉션·RT 반사·Lumen 반사</strong>가 올 수도 있어. 사다리의 1단 자리는 <strong>꽂아 갈아 끼울 수 있는 슬롯</strong>인 거야.</p>
+<p><strong><code>ReflectionEnvironmentPixelShader.usf:176</code></strong></p>
+<div class="code-block">	// Sample input reflection texture that may contain SSR, planar reflections, RT reflections or Lumen Reflections
+
+#if REFLECTION_SOURCE_TYPE == REFLECTION_SOURCE_LUMEN_STANDALONE
+	float4 ReflectionInput = Texture2DArraySample(LumenReflectionTexture, LumenReflectionTextureSampler, float3(BufferUV, 0));
+#elif REFLECTION_SOURCE_TYPE == REFLECTION_SOURCE_SSR
+	float4 ReflectionInput = Texture2DSample(ReflectionTexture, ReflectionTextureSampler, BufferUV);
+#else // REFLECTION_SOURCE_TILED_SSR
+	const uint2 PixelPos = uint2(SvPosition.xy - View.ViewRectMin.xy);
+	bool bSSRTileUsed = IsSSRTileUsed(PixelPos, SSRTiledViewRes, SSRTileMaskBuffer);
+	float4 ReflectionInput = 0;
+
+	if (bSSRTileUsed)
+	{
+		ReflectionInput = Texture2DSample(ReflectionTexture, ReflectionTextureSampler, BufferUV);
+	}
+#endif
+
+	Color = CompositeReflections(ReflectionInput, BufferUV, GBuffer.Roughness, ShadingModelID);</div>
+<p>그리고 저 <code>CompositeReflections</code> 안에 <strong>오늘의 한 줄</strong>이 들어 있다. 같은 파일 위쪽이야.</p>
+<p><strong><code>ReflectionEnvironmentPixelShader.usf:120</code></strong></p>
+<div class="code-block">float4 CompositeReflections(float4 ReflectionInput, float2 BufferUV, float InRoughness, uint ShadingModelID)
+{
+	float4 Lighting = float4(0, 0, 0, 1);
+
+#if REFLECTION_SOURCE_TYPE == REFLECTION_SOURCE_LUMEN_STANDALONE
+	const bool bHasBackfaceDiffuse = ShadingModelID == SHADINGMODELID_TWOSIDED_FOLIAGE || ShadingModelID == SHADINGMODELID_SUBSURFACE;
+	const float FadeAlpha = ShadingModelID == SHADINGMODELID_CLEAR_COAT ? 1.0f : LumenCombineReflectionsAlpha(InRoughness, bHasBackfaceDiffuse);
+
+	// Must branch as Lumen Reflections can be uninitialized where not needed and contain NaN
+	if (FadeAlpha &gt; 0.0f)
+	{
+		Lighting.rgb = ReflectionInput.xyz * FadeAlpha;
+		Lighting.a = 1 - FadeAlpha;
+	}
+
+#else
+	Lighting.rgb = ReflectionInput.rgb;
+	Lighting.a = 1 - ReflectionInput.a;
+#endif
+
+	return Lighting;
+}</div>
+<p>보이지? <code>Lighting.a = 1 - ReflectionInput.a;</code> — <strong>1단이 채우고 남은 몫</strong>이 알파에 적힌다. 그리고 이 <code>Lighting</code>이 위에서 <code>Color</code>로 돌아와.</p>
+<p>이제 <strong>남은 몫을 들고 2단·3단으로 내려간다</strong>. <code>Color.a</code>가 그대로 첫 인자로 넘어가는 걸 봐.</p>
+<p><strong><code>ReflectionEnvironmentPixelShader.usf:231</code></strong></p>
+<div class="code-block">	//Top of regular reflection or bottom layer of clear coat.
+	Color.rgb += View.PreExposure * GatherRadiance(Color.a, TranslatedWorldPosition, R, GBuffer.Roughness, BentNormal, IndirectIrradiance, GBuffer.ShadingModelID, NumCulledReflectionCaptures, CaptureDataStartIndex);</div>
+<p>그 <code>GatherRadiance</code>가 하는 일은 딱 하나야. 받은 <strong>남은 몫(<code>CompositeAlpha</code>)</strong>을 그대로 <strong>Reflection Capture + Sky Light 합성 함수</strong>에 넘긴다.</p>
+<p><strong><code>ReflectionEnvironmentPixelShader.usf:92</code></strong></p>
+<div class="code-block">float3 GatherRadiance(float CompositeAlpha, float3 TranslatedWorldPosition, float3 RayDirection, float Roughness, float3 BentNormal, float IndirectIrradiance, uint ShadingModelID, uint NumCulledReflectionCaptures, uint CaptureDataStartIndex)
+{
+	// Indirect occlusion from DFAO, which should be applied to reflection captures and skylight specular, but not SSR
+	float IndirectSpecularOcclusion = 1.0f;
+	float3 ExtraIndirectSpecular = 0;
+
+#if SUPPORT_DFAO_INDIRECT_OCCLUSION
+	float IndirectDiffuseOcclusion;
+	GetDistanceFieldAOSpecularOcclusion(BentNormal, RayDirection, Roughness, ShadingModelID == SHADINGMODELID_TWOSIDED_FOLIAGE, IndirectSpecularOcclusion, IndirectDiffuseOcclusion, ExtraIndirectSpecular);
+	// Apply DFAO to IndirectIrradiance before mixing with indirect specular
+	IndirectIrradiance *= IndirectDiffuseOcclusion;
+#endif
+
+	const bool bCompositeSkylight = true;
+	return CompositeReflectionCapturesAndSkylightTWS(
+		CompositeAlpha,
+		TranslatedWorldPosition,
+		RayDirection,
+		Roughness,
+		IndirectIrradiance,
+		IndirectSpecularOcclusion,
+		ExtraIndirectSpecular,
+		NumCulledReflectionCaptures,
+		CaptureDataStartIndex,
+		0,
+		bCompositeSkylight);
+}</div>
+<p>그리고 마지막. <strong>모아온 빛에 <code>EnvBRDF</code>를 곱한다.</strong></p>
+<p><strong><code>ReflectionEnvironmentPixelShader.usf:281</code></strong></p>
+<div class="code-block">	else
+	{
+		#if USE_ENERGY_CONSERVATION
+		Color.rgb *= EnergyTerms.E;
+		#else
+		Color.rgb *= EnvBRDF( SpecularColor, GBuffer.Roughness, NoV );
+		#endif
+	}
+
+	// Transform NaNs to black, transform negative colors to black.
+	return -min(-Color.rgb, 0.0);</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 사다리 합성<br>&bull;&nbsp;<strong><code>N</code></strong> = 표면 노멀. GBuffer에서 읽은 "이 픽셀이 바라보는 쪽"이야.<br>&bull;&nbsp;<strong><code>V</code></strong> = 카메라로 가는 방향. <code>-CameraToPixel</code>이니까 "픽셀→카메라" 화살표야.<br>&bull;&nbsp;<strong><code>R = 2 * dot(V, N) * N - V</code></strong> = <strong>반사 벡터</strong>. 거울 반사 공식 그대로야. "V를 노멀 기준으로 뒤집으면 어느 쪽을 보게 되나."<br>&bull;&nbsp;<strong><code>NoV</code></strong> = <code>dot(N, V)</code>. ch-26에서 봤던 그 값. 여기서 <code>EnvBRDF</code>의 LUT 좌표로 들어간다.<br>&bull;&nbsp;<strong><code>GetOffSpecularPeakReflectionDir(...)</code></strong> = 거친 표면에선 실제 반짝임의 정점이 완전한 거울 방향에서 살짝 <strong>노멀 쪽으로 밀린다</strong>. 그걸 보정해 <code>R</code>을 조금 꺾는다.<br>&bull;&nbsp;<strong><code>ReflectionInput</code></strong> = 1단 패스가 미리 만들어둔 반사 텍스처를 읽은 값. <code>rgb</code>=찾아낸 반사색, <code>a</code>=<strong>얼마나 확실히 찾았나</strong>. 주석대로 SSR일 수도, Lumen일 수도 있다.<br>&bull;&nbsp;<strong><code>Lighting.a = 1 - ReflectionInput.a</code></strong> = ⭐ <strong>오늘의 한 줄.</strong> 1단이 채우고 <strong>남은 몫</strong>이야. 완벽히 찾았으면(<code>a=1</code>) 남은 몫은 0.<br>&bull;&nbsp;<strong><code>#if REFLECTION_SOURCE_TYPE == ...</code></strong> = 컴파일 시점에 <strong>어느 소스를 꽂을지</strong> 고르는 스위치. 셰이더가 SSR용/타일 SSR용/Lumen용으로 각각 따로 컴파일된다.<br>&bull;&nbsp;<strong><code>GatherRadiance(Color.a, ...)</code></strong> = 첫 인자로 <strong>남은 몫</strong>을 받는 게 핵심이야. 이름 그대로 "radiance(들어오는 빛)를 긁어모은다".<br>&bull;&nbsp;<strong><code>CompositeAlpha</code></strong> = <code>GatherRadiance</code> 안에서 그 남은 몫을 부르는 이름. 그대로 <code>CompositeReflectionCapturesAndSkylightTWS</code>로 흘러간다.<br>&bull;&nbsp;<strong><code>CompositeReflectionCapturesAndSkylightTWS(...)</code></strong> = 이름 그대로 <strong>Reflection Capture들 + Sky Light</strong>를 합성하는 함수(4절에서 그 안을 이미 봤어). 끝의 <strong>TWS</strong>는 <strong>T</strong>ranslated <strong>W</strong>orld <strong>S</strong>pace — 좌표를 카메라 기준으로 옮겨 큰 월드에서 정밀도가 깨지지 않게 한 버전이야.<br>&bull;&nbsp;<strong><code>DFAO</code></strong> = <strong>D</strong>istance <strong>F</strong>ield <strong>A</strong>mbient <strong>O</strong>cclusion. 주석이 콕 집어 말하지 — 이 가림은 <strong>캡처와 스카이라이트엔 적용하고 SSR엔 적용하지 않는다</strong>. SSR은 실제 화면 픽셀이라 이미 가림이 반영돼 있으니까.<br>&bull;&nbsp;<strong><code>View.PreExposure</code></strong> = HDR 값이 float 범위를 넘지 않게 미리 곱해두는 노출 계수야.<br>&bull;&nbsp;<strong><code>EnvBRDF(...)</code></strong> = 방금 5절에서 본 그 함수. split-sum의 두 번째 항.<br>&bull;&nbsp;<strong><code>-min(-Color.rgb, 0.0)</code></strong> = NaN과 음수를 검게 눌러 담는 안전장치. 반사 계산이 터져도 화면에 <strong>이상한 점</strong>이 안 튀게 한다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> ① 노멀과 카메라 방향으로 <strong>반사 벡터 <code>R</code></strong>을 만들고(러프니스만큼 살짝 꺾고) → ② <strong>1단 결과(<code>ReflectionInput</code>)를 먼저 깐다</strong> → ③ <code>CompositeReflections</code>가 <strong>남은 몫을 <code>Lighting.a</code>에 적고</strong>(<code>1 - ReflectionInput.a</code>) → ④ 그 남은 몫(<code>Color.a</code>)을 <strong>첫 인자로 넘겨서</strong> Reflection Capture와 Sky Light가 <strong>딱 그만큼만</strong> 채우게 하고 → ⑤ 채운 걸 <code>+=</code>로 더하고 → ⑥ 마지막에 <strong><code>EnvBRDF</code>를 곱한다</strong>. 촬영장 스태프가 오려 붙이고, 남은 구멍만 사진첩으로 메우고, 그래도 남으면 하늘 배경판, 마지막에 "이 바닥 재질이 빛을 얼마나 돌려보내나"를 곱하는 장면이야.</div>
+<p>이 코드에서 딱 두 줄만 기억하면 돼.</p>
+<div class="info-box"><h4>🔑 사다리의 심장</h4><p><code>Lighting.a = 1 - ReflectionInput.a;</code> ← 1단(SSR)이 <strong>못 채운 몫</strong>이 여기 적힌다.</p><p><code>GatherRadiance(Color.a, ...)</code> → <code>CompositeReflectionCapturesAndSkylightTWS(CompositeAlpha, ...)</code> ← 다음 칸은 <strong>그 몫만큼만</strong> 채운다.</p><p style="margin-top:12px;">폴백 사다리는 <code>if/else</code>가 아니라 <strong>알파를 깎아 나가는 누적</strong>이다. 그래서 SSR과 큐브맵의 경계가 뚝 끊기지 않고 <strong>부드럽게 섞인다.</strong></p></div>
+<p>왜 <code>if/else</code>가 아니라 알파로 했을까? <code>if (SSR 실패) { 큐브맵 }</code>으로 짜면 픽셀마다 <strong>딱딱한 경계</strong>가 생겨. SSR이 아슬아슬하게 성공한 픽셀과 아슬아슬하게 실패한 픽셀 사이에 <strong>지저분한 선</strong>이 보인다. 알파로 섞으면 SSR의 확신도가 0.6이면 큐브맵이 0.4만 채우니까, 화면 가장자리에서 SSR이 <strong>스르륵 사라지면서 큐브맵이 스르륵 올라온다</strong>. 이게 티 안 나게 만드는 기술이야.</p>
+<p>그리고 마지막 줄을 다시 봐.</p>
+<p><code>Color.rgb *= EnvBRDF( SpecularColor, GBuffer.Roughness, NoV );</code></p>
+<p><strong><code>Color.rgb</code>는 "들어오는 빛"이고, <code>EnvBRDF(...)</code>는 "이 재질이 그걸 얼마나 돌려보내나"야.</strong> split-sum의 두 항이 여기서 진짜로 곱해진다. ch-26을 읽고 왔으면 이 한 줄이 이제 그냥 읽혀야 해.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Lumen Reflections</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: SSR로 화면 안을 채우고, 못 채운 건 미리 구운 큐브맵으로 메우면 돼. 10년 넘게 이 사다리로 잘 버텼어.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 큐브맵은 <strong>구운 시점의 정적인 씬</strong>이야. 캐릭터가 움직이면 안 비치고, 라이트를 껐다 켜도 반사는 그대로야. 문을 열면 옆방 빛이 바닥에 비쳐야 하는데 안 비쳐. 게다가 캡처 위치가 고정이라 시차가 계속 틀려. 결국 "실시간 GI"라고 부를 수가 없어.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: <a class="xref" href="ch-31-lumen-diffuse.html">lumen-diffuse</a>가 디퓨즈에 대해 한 걸, 스페큘러에도 똑같이 하자. <strong>진짜로 레이를 쏴서</strong> 그 방향에 지금 뭐가 있는지 보는 거야. 그게 <strong>Lumen Reflections</strong>고, Lumen 디퓨즈의 <strong>스페큘러 짝</strong>이야.</div>
+</div>
+<div class="conversation"><h2>8. 4단 — Lumen Reflections, 진짜로 카메라를 보낸다</h2>
+<p>ch-31에서 배운 걸 그대로 떠올려봐. Lumen Diffuse는 화면에 <strong>프로브 검사원</strong>을 세우고, 그 검사원이 레이를 쏴서 <strong>화면 추적 → 하드웨어 RT / Mesh SDF → radiance cache</strong> 순으로 뒤졌어.</p>
+<p>Lumen Reflections도 <strong>똑같은 추적 엔진</strong>을 쓴다. 딱 하나가 다를 뿐이야.</p>
+<table class="compare-table">
+<tr><th></th><th>Lumen Diffuse (ch-31)</th><th>Lumen Reflections (ch-39)</th></tr>
+<tr><td><strong>레이를 어디로 쏘나</strong></td><td>노멀 반구 <strong>사방으로</strong> 골고루</td><td><strong>반사 방향(R) 쪽으로</strong> 몰아서</td></tr>
+<tr><td><strong>퍼지는 정도</strong></td><td>항상 넓게 (디퓨즈는 사방 흩어짐)</td><td><strong>러프니스가 정한다</strong> (거울=좁게, 거칠면=넓게)</td></tr>
+<tr><td><strong>결과를 어디에 쓰나</strong></td><td>간접 디퓨즈</td><td>간접 스페큘러</td></tr>
+<tr><td><strong>추적 경로</strong></td><td colspan="2" style="text-align:center;"><strong>완전히 동일</strong> — 화면 추적 → HW RT / Mesh SDF → radiance cache</td></tr>
+</table>
+<p>이게 핵심이야. <strong>Lumen Reflections는 새 알고리즘이 아니라, ch-31의 추적 엔진에게 "반사 방향으로 쏴줘"라고 시킨 것</strong>이야. 그래서 두 기능이 하드웨어 RT를 쓰는지 SDF를 쓰는지도 같이 결정되고, 문지기 함수 생김새도 쌍둥이야.</p>
+<p><strong><code>LumenReflections.cpp:750</code></strong></p>
+<div class="code-block">bool ShouldRenderLumenReflections(const FSceneView&amp; View, bool bSkipTracingDataCheck, bool bSkipProjectCheck, bool bIncludeStandalone)
+{
+	const FScene* Scene = (const FScene*)View.Family-&gt;Scene;
+	if (Scene)
+	{
+		return Lumen::IsLumenFeatureAllowedForView(Scene, View, bSkipTracingDataCheck, bSkipProjectCheck)
+			&amp;&amp; View.FinalPostProcessSettings.ReflectionMethod == EReflectionMethod::Lumen
+			&amp;&amp; View.Family-&gt;EngineShowFlags.LumenReflections
+			&amp;&amp; CVarLumenAllowReflections.GetValueOnAnyThread()
+			&amp;&amp; (ShouldRenderLumenDiffuseGI(Scene, View, bSkipTracingDataCheck, bSkipProjectCheck)
+				// GRHISupportsRayTracingShaders is required for standalone Lumen Reflections because Lumen::LumenHardwareRayTracing::GetHitLightingMode forces hit lighting
+				|| (bIncludeStandalone &amp;&amp; Lumen::UseHardwareRayTracedReflections(*View.Family) &amp;&amp; GRHISupportsRayTracingShaders))
+			&amp;&amp; (bSkipTracingDataCheck || Lumen::UseHardwareRayTracedReflections(*View.Family) || Lumen::IsSoftwareRayTracingSupported());
+	}
+
+	return false;
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — Lumen Reflections 문지기<br>&bull;&nbsp;<strong><code>ShouldRenderLumenReflections</code></strong> = ch-31의 <code>ShouldRenderLumenDiffuseGI</code>와 <strong>거의 판박이</strong>인 문지기야. 이름만 Diffuse→Reflections로 바뀌었어.<br>&bull;&nbsp;<strong><code>IsLumenFeatureAllowedForView(...)</code></strong> = "이 뷰에서 Lumen을 써도 되나"를 묻는 공통 검사. 디퓨즈랑 <strong>같은 함수</strong>를 쓴다.<br>&bull;&nbsp;<strong><code>ReflectionMethod == EReflectionMethod::Lumen</code></strong> = 포스트프로세스 설정에서 <strong>반사 방식</strong>을 Lumen으로 골랐나. 여기가 SSR이면 Lumen 반사는 안 돈다.<br>&bull;&nbsp;<strong><code>EngineShowFlags.LumenReflections</code></strong> = 에디터 show flag 스위치.<br>&bull;&nbsp;<strong><code>CVarLumenAllowReflections</code></strong> = 콘솔 변수. 런타임에 껐다 켤 수 있는 손잡이야.<br>&bull;&nbsp;<strong><code>ShouldRenderLumenDiffuseGI(...)</code></strong> = ⭐ ch-31의 그 문지기를 <strong>여기서 직접 부른다</strong>. 즉 Lumen 반사는 기본적으로 <strong>Lumen 디퓨즈가 켜져 있어야</strong> 켜진다. "같은 추적 엔진을 공유한다"는 말이 코드로 박혀 있는 거야.<br>&bull;&nbsp;<strong><code>bIncludeStandalone</code></strong> = 그 예외 통로. 디퓨즈가 꺼져 있어도 <strong>하드웨어 RT + 히트 라이팅</strong>으로 반사만 <strong>단독(standalone)</strong> 실행하는 길이야.<br>&bull;&nbsp;<strong><code>GRHISupportsRayTracingShaders</code></strong> = 이 그래픽 API/드라이버가 <strong>레이 트레이싱 셰이더</strong>를 지원하나. 단독 경로는 히트 라이팅을 강제하니까 이게 없으면 못 한다.<br>&bull;&nbsp;<strong><code>UseHardwareRayTracedReflections(...)</code></strong> = 하드웨어 레이 트레이싱으로 반사를 추적할 수 있나.<br>&bull;&nbsp;<strong><code>IsSoftwareRayTracingSupported()</code></strong> = 하드웨어 RT가 없어도 <strong>SDF 소프트웨어 추적</strong> 길이 있나. ch-31에서 봤던 그 함수 그대로야.<br>&bull;&nbsp;<strong><code>(const FScene*)View.Family-&gt;Scene</code></strong> = 뷰 가족에 달린 씬 포인터를 렌더러용 <code>FScene</code>으로 캐스팅한다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> Lumen 기능 허용 확인 → <strong>반사 방식이 Lumen으로 설정됐나</strong> 확인 → show flag 확인 → 콘솔 변수 확인 → <strong>Lumen 디퓨즈가 켜져 있나</strong>(아니면 HW RT 단독 경로인가) 확인 → <strong>추적할 길(HW RT 또는 SDF)이 있나</strong> 확인. ch-31의 <code>ShouldRenderLumenDiffuseGI</code>와 <strong>구조가 같은 정도가 아니라 그 함수를 직접 부른다</strong>. 그리고 마지막 줄 — Lumen은 디퓨즈든 스페큘러든 <strong>"실제로 추적할 수 있어야" 켜진다</strong>는 원칙이 같은 거야.</div>
+<p>Lumen Reflections가 켜지면 앞의 사다리가 어떻게 되냐고? <strong>SSR과 Reflection Capture 경로를 대체</strong>해. 포스트프로세스의 <code>ReflectionMethod</code>가 <code>Lumen</code>이면 그 픽셀의 간접 스페큘러는 Lumen이 책임진다.</p>
+<p>다만 Lumen 안에서도 <strong>사다리 정신은 그대로야</strong>. Lumen Reflections의 레이도 먼저 <strong>화면 추적</strong>(싸다)을 시도하고, 실패하면 HW RT나 SDF로 나가고, 그래도 안 되면 <strong>radiance cache</strong>에서 꺼내 쓴다. 그리고 아주 먼 곳이나 miss는 결국 <strong>Sky Light</strong>로 떨어져.</p>
+<p>즉 사다리는 없어진 게 아니라 <strong>Lumen 안으로 들어간 것</strong>뿐이야. "싼 것부터, 실패하면 한 칸 아래로"라는 원칙은 렌더링 전체를 관통하는 사고방식이야.</p>
+<hr>
+<h3>Lumen Reflections의 대가 — 노이즈</h3>
+<p>진짜 레이를 쏘면 정확하지만, 픽셀당 레이를 몇 개밖에 못 쏴. 그래서 결과가 <strong>지글거려</strong>. 특히 거친 표면일수록 레이가 사방으로 퍼져서 심해.</p>
+<p>그래서 Lumen Reflections는 뒤에 반드시 <strong>디노이저</strong>와 <strong>시간 누적(temporal)</strong>이 붙는다. 이전 프레임 결과를 재활용해서 노이즈를 뭉갠다. <a class="xref" href="ch-32-temporal-aa.html">temporal-aa</a>에서 배운 그 사고방식이 여기도 그대로 들어와.</p>
+<p><strong>"공짜 점심은 없다"</strong>가 여기서도 성립해. SSR은 싸지만 화면 밖을 못 본다. 큐브맵은 싸고 화면 밖도 보지만 정적이고 시차가 틀리다. Lumen은 정확하지만 <strong>비싸고 노이즈가 있어서 시간을 걸쳐 안정화해야 한다</strong>.</p>
+</div>
+<div class="conversation"><h2>9. 거칠기가 방법을 고른다</h2>
+<p>지금까지 나온 방법들이 <strong>아무 때나 다 좋은 게 아니야</strong>. 러프니스가 어느 걸 쓸지를 크게 가른다. 이걸 감으로 잡아두면 실무에서 아주 유용해.</p>
+<table class="compare-table">
+<tr><th>러프니스</th><th>표면 느낌</th><th>필요한 것</th><th>뭐가 잘 통하나</th></tr>
+<tr><td><strong>0.0 ~ 0.1</strong></td><td>거울, 잘 닦은 금속, 고인 물</td><td>선명한 상 하나. <strong>정확한 위치</strong>가 생명</td><td>SSR(화면 안이면 최고) / Lumen. <strong>큐브맵은 시차 오류가 그대로 다 보여서 최악</strong></td></tr>
+<tr><td><strong>0.2 ~ 0.5</strong></td><td>젖은 아스팔트, 브러시드 메탈</td><td>약간 번진 상. 위치가 조금 틀려도 티가 덜 남</td><td>SSR + 큐브맵 섞기가 잘 먹힘. 사다리가 제일 빛나는 구간</td></tr>
+<tr><td><strong>0.6 ~ 1.0</strong></td><td>콘크리트, 천, 무광 페인트</td><td>거의 뭉개진 환경색. 방향이 거의 의미 없음</td><td><strong>큐브맵 뿌연 밉 하나로 충분</strong>. SSR이나 RT를 쓰는 건 낭비</td></tr>
+</table>
+<p>여기서 재밌는 역설이 나와.</p>
+<p><strong>러프니스가 낮을수록(=거울에 가까울수록) 반사가 더 어렵고 비싸다.</strong></p>
+<p>왜냐하면 거울은 <strong>정확한 위치</strong>를 요구하거든. 1픽셀만 어긋나도 눈에 보여. 반대로 거친 표면은 어차피 뭉개지니까 <strong>대충 맞아도 아무도 모른다</strong>. 그래서 거친 표면에는 값싼 큐브맵 밉 하나면 충분하고, 거울에는 SSR이나 진짜 레이 트레이싱이 필요한 거야.</p>
+<p>이게 아티스트가 <strong>러프니스를 0으로 내리면 갑자기 씬이 이상해 보이는</strong> 이유이기도 해. 러프니스 0.5일 땐 큐브맵의 시차 오류가 뿌연 뭉개짐에 숨어 있다가, 0으로 내리는 순간 <strong>선명하게 틀린 상</strong>이 드러나거든. 틀린 게 갑자기 생긴 게 아니라, <strong>원래 틀렸던 게 이제 보이는</strong> 거야.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — SSAO / 스크린스페이스 AO</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 표면이 얼마나 가려졌나(주변 물체에 파묻혀 어두워지나)를 알려면, 그 점에서 사방으로 레이를 쏴서 뭐에 막히는지 세면 돼.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 픽셀마다 사방 레이? 또 그 얘기야. 실시간에 못 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: <strong>SSR과 똑같은 발상</strong>을 쓰자. 화면에 이미 Depth 버퍼가 있잖아. 주변 픽셀들의 깊이를 몇 개 찍어보고 "내가 주변보다 움푹 들어가 있나"를 판단하면 근사가 된다. 화면 공간에서 가림을 재니까 <strong>SSAO(Screen Space Ambient Occlusion)</strong>야. 그리고 SSR과 <strong>똑같은 한계</strong>를 물려받아 — 화면 밖은 못 본다.</div>
+</div>
+<div class="conversation"><h2>10. SSAO — 같은 스크린스페이스 발상, 다른 물건</h2>
+<p>SSR을 이해했으면 SSAO는 5분이면 끝나. <strong>발상이 똑같기 때문</strong>이야.</p>
+<table class="compare-table">
+<tr><th></th><th>SSR</th><th>SSAO</th></tr>
+<tr><td><strong>묻는 질문</strong></td><td>"반사 방향에 <strong>뭐가</strong> 있나?"</td><td>"내 주변이 <strong>얼마나 막혔나</strong>?"</td></tr>
+<tr><td><strong>읽는 것</strong></td><td>Depth + <strong>SceneColor</strong></td><td>Depth + Normal (<strong>색은 필요 없음</strong>)</td></tr>
+<tr><td><strong>결과</strong></td><td>반사 <strong>색</strong> (RGB)</td><td>가림 <strong>정도</strong> (0~1 숫자 하나)</td></tr>
+<tr><td><strong>어디에 쓰나</strong></td><td>간접 <strong>스페큘러</strong>에 더함</td><td>간접광 전체를 <strong>깎음</strong> (곱함)</td></tr>
+<tr><td><strong>한계</strong></td><td colspan="2" style="text-align:center;"><strong>똑같음</strong> — 화면에 없는 건 못 본다</td></tr>
+</table>
+<p>SSAO가 만들어내는 건 <strong>구석의 그늘</strong>이야. 벽과 바닥이 만나는 모서리, 물체가 바닥에 닿는 자리, 주름 사이. 이런 데는 주변 물체에 파묻혀서 <strong>사방에서 오는 간접광이 잘 못 들어와</strong>. SSAO는 그걸 감지해서 어둡게 깎아.</p>
+<p>이게 없으면 물체가 <strong>바닥에 붕 떠 보여</strong>. 접지감이 사라지는 거야. AO는 "물체를 바닥에 붙여주는 풀"이라고 생각하면 돼.</p>
+<p>그리고 이건 우리가 <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>에서 이미 만난 적 있어. 기억나? <code>FGBufferData</code> 송장에 이런 칸이 있었잖아.</p>
+<p><strong><code>DeferredShadingCommon.ush:364</code></strong></p>
+<div class="code-block">	// 0..1 ambient occlusion  e.g.SSAO, wet surface mask, skylight mask, ...
+	half GBufferAO;</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> ch-21에서 그냥 지나쳤던 <code>GBufferAO</code> 주석에 <strong><code>e.g. SSAO</code></strong>가 박혀 있었어. 그때는 "AO가 뭐지" 하고 넘겼겠지만, 이제 알잖아 — <strong>재질이 자체적으로 들고 있는 가림 값</strong>이고, 여기에 <strong>화면 공간에서 계산한 SSAO</strong>가 더 곱해져서 간접광을 최종적으로 깎는다. 송장의 그 칸이 오늘 챕터에서 회수된 거야.</div>
+<p>중요한 건 AO가 <strong>직접광은 안 건드린다</strong>는 거야. 태양이 직접 때리는 자리를 AO로 어둡게 하면 물리적으로 틀려. AO가 깎는 건 <strong>사방에서 뭉개져 오는 간접광</strong>뿐이야. 구석에 간접광이 잘 안 들어오는 건 맞지만, 태양은 구석에도 직진해서 들어오거든.</p>
+<p>그리고 Lumen이 켜지면? <strong>AO의 역할이 줄어든다.</strong> Lumen은 레이를 실제로 쏘니까 "구석이 어둡다"가 <strong>계산 결과로 자연히 나와</strong>. 가짜 그늘을 덧칠할 필요가 없어지는 거지. 이것도 사다리랑 같은 이야기야 — <strong>진짜로 추적할 수 있으면, 근사 트릭들이 하나씩 은퇴한다.</strong></p>
+</div>
+<div class="conversation"><h2>콜/데이터 흐름 한눈에</h2>
+<div class="code-block">BasePass                                          → GBuffer (Normal, Roughness, SpecularColor)
+   │                                                 [basepass-gbuffer] [basepass-shader]
+   ▼
+RenderLights                                      → 직접광 (직접 디퓨즈 + 직접 스페큘러)
+   │                                                 [deferred-lighting]
+   ▼
+RenderDeferredReflectionsAndSkyLighting            IndirectLightRendering.cpp:1967
+   │        ← 오늘의 챕터. "간접 스페큘러"를 채운다
+   │
+   ├─ [경로 A] 전통 사다리
+   │     │
+   │     ├─ ShouldRenderScreenSpaceReflections      ScreenSpaceRayTracing.cpp:130
+   │     │     └─ SSR 패스: SceneColor + HZB 레이마칭
+   │     │          결과: ReflectionInput.rgb (찾은 색) + .a (확신도)
+   │     │
+   │     ▼  Lighting.a = 1 - ReflectionInput.a   ← ⭐ 남은 몫
+   │     │     CompositeReflections()            ReflectionEnvironmentPixelShader.usf:120
+   │     │
+   │     ├─ GatherRadiance(Color.a, ...)         ReflectionEnvironmentPixelShader.usf:92
+   │     │  └─ CompositeReflectionCapturesAndSkylightTWS
+   │     │     │                                 ReflectionEnvironmentComposite.ush:12
+   │     │     ├─ Reflection Capture 큐브맵들     (큰 것 → 작은 것 순으로 덮기)
+   │     │     │    └─ ComputeReflectionCaptureMipFromRoughness  ← 러프니스로 밉 고르기
+   │     │     └─ Sky Light 큐브맵               (마지막 배경판)
+   │     │
+   │     ▼
+   │   Color.rgb *= EnvBRDF(...)                 BRDF.ush:611
+   │                     ↑
+   │                   split-sum 두 번째 항 = PreIntegratedGF (LUT)
+   │                   ch-26의 Vis * F 를 미리 구워둔 표
+   │
+   └─ [경로 B] Lumen Reflections                    LumenReflections.cpp:750
+         └─ ShouldRenderLumenReflections
+              └─ 반사 방향(R)으로 레이 발사
+                   ├─ 화면 추적          (싸다)
+                   ├─ HW RT / Mesh SDF   (화면 밖)
+                   ├─ radiance cache     (멀리)
+                   └─ miss → Sky Light   (최후)
+                        ↓
+                   디노이즈 + 시간 누적    [temporal-aa]
+
+   ※ 병렬로: SSAO → GBufferAO 와 곱해져 간접광을 깎음
+             (SSR과 같은 스크린스페이스 발상, 같은 한계)</div>
+<p>한 문장으로 읽으면 이래.</p>
+<p><strong>GBuffer에서 노멀·러프니스·스페큘러 색을 읽고 → 반사 벡터 <code>R</code>을 만들고 → 그 방향에 뭐가 있는지 사다리를 타고 찾고 → 찾은 빛에 <code>EnvBRDF</code>를 곱해 SceneColor에 더한다.</strong></p>
+</div>
+<div class="conversation"><h2>우리 서버·DirectX랑 비교</h2>
+<p>DirectX로 반사를 직접 넣어본 적 있으면 오늘 내용이 <strong>소름 돋게 익숙</strong>할 거야. 왜냐면 우리가 손으로 하던 걸 언리얼이 전부 자동화해뒀거든.</p>
+<table class="compare-table">
+<tr><th>할 일</th><th>DirectX로 직접 짤 때</th><th>언리얼</th></tr>
+<tr><td><strong>반사 소스 준비</strong></td><td>큐브맵 <code>.dds</code>를 툴로 굽거나 스카이박스 텍스처를 <strong>손으로 바인딩</strong></td><td>Reflection Capture 액터를 놓으면 <strong>빌드 때 자동으로 구움</strong>. 타일별로 어느 캡처가 닿는지 컬링까지 해줌</td></tr>
+<tr><td><strong>반사 벡터</strong></td><td><code>reflect(-V, N)</code> 직접 계산</td><td><code>R = 2 * dot(V,N) * N - V</code> + <code>GetOffSpecularPeakReflectionDir</code>로 러프니스 보정까지</td></tr>
+<tr><td><strong>거칠기 반영</strong></td><td>밉 레벨을 <strong>감으로</strong> 골라서 <code>SampleLevel</code>. "러프니스 * 밉맥스" 같은 주먹구구</td><td><code>ComputeReflectionCaptureMipFromRoughness</code>. 밉 개수와 무관하게 <strong>같은 러프니스 = 같은 흐림</strong> 보장</td></tr>
+<tr><td><strong>BRDF 곱하기</strong></td><td>보통 그냥 <code>pow(dot(R,V), Shininess)</code> 하이라이트로 퉁치거나, 큐브맵 색을 <strong>그대로 더함</strong> (에너지 안 맞음)</td><td><code>EnvBRDF(SpecularColor, Roughness, NoV)</code> — <strong>split-sum</strong>으로 <code>Vis*F</code>를 미리 적분한 LUT</td></tr>
+<tr><td><strong>화면 안 반사</strong></td><td>SSR을 <strong>직접 구현</strong>. 레이마칭, HZB, 스텝 수 튜닝, 화면 가장자리 페이드… 지옥</td><td><code>ScreenSpaceRayTracing.cpp</code>의 SSR 패스가 다 해줌</td></tr>
+<tr><td><strong>화면 밖 / 뒤통수</strong></td><td><strong>답 없음.</strong> 큐브맵으로 때우고 시차 어긋난 채로 출시</td><td>Lumen Reflections가 <strong>진짜 레이</strong>로 추적 (HW RT / SDF)</td></tr>
+<tr><td><strong>여러 소스 합성</strong></td><td><code>if (SSR 성공) else</code> — <strong>딱딱한 경계</strong>가 눈에 보임</td><td><code>Lighting.a = 1 - ReflectionInput.a</code>로 <strong>알파 누적</strong> — 부드럽게 섞임</td></tr>
+</table>
+<p>제일 크게 다른 게 <strong>마지막 두 줄</strong>이야.</p>
+<p>DirectX 튜토리얼에서 큐브맵 반사를 넣을 때 뭐 했는지 떠올려봐. 보통 이랬지.</p>
+<div class="code-block">float3 R = reflect(-V, N);
+float3 Reflection = EnvCubemap.Sample(Samp, R).rgb;
+float3 Color = Diffuse + Specular + Reflection * ReflectionStrength;   // ← 그냥 더함
+</div>
+<p>여기서 <code>ReflectionStrength</code>는 뭐야? <strong>아티스트가 감으로 돌리는 손잡이</strong>야. 물리적 근거가 없어. 그래서 각도를 바꾸면 반사가 너무 세거나 약해 보이고, 거친 표면에서도 거울처럼 번쩍이고, 에너지 보존이 깨져서 <strong>화면이 붕 뜬다</strong>.</p>
+<p>언리얼은 그 <code>ReflectionStrength</code> 자리에 <code>EnvBRDF(SpecularColor, Roughness, NoV)</code>를 넣은 거야. <strong>감으로 돌리는 손잡이를 물리로 대체한 것.</strong> 이게 PBR이 하는 일의 본질이기도 해 — "그럴싸해 보일 때까지 슬라이더 돌리기"를 "재질 속성을 넣으면 알아서 맞기"로 바꾸는 것.</p>
+<p>서버 감각으로 옮기면 <strong>캐시 계층</strong>이야. 우리 서버에서 캐릭터 정보를 찾을 때 이렇게 하잖아.</p>
+<div class="code-block">로컬 메모리 캐시  →  없으면  Redis  →  없으면  MSSQL  →  없으면  기본값
+   (제일 싸고 최신)        (좀 느림)      (제일 느림)      (최후)</div>
+<p>반사의 사다리가 정확히 같은 구조야.</p>
+<div class="code-block">SSR  →  없으면  Reflection Capture  →  없으면  Sky Light
+(제일 싸고 최신)   (구워둔 캐시, 좀 낡음)      (최후의 기본값)</div>
+<p>차이가 있다면 서버 캐시는 <code>if (found) return</code>으로 <strong>딱 끊고</strong> 나가는데, 반사는 <strong>알파로 부드럽게 섞는다</strong>는 것. 왜냐면 서버는 "맞는 데이터냐 아니냐"가 이분법이지만, 렌더링은 <strong>"얼마나 확신하냐"가 연속값</strong>이고 경계가 눈에 보이면 안 되니까.</p>
+<p>그리고 락 감각은 여기서도 안 나와. GPU는 픽셀마다 병렬로 이 사다리를 탄다. 각 픽셀이 자기 SceneColor 칸만 쓰니까 경합이 없어. 대신 비용은 <strong>텍스처 대역폭</strong>과 <strong>레이마칭 스텝 수</strong>에 몰린다. SSR이 무거운 이유가 픽셀마다 Depth 버퍼를 <strong>수십 번 찍기</strong> 때문이야. 서버로 치면 락 경합이 아니라 <strong>디스크 랜덤 읽기가 많은 쿼리</strong>에 가까워.</p>
+</div>
+<div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
+<ul>
+<li><strong>간접 스페큘러</strong>는 ch-22(직접광)와 ch-31(간접 디퓨즈)이 채우지 못한 <strong>마지막 빈칸</strong>이다. 금속 바닥에 비친 상, 물에 비친 하늘이 여기서 나온다.</li>
+<li>언리얼은 이걸 하나의 알고리즘이 아니라 <strong>폴백 사다리</strong>로 채운다: <strong>SSR → Reflection Capture → Sky Light</strong>, 그리고 현대 경로로 <strong>Lumen Reflections</strong>.</li>
+<li><strong>SSR의 근본 한계</strong>: 화면에 없는 건 반사할 수 없다. 뒤통수, 화면 밖, 가려진 뒤쪽은 정보 자체가 존재하지 않는다.</li>
+<li><strong>Reflection Capture의 근본 한계</strong>: 미리 구운 큐브맵이라 <strong>위치가 고정</strong>이다. 캡처 중심에서 멀어질수록 <strong>시차(parallax)</strong>가 틀린다. 움직이는 물체는 아예 안 찍혀 있다.</li>
+<li>둘의 약점이 서로를 메운다: <strong>움직이는 것은 SSR, 화면 밖 정적 배경은 큐브맵.</strong></li>
+<li>사다리는 <code>if/else</code>가 아니라 <strong>알파 누적</strong>이다. <code>Lighting.a = 1 - ReflectionInput.a</code>가 "SSR이 못 채운 몫"이고, 다음 칸(<code>GatherRadiance</code>)은 <strong>딱 그만큼만</strong> 채운다. 그래서 경계가 부드럽다.</li>
+<li>⭐ <strong>Split-sum</strong>: 정직한 적분(사방의 빛 × BRDF)을 두 덩어리로 쪼갠다. <strong>들어오는 빛은 큐브맵 밉</strong>으로, <strong>BRDF는 <code>PreIntegratedGF</code> LUT</strong>로 미리 구워두고 런타임엔 곱하기만. ch-26의 <code>Vis * F</code>가 그 표 안에 들어 있다.</li>
+<li>최종 한 줄: <code>Color.rgb *= EnvBRDF( SpecularColor, GBuffer.Roughness, NoV )</code> — <strong>들어온 빛 × 재질이 돌려보내는 몫</strong>.</li>
+<li><strong>Lumen Reflections</strong>는 ch-31 디퓨즈와 <strong>같은 추적 엔진</strong>을 쓰되, 레이를 <strong>반사 방향으로 몰아서</strong> 쏜다. 정확하지만 노이즈가 있어 디노이즈+시간 누적이 필수다.</li>
+<li><strong>러프니스가 방법을 고른다.</strong> 거울(낮은 러프니스)일수록 정확한 위치가 필요해 <strong>더 비싸다</strong>. 거친 표면은 뿌연 큐브맵 밉 하나로 충분하다.</li>
+<li><strong>SSAO</strong>는 SSR과 <strong>같은 발상, 같은 한계</strong>다. Depth를 읽어 "얼마나 막혔나"를 근사하고, 간접광을 깎는다(직접광은 안 건드린다). ch-21의 <code>GBufferAO</code> 칸이 여기서 회수된다.</li>
+</ul>
+</div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 직접광(ch-22)도 하고 간접 디퓨즈(ch-31)도 했는데, 반사를 또 따로 해야 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">표를 2×2로 그려보면 칸 하나가 <strong>통째로 비어</strong>. 직접 디퓨즈·직접 스페큘러는 ch-22가 하고, 간접 디퓨즈는 ch-31이 해. 근데 <strong>간접 스페큘러</strong>가 없어. 이게 뭐냐면 <strong>금속 바닥에 비친 캐릭터, 물에 비친 하늘, 젖은 아스팔트의 네온사인</strong>이야. 라이트를 아무리 많이 꽂아도 이건 안 나와 — <strong>"그 방향에 뭐가 있는지" 실제로 가서 봐야</strong> 나오는 값이거든. GBuffer엔 "이 픽셀 표면의 성질"만 있지 "위쪽 30도 방향에 뭐가 있냐"는 안 적혀 있잖아. 이걸 안 하면 금속이 <strong>회색 플라스틱</strong>이 되고, 거울 바닥이 <strong>새까만 판때기</strong>가 돼.</div></details>
+
+<h4>↳ 왜 하필 "간접 <strong>스페큘러</strong>"만 이렇게 어려운가요? 간접 디퓨즈는 Lumen이 이미 하잖아요.</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>방향 의존성</strong> 때문이야. 디퓨즈는 사방으로 흩어 돌려보내니까 <strong>보는 자리가 바뀌어도 그림이 안 바뀌어</strong> — 흰 벽은 어디서 봐도 하얗잖아. 그래서 프로브 하나가 대표로 재서 주변 픽셀이 나눠 써도 티가 안 나(ch-31이 그렇게 한 거야). 근데 스페큘러는 <strong>내가 한 발짝 옮기면 거울 속 풍경이 통째로 미끄러져</strong>. 픽셀마다 보는 방향(<code>V</code>)이 다르고 반사 방향(<code>R</code>)도 다르니까 <strong>대표로 재서 나눠 쓸 수가 없어</strong>. 그래서 픽셀별로 따로 답을 찾아야 하고, 그게 비싼 거야.</div></details>
+
+<h3>Q2. SSR은 왜 화면 밖을 못 보나요? 그리고 못 보면 어떻게 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">SSR이 하는 일이 <strong>"이미 그려진 화면 픽셀 중에서 찾기"</strong>거든. SceneColor와 Depth를 레이마칭해서 "이 반사 방향으로 가면 화면 안 어디에 닿나"를 뒤지는 거야. 그러니까 <strong>화면에 안 그려진 건 정보 자체가 세상에 없어</strong> — 캐릭터 <strong>뒤통수</strong>(앞모습만 그려짐), <strong>화면 밖</strong>으로 잘린 천장 조명, <strong>기둥에 가려진</strong> 뒤쪽. 사진 뒤에 뭐가 있었는지는 사진을 확대해도 안 나오는 것과 같아. 그래서 화면 가장자리에서 반사가 스르륵 사라지는 건 버그가 아니라 <strong>정보가 끝나서 티 안 나게 죽이는</strong> 거고, 못 채운 몫은 <strong>다음 사다리 칸(Reflection Capture)</strong>으로 넘긴다.</div></details>
+
+<h4>↳ 그럼 Reflection Capture는 만능인가요? 화면 밖도 보이잖아요.</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니, <strong>정확히 반대되는 약점</strong>이 있어. 큐브맵은 <strong>액터가 놓인 한 자리에서 미리 찍은 사진</strong>이야. 그런데 지금 반사를 계산하는 픽셀은 <strong>거기 없어</strong> — 방 구석 바닥일 수도 있잖아. 거울 앞에서 옆으로 한 발 가면 거울 속 풍경이 미끄러지지? 사진첩은 그걸 못 따라가. 이게 <strong>시차(parallax) 오류</strong>야. 언리얼이 캡처 반경(구/박스)에 반사 벡터를 부딪히게 해서 <strong>근사 보정</strong>은 하지만 근본 해결은 아니야. 게다가 <strong>구운 시점의 정적인 씬</strong>이라 <strong>움직이는 캐릭터는 애초에 안 찍혀 있어</strong>.<br><br>⭐ 그래서 <strong>사다리 순서가 이렇게 정해진 거야</strong>. 둘의 약점이 <strong>서로를 정확히 메우거든</strong> — SSR은 <strong>움직이는 것·정확한 위치</strong>에 강하고 화면 밖에 약해. 큐브맵은 <strong>화면 밖·정적 배경</strong>에 강하고 움직임·시차에 약해. 그러니 <strong>SSR을 먼저 깔고, SSR이 못 채운 자리만 큐브맵이 메우는</strong> 게 맞지. <strong>"강한 놈 먼저, 걔가 못 하는 걸 다음 놈이."</strong> 서버 캐시가 <strong>로컬 메모리 → Redis → MSSQL</strong> 순인 거랑 완전히 같은 사고방식이야.</div></details>
+
+<h4>↳ "못 채운 몫"을 코드에선 어떻게 표현해요? <code>if/else</code>인가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>if/else</code>가 <strong>아니야</strong>. 그게 오늘의 핵심이야. <code>CompositeReflections()</code> 안의 <code>Lighting.a = 1 - ReflectionInput.a;</code> 한 줄이 <strong>"SSR이 못 채운 몫"</strong>을 0~1 숫자로 적어두고, 그걸 <code>GatherRadiance(Color.a, ...)</code> → <code>CompositeReflectionCapturesAndSkylightTWS(CompositeAlpha, ...)</code>의 <strong>첫 인자로 넘겨서</strong> 다음 칸이 <strong>딱 그만큼만</strong> 채우게 해. 왜 <code>if/else</code>가 아니냐면, 그렇게 짜면 SSR이 아슬아슬하게 성공한 픽셀과 실패한 픽셀 사이에 <strong>딱딱한 경계선</strong>이 눈에 보이거든. 알파로 섞으면 SSR 확신도가 0.6일 때 큐브맵이 0.4만 채워서, 화면 가장자리에서 <strong>SSR이 스르륵 사라지며 큐브맵이 스르륵 올라온다</strong>. 물통에 첫 사람이 70% 부었으면 다음 사람은 30%만 붓는 거야.</div></details>
+
+<h3>Q3. ⭐ Split-sum approximation이 뭔가요? ch-26의 BRDF랑 무슨 관계예요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">ch-26에서 스페큘러는 <code>D * Vis * F</code>였잖아. 근데 그건 <strong>라이트 하나</strong>, 방향이 딱 하나(<code>L</code>)일 때 얘기야. <strong>간접 스페큘러는 큐브맵 사방 전체가 다 빛</strong>이야. 정직하게 하면 큐브맵의 모든 방향마다 <code>D*Vis*F</code>를 계산해서 전부 더해야 해 — 픽셀당 수천 샘플, 즉사야.<br><br>그래서 이 <strong>적분을 두 덩어리로 쪼개서 각각 미리 굽는다</strong>. 그게 split-sum이야:<br>&bull;&nbsp;<strong>① 들어오는 빛</strong> → 러프니스별로 흐리게 구운 <strong>큐브맵 밉</strong>. (<code>ComputeReflectionCaptureMipFromRoughness</code>가 어느 밉을 꺼낼지 고름)<br>&bull;&nbsp;<strong>② BRDF 몫</strong> → <code>(NoV, Roughness)</code> 두 값만 넣으면 되는 <strong>작은 2D 표</strong>. 이게 <code>PreIntegratedGF</code> LUT이고, <strong>ch-26의 <code>Vis</code>와 <code>F</code>를 미리 적분해 구워둔 것</strong>이야.<br><br>런타임엔 <strong>둘을 곱하기만</strong> 해. 합(sum)을 둘로 쪼갰다고 <strong>Split-sum</strong>이야.</div></details>
+
+<h4>↳ 그럼 <code>D</code>(GGX 분포)는 어디 갔나요? 표에는 <code>Vis</code>랑 <code>F</code>만 있다면서요.</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>D</code>는 <strong>큐브맵을 흐리게 굽는 그 과정 자체에 녹아 있어</strong>. 러프니스가 크면 GGX 로브가 넓게 퍼지지? 그래서 큐브맵을 <strong>그 로브 모양대로 넓게 뭉개서</strong> 굽는 거야. <strong>흐림의 모양이 곧 <code>D</code>다.</strong> ch-26에서 "GGX는 꼬리가 예쁘게 길어서 좋다"고 했던 그 성질이, 여기선 <strong>큐브맵 밉의 뿌연 모양으로 미리 박혀</strong> 있는 거지. 그래서 <code>EnvBRDF</code>가 돌려주는 표에는 <code>Vis * F</code>만 들어 있어도 되는 거야. 한 문장으로: <strong>같은 BRDF인데, 계산하는 시점만 다르다</strong> — 라이트는 런타임에, 환경광은 미리.</div></details>
+
+<h4>↳ 최종적으로 픽셀 색은 어떻게 나오나요? 한 줄로 짚어보라면?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>Color.rgb *= EnvBRDF( SpecularColor, GBuffer.Roughness, NoV );</code><br><br><code>Color.rgb</code>는 <strong>사다리를 타고 긁어모은 "들어오는 빛"</strong>이고, <code>EnvBRDF(...)</code>는 <strong>"이 재질이 그 빛을 얼마나 돌려보내나"</strong>야. split-sum의 두 항이 여기서 진짜로 곱해지는 거지. DirectX로 짤 때 우리가 <code>Reflection * ReflectionStrength</code>라고 <strong>감으로 돌리던 손잡이</strong> 자리에, 언리얼은 <strong>물리적으로 적분된 <code>EnvBRDF</code></strong>를 넣은 거야. 그게 PBR이 하는 일의 본질이기도 해.</div></details>
+
+<h3>Q4. Lumen Reflections는 앞의 사다리랑 뭐가 다른가요? 그리고 러프니스는 왜 중요해요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">Lumen Reflections는 <strong>ch-31 Lumen Diffuse와 똑같은 추적 엔진</strong>이야. 딱 하나가 달라 — <strong>레이를 어디로 쏘냐</strong>. 디퓨즈는 노멀 반구 <strong>사방으로</strong> 골고루, 리플렉션은 <strong>반사 방향(<code>R</code>) 쪽으로 몰아서</strong> 쏴. 퍼지는 폭은 <strong>러프니스가 정하고</strong>. 추적 경로(화면 추적 → HW RT/SDF → radiance cache → miss는 Sky Light)는 <strong>완전히 동일</strong>해. 문지기 함수 <code>ShouldRenderLumenReflections</code>도 ch-31의 <code>ShouldRenderLumenDiffuseGI</code>와 <strong>판박이</strong>고. 그래서 <strong>"Lumen 디퓨즈의 스페큘러 짝"</strong>이라고 부르는 거야.<br><br>대가는 <strong>노이즈</strong>야. 픽셀당 레이를 몇 개밖에 못 쏘니까 지글거려서 <strong>디노이즈 + 시간 누적</strong>이 필수야(→ ch-32).</div></details>
+
+<h4>↳ 러프니스가 낮을수록(거울에 가까울수록) 왜 더 어려운가요? 직관과 반대 같은데요.</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">역설처럼 보이지만 이유는 단순해. <strong>거울은 정확한 위치를 요구</strong>하거든 — 1픽셀만 어긋나도 눈에 딱 보여. 반대로 <strong>거친 표면은 어차피 뭉개지니까 대충 맞아도 아무도 몰라</strong>. 그래서 러프니스 0.8짜리 콘크리트엔 <strong>뿌연 큐브맵 밉 하나로 충분</strong>하고(SSR이나 RT 쓰면 낭비), 러프니스 0.05짜리 거울엔 <strong>SSR이나 진짜 레이 트레이싱</strong>이 필요해. 큐브맵은 시차 오류가 선명하게 다 보여서 <strong>거울엔 최악</strong>이야.<br><br>이게 아티스트가 <strong>러프니스를 0으로 내리면 갑자기 씬이 이상해 보이는</strong> 이유야 — 틀린 게 갑자기 생긴 게 아니라, <strong>원래 틀렸던 게 뿌연 뭉개짐에 숨어 있다가 이제 드러난</strong> 거지.</div></details>
+
+<h4>↳ SSAO는 이 챕터에 왜 같이 나오나요? 반사랑 상관없어 보이는데요.</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>발상이 SSR과 완전히 똑같기 때문</strong>이야. 둘 다 <strong>"화면에 이미 있는 Depth 버퍼를 재활용해서 근사한다"</strong>는 스크린스페이스 트릭이고, <strong>똑같은 한계</strong>(화면에 없는 건 못 본다)를 물려받아. 다른 건 묻는 질문뿐이야 — SSR은 "반사 방향에 <strong>뭐가</strong> 있나?"(색을 가져옴), SSAO는 "내 주변이 <strong>얼마나 막혔나</strong>?"(0~1 숫자 하나). AO는 구석의 그늘을 만들어 <strong>물체를 바닥에 붙여주는 풀</strong> 역할을 해. 중요한 건 AO가 <strong>간접광만 깎고 직접광은 안 건드린다</strong>는 것 — 태양은 구석에도 직진해서 들어오니까. 그리고 <strong>Lumen이 켜지면 AO의 역할이 줄어</strong>. 진짜로 레이를 쏘면 "구석이 어둡다"가 계산 결과로 자연히 나오거든. <strong>진짜로 추적할 수 있으면 근사 트릭들이 하나씩 은퇴한다</strong> — 이게 오늘 챕터 전체를 관통하는 이야기야.</div></details>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>간접 스페큘러는 "이 반사 방향에 뭐가 있나"를 SSR(화면 안) → Reflection Capture(구워둔 큐브맵) → Sky Light(최후의 하늘) 순서로 <code>알파를 깎아 가며</code> 찾아 채우고, 마지막에 split-sum으로 미리 구운 <code>EnvBRDF</code>(= ch-26의 <code>Vis*F</code>)를 곱해 완성한다. Lumen Reflections는 이 사다리를 진짜 레이 트레이싱으로 갈아치운 ch-31 디퓨즈의 스페큘러 짝이다.</strong></p>
+<hr>
+<div class="note">막히면(선행 개념) → <a class="xref" href="ch-20-basepass-gbuffer.html">basepass-gbuffer</a> · <a class="xref" href="ch-22-deferred-lighting.html">deferred-lighting</a> · <a class="xref" href="ch-26-pbr-brdf.html">pbr-brdf</a> · <a class="xref" href="ch-30-lumen-overview.html">lumen-overview</a> · <a class="xref" href="ch-31-lumen-diffuse.html">lumen-diffuse</a><br>다음(낮은 해상도로 그리고 키우기) → <a class="xref" href="ch-40-tsr-upscaling.html">tsr-upscaling</a></div></div><nav class="booknav"><a href="ch-38-gpu-scene.html"><span class="lbl">← 이전</span>GPU Scene — 씬 데이터를 GPU에 통째로</a><a class="nx" href="ch-40-tsr-upscaling.html"><span class="lbl">다음 →</span>TSR — 낮은 해상도로 그리고 키운다</a></nav></div><script src="/MSH_Portfolio/study/notes.js"></script></body></html>

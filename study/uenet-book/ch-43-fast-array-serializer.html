@@ -1,0 +1,519 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>FastArraySerializer — 배열에서 바뀐 원소만 보내기 - UE 네트워크 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#1a237e; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #e8eaf6; }
+.conversation h3 { font-size:1.08rem; color:#283593; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#3949ab; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#eef1f6; color:#c7254e; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#e3f2fd; color:#1565c0; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#bbdefb; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
+.note.warn code { background:#ffe0e0; color:#b71c1c; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#1565c0 0%,#0d47a1 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#1565c0; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#1565c0; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#1565c0; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>FastArraySerializer — 배열에서 바뀐 원소만 보내기</h1><p>언리얼 네트워크 · 43 / 47</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>네가 조선 서버에서 인벤토리를 짜봤으면 이 고민을 무조건 했을 거야. <code>CChosunPlayer</code>가 아이템 100칸을 들고 있는데, 유저가 물약 하나를 먹어서 <strong>3번 칸 개수가 5 → 4</strong> 로 줄었어. 그럼 클라에 뭘 보내지?</p>
+<p>제일 게으른 답은 <code>SP_INVENTORY_ALL</code> 같은 패킷 하나 만들어서 <strong>100칸을 통째로</strong> 다시 보내는 거야. 짜기는 제일 쉬워. 근데 물약 한 번 먹을 때마다 100칸이 날아가. 파티 8명이 사냥하면서 계속 아이템을 먹고 쓰면? 대역폭이 그냥 녹아.</p>
+<p>그래서 우리는 손으로 나눠 만들었지. <code>SP_ITEM_ADD</code>(아이템 하나 추가), <code>SP_ITEM_REMOVE</code>(하나 삭제), <code>SP_ITEM_UPDATE</code>(하나 수량 변경). 바뀐 칸 하나만 보내니까 대역폭은 살았어. 대신 <strong>패킷 세 개를 사람이 직접 설계·직렬화·핸들러 등록</strong>해야 하고, 클라 쪽엔 "3번 슬롯이 어디 있더라?" 하고 찾아 고치는 코드를 또 손으로 짜야 해. 버프 목록도 똑같이 <code>SP_BUFF_ADD/REMOVE/UPDATE</code>. 킬로그도, 팀 목록도... 배열 하나 늘어날 때마다 패킷 3종 세트가 늘어나.</p>
+<p>언리얼도 정확히 같은 벽에 부딪혔어. <code>TArray</code>를 <code>UPROPERTY(Replicated)</code>로 걸면 <strong>통짜 복제</strong>가 돼 — 원소 하나만 바뀌어도 배열 전체가 다시 날아가. 앞에서 배운 <a class="xref" href="ch-19-push-model.html">push-model</a>도 이건 못 고쳐. Push Model은 <strong>최상위 프로퍼티 단위</strong>로만 손을 들거든. "배열 3번 원소만 바꿨어요"를 표현할 방법 자체가 없어.</p>
+<p>그 빈틈을 메우려고 나온 게 <strong>FastArraySerializer</strong>야. 원소마다 <strong>ID(이름표)</strong> 와 <strong>Key(버전 번호)</strong> 를 붙여서, 서버가 "추가된 놈 / 바뀐 놈 / 삭제된 놈"만 골라 보내. 우리가 손으로 만들던 <code>SP_ITEM_ADD/REMOVE/UPDATE</code> 3종 세트를, <strong>엔진이 자동으로 만들어주는 것</strong>. 이 챕터는 그 자동화가 어떤 원리로 도는지를 판다.</p>
+</div>
+<div class="conversation"><h2>0. 문 앞에서: TArray 통짜 복제가 진짜로 얼마나 아까운가</h2>
+<p>먼저 아무 장치 없이 배열을 복제하면 무슨 일이 벌어지는지 보자. 인벤토리 구조체가 이렇다고 쳐.</p>
+<div class="code-block">USTRUCT()
+struct FItemEntry
+{
+    UPROPERTY() int32 ItemId;      // 4바이트
+    UPROPERTY() int32 Count;       // 4바이트
+    UPROPERTY() float Durability;  // 4바이트
+};
+
+UPROPERTY(Replicated)
+TArray&lt;FItemEntry&gt; Items;   // 100칸</div>
+<p>여기서 <code>Items[3].Count</code>를 5에서 4로 바꿨어. 딱 <strong>4바이트</strong> 바뀐 거야. 그럼 클라한테 몇 바이트가 날아갈까? 맞춰봐.</p>
+<div class="note">원소 12바이트 × 100개 = 1200바이트짜리 배열.<br>그중 4바이트 하나만 바꿨어. 네트워크로는 몇 바이트가 나갈까?</div>
+<p>...정답: <strong>1200바이트 전부</strong>. 4바이트 바꾸겠다고 1200바이트를 보내. 300배 낭비야.</p>
+<p>왜 이렇게 되냐면, 언리얼의 프로퍼티 비교는 <strong>배열 프로퍼티 하나를 통짜 단위로</strong> 본다. 배열 안을 들여다보고 "3번 원소만 다르네" 하고 그 원소만 changelist에 넣는 게 아니야(→ <a class="xref" href="ch-16-changelist.html">changelist</a>). "배열이 다르다"까지만 판정하고, 다르면 <strong>배열 전체를 직렬화</strong>해서 실어.</p>
+<p>더 고약한 건 <strong>순서</strong>야. 인벤 정렬 버튼을 눌러서 아이템 순서만 뒤바꿨다고 해보자. 데이터 총량은 하나도 안 변했어. 근데 인덱스 기준으로 비교하면 <code>Items[0]</code>도 다르고 <code>Items[1]</code>도 다르고... <strong>전 원소가 dirty</strong>가 돼. 실제로 바뀐 정보는 "순서"뿐인데 배열 전체를 다시 보낸다.</p>
+<p>정리하면 통짜 <code>TArray</code> 복제의 문제는 둘이야.</p>
+<ul><li><strong>원소 하나 바뀌어도 전부 재전송</strong> — 변경량이 아니라 배열 크기에 비례해 대역폭을 쓴다.</li><li><strong>인덱스가 곧 정체성</strong> — 순서가 밀리면 안 바뀐 원소까지 "바뀐 것"으로 잡힌다.</li></ul>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — FastArraySerializer</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: <code>TArray</code>를 <code>UPROPERTY(Replicated)</code>로 걸면 엔진이 배열을 <strong>통짜 하나의 프로퍼티</strong>로 보고 복제해. 다르면 전부 다시 보내.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 아이템 100개 중 1개의 수량 4바이트만 바뀌었는데 1200바이트가 통째로 날아가. 게다가 인덱스로 비교하니까 <strong>순서만 바뀌어도 전 원소가 dirty</strong>가 돼. 인벤·버프·킬로그처럼 자주 찔끔 바뀌는 배열엔 최악이야.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 원소를 <strong>인덱스가 아니라 ID로</strong> 식별하고, 원소마다 <strong>버전 번호(Key)</strong> 를 달아서 "추가된 놈 / 키가 오른 놈 / 사라진 놈"만 골라 보내는 장치. → 그게 <strong>FastArraySerializer</strong>야. 우리가 손으로 나눠 만들던 <code>SP_ITEM_ADD / REMOVE / UPDATE</code>를 엔진이 자동 생성해주는 셈이지.</div>
+<hr>
+<p>지금부터 진짜 코드가 나와. <strong>겁먹지 마</strong> — 이 챕터는 딱 두 개만 잡으면 돼. <strong>ID(누구냐)</strong> 와 <strong>Key(몇 번째 버전이냐)</strong>. 나머지는 전부 이 둘의 응용이야. 낯선 기호는 코드 바로 아래 🔤 상자에서 하나씩 풀어줄게.</p>
+</div>
+<div class="conversation"><h2>1. 큰 그림: 이름표(ID)와 버전 도장(Key)</h2>
+<p>FastArraySerializer의 아이디어는 택배 송장이랑 똑같아.</p>
+<p>배열 원소 하나하나에 <strong>바코드(ID)</strong> 를 붙여. 인덱스는 정렬하면 바뀌지만 바코드는 안 바뀌어. 그리고 그 옆에 <strong>도장 칸(Key)</strong> 을 하나 더 둬서, 내용이 바뀔 때마다 도장을 하나씩 더 찍어(숫자를 1 올려).</p>
+<p>그럼 서버는 각 클라마다 "지난번에 이 클라한테 보낼 때, 바코드별 도장 개수가 몇이었지?"를 기억해두면 돼. 이번 프레임에 다시 훑어서:</p>
+<ul><li>지난 기록에 <strong>없던 바코드</strong>가 있다 → <strong>추가(Add)</strong></li><li>있던 바코드인데 <strong>도장 개수가 늘었다</strong> → <strong>변경(Change)</strong></li><li>지난 기록엔 있는데 <strong>지금은 없는 바코드</strong> → <strong>삭제(Remove)</strong></li></ul>
+<p>이 세 갈래만 뽑아서 보내면 끝이야. 안 바뀐 원소는 바코드도 도장도 그대로니까 아무 갈래에도 안 걸려 → <strong>아예 안 실린다.</strong></p>
+<p>그리고 배열 전체에도 도장 칸이 하나 더 있어. <strong>ArrayReplicationKey</strong>. 원소 하나라도 손대면 이 배열 도장도 같이 올라가. 왜 필요하냐면 — 서버가 매 프레임 100개 원소를 다 훑기 전에, <strong>"배열 도장이 지난번이랑 같네? 그럼 볼 것도 없이 스킵"</strong> 하고 빠져나가려고. 문 앞에서 한 번 걸러주는 거지.</p>
+<div class="note"><strong>세 개의 숫자만 기억해.</strong><br>&bull; <code>ReplicationID</code> — 원소의 <strong>바코드</strong>. 한 번 받으면 안 바뀜. 인덱스가 아니라 이게 정체성.<br>&bull; <code>ReplicationKey</code> — 원소의 <strong>도장 개수</strong>. 내용 바뀔 때마다 +1.<br>&bull; <code>ArrayReplicationKey</code> — <strong>배열 전체의 도장 개수</strong>. 뭐라도 바뀌면 +1. 빠른 조기 탈출용.</div>
+<hr>
+</div>
+<div class="conversation"><h2>2. 뼈대 코드: 원소 struct와 배열 struct</h2>
+<p>쓰려면 규칙이 두 개 있어. <strong>원소 구조체는 <code>FFastArraySerializerItem</code>을 상속</strong>하고, <strong>배열 구조체는 <code>FFastArraySerializer</code>를 상속</strong>한다. 엔진 헤더 주석에 그대로 예제가 박혀 있어.</p>
+<div class="note">📁 <strong>파일 위치부터 짚고 가자.</strong> 예전엔 이게 <code>Engine/Classes/Engine/NetSerialization.h</code>에 있었는데, UE5에서 <strong>독립 파일로 빠졌어</strong>. 지금 <code>NetSerialization.h</code>를 열면 이 한 줄만 남아 있다 — <code>NetSerialization.h:134</code>:<br>"Everything related to Fast TArray Replication has been moved to <code>"Net/Serialization/FastArraySerializer.h"</code>"<br>그래서 이 챕터의 코드는 전부 <code>Runtime/Net/Core/Classes/Net/Serialization/FastArraySerializer.h</code>에서 가져온다.</div>
+<p>엔진이 제시하는 6단계 레시피가 헤더 주석에 통째로 박혀 있어. <code>FastArraySerializer.h:50-108</code> (원소 콜백 3종 선언은 5장에서 볼 거라 여기선 접었어):</p>
+<div class="code-block">#if 0
+
+/** Step 1: Make your struct inherit from FFastArraySerializerItem */
+USTRUCT()
+struct FExampleItemEntry : public FFastArraySerializerItem
+{
+	GENERATED_USTRUCT_BODY()
+
+	// Your data:
+	UPROPERTY()
+	int32		ExampleIntProperty;
+
+	UPROPERTY()
+	float		ExampleFloatProperty;
+
+	// ... (여기에 PreReplicatedRemove / PostReplicatedAdd / PostReplicatedChange 선언 — 5장에서 본다)
+};
+
+/** Step 2: You MUST wrap your TArray in another struct that inherits from FFastArraySerializer */
+USTRUCT()
+struct FExampleArray: public FFastArraySerializer
+{
+	GENERATED_USTRUCT_BODY()
+
+	UPROPERTY()
+	TArray&lt;FExampleItemEntry&gt;	Items;	/** Step 3: You MUST have a TArray named Items of the struct you made in step 1. */
+
+	/** Step 4: Copy this, replace example with your names */
+	bool NetDeltaSerialize(FNetDeltaSerializeInfo &amp; DeltaParms)
+	{
+	   return FFastArraySerializer::FastArrayDeltaSerialize&lt;FExampleItemEntry, FExampleArray&gt;( Items, DeltaParms, *this );
+	}
+};
+
+/** Step 5: Copy and paste this struct trait, replacing FExampleArray with your Step 2 struct. */
+template&lt;&gt;
+struct TStructOpsTypeTraits&lt; FExampleArray &gt; : public TStructOpsTypeTraitsBase2&lt; FExampleArray &gt;
+{
+       enum
+       {
+			WithNetDeltaSerializer = true,
+       };
+};
+
+#endif</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 예제 한 줄씩<br>&bull;&nbsp;<strong><code>#if 0 ... #endif</code></strong> = "이 안은 <strong>컴파일하지 마라</strong>"는 표시. 즉 이 예제는 <strong>실제로 빌드되는 코드가 아니라 헤더에 박아둔 복붙용 설명서</strong>야. Epic이 "이대로 베껴 쓰라"고 넣어둔 거지. <code>Step 1~5</code>라는 주석 번호가 그 증거고.<br>&bull;&nbsp;<strong><code>USTRUCT()</code></strong> = "이건 언리얼이 알아봐야 할 구조체야"라고 엔진에 신고하는 표시. 이게 있어야 리플렉션·복제 대상이 돼.<br>&bull;&nbsp;<strong><code>: public FFastArraySerializerItem</code></strong> = <code>:</code>는 "~을 물려받는다"는 상속 기호. 부모가 가진 <code>ReplicationID</code>·<code>ReplicationKey</code> 칸을 공짜로 얻는다는 뜻이야. (Step 1)<br>&bull;&nbsp;<strong><code>GENERATED_USTRUCT_BODY()</code></strong> = 언리얼이 자동 생성한 코드를 여기 끼워 넣으라는 자리 표시. 신경 안 써도 돼.<br>&bull;&nbsp;<strong><code>UPROPERTY()</code></strong> = 이 변수를 엔진이 추적하게 만드는 표시. 없으면 복제 대상 목록에 안 들어가.<br>&bull;&nbsp;<strong><code>TArray&lt;FExampleItemEntry&gt;	Items</code></strong> = <code>FExampleItemEntry</code>가 줄줄이 담긴 배열. <code>&lt;&gt;</code> 안이 "무엇이 담기느냐"야. 주석(Step 3)이 <strong>이름까지 못 박아</strong> — "<code>Items</code>라는 이름의 <code>TArray</code>를 <strong>반드시</strong> 가져야 한다".<br>&bull;&nbsp;<strong><code>NetDeltaSerialize(FNetDeltaSerializeInfo &amp; DeltaParms)</code></strong> = "이 구조체는 <strong>델타(차이)로 직렬화</strong>합니다"라고 엔진에 내미는 함수. 통짜 복제 대신 이 함수가 불려. (Step 4)<br>&bull;&nbsp;<strong><code>FastArrayDeltaSerialize&lt;아이템형, 배열형&gt;( Items, DeltaParms, *this )</code></strong> = 실제 델타 계산을 대신 해주는 엔진 템플릿 함수. 우리는 "내 아이템 타입은 이거, 내 배열은 이거" 하고 넘기기만 해.<br>&bull;&nbsp;<strong><code>TStructOpsTypeTraits ... WithNetDeltaSerializer = true</code></strong> = 엔진에게 "이 구조체는 델타 직렬화 기능을 갖고 있으니 그쪽 길로 보내줘"라고 등록하는 스위치. <strong>이걸 빼면 위 함수를 짜놔도 안 불린다.</strong> (Step 5)</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 원소는 <code>FFastArraySerializerItem</code>을 상속해서 <strong>바코드·도장 칸</strong>을 얻고(Step 1), 배열은 <code>FFastArraySerializer</code>를 상속해서 <strong>델타 계산 능력</strong>을 얻어(Step 2). 배열 구조체는 <code>Items</code>라는 <strong>정해진 이름</strong>의 <code>TArray</code>를 두고(Step 3), <code>NetDeltaSerialize</code> 안에서 엔진 템플릿에 위임하고(Step 4), 마지막에 <code>WithNetDeltaSerializer = true</code>로 "나 델타로 보내주세요"를 신고한다(Step 5). 이 다섯 단계가 준비 끝.</div>
+<p>그리고 Step 6부터는 <strong>네가 지켜야 할 규율</strong>이야. 주석이 <code>MUST</code>를 두 번 쓴다. <code>FastArraySerializer.h:110-121</code>:</p>
+<div class="code-block">/** Step 6 and beyond:
+ *		-Declare a UPROPERTY of your FExampleArray (step 2) type.
+ *		-You MUST call MarkItemDirty on the FExampleArray when you change an item in the array. You pass in a reference to the item you dirtied.
+ *			See FFastArraySerializer::MarkItemDirty.
+ *		-You MUST call MarkArrayDirty on the FExampleArray if you remove something from the array.
+ *		-In your classes GetLifetimeReplicatedProps, use DOREPLIFETIME(YourClass, YourArrayStructPropertyName);
+ *
+ *		You can provide the following functions in your structure (step 1) to get notifies before add/deletes/removes:
+ *			-void PreReplicatedRemove(const FFastArraySerializer&amp; Serializer)
+ *			-void PostReplicatedAdd(const FFastArraySerializer&amp; Serializer)
+ *			-void PostReplicatedChange(const FFastArraySerializer&amp; Serializer)
+ *			-void PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters&amp; Parameters)</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 여기에 이 챕터의 나머지가 전부 예고돼 있어. <strong>바꾸면 <code>MarkItemDirty</code>, 지우면 <code>MarkArrayDirty</code></strong>(→ 3장), <strong>클라 알림은 콜백</strong>(→ 5장). 대문자 <code>MUST</code>가 두 번 나오는 건, <strong>안 부르면 조용히 망가지기 때문</strong>이야. (맨 아래 <code>PostReplicatedReceive</code>는 "이번 수신 <strong>전체</strong>가 끝났다"를 한 번 알려주는 네 번째 콜백이야. 5장에서 볼 배치 콜백과 같은 결이니 거기서 같이 이해하면 돼.)</div>
+<p>그럼 원소가 상속받는 그 "바코드·도장 칸"이 실제로 뭔지 보자. <code>FastArraySerializer.h:286-322</code>:</p>
+<div class="code-block">/** Base struct for items using Fast TArray Replication */
+USTRUCT()
+struct FFastArraySerializerItem
+{
+	GENERATED_USTRUCT_BODY()
+
+	FFastArraySerializerItem()
+		: ReplicationID(INDEX_NONE), ReplicationKey(INDEX_NONE), MostRecentArrayReplicationKey(INDEX_NONE)
+	{
+
+	}
+
+	FFastArraySerializerItem(const FFastArraySerializerItem &amp;InItem)
+		: ReplicationID(INDEX_NONE), ReplicationKey(INDEX_NONE), MostRecentArrayReplicationKey(INDEX_NONE)
+	{
+
+	}
+
+	FFastArraySerializerItem&amp; operator=(const FFastArraySerializerItem&amp; In)
+	{
+		if (&amp;In != this)
+		{
+			ReplicationID = INDEX_NONE;
+			ReplicationKey = INDEX_NONE;
+			MostRecentArrayReplicationKey = INDEX_NONE;
+		}
+		return *this;
+	}
+
+	UPROPERTY(NotReplicated)
+	int32 ReplicationID;
+
+	UPROPERTY(NotReplicated)
+	int32 ReplicationKey;
+
+	UPROPERTY(NotReplicated)
+	int32 MostRecentArrayReplicationKey;</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>FFastArraySerializerItem</code><br>&bull;&nbsp;<strong><code>FFastArraySerializerItem() : ReplicationID(INDEX_NONE), ...</code></strong> = 생성자야. <code>:</code> 뒤는 "태어날 때 이 값들로 시작한다"는 초기화 목록.<br>&bull;&nbsp;<strong><code>INDEX_NONE</code></strong> = 언리얼에서 "<strong>없음 / 아직 안 정해짐</strong>"을 뜻하는 값(실제로는 -1). 즉 <strong>새로 만든 원소는 바코드가 없는 상태</strong>로 태어나.<br>&bull;&nbsp;<strong><code>FFastArraySerializerItem(const FFastArraySerializerItem &amp;InItem)</code></strong> = <strong>복사 생성자</strong>야. 그런데 몸통을 봐 — 원본에서 값을 베껴오는 게 아니라 <strong>세 숫자를 전부 <code>INDEX_NONE</code>으로 리셋</strong>해버려. <strong>바코드는 복사되지 않는다</strong>는 뜻이야. 원소를 복사해서 배열에 넣으면 그건 <strong>바코드 없는 새 놈</strong>이고, 그래서 <code>MarkItemDirty</code>가 새 번호를 발급해줘야 해. 남의 바코드를 물려받으면 서버가 두 원소를 같은 놈으로 착각하니까, 아예 원천봉쇄한 거지.<br>&bull;&nbsp;<strong><code>operator=(const FFastArraySerializerItem&amp; In)</code></strong> = <strong>대입 연산자</strong>. 여기도 똑같이 리셋해. <code>ItemA = ItemB;</code>를 해도 <strong>바코드는 안 따라온다</strong>.<br>&bull;&nbsp;<strong><code>UPROPERTY(NotReplicated)</code></strong> = "엔진은 추적하되 <strong>네트워크로는 보내지 마</strong>"라는 표시. 바코드·도장은 <strong>서버 내부 살림살이</strong>지, 그대로 전송되는 데이터가 아니야.<br>&bull;&nbsp;<strong><code>int32 ReplicationID</code></strong> = 이 원소의 바코드. 인덱스가 아니라 <strong>이게 정체성</strong>이야.<br>&bull;&nbsp;<strong><code>int32 ReplicationKey</code></strong> = 이 원소의 도장 개수. 내용이 바뀔 때마다 1씩 오른다.<br>&bull;&nbsp;<strong><code>int32 MostRecentArrayReplicationKey</code></strong> = "이 원소가 마지막으로 갱신됐을 때의 <strong>배열 도장 번호</strong>". 수신측이 "얘 이번 업데이트에 손 탔나?"를 판단할 때 쓰는 메모야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 원소는 태어날 때 <code>INDEX_NONE</code>(바코드 없음)으로 시작하고, <strong>복사해도·대입해도 바코드는 안 따라온다</strong> — 복사 생성자와 <code>operator=</code>가 대놓고 리셋하거든. 바코드는 <strong>오직 <code>MarkItemDirty</code>만 발급</strong>한다는 규칙을 코드로 못 박은 거야. 그리고 세 숫자 전부 <code>NotReplicated</code> — <strong>전송되는 값이 아니라 델타를 계산하기 위한 장부</strong>라는 뜻이야. 클라가 받는 건 "몇 번 바코드가 이렇게 바뀌었다"는 <strong>결과</strong>지, 이 필드들 자체가 아니다.</div>
+<div class="note warn">⚠️ <strong><code>Items</code> 이름 규칙을 어기면?</strong> Step 3 주석이 <code>MUST have a TArray named Items</code>라고 못 박은 이유가 있어. 엔진의 델타 경로는 <strong>그 배열을 이름으로 찾아간다</strong>. 이름이 다르거나 엉뚱한 프로퍼티가 잡히면 컴파일은 되는데 런타임에 복제가 이상해져. "왜 인벤이 안 오지?" 하고 하루 날리는 전형적 함정이야.</div>
+<hr>
+</div>
+<div class="conversation"><h2>3. 손드는 법: MarkItemDirty / MarkArrayDirty</h2>
+<p>이제 핵심. <strong>바코드는 누가 발급하고, 도장은 누가 찍나?</strong> 엔진이 알아서 해줄 것 같지만 <strong>아니야.</strong> 게임 코드가 직접 손을 들어야 해. 여기서 <a class="xref" href="ch-19-push-model.html">push-model</a>이랑 완전히 같은 철학이 나온다 — <strong>비교하지 말고, 바꾼 놈이 신고해라.</strong></p>
+<p>신고 함수가 <code>MarkItemDirty</code>야. <code>FastArraySerializer.h:430-471</code>의 <code>FFastArraySerializer</code>:</p>
+<div class="code-block">	/** This must be called if you add or change an item in the array */
+	void MarkItemDirty(FFastArraySerializerItem &amp; Item)
+	{
+		if (Item.ReplicationID == INDEX_NONE)
+		{
+			Item.ReplicationID = ++IDCounter;
+			if (IDCounter == INDEX_NONE)
+			{
+				IDCounter++;
+			}
+		}
+
+		Item.ReplicationKey++;
+		MarkArrayDirty();
+	}
+
+	/** This must be called if you just remove something from the array */
+	void MarkArrayDirty()
+	{
+		ItemMap.Reset();		// This allows to clients to add predictive elements to arrays without affecting replication.
+		IncrementArrayReplicationKey();
+
+		// Invalidate the cached item counts so that they're recomputed during the next write
+		CachedNumItems = INDEX_NONE;
+		CachedNumItemsToConsiderForWriting = INDEX_NONE;
+	}
+
+	void IncrementArrayReplicationKey()
+	{
+		ArrayReplicationKey++;
+		if (ArrayReplicationKey == INDEX_NONE)
+		{
+			ArrayReplicationKey++;
+		}
+
+#if WITH_PUSH_MODEL
+		if (OwningObject != nullptr &amp;&amp; RepIndex != INDEX_NONE)
+		{
+			MARK_PROPERTY_DIRTY_UNSAFE(OwningObject, RepIndex);
+		}
+#endif // WITH_PUSH_MODEL
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — <code>MarkItemDirty</code> / <code>MarkArrayDirty</code> / <code>IncrementArrayReplicationKey</code><br>&bull;&nbsp;<strong><code>FFastArraySerializerItem &amp; Item</code></strong> = <code>&amp;</code>는 복사본이 아니라 <strong>진짜 그 원소</strong>를 받는다는 표시. 복사본에 도장 찍으면 아무 의미 없으니 반드시 원본이어야 해. (게다가 2장에서 봤듯 <strong>복사하면 바코드가 리셋</strong>되니까 복사본은 애초에 다른 원소야.)<br>&bull;&nbsp;<strong><code>if (Item.ReplicationID == INDEX_NONE)</code></strong> = "아직 <strong>바코드가 없는 원소냐?</strong>" 즉 <strong>새로 추가된 원소냐</strong>를 묻는 거야.<br>&bull;&nbsp;<strong><code>Item.ReplicationID = ++IDCounter</code></strong> = 배열이 들고 있는 발급기(<code>IDCounter</code>)를 <strong>먼저 1 올리고</strong>, 그 번호를 바코드로 준다. <code>++</code>가 앞에 붙으면 "올린 다음 값을 쓴다"는 뜻.<br>&bull;&nbsp;<strong><code>if (IDCounter == INDEX_NONE) { IDCounter++; }</code></strong> = 발급기가 한 바퀴 돌아 <code>-1</code>(없음 값)에 걸리면 한 칸 더 넘긴다. "없음"이라는 특별한 번호를 실수로 바코드로 쓰지 않으려는 방어야. <code>ArrayReplicationKey</code>에도 <strong>똑같은 방어</strong>가 붙어 있는 게 보이지?<br>&bull;&nbsp;<strong><code>Item.ReplicationKey++</code></strong> = 이 원소의 <strong>도장을 하나 더 찍는다</strong>. 이 한 줄이 "이 원소 바뀌었어요" 신고 그 자체.<br>&bull;&nbsp;<strong><code>MarkArrayDirty()</code></strong> = 원소를 건드렸으면 <strong>배열 도장도 같이</strong> 올린다. 원소 신고는 항상 배열 신고를 포함해.<br>&bull;&nbsp;<strong><code>ItemMap.Reset()</code></strong> = "바코드 → 인덱스" 캐시 지도를 싹 비운다. 배열이 흔들렸으니 지도가 낡았거든. 다음에 필요할 때 다시 만든다. 옆 주석이 이유를 하나 더 대 — <strong>클라가 예측으로 원소를 끼워 넣어도</strong> 복제가 안 망가지게 하려고.<br>&bull;&nbsp;<strong><code>CachedNumItems = INDEX_NONE</code></strong> = 캐시해둔 원소 개수를 "모름"으로 되돌린다. 다음 전송 때 다시 세라는 뜻.<br>&bull;&nbsp;<strong><code>#if WITH_PUSH_MODEL ... MARK_PROPERTY_DIRTY_UNSAFE(OwningObject, RepIndex)</code></strong> = <strong>여기가 결정적이야.</strong> 배열 도장을 올리는 김에, <a class="xref" href="ch-19-push-model.html">push-model</a>의 <strong>dirty 비트까지 같이 켠다</strong>. <code>#if</code>는 "push model이 켜진 빌드에서만 이 줄을 컴파일하라"는 조건부 컴파일이야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> <code>MarkItemDirty(Item)</code>는 두 가지 일을 해. ① 바코드가 없으면(<code>INDEX_NONE</code>) <strong>새로 발급</strong>하고 → 이게 곧 "추가"의 표시야. ② 도장을 하나 찍고(<code>ReplicationKey++</code>) 배열 도장도 올린다 → 이게 "변경"의 표시. 그리고 <code>MarkArrayDirty()</code>는 배열 도장만 올려 — <strong>삭제</strong>는 원소가 사라져서 도장 찍을 대상이 없으니 이쪽을 쓴다.</div>
+<div class="note origin">🌱 <strong>여기서 두 층이 실제로 만난다</strong><br>&bull;&nbsp;<code>IncrementArrayReplicationKey()</code> 마지막의 <code>MARK_PROPERTY_DIRTY_UNSAFE(OwningObject, RepIndex)</code>가 <strong>Push Model과 FastArray를 잇는 이음매</strong>야.<br>&bull;&nbsp;<a class="xref" href="ch-19-push-model.html">push-model</a>에서 배운 그 <code>MarkPropertyDirty(RepIndex)</code>가 여기서 불려. 즉 <code>MarkItemDirty(Items[3])</code> 한 번이 <strong>두 층에 동시에 손을 든다</strong> — <strong>바깥층</strong>(Push Model)엔 "이 오브젝트의 <code>Items</code> 프로퍼티 좀 봐라", <strong>안쪽층</strong>(FastArray)엔 "그중에서도 3번 원소만 바뀌었다".<br>&bull;&nbsp;그래서 <strong>둘은 경쟁이 아니라 포개진다.</strong> Push Model이 "볼지 말지"의 문을 열어주고, FastArray가 "그 안에서 무엇을 보낼지"를 고른다. 게임 코드는 <code>MarkItemDirty</code> 하나만 부르면 두 층이 다 갱신돼.</div>
+<p>그래서 실무 규칙은 딱 세 줄로 외워:</p>
+<table class="compare-table"><thead><tr><th>내가 한 일</th><th>불러야 할 함수</th><th>왜</th></tr></thead><tbody>
+<tr><td>배열에 원소 <strong>추가</strong></td><td><code>MarkItemDirty(새원소)</code></td><td>바코드가 없으니 여기서 발급된다. 안 부르면 <strong>바코드 없는 유령 원소</strong>.</td></tr>
+<tr><td>원소 내용 <strong>변경</strong></td><td><code>MarkItemDirty(그원소)</code></td><td>도장이 안 올라가면 서버는 "안 바뀌었네" 하고 <strong>안 보낸다</strong>.</td></tr>
+<tr><td>원소 <strong>삭제</strong></td><td><code>MarkArrayDirty()</code></td><td>사라진 원소엔 도장 못 찍으니 배열 도장을 올려 "다시 훑어봐"라고 알린다.</td></tr>
+</tbody></table>
+<div class="note warn">⚠️ <strong>제일 흔한 사고</strong>: <code>Items[3].Count--;</code> 만 하고 <code>MarkItemDirty(Items[3])</code>를 <strong>안 부르는 것</strong>. 서버 값은 분명 바뀌었는데 도장이 그대로라 델타 계산에서 <strong>안 바뀐 걸로 판정</strong>돼. 에러도 로그도 안 나. 클라 인벤만 조용히 틀려 있어. 조선 서버에서 "DB엔 반영됐는데 클라에 안 뜬다"던 그 사고랑 정확히 같은 종류야.</div>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — Push Model이 못 하는 걸 FastArray가 한다</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: <a class="xref" href="ch-19-push-model.html">push-model</a>은 "값 바꾼 코드가 dirty 비트를 켠다"로 폴링 비용을 없앴어. 좋은 발상이지.<br>&bull;&nbsp;<strong>그런데 문제</strong>: Push Model은 <strong>최상위 프로퍼티 단위</strong>로만 추적해. 배열 3번 원소만 바꿔도 켤 수 있는 건 "<code>Items</code> 배열이 dirty" 비트 하나뿐이야. 그럼 결국 <strong>배열 전체가 다시 나간다</strong> — 비교를 스킵했을 뿐, 전송량은 그대로.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: <strong>배열 안쪽</strong>에서 한 층 더 손드는 장치. 프로퍼티가 아니라 <strong>원소</strong>가 손을 들게. → 그게 <code>MarkItemDirty</code>야. Push Model은 "어떤 프로퍼티를 볼까"를 줄이고, FastArray는 "그 배열에서 무엇을 보낼까"를 줄인다. <strong>같은 철학(신고제), 다른 층.</strong></div>
+<hr>
+</div>
+<div class="conversation"><h2>4. 서버가 델타를 만드는 순간</h2>
+<p>보낼 때가 되면 <code>NetDeltaSerialize</code>가 불리고, 그 안의 <code>FastArrayDeltaSerialize</code>가 실제 일을 해. 흐름을 그림으로 보자.</p>
+<div class="code-block">[서버] 이 클라에게 보낼 차례
+  │
+  ├─ ① 배열 도장 비교                      ConditionalCreateNewDeltaState()   FastArraySerializer.h:809
+  │     지난번 이 클라에 보낼 때 ArrayReplicationKey == 지금 값?
+  │        └─ 같다 → 아무것도 안 쓰고 즉시 탈출.  (원소 100개 훑지도 않음)
+  │
+  ├─ ② 다르다 → 원소를 훑으며 "바코드 → 도장" 지도를 만든다
+  │                                        BuildChangedAndDeletedBuffers()    FastArraySerializer.h:886
+  │     현재:  {ID 7: Key 3}, {ID 8: Key 1}, {ID 9: Key 5}
+  │     지난번: {ID 7: Key 3}, {ID 8: Key 1}, {ID 5: Key 2}
+  │
+  ├─ ③ 세 갈래로 분류
+  │     ID 9  : 지난 기록에 없음        → ADD     (원소 통째로 실음)
+  │     ID 7  : 도장 3 == 3             → 그대로  (안 실음! ★ 여기가 절약)
+  │     ID 8  : 도장 1 == 1             → 그대로  (안 실음!)
+  │     ID 5  : 지금 배열에 없음        → REMOVE  (바코드 번호만 실음)
+  │
+  └─ ④ 봉투에 쓴다                         WriteDeltaHeader()                 FastArraySerializer.h:970
+        [삭제 개수=1][삭제 ID 목록: 5]
+        [변경/추가 개수=1][ID 9 + 그 원소 데이터]
+                                      ↑ ID 7, 8은 한 바이트도 안 나감</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 흐름의 낯선 말들<br>&bull;&nbsp;<strong>"지난번 이 클라에 보낼 때"</strong> = 서버는 <strong>연결(클라)마다 따로</strong> 마지막으로 보낸 상태를 기억해둬. A는 최신인데 B는 세 프레임 늦게 접속했을 수 있으니, 델타 기준점이 클라마다 달라야 하거든.<br>&bull;&nbsp;<strong>ADD / REMOVE / CHANGE</strong> = 우리가 손으로 만들던 <code>SP_ITEM_ADD</code> / <code>SP_ITEM_REMOVE</code> / <code>SP_ITEM_UPDATE</code> 3종 세트가 여기서 <strong>자동으로 생성</strong>되는 지점이야.<br>&bull;&nbsp;<strong>"삭제는 바코드 번호만 실음"</strong> = 지운 원소의 데이터는 보낼 필요가 없어. "5번 없애"라는 <strong>번호 하나</strong>면 클라가 알아서 지워.<br>&bull;&nbsp;<strong>"조기 탈출"</strong> = ①에서 배열 도장이 같으면 원소를 훑지도 않고 바로 나가는 것. 안 바뀐 배열은 <strong>비교 비용조차</strong> 거의 안 든다.</div>
+<p>위는 그림이니까, <strong>진짜 코드로 확인 사살</strong>하자. ①의 <strong>조기 탈출</strong>이 정말 저 한 줄인지 보자. 함수 이름부터가 "<strong>조건부로만</strong> 새 델타 상태를 만든다"야. <code>FastArraySerializer.h:808-813</code>:</p>
+<div class="code-block">template&lt;typename Type, typename SerializerType&gt;
+bool FFastArraySerializer::TFastArraySerializeHelper&lt;Type, SerializerType&gt;::ConditionalCreateNewDeltaState(const TMap&lt;int32, int32&gt;&amp; OldIDToKeyMap, const int32 BaseReplicationKey)
+{
+	if (ArraySerializer.ArrayReplicationKey == BaseReplicationKey)
+	{
+		// If the keys didn't change, only update the item count caches if necessary.</div>
+<p>그리고 ②③의 <strong>세 갈래 분류</strong>. 여기가 이 챕터의 심장이야. <code>FastArraySerializer.h:899-959</code>(발췌 — 로그 줄은 그대로 뒀어, 엔진이 뭘 생각하는지 그대로 읽히거든):</p>
+<div class="code-block">	//--------------------------------------------
+	// Find out what is new or what has changed
+	//--------------------------------------------
+	for (int32 i = 0; i &lt; Items.Num(); ++i)
+	{
+		Type&amp; Item = Items[i];
+
+		UE_LOG(LogNetFastTArray, Log, TEXT("    Array[%d] - ID %d. CL %d."), i, Item.ReplicationID, Item.ReplicationKey);
+		if (!ArraySerializer.template ShouldWriteFastArrayItem&lt;Type, SerializerType&gt;(Item, Parms.bIsWritingOnClient))
+		{
+			// On clients, this will skip items that were added predictively.
+			continue;
+		}
+
+		// The item really should have a valid ReplicationID but in the case of loading from a save game, or initializing from a default state/archetype with existing data
+		// items may not have been marked dirty individually. Its ok to just assign them one here.
+		if (Item.ReplicationID == INDEX_NONE)
+		{
+			ArraySerializer.MarkItemDirty(Item);
+		}
+
+		NewIDToKeyMap.Add(Item.ReplicationID, Item.ReplicationKey);
+
+		const int32* OldValuePtr = OldIDToKeyMap ? OldIDToKeyMap-&gt;Find(Item.ReplicationID) : NULL;
+		if (OldValuePtr)
+		{
+			if (*OldValuePtr == Item.ReplicationKey)
+			{
+				UE_LOG(LogNetFastTArray, Log, TEXT("       Stayed The Same - Skipping"));
+
+				// Stayed the same, it might have moved but we dont care
+				continue;
+			}
+			else
+			{
+				UE_LOG(LogNetFastTArray, Log, TEXT("       Changed! Was: %d. Element ID: %d. %s"), *OldValuePtr, Item.ReplicationID, *Item.GetDebugString());
+
+				// Changed
+				ChangedElements.Add(FFastArraySerializer_FastArrayDeltaSerialize_FIdxIDPair(i, Item.ReplicationID));
+			}
+		}
+		else
+		{
+			UE_LOG(LogNetFastTArray, Log, TEXT("       New! Element ID: %d. %s"), Item.ReplicationID, *Item.GetDebugString());
+
+			// New
+			ChangedElements.Add(FFastArraySerializer_FastArrayDeltaSerialize_FIdxIDPair(i, Item.ReplicationID));
+			++DeleteCount; // We added something new, so our initial DeleteCount value must be incremented.
+		}
+	}
+
+	// Find out what was deleted
+	if (DeleteCount &gt; 0 &amp;&amp; OldIDToKeyMap)
+	{
+		for (auto It = OldIDToKeyMap-&gt;CreateConstIterator(); It; ++It)
+		{
+			if (!NewIDToKeyMap.Contains(It.Key()))
+			{
+				UE_LOG(LogNetFastTArray, Log, TEXT("   Deleting ID: %d"), It.Key());
+
+				DeletedElements.Add(It.Key());</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 위 실제 코드의 낯선 말들<br>&bull;&nbsp;<strong><code>OldIDToKeyMap</code> / <code>NewIDToKeyMap</code></strong> = 이게 바로 "<strong>바코드 → 도장</strong>" 지도야. <code>Old</code>는 <strong>지난번 이 클라에 보낼 때</strong> 찍어둔 지도, <code>New</code>는 <strong>지금</strong> 만드는 지도. 델타는 이 두 지도를 대조해서 나와.<br>&bull;&nbsp;<strong><code>BaseReplicationKey</code></strong> = 지난번 이 클라에 보낼 때의 <strong>배열 도장 번호</strong>. <code>if (ArraySerializer.ArrayReplicationKey == BaseReplicationKey)</code> 한 줄이 <strong>조기 탈출 판정 그 자체</strong>야.<br>&bull;&nbsp;<strong><code>ShouldWriteFastArrayItem(...)</code> → <code>continue;</code></strong> = 이 원소를 아예 <strong>건너뛴다</strong>. 옆 주석이 이유를 말해줘 — <strong>클라가 예측으로 끼워 넣은 원소</strong>는 서버로 되돌려 보내면 안 되니까.<br>&bull;&nbsp;<strong><code>if (Item.ReplicationID == INDEX_NONE) { MarkItemDirty(Item); }</code></strong> = <strong>안전망</strong>이야. 세이브 게임에서 불러왔거나 기본값으로 초기화된 원소는 바코드가 없을 수 있는데, 주석 왈 "여기서 그냥 하나 발급해줘도 괜찮다". <strong>단, 이건 최초 1회를 위한 구제책이지 <code>MarkItemDirty</code>를 빼먹어도 된다는 뜻이 절대 아니야</strong> — 값만 바꾸고 마킹을 안 하면 <code>ReplicationKey</code>가 안 올라서 아래 <code>Stayed The Same</code> 갈래로 빠진다.<br>&bull;&nbsp;<strong><code>*OldValuePtr == Item.ReplicationKey</code> → <code>continue;</code></strong> = <strong>여기가 절약이 일어나는 정확한 한 줄.</strong> 도장이 같으면 로그에 "<code>Stayed The Same - Skipping</code>"만 남기고 <strong>아무것도 안 싣고 넘어간다</strong>. 옆 주석이 정렬 문제까지 대답해줘 — "<code>it might have moved but we dont care</code>"(자리가 옮겨졌을 수도 있지만 <strong>신경 안 쓴다</strong>).<br>&bull;&nbsp;<strong><code>else { ... ChangedElements.Add(...) }</code></strong> = 도장이 다르면 <strong>CHANGE</strong>. 지도에 바코드 자체가 없으면(<code>OldValuePtr</code>이 널) <strong>ADD</strong>. 재밌는 건 <strong>둘 다 같은 <code>ChangedElements</code> 목록에 들어간다</strong>는 거야 — 봉투에 실릴 때 "이 ID의 원소 데이터"라는 형태로 <strong>똑같이</strong> 나가거든. 클라는 그 ID가 자기한테 있으면 갱신, 없으면 생성.<br>&bull;&nbsp;<strong><code>if (!NewIDToKeyMap.Contains(It.Key()))</code></strong> = <strong>REMOVE 판정.</strong> 옛 지도엔 있는데 새 지도엔 없는 바코드 = 사라진 놈. 데이터는 안 싣고 <strong><code>DeletedElements</code>에 번호만</strong> 넣는다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 서버는 ① <code>ArrayReplicationKey == BaseReplicationKey</code> 한 줄로 "아예 볼 필요 있나?"를 먼저 걸러. ② 볼 필요가 있으면 <code>NewIDToKeyMap</code>(바코드→도장 지도)을 만들며 옛 지도와 대조해. ③ 도장이 같으면 <code>continue</code>(=안 실림), 다르면 <code>ChangedElements</code>, 옛 지도에만 있으면 <code>DeletedElements</code>. <strong>"안 바뀐 원소는 <code>continue</code> 한 줄로 사라진다"</strong> — 100개 중 1개 바꿨으면 1개만 나가는 게 정확히 이 대목이야.</div>
+<p>여기서 <strong>정렬 문제</strong>가 자동으로 풀리는 게 보이지? 인벤을 정렬해서 순서를 통째로 뒤집었어도, 바코드와 도장은 그대로야. 그럼 델타는 <strong>비어 있다</strong>. 인덱스 기준 비교였으면 전 원소가 dirty였을 상황인데, ID 기준이라 <strong>한 바이트도 안 나간다.</strong></p>
+<div class="note">역으로 이게 <strong>한계</strong>이기도 해. 서버가 순서를 바꿔도 델타가 안 나가니까, <strong>클라 배열의 순서는 서버와 다를 수 있어</strong>. FastArray는 "이 집합에 뭐가 들었나"는 맞춰주지만 <strong>"몇 번째 칸인가"는 안 맞춰줘.</strong> 순서가 의미 있으면(정렬된 랭킹 등) 원소 안에 <code>SortOrder</code> 같은 값을 <strong>직접 넣어서</strong> 클라가 정렬하게 해야 해.</div>
+<hr>
+</div>
+<div class="conversation"><h2>5. 클라 콜백: 받은 델타를 어떻게 알려주나</h2>
+<p>클라는 델타를 받아서 자기 배열을 고쳐. 근데 그냥 조용히 고치면 UI는 어떻게 알지? 인벤 창을 매 프레임 통째로 다시 그릴 순 없잖아. 그래서 FastArray는 <strong>원소 단위로 콜백</strong>을 쏴줘. 원소 구조체에 이 함수들을 정의해두면 엔진이 알아서 부른다. 2장에서 접어뒀던 그 부분이야. <code>FastArraySerializer.h:66-75</code>:</p>
+<div class="code-block">	/**
+	 * Optional functions you can implement for client side notification of changes to items;
+	 * Parameter type can match the type passed as the 2nd template parameter in associated call to FastArrayDeltaSerialize
+	 *
+	 * NOTE: It is not safe to modify the contents of the array serializer within these functions, nor to rely on the contents of the array
+	 * being entirely up-to-date as these functions are called on items individually as they are updated, and so may be called in the middle of a mass update.
+	 */
+	void PreReplicatedRemove(const struct FExampleArray&amp; InArraySerializer);
+	void PostReplicatedAdd(const struct FExampleArray&amp; InArraySerializer);
+	void PostReplicatedChange(const struct FExampleArray&amp; InArraySerializer);</div>
+<p>그리고 이건 <strong>선택</strong>이라서, 네가 안 짜면 <strong>아무것도 안 하는 빈 함수</strong>가 대신 불려. 부모가 기본값을 들고 있거든. <code>FastArraySerializer.h:324-346</code>:</p>
+<div class="code-block">	/**
+	 * Called right before deleting element during replication.
+	 *
+	 * @param InArraySerializer	Array serializer that owns the item and has triggered the replication call
+	 *
+	 * NOTE: intentionally not virtual; invoked via templated code, @see FExampleItemEntry
+	 */
+	FORCEINLINE void PreReplicatedRemove(const struct FFastArraySerializer&amp; InArraySerializer) { }
+	/**
+	 * Called after adding and serializing a new element
+	 *
+	 * @param InArraySerializer	Array serializer that owns the item and has triggered the replication call
+	 *
+	 * NOTE: intentionally not virtual; invoked via templated code, @see FExampleItemEntry
+	 */
+	FORCEINLINE void PostReplicatedAdd(const struct FFastArraySerializer&amp; InArraySerializer) { }
+	/**
+	 * Called after updating an existing element with new data
+	 *
+	 * @param InArraySerializer	Array serializer that owns the item and has triggered the replication call
+	 * NOTE: intentionally not virtual; invoked via templated code, @see FExampleItemEntry
+	 */
+	FORCEINLINE void PostReplicatedChange(const struct FFastArraySerializer&amp; InArraySerializer) { }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 세 콜백<br>&bull;&nbsp;<strong><code>Pre</code> / <code>Post</code></strong> = 각각 "~<strong>하기 직전</strong>" / "~<strong>한 직후</strong>". 이 접두사가 타이밍의 전부야.<br>&bull;&nbsp;<strong><code>PreReplicatedRemove</code></strong> = 주석 왈 <code>Called right before deleting element</code> — 원소가 <strong>지워지기 직전</strong>에 불려. 아직 데이터가 살아 있는 마지막 순간이라, "무슨 버프가 사라졌는지"를 읽어서 이펙트를 꺼줄 수 있어. 지워진 뒤엔 읽을 게 없으니 <strong>반드시 Pre</strong>여야 해.<br>&bull;&nbsp;<strong><code>PostReplicatedAdd</code></strong> = 원소가 <strong>추가된 직후</strong>. 새 아이템 아이콘을 UI에 붙이거나, 새 버프의 파티클을 켜는 자리.<br>&bull;&nbsp;<strong><code>PostReplicatedChange</code></strong> = 기존 원소의 <strong>값이 갱신된 직후</strong>. 수량 숫자만 다시 그리면 되는 자리.<br>&bull;&nbsp;<strong><code>const struct FExampleArray&amp; InArraySerializer</code></strong> = 나를 담고 있는 <strong>배열 본인</strong>을 넘겨준다. 원소가 "내 주인이 누구지?"(어느 컴포넌트 소속인지)를 거슬러 올라가려고 쓰는 손잡이야. <code>const</code>라서 <strong>읽기만</strong> 하라는 뜻.<br>&bull;&nbsp;<strong><code>FORCEINLINE ... { }</code></strong> = 부모가 들고 있는 <strong>빈 기본 구현</strong>이야. 몸통이 <code>{ }</code> — 아무 일도 안 해. 네가 안 짜면 이게 불리고 <strong>공짜로 사라진다</strong>(인라인이라 호출 비용도 0에 가까워). 그래서 콜백은 <strong>선택</strong>인 거야.<br>&bull;&nbsp;<strong><code>NOTE: intentionally not virtual; invoked via templated code</code></strong> = <strong>일부러 <code>virtual</code>을 안 붙였다</strong>는 뜻이야. 그래서 이 콜백들은 "가상함수 오버라이드"가 <strong>아니야</strong>. 네 원소 구조체에 <strong>같은 이름·같은 시그니처의 함수를 그냥 정의해두면</strong>, 템플릿이 컴파일 타임에 그걸 골라 부른다. 가상 테이블을 거치지 않으니 <strong>런타임 비용이 0</strong>이고, 대신 <strong>이름을 한 글자라도 틀리면 조용히 부모의 빈 함수가 불린다</strong>(에러 없이!).<br>&bull;&nbsp;<strong><code>NOT safe to modify the contents ... in the middle of a mass update</code></strong> = 주석이 대놓고 경고해. 이 콜백은 <strong>원소 하나 처리할 때마다 개별 호출</strong>돼서, 이 시점의 배열은 <strong>공사 중</strong>이야. 여기서 배열에 원소를 추가/삭제하면 엔진이 돌던 자리가 무너진다.</div>
+<div class="note warn">⚠️ <strong>"오버라이드가 아니다"의 함정.</strong> <code>virtual</code>이 아니라 <strong>템플릿 이름 매칭</strong>이라, <code>PostReplicatedAdd</code>를 <code>PostReplicateAdd</code>로 오타 내도 <strong>컴파일이 된다</strong>. <code>override</code> 키워드가 잡아주지도 않아(가상함수가 아니니까). 그냥 부모의 <strong>빈 함수</strong>가 불리고, 클라 UI만 조용히 안 갱신돼. 이 챕터의 다른 함정들과 <strong>똑같은 종류</strong>지 — <strong>에러 없이 조용히 아무 일도 안 일어난다.</strong></div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 클라가 델타를 풀면서, 지울 원소엔 <strong>지우기 전에</strong> <code>PreReplicatedRemove</code>를, 새로 넣은 원소엔 <strong>넣은 뒤</strong> <code>PostReplicatedAdd</code>를, 값만 고친 원소엔 <strong>고친 뒤</strong> <code>PostReplicatedChange</code>를 부른다. UI·이펙트는 이 세 지점에만 붙이면 돼 — <strong>폴링 없이, 바뀐 원소에 대해서만</strong> 반응하는 거지. 우리가 <code>SP_ITEM_ADD</code> 핸들러, <code>SP_ITEM_REMOVE</code> 핸들러를 손으로 등록하던 그 자리가 여기야.</div>
+<p>배열 구조체(<code>FFastArraySerializer</code>) 쪽에도 <strong>배치 단위</strong> 콜백이 있어. 원소 하나하나가 아니라 "이번 업데이트에서 3개 추가, 1개 삭제됐다"를 <strong>한 번에</strong> 받는 버전이야. <code>FastArraySerializer.h:486-505</code>:</p>
+<div class="code-block">	/**
+	 * Called before removing elements and after the elements themselves are notified.  The indices are valid for this function call only!
+	 *
+	 * NOTE: intentionally not virtual; invoked via templated code, @see FExampleItemEntry
+	 */
+	FORCEINLINE void PreReplicatedRemove(const TArrayView&lt;int32&gt;&amp; RemovedIndices, int32 FinalSize) { }
+
+	/**
+	 * Called after adding all new elements and after the elements themselves are notified.  The indices are valid for this function call only!
+	 *
+	 * NOTE: intentionally not virtual; invoked via templated code, @see FExampleItemEntry
+	 */
+	FORCEINLINE void PostReplicatedAdd(const TArrayView&lt;int32&gt;&amp; AddedIndices, int32 FinalSize) { }
+
+	/**
+	 * Called after updating all existing elements with new data and after the elements themselves are notified. The indices are valid for this function call only!
+	 *
+	 * NOTE: intentionally not virtual; invoked via templated code, @see FExampleItemEntry
+	 */
+	FORCEINLINE void PostReplicatedChange(const TArrayView&lt;int32&gt;&amp; ChangedIndices, int32 FinalSize) { }</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 배치 콜백<br>&bull;&nbsp;<strong><code>TArrayView&lt;int32&gt;&amp; RemovedIndices</code></strong> = "이번에 건드린 원소들의 <strong>인덱스 목록</strong>". <code>TArrayView</code>는 복사 없이 <strong>남의 배열을 들여다보는 창</strong>이라고 보면 돼.<br>&bull;&nbsp;<strong><code>The indices are valid for this function call only!</code></strong> = 느낌표까지 붙여 경고해. 이 <strong>인덱스 목록을 어디 저장해두면 안 된다</strong>는 뜻이야. 창(view)일 뿐이라 함수가 끝나면 가리키던 메모리가 사라져. 필요하면 <strong>이 함수 안에서 다 쓰거나, 값을 복사</strong>해둬.<br>&bull;&nbsp;<strong><code>int32 FinalSize</code></strong> = 이 업데이트가 <strong>다 끝났을 때의 배열 크기</strong>. 미리 알려주니 UI 슬롯을 한 번에 잡을 수 있어.<br>&bull;&nbsp;<strong><code>and after the elements themselves are notified</code></strong> = <strong>호출 순서를 못 박은 문장이야.</strong> <strong>원소 콜백이 먼저</strong> 전부 돌고, <strong>그다음에</strong> 배열 배치 콜백이 불린다. 즉 배치 콜백 시점엔 개별 반응이 이미 끝나 있어.<br>&bull;&nbsp;<strong>왜 배치가 필요해?</strong> = 원소 콜백은 10개 바뀌면 10번 불려. UI를 10번 다시 그리면 낭비지. 배치 콜백은 <strong>한 번</strong> 불리니까 "인벤 새로고침 1회"로 끝낼 수 있어.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 콜백이 두 층이고 <strong>순서가 정해져 있어</strong> — <strong>원소 콜백</strong>이 먼저 원소마다 돌고(<code>and after the elements themselves are notified</code>), <strong>그다음</strong> 배열 배치 콜백이 한 번 돈다. 원소 콜백은 "이 아이템 하나에 무슨 일이 났나"(파티클 켜기 같은 개별 반응), 배치 콜백은 "이번 업데이트로 총 뭐가 바뀌었나"(UI 한 방 갱신). <strong>개별 반응은 원소에, 뭉쳐서 할 일은 배열에</strong> 붙인다.</div>
+<hr>
+</div>
+<div class="conversation"><h2>6. 실무에선 어디에 쓰나</h2>
+<p>이름은 낯설어도 언리얼 게임 만들면 <strong>거의 무조건</strong> 만나게 돼. 자주 찔끔 바뀌는 목록은 전부 후보야.</p>
+<ul>
+<li><strong>인벤토리 / 장비 목록</strong> — 아이템 하나 먹고, 하나 쓰고. 딱 FastArray용이야. Lyra 샘플의 인벤 리스트가 이 구조로 돼 있어.</li>
+<li><strong>버프·디버프 (GameplayEffect) 목록</strong> — GAS(Gameplay Ability System)의 활성 이펙트 컨테이너가 FastArray야. 버프 하나 걸릴 때마다 전체 버프 목록을 재전송하면 전투 중에 대역폭이 터지니까. → 클라 이펙트/아이콘은 <code>PostReplicatedAdd</code>·<code>PreReplicatedRemove</code>에서 켜고 끈다.</li>
+<li><strong>팀 / 플레이어 목록</strong> — 20명 방에서 1명 들어오고 1명 나갈 때, 20명 정보를 다시 보낼 이유가 없지.</li>
+<li><strong>킬로그 / 채팅 로그</strong> — 계속 뒤에 추가만 되는 목록. 추가된 줄만 나가면 돼.</li>
+<li><strong>퀘스트 진행 상황, 스킬 쿨다운 목록</strong> — 하나씩 갱신되는 전형적 케이스.</li>
+</ul>
+<p>기준은 단순해. <strong>"원소 수는 많은데, 한 번에 바뀌는 건 몇 개 안 된다"</strong> → FastArray. 반대로 원소가 3~4개뿐이고 어차피 매번 다 바뀐다면? 통짜 <code>TArray</code>가 더 싸. FastArray는 바코드·도장·지도(<code>ItemMap</code>) 같은 <strong>관리 비용</strong>을 내는 대신 전송량을 줄이는 거래니까, 줄일 게 없으면 손해야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>7. 한계 — 공짜가 아니다</h2>
+<p>ch-19에서 Push Model이 "손 안 들면 안 본다"는 규칙 때문에 함정이 생겼듯, FastArray도 똑같이 대가를 치러.</p>
+<ol>
+<li><strong>"원소 통짜 전송"은 옛말이다 — 하지만 원소는 여전히 얇게 유지해라.</strong> 여기는 <strong>낡은 지식이 많이 돌아다니는 대목</strong>이라 소스를 직접 봐야 해. 예전엔 정말 그랬어 — <code>ReplicationKey</code>가 오른 원소는 <strong>안의 필드 40개가 통째로</strong> 나갔지. 근데 UE5의 헤더 주석은 이렇게 말한다. <code>FastArraySerializer.h:208-211</code>:
+<div class="code-block"> *		Delta Serialization for inner structs is now enabled by default. That means that when a ReplicationKey changes, we will compare the current state of the
+ *		struct to the last sent state, tracking changelists and only sending properties that changed exactly like the standard replication path.
+ *		If this causes issues with a specific FastArray type, it can be disabled by calling FFastArraySerializer::SetDeltaSerializationEnabled(false) in the constructor.
+ *		The feature can be completely disabled by setting the "net.SupportFastArrayDelta" CVar to 0.</div>
+번역하면: <strong>원소 내부까지 델타로 쪼개는 게 이제 기본값</strong>이야. <code>ReplicationKey</code>가 오르면, 엔진이 그 원소를 <strong>지난번 보낸 상태와 비교해서 <a class="xref" href="ch-16-changelist.html">changelist</a>를 만들고 바뀐 프로퍼티만</strong> 보내 — "<code>exactly like the standard replication path</code>", 즉 일반 복제 경로와 똑같이. 그래서 <strong>두 층의 델타가 포개져</strong>: <strong>바깥</strong>(FastArray)이 "어떤 <strong>원소</strong>를 보낼까"를 고르고, <strong>안쪽</strong>(changelist)이 "그 원소의 어떤 <strong>필드</strong>를 보낼까"를 고른다.<br>
+<strong>그런데도 원소를 얇게 유지해야 하는 이유</strong>는 남아 있어. 델타가 공짜가 아니거든 — 원소가 두꺼우면 <strong>비교 비용</strong>과 <strong>클라별로 보관하는 "지난번 보낸 상태"의 메모리</strong>가 그만큼 커져. 전송량은 줄었어도 <strong>CPU와 메모리는 필드 수에 비례</strong>해. 그리고 문제가 생기면 <code>SetDeltaSerializationEnabled(false)</code>나 <code>net.SupportFastArrayDelta 0</code>으로 <strong>끌 수 있다</strong>는 건, 뒤집으면 <strong>꺼지면 다시 통짜로 돌아간다</strong>는 뜻이기도 하고.</li>
+<li><strong>순서 보장 없음.</strong> 4장에서 봤듯 ID 기준이라 순서 변경은 델타로 안 잡혀. 클라 배열의 인덱스 순서를 <strong>절대 신뢰하면 안 돼</strong>. 원소를 찾을 땐 인덱스가 아니라 <strong>고유값(아이템 GUID 등)으로</strong> 찾고, 순서가 의미 있으면 정렬 키를 원소 안에 넣어 보내.</li>
+<li><strong>마킹 안 하면 조용히 유실.</strong> <code>MarkItemDirty</code>를 빼먹으면 서버 값만 바뀌고 클라는 영원히 옛날 값. 로그도 에러도 없어. Push Model의 "dirty 마킹 없이 값 바꾸면 변경이 조용히 유실" 함정과 <strong>똑같은 종류</strong>야. 배열을 직접 만지는 코드를 여기저기 흩뿌리지 말고, <strong>Add/Remove/Update 함수를 하나씩 만들어 그 안에서만 마킹</strong>하는 게 유일한 방어책이야.</li>
+<li><strong>콜백 안에서 배열 수정 금지.</strong> 주석이 명시하듯 콜백은 <strong>대량 업데이트 중간</strong>에 원소별로 불려. 그 시점의 배열은 공사 중이라 원소를 추가·삭제하면 터진다. 뭔가 고쳐야 하면 <strong>플래그만 세워두고 다음 틱에</strong> 처리해.</li>
+<li><strong>관리 비용은 항상 든다.</strong> <code>ItemMap</code> 재구축, 원소 순회, 클라마다 지난 상태 보관 — 이건 배열이 안 바뀌어도(조기 탈출 덕에 적게나마) 계속 드는 비용이야. 원소 몇 개짜리 배열엔 오히려 손해라는 얘기.</li>
+</ol>
+<hr>
+</div>
+<div class="conversation"><h2>우리 서버랑 비교</h2>
+<p>조선 서버에서 우리가 손으로 했던 그 일 그대로야. 그래서 오히려 이해가 빨라.</p>
+<table class="compare-table"><thead><tr><th></th><th>조선 서버 (TCP/IOCP)</th><th>UE FastArraySerializer</th></tr></thead><tbody>
+<tr><td>배열 하나 바뀔 때</td><td><code>SP_ITEM_ADD</code> / <code>SP_ITEM_REMOVE</code> / <code>SP_ITEM_UPDATE</code> <strong>3종 세트를 손으로 설계</strong></td><td>ADD/REMOVE/CHANGE 델타를 <strong>엔진이 자동 생성</strong></td></tr>
+<tr><td>원소 식별</td><td>슬롯 인덱스 or 아이템 <code>wID</code>를 패킷에 직접 실음</td><td><code>ReplicationID</code>(바코드)를 <strong>엔진이 발급·추적</strong></td></tr>
+<tr><td>"바뀐 원소" 판정</td><td>게임 로직이 그때그때 판단해 패킷을 쏨</td><td><code>ReplicationKey</code>(도장) 비교로 <strong>자동 분류</strong></td></tr>
+<tr><td>변경 신고</td><td>패킷 <code>Send</code> 호출을 빼먹으면 유실</td><td><code>MarkItemDirty</code>를 빼먹으면 유실 (<strong>같은 함정</strong>)</td></tr>
+<tr><td>클라 수신 처리</td><td>패킷 타입별 핸들러를 손으로 등록</td><td><code>PostReplicatedAdd</code> / <code>PreReplicatedRemove</code> / <code>PostReplicatedChange</code> <strong>콜백 자동 호출</strong></td></tr>
+<tr><td>배열이 3개면</td><td>패킷 <strong>9종</strong> (인벤3 + 버프3 + 팀3)</td><td>구조체 3개에 <strong>상속 한 줄씩</strong></td></tr>
+<tr><td>클라별 델타 기준점</td><td>세션마다 손으로 관리 (or 그냥 전체 재전송)</td><td>연결마다 <strong>지난 상태를 엔진이 보관</strong></td></tr>
+<tr><td>스레드 모델</td><td>IOCP 워커 N개 병렬 → 배열 만질 때 락 필요</td><td>게임 스레드 1개 순차 → <strong>락 없음</strong></td></tr>
+</tbody></table>
+<p>가장 큰 사고방식 차이는 이거야. 우리는 <strong>"어떤 패킷을 언제 쏠지"를 게임 로직이 직접 결정</strong>했어. 아이템을 지우는 코드가 <code>SP_ITEM_REMOVE</code>를 쏘는 책임까지 졌지. 그래서 로직 분기가 늘어날 때마다 "여기서도 패킷 쏴야 하나?"를 매번 확인해야 했고, 한 군데 빼먹으면 클라가 틀어졌어.</p>
+<p>언리얼은 그 책임을 반으로 쪼갰어. 게임 코드는 <strong>"바뀌었다"고 손만 든다</strong>(<code>MarkItemDirty</code>). <strong>무엇을 어떤 형태로 보낼지는 엔진이 결정</strong>해. 손드는 건 여전히 사람 몫이라 빼먹으면 똑같이 유실되지만(그래서 함정도 같지만), 최소한 <strong>패킷 3종 세트를 설계하고 핸들러를 등록하는 노동은 사라졌어</strong>. 클라 쪽 핸들러도 콜백 세 개 override로 끝나고.</p>
+<p>그리고 우리 서버였다면 <strong>"클라마다 지난 상태를 기억"</strong> 하는 게 제일 귀찮았을 거야. A는 30초 전에 접속했고 B는 방금 들어왔으면 델타 기준점이 다르니까. 결국 귀찮아서 신규 접속자한테 "그냥 전체 스냅샷 한 번 쏘자"로 타협했지. UE는 그 연결별 기준점을 엔진이 들고 있어서, <strong>신규 클라에겐 자동으로 "전 원소가 ADD"인 델타</strong>가 나가. 스냅샷 코드를 따로 안 짜도 되는 거야.</p>
+<hr>
+</div>
+<div class="conversation"><h2>초보가 헷갈리는 용어 (짧게)</h2>
+<ul>
+<li><strong><code>ReplicationID</code></strong>: 원소의 <strong>바코드</strong>. <code>MarkItemDirty</code>가 처음 발급. 인덱스가 아니라 <strong>이게 원소의 정체성</strong>. 절대 직접 대입하지 마.</li>
+<li><strong><code>ReplicationKey</code></strong>: 원소의 <strong>버전 번호(도장 개수)</strong>. 내용 바뀌면 +1. 지난번 보낸 값과 다르면 "변경된 원소"로 분류돼.</li>
+<li><strong><code>ArrayReplicationKey</code></strong>: <strong>배열 전체의 버전 번호</strong>. 뭐 하나라도 바뀌면 +1. 같으면 원소를 훑지도 않고 <strong>조기 탈출</strong>하는 데 쓴다.</li>
+<li><strong><code>MarkItemDirty(Item)</code></strong>: <strong>추가·변경</strong> 신고. 바코드가 없으면 발급하고, 도장을 찍고, 배열 도장까지 올린다.</li>
+<li><strong><code>MarkArrayDirty()</code></strong>: <strong>삭제</strong> 및 대량 변경 신고. 사라진 원소엔 도장 못 찍으니 배열 도장만 올려 "다시 훑어봐"라고 알린다.</li>
+<li><strong>NetDeltaSerialize</strong>: "이 구조체는 <strong>차이만</strong> 직렬화합니다"라는 엔진 규약. 통짜 복제 경로 대신 이쪽을 탄다. <code>WithNetDeltaSerializer = true</code>로 등록해야 실제로 불려.</li>
+<li><strong>델타(delta)</strong>: 전체가 아니라 <strong>차이</strong>. 이 책에서 계속 나온 개념이야 → <a class="xref" href="ch-16-changelist.html">changelist</a>(프로퍼티 단위 델타), FastArray(배열 원소 단위 델타).</li>
+</ul>
+<hr>
+</div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+<h3>Q1. FastArraySerializer, 왜 필요한가요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>TArray</code>를 그냥 <code>UPROPERTY(Replicated)</code>로 걸면 <strong>통짜 복제</strong>가 돼. 원소 하나만 바뀌어도 배열 전체가 다시 나가. 아이템 100개짜리 인벤에서 물약 수량 4바이트 바꿨는데 1200바이트가 날아가는 거지. 게다가 인덱스로 비교하니까 <strong>정렬만 해도 전 원소가 dirty</strong>야. FastArraySerializer는 원소마다 <strong>ID(바코드)</strong>와 <strong>Key(도장)</strong>를 붙여서, 추가된 놈·도장이 오른 놈·사라진 놈만 골라 보내. 우리가 손으로 만들던 <code>SP_ITEM_ADD/REMOVE/UPDATE</code> 3종 세트를 엔진이 자동으로 만들어주는 셈이야.</div></details>
+<h4>↳ Push Model 켜면 해결되는 거 아닌가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">안 돼. Push Model은 <strong>최상위 프로퍼티 단위</strong>로만 추적하거든. 배열 3번 원소만 바꿔도 켤 수 있는 건 "<code>Items</code> 배열이 dirty"라는 비트 하나뿐이야. 그럼 <strong>비교는 스킵되지만 전송량은 그대로</strong> — 결국 배열 전체가 나가. Push Model은 "어떤 <strong>프로퍼티</strong>를 볼까"를 줄이고, FastArray는 "그 배열에서 <strong>무엇을</strong> 보낼까"를 줄여. <strong>같은 철학(비교 말고 신고해라), 다른 층</strong>이야. 그래서 둘은 경쟁 관계가 아니라 보완 관계지.</div></details>
+<h4>↳ 그럼 모든 배열에 FastArray를 쓰면 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니. FastArray는 바코드·도장·<code>ItemMap</code>·클라별 지난 상태 같은 <strong>관리 비용</strong>을 내고 전송량을 사는 거래야. 그러니까 <strong>"원소는 많은데 한 번에 바뀌는 건 몇 개 안 되는"</strong> 배열에만 이득이지. 원소가 3~4개뿐이고 어차피 매번 다 바뀌는 배열이면 줄일 게 없어서 오히려 손해야. 인벤·버프·팀 목록·킬로그처럼 <strong>길고 찔끔 바뀌는</strong> 목록이 정확한 타깃이야.</div></details>
+<h3>Q2. 서버는 "어떤 원소가 바뀌었는지"를 어떻게 알아내나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">원소마다 <code>ReplicationID</code>(바코드)와 <code>ReplicationKey</code>(도장 개수)가 있어. 서버는 <strong>클라마다</strong> "지난번에 보낼 때 바코드별 도장이 몇이었는지"를 기억해둬. 보낼 때 현재 배열을 훑어서 대조하면 세 갈래가 나와 — 지난 기록에 <strong>없던 바코드</strong>면 ADD, 있는데 <strong>도장이 오른</strong> 거면 CHANGE, 지금 배열에 <strong>없어진 바코드</strong>면 REMOVE. 도장이 그대로인 원소는 어느 갈래에도 안 걸려서 <strong>한 바이트도 안 실려</strong>. 100개 중 1개 바꿨으면 1개만 나가는 게 이 대목이야.</div></details>
+<h4>↳ 배열 전체 키(ArrayReplicationKey)는 왜 또 따로 있죠?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>조기 탈출</strong>용이야. 원소별 대조를 하려면 배열을 한 번 훑어야 하잖아. 근데 대부분의 프레임에서 그 배열은 <strong>아무것도 안 바뀌어</strong>. 그래서 문 앞에서 "지난번 보낼 때 배열 도장 == 지금 배열 도장?"만 먼저 봐. 같으면 원소 100개를 훑지도 않고 즉시 빠져나가. <code>MarkItemDirty</code>가 원소 도장을 찍고 나서 항상 <code>MarkArrayDirty</code>를 같이 부르는 이유가 이거야 — <strong>원소를 건드렸으면 배열 도장도 올라가야</strong> 조기 탈출에 안 걸리거든.</div></details>
+<h4>↳ 인벤을 정렬해서 순서만 뒤집으면 뭐가 나가나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>아무것도 안 나가.</strong> 바코드도 도장도 안 바뀌었으니 델타가 비어 있어. 인덱스 기준 비교였으면 전 원소가 dirty였을 상황인데, ID 기준이라 공짜야. 근데 이게 <strong>동전의 양면</strong>이야 — 서버가 순서를 바꿔도 클라엔 안 전달된다는 뜻이거든. 그래서 <strong>클라 배열의 인덱스 순서는 서버와 다를 수 있고, 절대 신뢰하면 안 돼</strong>. 순서가 의미 있으면 원소 안에 정렬 키를 넣어 보내서 클라가 직접 정렬하게 해야지.</div></details>
+<h3>Q3. <code>MarkItemDirty</code>를 안 부르면 어떻게 되나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">서버 값만 바뀌고 <strong>클라는 영원히 옛날 값</strong>이야. 도장이 안 올라갔으니 델타 계산에서 "안 바뀐 원소"로 판정돼서 안 실려. 에러도 로그도 안 나. 조선 서버에서 "DB엔 반영됐는데 클라에 안 뜬다" 하던 사고랑 <strong>정확히 같은 종류</strong>야. Push Model의 "dirty 마킹 없이 값 바꾸면 조용히 유실" 함정과도 똑같지. 방어책은 하나야 — 배열을 직접 만지는 코드를 여기저기 흩뿌리지 말고, <strong>AddItem / RemoveItem / UpdateItem 함수를 만들어 마킹을 그 안에 가둬라.</strong></div></details>
+<h4>↳ 삭제는 왜 <code>MarkItemDirty</code>가 아니라 <code>MarkArrayDirty</code>인가요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">사라진 원소엔 <strong>도장을 찍을 대상 자체가 없으니까</strong>. <code>MarkItemDirty</code>는 원소를 참조로 받아서 그 안의 <code>ReplicationKey</code>를 올리는 함수인데, 이미 배열에서 빠진 원소한테 그걸 할 수가 없잖아. 그래서 <strong>배열 도장만 올려서</strong> "이 배열 뭔가 달라졌으니 다시 훑어봐"라고 알려. 그러면 서버가 훑다가 "지난 기록엔 있던 바코드가 지금 배열엔 없네" → REMOVE로 분류하는 거야. 삭제는 <strong>없어진 걸로 자기 증명</strong>하는 셈이지.</div></details>
+<h3>Q4. 클라는 받은 델타를 어떻게 처리하나요?</h3>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">클라가 델타를 풀면서 <strong>원소 단위로 콜백</strong>을 쏴줘. 지울 원소엔 <strong>지우기 직전</strong>에 <code>PreReplicatedRemove</code>(아직 데이터가 살아 있어야 "무슨 버프가 사라졌는지" 읽고 이펙트를 끄니까 반드시 Pre여야 해), 새로 들어온 원소엔 <strong>추가된 직후</strong> <code>PostReplicatedAdd</code>, 값만 바뀐 원소엔 <code>PostReplicatedChange</code>. UI·이펙트는 이 세 지점에만 붙이면 되니까 <strong>폴링 없이 바뀐 원소에만 반응</strong>해. 우리가 <code>SP_ITEM_ADD</code> 핸들러를 손으로 등록하던 그 자리를 엔진이 자동으로 불러주는 거야. 배열 struct 쪽에 <strong>배치 콜백</strong>을 달면 "이번에 3개 추가, 1개 삭제"를 한 번에 받아서 UI를 한 방에 갱신할 수도 있어.</div></details>
+<h4>↳ 그 콜백 안에서 배열을 고쳐도 되나요?</h4>
+<details><summary style="cursor:pointer;color:#1565c0;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>안 돼.</strong> 엔진 주석이 대놓고 경고해 — 이 콜백들은 <strong>대량 업데이트 중간</strong>에 원소별로 개별 호출되거든. 그 시점의 배열은 <strong>공사 중</strong>이라 아직 전부 최신도 아니고, 여기서 원소를 추가·삭제하면 엔진이 돌던 자리가 무너져. 뭔가 고쳐야 하면 <strong>플래그만 세워두고 다음 틱에</strong> 처리해야 해. 그리고 여기서 <strong>낡은 지식 하나를 정정</strong>하고 갈게. "FastArray는 원소를 통째로 보낸다"는 말이 아직도 돌아다니는데, <strong>UE5에선 아니야</strong>. 헤더 주석이 <code>Delta Serialization for inner structs is now enabled by default</code>라고 못 박아(<code>FastArraySerializer.h:208</code>). <code>ReplicationKey</code>가 오르면 엔진이 그 원소를 지난번 보낸 상태와 비교해 <strong>바뀐 프로퍼티만</strong> 보내 — 일반 복제 경로와 똑같이. 그러니까 <strong>델타가 두 층</strong>인 거지: 바깥이 "어떤 <strong>원소</strong>", 안쪽이 "그 원소의 어떤 <strong>필드</strong>". 그래도 <strong>원소는 얇게</strong> 유지하는 게 맞아 — 전송량은 줄어도 <strong>비교 비용과 클라별 "지난 상태" 메모리</strong>는 필드 수에 비례하니까.</div></details>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>통짜 <code>TArray</code> 복제는 원소 하나만 바뀌어도 배열 전체를 다시 보내고, FastArraySerializer는 원소마다 ID(바코드)와 Key(도장)를 달아 "추가된 놈 / 도장이 오른 놈 / 사라진 놈"만 델타로 보낸다 — 우리가 손으로 나눠 만들던 <code>SP_ITEM_ADD/REMOVE/UPDATE</code>를 엔진이 자동 생성해주는 것이고, 대신 <code>MarkItemDirty</code>로 손드는 규율은 여전히 사람 몫이다.</strong></p>
+<hr>
+<ul>
+<li>막히면 → <a class="xref" href="ch-16-changelist.html">changelist</a> (바뀐 것만 모으는 델타의 원형), <a class="xref" href="ch-19-push-model.html">push-model</a> (프로퍼티 층에서 손드는 법 — 왜 배열 안쪽은 못 잡는지)</li>
+<li>같이 보면 좋음 → <a class="xref" href="ch-20-subobject-replication.html">subobject-replication</a> (배열 대신 서브오브젝트 목록으로 인벤을 표현하는 다른 길)</li>
+</ul></div><nav class="booknav"><a href="ch-42-demo-replay.html"><span class="lbl">← 이전</span>Replay — 네트워크로 녹화하기</a><a class="nx" href="ch-44-netguid-object-refs.html"><span class="lbl">다음 →</span>NetGUID — 오브젝트 참조를 어떻게 주고받나</a></nav></div><script src="/MSH_Portfolio/study/notes.js"></script></body></html>

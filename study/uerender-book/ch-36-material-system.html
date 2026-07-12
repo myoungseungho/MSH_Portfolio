@@ -1,0 +1,532 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>머티리얼 그래프는 어떻게 HLSL이 되는가 - UE 렌더링 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fafafa; color:#333; line-height:1.9; }
+.container { max-width:800px; margin:0 auto; padding:60px 20px; }
+.back-link { display:inline-block; margin-bottom:24px; color:#666; text-decoration:none; }
+.back-link:hover { color:#111; }
+.header { margin-bottom:40px; }
+.header h1 { font-size:2rem; font-weight:700; color:#111; margin-bottom:12px; line-height:1.35; }
+.header p { color:#888; font-size:1rem; }
+.conversation { background:white; border-radius:16px; padding:28px 32px; margin:24px 0; border:1px solid #e0e0e0; }
+.conversation h2 { font-size:1.3rem; color:#4a148c; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f3e5f5; }
+.conversation h3 { font-size:1.08rem; color:#6a1b9a; margin:22px 0 10px; }
+.conversation h4 { font-size:1rem; color:#7b1fa2; margin:18px 0 8px; }
+.conversation p { margin-bottom:14px; }
+.conversation ul, .conversation ol { margin:12px 0 12px 24px; }
+.conversation li { margin:6px 0; }
+.conversation strong { color:#111; }
+.conversation hr { border:0; border-top:1px solid #eee; margin:22px 0; }
+.container code { background:#f3e5f5; color:#6a1b9a; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:0.88em; }
+a.xref { background:#f3e5f5; color:#6a1b9a; padding:2px 8px; border-radius:4px; font-weight:600; text-decoration:none; white-space:nowrap; }
+a.xref:hover { background:#e1bee7; }
+.note { background:#f4f6fb; border-left:4px solid #7986cb; padding:14px 20px; margin:16px 0; border-radius:0 12px 12px 0; color:#455; }
+.note code { background:#e8ebf5; }
+.note.gloss { background:#fff8e1; border-left-color:#ffb300; color:#5d4300; }
+.note.gloss code { background:#fdeeba; color:#7a4f00; }
+.note.gloss strong { color:#4e3600; }
+.note.reread { background:#e8f5e9; border-left-color:#43a047; color:#1b5e20; }
+.note.reread code { background:#c8e6c9; color:#1b5e20; }
+.note.reread strong { color:#1b5e20; }
+.note.warn { background:#fff5f5; border-left-color:#ef5350; color:#b71c1c; }
+.note.origin { background:#e0f7fa; border-left-color:#00838f; color:#004d56; }
+.note.origin code { background:#b2ebf2; color:#00565e; }
+.note.origin strong { color:#00363d; }
+.note.schema { background:#efebe9; border-left-color:#8d6e63; color:#4e342e; }
+.note.schema code { background:#e0d5cf; color:#5d4037; }
+.note.schema strong { color:#3e2723; }
+.code-block { background:#263238; border-radius:8px; padding:16px 20px; margin:16px 0; font-family:'Consolas','Monaco',monospace; font-size:0.86rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.compare-table { width:100%; border-collapse:collapse; margin:16px 0; font-size:0.9rem; }
+.compare-table th, .compare-table td { padding:10px 12px; border:1px solid #e0e0e0; text-align:left; }
+.compare-table th { background:#f5f5f5; font-weight:600; }
+.info-box { background:linear-gradient(135deg,#6a1b9a 0%,#4a148c 100%); border-radius:16px; padding:24px 32px; color:white; margin:24px 0; }
+.info-box h4 { font-size:1rem; margin-bottom:12px; }
+.info-box p { opacity:.95; margin-bottom:8px; }
+.info-box p:last-child { margin-bottom:0; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:36px; }
+.booknav a { flex:1; background:white; border:1px solid #e0e0e0; border-radius:12px; padding:16px 20px; color:#6a1b9a; text-decoration:none; font-weight:600; font-size:.95rem; }
+.booknav a:hover { border-color:#6a1b9a; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#999; font-weight:400; margin-bottom:4px; }
+.toc-item { display:flex; gap:12px; align-items:baseline; padding:11px 4px; border-bottom:1px solid #f0f0f0; color:#333; text-decoration:none; }
+.toc-item:last-child { border-bottom:none; }
+.toc-item:hover { color:#6a1b9a; }
+.toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
+@media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>머티리얼 그래프는 어떻게 HLSL이 되는가</h1><p>언리얼 렌더링 · 36 / 42</p></header><div class="conversation"><div class="note">대상 독자: 게임 서버는 아는데 렌더링은 처음인 사람.<br>이 챕터가 끝나면 "아티스트가 연결한 노드가 <code>HLSLMaterialTranslator</code>를 거쳐 <code>MaterialTemplate.ush</code>의 빈칸을 채우고, 그게 <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>에서 우리가 그냥 받아 쓰던 <code>GetMaterialBaseColor()</code>가 되는 길"이 잡힌다.</div>
+<hr></div>
+<div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+<p>DirectX로 직접 뭘 그려봤으면 이 순서가 몸에 배어 있을 거야. HLSL 파일을 손으로 연다. <code>float4 PS(...) : SV_Target</code>을 손으로 짠다. 상수버퍼 구조체를 C++에도 똑같이 하나 만든다. <code>map</code> 해서 값을 채우고, 셰이더를 컴파일해서 PSO에 꽂는다. 재질이 하나 늘면? 사람이 코드를 하나 더 짠다.</p>
+<p>그런데 언리얼 에디터를 열면 아티스트가 마우스로 노드를 끌어다 붙이고 있어. 텍스처 샘플 노드 하나, 곱하기 노드 하나, 그 결과를 <code>Base Color</code> 핀에 꽂는다. 저장을 누르면 잠깐 "Compiling Shaders"가 뜨고, 뷰포트의 구체가 바뀐다. <strong>코드를 아무도 안 짰는데 GPU에서 픽셀 셰이더가 돌고 있어.</strong></p>
+<p>그럼 그 셰이더는 누가 짰나?</p>
+<p>지난 <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>에서 우리는 <code>GetMaterialBaseColor(PixelMaterialInputs)</code>, <code>GetMaterialRoughness(...)</code> 같은 함수를 그냥 <strong>있는 셈 치고</strong> 받아 썼어. <code>FPixelMaterialInputs</code>라는 구조체가 어디선가 뚝 떨어져서 채워져 있었지. 사실 그게 이 챕터의 정체야. <strong>그 함수들은 언리얼이 미리 짜둔 게 아니라, 네 머티리얼 그래프를 보고 그때그때 만들어낸 코드다.</strong></p>
+<p>이걸 모르면 뭐가 터질까? 세 가지가 계속 미스터리로 남아.</p>
+<ol><li>머티리얼 인스턴스에서 색깔 파라미터를 슬라이더로 드르륵 움직이면 <strong>즉시</strong> 바뀌는데, <code>Static Switch</code> 체크박스 하나 누르면 <strong>다시 컴파일</strong>이 돈다. 왜 어떤 건 공짜고 어떤 건 비싼가?</li><li>블렌드 모드를 <code>Opaque</code>에서 <code>Translucent</code>로 바꿨더니 GBuffer에 안 찍힌다. 왜?</li><li>머티리얼 하나 고쳤는데 셰이더가 수백 벌 컴파일된다. 뭐가 곱해지는 건가?</li></ol>
+<p>이 셋 다 "그래프가 코드가 되는 그 순간"에 답이 있어. 그러니까 이번 장은 <a class="xref" href="ch-09-shader-compile.html">shader-compile</a>(어떻게 굽는가)과 <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a>(왜 여러 벌 굽는가) 사이에 빠져 있던 조각, <strong>"애초에 그 셰이더 원본을 누가 썼는가"</strong>를 채우는 장이다.</p>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 그림으로 그린 계산도 결국 계산 순서다</strong><br>&bull;&nbsp;<strong>선으로 이은 상자</strong>: 상자에서 상자로 선을 그으면, 앞 상자의 결과가 뒤 상자의 재료가 된다는 뜻이야. 왼쪽에서 오른쪽으로 물이 흐르는 관이라고 봐도 돼.<br>&bull;&nbsp;<strong>순서가 정해진다</strong>: "A와 B를 곱해서 C에 넣는다"를 상자 그림으로 그리든 글로 쓰든, 실제로 해야 할 일의 순서는 똑같다. 그림은 표현 방식일 뿐이야.<br>&bull;&nbsp;<strong>끝에는 목적지가 있다</strong>: 관을 따라가면 마지막엔 "이 값을 어디에 쓸 건가"가 나온다. 색인지, 거칠기인지, 표면 방향인지.<br>이게 잡히면 아래 "노드 그래프를 코드로 번역한다"는 말이 얹힌다.</div>
+</div>
+<div class="conversation"><h2>0. 비유부터 — 콘티는 있는데 대본이 없다</h2>
+<p>영화 촬영장으로 가보자. 감독이 콘티를 그렸어. 그림으로. "여기서 카메라가 이렇게 돌고, 배우가 저쪽에서 나오고, 조명은 파랗게."</p>
+<p>근데 조명팀은 그림을 못 읽어. 조명팀이 읽는 건 <strong>큐시트</strong>야. "3번 조명, 청색 필터, 40% 밝기, 12초부터." 아주 딱딱한 형식.</p>
+<p>그러면 누군가는 <strong>콘티(그림)를 큐시트(글)로 옮겨 적어야</strong> 해. 그 사람이 스크립터야. 스크립터는 콘티를 보고, 이미 정해진 큐시트 양식지의 빈칸을 채운다. 양식지는 원래 있던 거고 — "3번 조명: ______, 밝기: ______" — 스크립터는 그 빈칸만 채우는 거지.</p>
+<p>머티리얼도 똑같아.</p>
+<ul><li><strong>콘티(그림)</strong> = 아티스트가 연결한 <strong>머티리얼 노드 그래프</strong></li><li><strong>스크립터</strong> = <code>HLSLMaterialTranslator</code> (그래프 → HLSL 번역기)</li><li><strong>큐시트 양식지</strong> = <code>MaterialTemplate.ush</code> (빈칸이 뚫린 셰이더 틀)</li><li><strong>채워진 큐시트</strong> = 완성된 <code>.usf</code> 소스</li><li><strong>조명팀</strong> = GPU</li></ul>
+<p>중요한 건 이거야. <strong>양식지는 언리얼이 미리 만들어놨고, 빈칸만 네 그래프로 채운다.</strong> 그러니까 <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>의 BasePass 코드는 절대 안 바뀐다. 걔는 항상 <code>GetMaterialBaseColor()</code>를 부를 뿐이야. 바뀌는 건 그 함수 안쪽, 즉 빈칸이지.</p>
+<p>이번 장은 그 스크립터의 손을 따라간다.</p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 머티리얼 그래프</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 재질마다 프로그래머가 HLSL을 하나씩 손으로 짠다. 우리가 DirectX 샘플 짤 때 하던 그거야. 재질 3개면 셰이더 3개.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 게임 하나에 재질이 수천 개다. 아티스트는 "이 벽돌을 조금 더 젖게" 만들고 싶은데 그때마다 프로그래머한테 가서 HLSL을 고쳐달라고 해야 해. 병목이 사람이 돼버려.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 아티스트가 코드 없이 재질을 조립할 수 있는 <strong>그림 언어</strong>가 필요해. 그게 노드 그래프고, 대신 <strong>그 그림을 코드로 옮기는 번역기</strong>가 엔진 쪽에 하나 있어야 한다. 그 번역기가 <code>HLSLMaterialTranslator</code>야.</div>
+</div>
+<div class="conversation"><h2>1. 노드 하나는 코드 한 줄이 된다</h2>
+<p>제일 밑바닥부터 보자. 노드 하나가 코드로 바뀌는 순간.</p>
+<p>모든 머티리얼 노드는 C++에서 <code>UMaterialExpression</code>을 상속한 클래스야. 그리고 <strong>각자 자기를 어떻게 코드로 옮길지 아는 <code>Compile()</code> 함수를 하나씩 갖고 있어.</strong> 곱하기 노드를 보자.</p>
+<p><strong><code>MaterialExpressions.cpp:4610</code></strong></p>
+<div class="code-block">int32 UMaterialExpressionMultiply::Compile(class FMaterialCompiler* Compiler, int32 OutputIndex)
+{
+	// if the input is hooked up, use it, otherwise use the internal constant
+	int32 Arg1 = A.GetTracedInput().Expression ? A.Compile(Compiler) : Compiler-&gt;Constant(ConstA);
+	// if the input is hooked up, use it, otherwise use the internal constant
+	int32 Arg2 = B.GetTracedInput().Expression ? B.Compile(Compiler) : Compiler-&gt;Constant(ConstB);
+
+	return Compiler-&gt;Mul(Arg1, Arg2);
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 노드의 자기소개서<br>&bull;&nbsp;<strong><code>UMaterialExpression</code></strong> = 머티리얼 그래프의 노드 한 개를 나타내는 C++ 클래스야. <code>Multiply</code>, <code>TextureSample</code>, <code>ScalarParameter</code> 전부 이걸 상속해.<br>&bull;&nbsp;<strong><code>FMaterialCompiler* Compiler</code></strong> = 번역기 손잡이야. 노드는 "나를 코드로 만들어줘"라고 이 손잡이에 부탁한다. 실제 구현체가 <code>FHLSLMaterialTranslator</code>야.<br>&bull;&nbsp;<strong><code>int32</code> 리턴</strong> = 놀랍게도 값이 아니라 <strong>번호표</strong>를 돌려줘. "네가 부탁한 계산은 몇 번 코드 조각(chunk)이야"라는 인덱스다.<br>&bull;&nbsp;<strong><code>A</code>, <code>B</code></strong> = 노드의 입력 핀. 그래프에서 왼쪽에 달린 그 구멍이야.<br>&bull;&nbsp;<strong><code>A.GetTracedInput().Expression</code></strong> = 그 핀에 연결된 노드가 실제로 있는지 확인한다. 없으면 <code>nullptr</code>.<br>&bull;&nbsp;<strong><code>? :</code></strong> = 조건이 참이면 앞, 거짓이면 뒤를 고르는 삼항 연산자야.<br>&bull;&nbsp;<strong><code>A.Compile(Compiler)</code></strong> = 연결된 앞 노드를 <strong>재귀적으로</strong> 컴파일한다. 그래프를 거슬러 올라가는 거야.<br>&bull;&nbsp;<strong><code>Compiler-&gt;Constant(ConstA)</code></strong> = 핀이 비어 있으면 노드에 손으로 적어둔 상수를 코드 조각으로 만든다.<br>&bull;&nbsp;<strong><code>Compiler-&gt;Mul(Arg1, Arg2)</code></strong> = "이 두 번호표를 곱하는 코드 한 줄 만들어줘"라는 요청. 새 번호표가 나온다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 곱하기 노드는 자기 왼쪽 핀 두 개를 먼저 컴파일해서 <strong>번호표 두 장</strong>을 받고 → 번역기에게 "이 둘을 곱해라"고 시켜 <strong>새 번호표 한 장</strong>을 받아 → 그걸 자기를 부른 쪽에 돌려준다. 이게 그래프 전체에서 재귀로 일어나. 결과 핀에서 시작해 거꾸로 거슬러 올라가면서, 노드마다 코드 조각이 하나씩 쌓이는 거야.</div>
+<p>여기서 감이 와야 해. <strong>번역기는 그래프를 "그림"으로 안 봐. 결과 핀에서 거꾸로 타고 올라가면서 계산 순서를 뽑아내.</strong> 서버로 치면 스크립트 표현식 트리를 후위 순회하면서 바이트코드를 뱉는 거랑 똑같은 짓이야.</p>
+<p>그럼 그 "코드 조각"이 실제로 어떻게 생겼냐? 번역기는 조각마다 <strong>지역변수 한 줄</strong>을 뱉어. 텍스처 샘플 하나를 곱해서 <code>Base Color</code>에 꽂은 그래프는 대충 이런 HLSL이 된다.</p>
+<div class="code-block">// 노드 그래프
+//
+//   [Texture Sample] ──┐
+//                      ├──▶ [Multiply] ──▶ ● Base Color
+//   [Scalar "Tint"]  ──┘
+//
+// ↓ 번역 결과 (모양만 보자. 정확한 표기는 엔진 버전마다 다르다)
+
+MaterialFloat4 Local0 = ProcessMaterialColorTextureLookup(Texture2DSample(...));
+MaterialFloat  Local1 = &lt;Material 유니폼 버퍼의 N번 칸&gt;;       // ScalarParameter "Tint"
+MaterialFloat3 Local2 = (Local0.rgb * Local1);                // Multiply 노드
+
+PixelMaterialInputs.BaseColor = Local2;                       // 결과 핀에 대입</div>
+<p><code>Local0</code>, <code>Local1</code>, <code>Local2</code>. 노드 하나당 지역변수 하나. 아까 <code>Compile()</code>이 돌려준 <code>int32</code> 번호표가 바로 이 <code>LocalN</code>의 N이야. 번호표를 코드로 펼치면 <code>Local2</code>가 되는 거지.</p>
+<p>그리고 마지막 줄을 잘 봐둬. <code>PixelMaterialInputs.BaseColor = Local2;</code> — <strong>여기가 그래프와 <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>가 만나는 지점이다.</strong></p>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — <code>MaterialTemplate.ush</code> (빈칸 뚫린 양식지)</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 번역기가 셰이더 파일 전체를 통째로 생성하면 되지 않나? 노드 그래프를 보고 <code>.usf</code> 한 벌을 처음부터 끝까지 찍어내는 거야.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그러면 <code>FMaterialPixelParameters</code> 구조체 선언, 텍스처 좌표 처리, 노멀 공간 변환 같은 <strong>모든 머티리얼이 똑같이 쓰는 뼈대</strong>까지 매번 생성해야 해. 뼈대를 고치려면 생성기 C++ 코드를 고쳐야 하고, 셰이더 프로그래머가 HLSL을 못 만지게 돼.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: 뼈대는 <strong>사람이 쓴 HLSL 파일</strong>로 두고, 그래프마다 달라지는 부분만 빈칸으로 뚫어두면 돼. 그 빈칸 뚫린 양식지가 <code>MaterialTemplate.ush</code>고, 빈칸 기호가 <code>%{이름}</code>이야.</div>
+</div>
+<div class="conversation"><h2>2. 양식지의 빈칸 — <code>MaterialTemplate.ush</code></h2>
+<p>이제 양식지를 열어보자. <code>Engine/Shaders/Private/MaterialTemplate.ush</code>. 이건 <strong>그냥 HLSL이 아니야.</strong> 중간중간 <code>%{이름}</code>이 박혀 있는, 컴파일 안 되는 반쪽짜리 파일이다.</p>
+<p>먼저 머티리얼이 <strong>내놓는 값들</strong>의 상자를 보자. 놀랍게도 <strong>구조체 몸통 자체가 빈칸</strong>이야.</p>
+<p><strong><code>MaterialTemplate.ush:349</code></strong></p>
+<div class="code-block">/**
+ * Parameters calculated from the pixel material inputs.
+ */
+struct FPixelMaterialInputs
+{
+%{pixel_material_inputs}
+
+#if TEMPLATE_USES_SUBSTRATE
+FSubstrateData GetFrontSubstrateData()
+{
+#if SUBSTRATE_USE_FULLYSIMPLIFIED_MATERIAL == 1
+	return FullySimplifiedFrontMaterial;
+#else
+	return FrontMaterial;
+#endif
+}
+#endif // TEMPLATE_USES_SUBSTRATE
+};</div>
+<p>그리고 그 상자를 채우는 함수. <strong>여기가 네 노드 그래프가 들어오는 자리</strong>야.</p>
+<p><strong><code>MaterialTemplate.ush:4163</code></strong> (앞뒤 발췌)</p>
+<div class="code-block">void CalcPixelMaterialInputs(in out FMaterialPixelParameters Parameters, in out FPixelMaterialInputs PixelMaterialInputs)
+{
+SHADER_PUSH_WARNINGS_STATE
+SHADER_DISABLE_WARNINGS
+	// Initial calculations (required for Normal)
+%{calc_pixel_material_inputs_initial_calculations}
+	// The Normal is a special case as it might have its own expressions and also be used to calculate other inputs, so perform the assignment here
+%{calc_pixel_material_inputs_normal}
+SHADER_POP_WARNINGS_STATE
+
+    ... (4172~4213 생략: Substrate 초기화, 탄젠트→월드 노멀 변환 등) ...
+
+SHADER_PUSH_WARNINGS_STATE
+SHADER_DISABLE_WARNINGS
+	// Now the rest of the inputs
+%{calc_pixel_material_inputs_other_inputs}
+SHADER_POP_WARNINGS_STATE</div>
+<p>마지막으로 BasePass가 부르는 창구. 이건 <strong>사람이 미리 써둔 고정 코드</strong>야.</p>
+<p><strong><code>MaterialTemplate.ush:3652</code></strong></p>
+<div class="code-block">half3 GetMaterialBaseColorRaw(FPixelMaterialInputs PixelMaterialInputs)
+{
+	return PixelMaterialInputs.BaseColor;
+}
+
+half3 GetMaterialBaseColor(FPixelMaterialInputs PixelMaterialInputs)
+{
+	return saturate(GetMaterialBaseColorRaw(PixelMaterialInputs));
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 양식지 읽는 법<br>&bull;&nbsp;<strong><code>.ush</code></strong> = Unreal Shader Header. <code>.usf</code>가 셰이더 본문이면 <code>.ush</code>는 include 되는 조각이야.<br>&bull;&nbsp;<strong><code>%{pixel_material_inputs}</code></strong> = <strong>여기가 빈칸이다.</strong> C++ 번역기가 나중에 이 자리에 생성한 HLSL 문자열을 꽂는다. UE5.6은 <code>printf</code>의 <code>%s</code>가 아니라 <strong>이름표 달린 빈칸</strong>(<code>%{이름}</code>)을 쓴다.<br>&bull;&nbsp;<strong><code>struct FPixelMaterialInputs { %{pixel_material_inputs} };</code></strong> = ⭐ 구조체의 <strong>필드 목록조차 생성물</strong>이라는 뜻이야. 이 머티리얼이 실제로 쓰는 칸만 들어간다.<br>&bull;&nbsp;<strong><code>#if TEMPLATE_USES_SUBSTRATE</code></strong> = UE5의 새 재질 시스템(Substrate)을 쓸 때만 켜지는 갈래.<br>&bull;&nbsp;<strong><code>FMaterialPixelParameters Parameters</code></strong> = 머티리얼이 <strong>받는 재료들</strong>의 상자. 이 픽셀의 UV, 월드 위치, 카메라 방향 같은 것.<br>&bull;&nbsp;<strong><code>in out</code></strong> = 들어오기도 하고 나가기도 하는 값. 함수 안에서 고쳐서 바깥으로 넘긴다.<br>&bull;&nbsp;<strong><code>SHADER_PUSH_WARNINGS_STATE</code> / <code>SHADER_DISABLE_WARNINGS</code></strong> = 생성된 코드는 사람이 안 쓴 코드라 경고가 잔뜩 뜰 수 있어서, <strong>빈칸 구간만 경고를 꺼두는</strong> 장치야. 빈칸이 어디부터 어디까지인지 알려주는 표시이기도 해.<br>&bull;&nbsp;<strong><code>CalcPixelMaterialInputs(...)</code></strong> = 이 픽셀의 머티리얼 값을 <strong>전부 계산해서</strong> <code>PixelMaterialInputs</code>를 채우는 함수. <strong>이 함수의 몸통이 곧 네 그래프다.</strong><br>&bull;&nbsp;<strong><code>GetMaterialBaseColor(...)</code></strong> = 채워진 상자에서 <code>BaseColor</code> 칸을 꺼내주는 창구. <code>saturate</code>(0~1로 자르기) 하나 얹은 게 전부야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 양식지에서 <strong>안 바뀌는 부분</strong>은 <code>struct FPixelMaterialInputs</code>라는 <strong>껍데기</strong>와 <code>GetMaterialBaseColor</code> 같은 창구 함수들이야. <strong>바뀌는 부분</strong>은 <code>%{pixel_material_inputs}</code>(어떤 칸이 있는지)와 <code>CalcPixelMaterialInputs</code> 몸통의 <code>%{calc_pixel_material_inputs_*}</code> 세 칸(그 칸을 어떻게 채우는지)이고, 거기에 <code>Local0 = ...; Local1 = ...; PixelMaterialInputs.BaseColor = Local2;</code>가 들어간다. 그래서 BasePass는 어떤 머티리얼이든 항상 같은 함수를 부를 수 있어.</div>
+<div class="note warn">⚠️ 여기서 <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>의 오해 하나가 풀려. <code>GetMaterialBaseColor()</code>는 <strong>무거운 계산을 하는 함수가 아니야.</strong> 계산은 이미 <code>CalcPixelMaterialInputs</code>에서 다 끝났고, 얘는 구조체 필드 하나 꺼내주는 게 전부다. BasePass가 <code>GetMaterialRoughness()</code>를 부른다고 해서 러프니스 그래프가 그때 도는 게 아니야 — 픽셀당 한 번, 맨 앞에서 이미 다 돌았어.</div>
+<h3>빈칸을 채우는 손 — <code>GetMaterialShaderCode()</code></h3>
+<p>그럼 <code>%{이름}</code>에 실제로 문자열을 꽂는 코드는 어디 있냐. 번역기의 마지막 단계야. 허무할 만큼 짧다.</p>
+<p><strong><code>HLSLMaterialTranslator.cpp:3316</code></strong></p>
+<div class="code-block">FString FHLSLMaterialTranslator::GetMaterialShaderCode()
+{
+	// use "/Engine/Private/MaterialTemplate.ush" to create the functions to get data (e.g. material attributes) and code (e.g. material expressions to create specular color) from C++
+	int32 MaterialTemplateLineNumberNew;
+	FStringTemplateResolver Resolver = FMaterialSourceTemplate::Get().BeginResolve(GetShaderPlatform(), &amp;MaterialTemplateLineNumberNew);
+
+	Resolver.SetParameterMap(&amp;MaterialSourceTemplateParams);
+	MaterialSourceTemplateParams.Add({ TEXT("line_number"), FString::Printf(TEXT("%u"), MaterialTemplateLineNumberNew) });
+
+	// Copy generate code chunks to the insights object.
+	Material-&gt;GetMaterialInterface()-&gt;MaterialInsight-&gt;Legacy_ShaderStringParameters = MaterialSourceTemplateParams;
+
+	return Resolver.Finalize();
+}</div>
+<p>짧은 이유는, <strong>빈칸에 넣을 문자열을 미리 다 만들어두는 함수가 따로 있기</strong> 때문이야. 그게 <code>PrepareMaterialSourceStringParameters()</code>다. 이름표(<code>num_material_texcoords</code>, <code>calc_pixel_material_inputs_normal</code> …)와 문자열을 짝지어 목록에 쌓는다.</p>
+<p><strong><code>HLSLMaterialTranslator.cpp:16710</code></strong> (앞부분 발췌)</p>
+<div class="code-block">void FHLSLMaterialTranslator::PrepareMaterialSourceStringParameters()
+{
+	MaterialSourceTemplateParams.Empty();
+	MaterialSourceTemplateParams.Reserve(FMaterialSourceTemplate::Get().GetTemplate(GetShaderPlatform()).GetNumNamedParameters());
+
+	// Assign slots to vertex interpolators
+	FString VertexInterpolatorsOffsetsDefinition;
+	TBitArray&lt;&gt; FinalAllocatedCoords = GetVertexInterpolatorsOffsets(VertexInterpolatorsOffsetsDefinition);
+
+	const uint32 NumUserVertexTexCoords = GetNumUserVertexTexCoords();
+	const uint32 NumUserTexCoords = GetNumUserTexCoords();
+	const uint32 NumCustomVectors = FMath::DivideAndRoundUp((uint32)CurrentCustomVertexInterpolatorOffset, 2u);
+	const uint32 NumTexCoordVectors = FinalAllocatedCoords.FindLast(true) + 1;
+
+	MaterialSourceTemplateParams.Add({ TEXT("num_material_texcoords_vertex"), FString::Printf(TEXT("%u"), NumUserVertexTexCoords) });
+	MaterialSourceTemplateParams.Add({ TEXT("num_material_texcoords"), FString::Printf(TEXT("%u"), NumUserTexCoords) });</div>
+<p>그리고 <strong>같은 함수의 맨 끝</strong>. 여기가 네 노드 그래프가 문자열이 되어 들어가는 자리다.</p>
+<p><strong><code>HLSLMaterialTranslator.cpp:16895</code></strong></p>
+<div class="code-block">	{
+		// Initializers required for Normal
+		MaterialSourceTemplateParams.Add({ TEXT("calc_pixel_material_inputs_initial_calculations"), DerivativeVariations[CompiledPDV_FiniteDifferences].TranslatedCodeChunkDefinitions[MP_Normal] });
+		MaterialSourceTemplateParams.Add({ TEXT("calc_pixel_material_inputs_normal"), NormalAssignment[CompiledPDV_FiniteDifferences] });
+		// Finally the rest of common code followed by assignment into each input
+		MaterialSourceTemplateParams.Add({ TEXT("calc_pixel_material_inputs_other_inputs"), PixelMembersSetupAndAssignments[CompiledPDV_FiniteDifferences] });
+	}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 빈칸 채우기<br>&bull;&nbsp;<strong><code>FString</code></strong> = 언리얼의 문자열 타입이야. <code>GetMaterialShaderCode()</code>는 <strong>셰이더 소스 코드를 문자열로</strong> 돌려준다.<br>&bull;&nbsp;<strong><code>FMaterialSourceTemplate::Get()</code></strong> = <code>MaterialTemplate.ush</code> 원본을 읽어서 들고 있는 전역 보관소. <code>%{이름}</code> 빈칸이 그대로 들어 있어.<br>&bull;&nbsp;<strong><code>FStringTemplateResolver</code></strong> = 그 빈칸을 <strong>이름표로 찾아서</strong> 채우는 도구. <code>BeginResolve</code>로 시작하고 <code>Finalize()</code>로 완성본을 뽑는다.<br>&bull;&nbsp;<strong><code>MaterialSourceTemplateParams</code></strong> = ⭐ <strong>(이름표, 문자열)</strong> 짝의 목록. <code>SetParameterMap</code>으로 리졸버에 통째로 건네준다.<br>&bull;&nbsp;<strong><code>.Add({ TEXT("num_material_texcoords"), ... })</code></strong> = "<code>%{num_material_texcoords}</code> 자리에 이 문자열을 꽂아라"라는 등록. 순서가 아니라 <strong>이름</strong>으로 맞으니까 하나 빠져도 다른 게 밀리진 않아.<br>&bull;&nbsp;<strong><code>NumUserTexCoords</code></strong> = 이 머티리얼이 실제로 쓰는 UV 채널 개수. 안 쓰는 건 안 넘기려고 세어둔다.<br>&bull;&nbsp;<strong><code>PixelMembersSetupAndAssignments</code></strong> = ⭐ <strong>네 노드 그래프를 번역한 HLSL 문자열 그 자체.</strong> <code>Local0 = ...; PixelMaterialInputs.BaseColor = Local2;</code>가 여기 담겨 있다가 <code>%{calc_pixel_material_inputs_other_inputs}</code> 자리에 들어간다.<br>&bull;&nbsp;<strong><code>Finalize()</code></strong> = 빈칸이 다 채워진 <strong>최종 셰이더 소스 문자열</strong>을 뽑는다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 번역기는 <code>PrepareMaterialSourceStringParameters()</code>에서 <strong>(이름표 → 문자열)</strong> 짝을 수십 개 쌓아두고(개수 define부터 노드 그래프 번역 결과까지) → <code>GetMaterialShaderCode()</code>가 <code>MaterialTemplate.ush</code>를 리졸버에 물리고 그 목록을 넘겨 → <code>Finalize()</code>로 <strong>완성된 <code>.usf</code> 소스 한 벌</strong>을 만든다. 이 문자열이 그대로 <a class="xref" href="ch-09-shader-compile.html">shader-compile</a>의 입구로 들어가. 거기서 전처리되고, 백엔드가 굽고, DDC에 박히는 거야.</div>
+<p>이제 두 챕터가 이어졌지. <strong>이 장이 "셰이더 소스를 만드는 곳"이고, <a class="xref" href="ch-09-shader-compile.html">shader-compile</a>이 "그 소스를 굽는 곳"이야.</strong> DirectX로 치면, 우리가 손으로 <code>.hlsl</code> 파일을 저장하는 그 순간을 언리얼은 C++ 문자열 조립으로 대신하는 거다.</p>
+</div>
+<div class="conversation"><h2>3. 역할 분담 — <code>FMaterial</code> / <code>FMaterialShaderMap</code> / <code>FMaterialRenderProxy</code></h2>
+<p>이름이 비슷해서 제일 헷갈리는 3형제야. 근데 하는 일은 완전히 달라. 촬영장 비유로 먼저 나누자.</p>
+<ul><li><strong><code>FMaterial</code></strong> = <strong>대본 담당</strong>. "이 재질은 어떤 셰이딩 모델이고, 블렌드 모드가 뭐고, 그래프가 이렇게 생겼다"는 <strong>레시피</strong>를 안다. 렌더 스레드가 보는 머티리얼의 정체. (<code>UMaterial</code>은 에디터/게임 스레드 쪽 에셋이고, 렌더링이 실제로 보는 건 <code>FMaterial</code> 쪽이야.)</li><li><strong><code>FMaterialShaderMap</code></strong> = <strong>구워진 필름 창고</strong>. 그 레시피로 실제 컴파일된 <strong>셰이더 바이트코드 묶음</strong>. 버텍스 팩토리별 × 셰이더 타입별 × 순열별로 여러 벌 들어 있다.</li><li><strong><code>FMaterialRenderProxy</code></strong> = <strong>현장 소품 담당</strong>. "이번 촬영에서 이 벽돌의 색은 빨강, 거칠기 0.7" 같은 <strong>파라미터 값</strong>을 대준다. 대본은 안 건드리고 값만 대준다.</li></ul>
+<p>표로 보면 더 깔끔해.</p>
+<table class="compare-table"><thead><tr><th>클래스</th><th>뭘 들고 있나</th><th>바뀌면?</th></tr></thead><tbody>
+<tr><td><code>FMaterial</code></td><td>셰이딩 모델, 블렌드 모드, 도메인, 그래프 → <strong>레시피</strong></td><td>셰이더 소스가 달라짐 → 재컴파일</td></tr>
+<tr><td><code>FMaterialShaderMap</code></td><td>컴파일된 셰이더들 → <strong>결과물</strong></td><td>(레시피가 바뀌면 통째로 새로 생김)</td></tr>
+<tr><td><code>FMaterialRenderProxy</code></td><td>스칼라/벡터/텍스처 파라미터 <strong>값</strong></td><td>유니폼 버퍼만 다시 채움 → <strong>공짜</strong></td></tr>
+</tbody></table>
+<p>연결 관계는 이래. 드로우콜을 만들 때(<a class="xref" href="ch-17-mesh-draw-command.html">mesh-draw-command</a>) 렌더러는 메시에 붙은 <code>FMaterialRenderProxy</code>를 잡는다. 프록시한테 "네 <code>FMaterial</code> 줘" 하면 레시피가 나오고, 레시피의 <code>FMaterialShaderMap</code>에서 <strong>이 버텍스 팩토리 × 이 패스에 맞는 셰이더</strong>를 꺼낸다. 그리고 프록시가 들고 있는 <strong>유니폼 버퍼</strong>를 그 셰이더에 꽂는다.</p>
+<div class="note schema">🧱 <strong>먼저 알아야 할 것 — 틀과 채우는 값은 다른 층이다</strong><br>&bull;&nbsp;<strong>도장과 잉크</strong>: 도장은 모양을 정하고, 잉크는 색을 정한다. 도장을 깎는 건 오래 걸리지만 잉크를 바꾸는 건 순식간이야.<br>&bull;&nbsp;<strong>같은 도장, 다른 잉크</strong>: 도장 하나로 빨강도 찍고 파랑도 찍을 수 있다. 굳이 도장을 새로 깎지 않아도 돼.<br>&bull;&nbsp;<strong>모양을 바꾸려면</strong>: 글자 하나를 빼고 싶으면? 그건 잉크로 못 한다. 도장을 다시 깎아야 해.<br>이게 잡히면 아래 "머티리얼 인스턴스 vs 스태틱 스위치" 설명이 얹힌다.</div>
+</div>
+<div class="conversation"><h2>4. ⭐ 왜 파라미터는 공짜고, 스태틱 스위치는 비싼가</h2>
+<p>이번 장의 심장이다. 아티스트가 제일 자주 묻고, 면접에서도 제일 자주 나오는 질문이야.</p>
+<p><strong>머티리얼 인스턴스에서 색 슬라이더를 움직이면 즉시 반영된다. 근데 <code>Static Switch</code> 체크박스 하나 누르면 셰이더가 다시 컴파일된다. 왜?</strong></p>
+<h3>스칼라/벡터 파라미터 — 잉크만 바꾼다</h3>
+<p><code>ScalarParameter</code> 노드의 <code>Compile()</code>을 보자. 허무할 만큼 짧아.</p>
+<p><strong><code>MaterialExpressions.cpp:8620</code></strong></p>
+<div class="code-block">int32 UMaterialExpressionScalarParameter::Compile(class FMaterialCompiler* Compiler, int32 OutputIndex)
+{
+	if (bUseCustomPrimitiveData)
+	{
+		if (Material &amp;&amp; Material-&gt;MaterialDomain == MD_UI)
+		{
+			return CompilerError(Compiler, CPD_UI_ErrorMessage);
+		}
+
+		return Compiler-&gt;CustomPrimitiveData(PrimitiveDataIndex, MCT_Float);
+	}
+	else
+	{
+		return Compiler-&gt;ScalarParameter(ParameterName,DefaultValue);
+	}
+}</div>
+<p>본줄기는 맨 아래 <code>return Compiler-&gt;ScalarParameter(ParameterName, DefaultValue);</code> 한 줄이야. 여기서 핵심은 <code>DefaultValue</code>를 <strong>상수로 박지 않는다</strong>는 거야. <code>Compiler-&gt;ScalarParameter(...)</code>는 "이 머티리얼의 유니폼 버퍼에 <code>Tint</code>라는 칸을 하나 잡아라"라고 등록하고, 생성되는 HLSL은 <strong>상수 대신 그 칸을 읽는 코드</strong>가 된다.</p>
+<div class="code-block">// ScalarParameter "Tint" = 0.5 로 만든 그래프의 번역 결과
+
+// ❌ 이렇게 안 됨 (상수로 굳어버림)
+MaterialFloat Local1 = 0.5f;
+
+// ✅ 실제로는 이렇게 (유니폼 버퍼를 읽음)
+MaterialFloat Local1 = &lt;Material 유니폼 버퍼의 N번 칸&gt;;
+
+// → 0.5든 0.9든 셰이더 코드는 똑같다. 버퍼에 든 숫자만 다르다.</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 유니폼 버퍼로 빠지는 값<br>&bull;&nbsp;<strong>유니폼 버퍼(uniform buffer)</strong> = 한 드로우콜 동안 <strong>모든 픽셀에 똑같이 적용되는 값</strong>을 담는 GPU 메모리 덩어리. DirectX의 <strong>상수 버퍼(constant buffer, <code>cbuffer</code>)</strong>랑 같은 물건이야. 우리가 <code>ID3D11Buffer</code> 만들어서 <code>Map</code>/<code>memcpy</code> 하던 그거.<br>&bull;&nbsp;<strong><code>bUseCustomPrimitiveData</code></strong> = 곁가지 갈래야. 이걸 켜면 값을 머티리얼 유니폼 버퍼가 아니라 <strong>프리미티브(오브젝트)마다 따로 들고 있는 칸</strong>에서 읽는다. 같은 머티리얼을 쓰는 물체마다 값을 다르게 주고 싶을 때 쓰는 길이고, 이번 절의 본줄기는 아니야.<br>&bull;&nbsp;<strong><code>ParameterName</code></strong> = 아티스트가 노드에 적어둔 이름(<code>Tint</code>). 나중에 인스턴스가 이 이름으로 값을 덮어쓴다.<br>&bull;&nbsp;<strong><code>DefaultValue</code></strong> = 아무도 안 덮어썼을 때 쓸 기본값. <strong>코드에 박히는 게 아니라 버퍼의 초기값이 될 뿐이다.</strong><br>&bull;&nbsp;<strong><code>FMaterialUniformExpressionSet</code></strong> = "이 머티리얼의 유니폼 버퍼에는 몇 번 칸에 뭐가 들어간다"는 <strong>배치표</strong>. 번역할 때 같이 만들어진다.<br>&bull;&nbsp;<strong><code>FUniformExpressionCache</code></strong> = 렌더 프록시가 들고 있는 <strong>실제로 채워진 유니폼 버퍼</strong>. 값이 바뀌면 이것만 다시 채운다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 스칼라/벡터 파라미터는 <strong>셰이더 코드에 흔적을 남기지 않아.</strong> 코드에는 "유니폼 버퍼 N번 칸을 읽어라"만 남고, 그 칸에 <code>0.5</code>를 넣든 <code>0.9</code>를 넣든 <strong>바이트코드는 글자 하나 안 바뀐다.</strong> 그래서 머티리얼 인스턴스를 100개 만들어도 <code>FMaterialShaderMap</code>은 부모 것 하나를 <strong>공유</strong>하고, 인스턴스마다 다른 건 <code>FMaterialRenderProxy</code>가 채우는 유니폼 버퍼뿐이야. 슬라이더를 움직이면 <code>FUniformExpressionCache</code>만 다시 채워진다. 셰이더는 손도 안 대.</div>
+<p>이게 머티리얼 인스턴스(Material Instance)의 존재 이유 전부야. <strong>같은 도장, 다른 잉크.</strong> 텍스처 파라미터도 마찬가지 — 셰이더는 "0번 텍스처 슬롯에서 샘플링해"라고만 적혀 있고, 그 슬롯에 어떤 텍스처를 바인딩하는지는 프록시가 정하니까.</p>
+<h3>스태틱 스위치 — 도장을 다시 깎는다</h3>
+<p>이제 <code>StaticSwitchParameter</code>를 보자. 이름은 비슷한데 <code>Compile()</code>이 완전히 다른 짓을 해.</p>
+<p>UE5.6에서는 "어느 쪽 핀을 쓸지 고르는" 일이 <code>GetEffectiveInput()</code>으로 빠져 있어. 여기가 진짜 핵심이야.</p>
+<p><strong><code>MaterialExpressions.cpp:8749</code></strong></p>
+<div class="code-block">FExpressionInput* UMaterialExpressionStaticSwitchParameter::GetEffectiveInput(class FMaterialCompiler* Compiler)
+{
+	bool bSucceeded;
+	const bool bValue = Compiler-&gt;GetStaticBoolValue(Compiler-&gt;StaticBoolParameter(ParameterName, DefaultValue), bSucceeded);
+
+	//Both A and B must be connected in a parameter.
+	if (!A.GetTracedInput().IsConnected())
+	{
+		Compiler-&gt;Errorf(TEXT("Missing A input"));
+		bSucceeded = false;
+	}
+	if (!B.GetTracedInput().IsConnected())
+	{
+		Compiler-&gt;Errorf(TEXT("Missing B input"));
+		bSucceeded = false;
+	}
+
+	if (!bSucceeded)
+	{
+		return nullptr;
+	}
+	return bValue ? &amp;A : &amp;B;
+}</div>
+<p>그리고 <code>Compile()</code>은 그렇게 고른 <strong>한쪽 핀만</strong> 컴파일한다.</p>
+<p><strong><code>MaterialExpressions.cpp:8773</code></strong></p>
+<div class="code-block">int32 UMaterialExpressionStaticSwitchParameter::Compile(class FMaterialCompiler* Compiler, int32 OutputIndex)
+{
+	if(DynamicBranch)
+	{
+		int32 V = Compiler-&gt;DynamicBoolParameter(ParameterName, DefaultValue);
+		if (V != INDEX_NONE)
+		{
+			return Compiler-&gt;DynamicBranch(V, A.Compile(Compiler), B.Compile(Compiler));
+		}
+		else
+		{
+			if(DefaultValue)
+			{
+				return A.Compile(Compiler);
+			}
+			else
+			{
+				return B.Compile(Compiler);
+			}
+		}
+	}
+
+	FExpressionInput* EffectiveInput = GetEffectiveInput(Compiler);
+	if (EffectiveInput)
+	{
+		return EffectiveInput-&gt;Compile(Compiler);
+	}
+	return INDEX_NONE;
+}</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 번역 시점에 갈라지는 스위치<br>&bull;&nbsp;<strong><code>bool bValue</code></strong> = 이 스위치가 켜졌는지 꺼졌는지. <strong>런타임이 아니라 번역 중에</strong> 정해지는 값이야.<br>&bull;&nbsp;<strong><code>GetStaticBoolValue(...)</code></strong> = "이 머티리얼(인스턴스)에서 이 스위치는 켜져 있나?"를 번역기에게 물어본다. 답은 <strong>컴파일 전에</strong> 이미 나와 있다.<br>&bull;&nbsp;<strong><code>StaticBoolParameter(...)</code></strong> = 이 스위치를 <strong>스태틱 파라미터 목록</strong>에 등록한다. 이 목록이 나중에 셰이더맵을 찾는 열쇠의 일부가 돼.<br>&bull;&nbsp;<strong><code>FExpressionInput*</code></strong> = 입력 핀을 가리키는 <strong>포인터</strong>야. <code>return bValue ? &amp;A : &amp;B;</code> — ⭐ <strong>이 한 줄이 전부다.</strong> 켜졌으면 A 핀 주소를, 꺼졌으면 B 핀 주소를 돌려준다.<br>&bull;&nbsp;<strong><code>EffectiveInput-&gt;Compile(Compiler)</code></strong> = <strong>고른 쪽 하나만 컴파일한다.</strong> 안 불린 쪽 서브그래프는 코드 조각이 아예 안 만들어져. HLSL 파일에 존재하지 않는다.<br>&bull;&nbsp;<strong><code>INDEX_NONE</code></strong> = 언리얼의 "없음" 인덱스(-1). 번역 실패를 뜻해.<br>&bull;&nbsp;<strong><code>DynamicBranch</code></strong> = 최근에 추가된 <strong>예외 갈래</strong>야. 이걸 켜면 스태틱 스위치인데도 A와 B를 <strong>둘 다 컴파일하고</strong> 런타임 분기를 남긴다. 즉 재컴파일은 안 하지만 셰이더가 무거워져. <strong>정확히 "도장 vs 잉크"의 절충안</strong>이고, 기본값은 꺼져 있어.<br>&bull;&nbsp;<strong><code>FStaticParameterSet</code></strong> = 이 머티리얼의 모든 스태틱 스위치 값 모음. 셰이더맵 ID의 재료야.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 스태틱 스위치는 (<code>DynamicBranch</code>를 안 켠 기본 상태에서) <strong>if 문을 셰이더에 남기지 않아.</strong> <code>GetEffectiveInput()</code>이 번역 중에 <code>GetStaticBoolValue</code>로 값을 확정하고 <strong>A 핀이냐 B 핀이냐를 골라서 그 하나만</strong> <code>Compile()</code>에 넘긴다. 안 쓰는 쪽 노드들은 <strong>코드로 번역조차 안 된다.</strong> 그러니까 스위치를 켜고 끄면 <strong>생성되는 HLSL 소스 자체가 달라진다.</strong> 소스가 다르면? 다른 셰이더다. 다시 구워야 해. 도장을 다시 깎는 거야.</div>
+<h3>그래서 셰이더맵이 갈린다 — <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a>과 만나는 지점</h3>
+<p>언리얼이 컴파일된 셰이더맵을 찾을 때 쓰는 열쇠가 <code>FMaterialShaderMapId</code>야. 그 안에 뭐가 들었냐면:</p>
+<div class="code-block">FMaterialShaderMapId (열쇠 구성 — 개념)
+  ├─ BaseMaterialId        (어느 머티리얼 에셋인가)
+  ├─ FStaticParameterSet   ★ 스태틱 스위치 값들
+  ├─ QualityLevel          (Low / Medium / High / Epic)
+  ├─ FeatureLevel          (SM5 / SM6 / ES3_1 ...)
+  └─ ShaderTypeDependencies / VertexFactoryTypeDependencies</div>
+<p>보이지? <strong><code>FStaticParameterSet</code>이 열쇠 안에 들어 있다.</strong> 스위치 하나 켜면 열쇠가 달라지고, 열쇠가 달라지면 창고에서 기존 셰이더맵을 못 꺼내. 새로 구워야 한다. <a class="xref" href="ch-09-shader-compile.html">shader-compile</a>에서 봤던 "define 하나 바뀌면 캐시 키가 달라진다"의 머티리얼 버전이야.</p>
+<p>그리고 여기서 순열 폭발이 시작돼. <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a>에서 배운 곱셈이 그대로 돌아온다.</p>
+<div class="code-block">스태틱 스위치 3개      = 2 × 2 × 2   =    8 벌
+  × 퀄리티 4단계                      =   32 벌
+  × 버텍스 팩토리 (Static/Skeletal/Instanced ...)   ← ch-37에서 다룬다
+  × 패스별 셰이더 타입 (BasePass / Depth / Shadow / Velocity ...)
+  ─────────────────────────────────────────────
+  = 머티리얼 하나에서 수백~수천 벌</div>
+<p>"머티리얼 하나 저장했는데 왜 셰이더 400개를 굽지?"의 답이 이거야. <strong>스태틱 스위치 하나 추가는 코드 한 줄이 아니라, 구워야 할 셰이더 수를 두 배로 만드는 결정이다.</strong></p>
+<div class="note warn">⚠️ 그래서 실무 원칙이 하나 나와. <strong>런타임에 자주 바뀌는 건 스칼라/벡터 파라미터로, 에셋마다 고정인 건 스태틱 스위치로.</strong> "이 벽돌은 젖었나?"를 스태틱 스위치로 하면 젖음/마름 두 벌이 구워지지만 셰이더가 최적이고, 스칼라 <code>WetAmount</code>로 하면 한 벌만 굽지만 안 젖은 픽셀도 젖음 계산 코드를 지나간다. <strong>컴파일 시간 vs GPU 시간의 거래야.</strong></div>
+<div class="note origin">🌱 <strong>이 개념은 왜 생겼나 — 머티리얼 인스턴스</strong><br>&bull;&nbsp;<strong>원래 구조</strong>: 색깔만 다른 벽돌 재질 20개가 필요하면 머티리얼 에셋 20개를 만든다. 그래프를 복사-붙여넣기 하면 되잖아.<br>&bull;&nbsp;<strong>그런데 문제</strong>: 그래프가 같으니 <strong>셰이더 코드도 완전히 똑같은데</strong>, 에셋이 20개니까 셰이더맵도 20벌 구워진다. 컴파일 시간 20배, 메모리 20배, PSO 20배. 게다가 그래프를 고치려면 20개를 다 고쳐야 해.<br>&bull;&nbsp;<strong>그래서 필요한 것</strong>: <strong>코드는 부모 것을 그대로 쓰고, 유니폼 버퍼 값만 다른</strong> 가벼운 자식이 필요해. 그게 머티리얼 인스턴스(<code>UMaterialInstance</code> → 렌더 쪽 <code>FMaterialInstanceResource</code>)야. 자기 셰이더맵을 안 갖고 부모의 <code>FMaterial</code>을 가리키기만 한다. <strong>단, 스태틱 파라미터를 하나라도 덮어쓰면 그 순간 자기만의 셰이더맵을 갖게 된다.</strong></div>
+</div>
+<div class="conversation"><h2>5. 블렌드 모드 · 셰이딩 모델 · 도메인은 define이 된다</h2>
+<p>머티리얼 에디터 왼쪽 디테일 패널의 드롭다운 세 개. 이것들도 결국 <strong>셰이더 컴파일 환경의 define</strong>으로 번역돼. <a class="xref" href="ch-09-shader-compile.html">shader-compile</a>에서 봤던 <code>FShaderCompilerEnvironment</code>에 값을 박는 거야.</p>
+<p><strong><code>MaterialShared.cpp:2484</code></strong> — <code>FMaterial::SetupMaterialEnvironment</code> 중 블렌드 모드 부분 (Substrate 미사용 경로)</p>
+<div class="code-block">		switch(GetBlendMode())
+		{
+		case BLEND_Opaque:
+		case BLEND_Masked:
+		{
+			// Only set MATERIALBLENDING_MASKED if the material is truly masked
+			//@todo - this may cause mismatches with what the shader compiles and what the renderer thinks the shader needs
+			// For example IsTranslucentBlendMode doesn't check IsMasked
+			if(!WritesEveryPixel())
+			{
+				SET_SHADER_DEFINE(OutEnvironment, MATERIALBLENDING_MASKED, 1);
+			}
+			else
+			{
+				SET_SHADER_DEFINE(OutEnvironment, MATERIALBLENDING_SOLID, 1);
+			}
+			break;
+		}
+		case BLEND_AlphaComposite:
+		{
+			// Blend mode will reuse MATERIALBLENDING_TRANSLUCENT
+			SET_SHADER_DEFINE_AND_COMPILE_ARGUMENT(OutEnvironment, MATERIALBLENDING_ALPHACOMPOSITE, true);
+			SET_SHADER_DEFINE_AND_COMPILE_ARGUMENT(OutEnvironment, MATERIALBLENDING_TRANSLUCENT, true);
+			break;
+		}
+		case BLEND_AlphaHoldout:
+		{
+			// Blend mode will reuse MATERIALBLENDING_TRANSLUCENT
+			SET_SHADER_DEFINE(OutEnvironment, MATERIALBLENDING_ALPHAHOLDOUT, 1);
+			SET_SHADER_DEFINE_AND_COMPILE_ARGUMENT(OutEnvironment, MATERIALBLENDING_TRANSLUCENT, true);
+			break;
+		}
+		case BLEND_TranslucentColoredTransmittance:
+		case BLEND_Translucent:
+			SET_SHADER_DEFINE_AND_COMPILE_ARGUMENT(OutEnvironment, MATERIALBLENDING_TRANSLUCENT, true);
+			break;
+
+		case BLEND_Additive: SET_SHADER_DEFINE_AND_COMPILE_ARGUMENT(OutEnvironment, MATERIALBLENDING_ADDITIVE, true); break;
+		case BLEND_Modulate: SET_SHADER_DEFINE_AND_COMPILE_ARGUMENT(OutEnvironment, MATERIALBLENDING_MODULATE, true); break;
+
+		default:
+			UE_LOG(LogMaterial, Warning, TEXT("Unknown material blend mode: %u  Setting to BLEND_Opaque"),(int32)GetBlendMode());
+			SET_SHADER_DEFINE(OutEnvironment, MATERIALBLENDING_SOLID, 1);
+		}</div>
+<p>도메인 드롭다운도 같은 함수 안에서 똑같은 방식으로 define이 된다.</p>
+<p><strong><code>MaterialShared.cpp:2665</code></strong></p>
+<div class="code-block">	switch(GetMaterialDomain())
+	{
+		case MD_Surface:				SET_SHADER_DEFINE(OutEnvironment, MATERIAL_DOMAIN_SURFACE,			1); break;
+		case MD_DeferredDecal:			SET_SHADER_DEFINE(OutEnvironment, MATERIAL_DOMAIN_DEFERREDDECAL,	1); break;
+		case MD_LightFunction:			SET_SHADER_DEFINE(OutEnvironment, MATERIAL_DOMAIN_LIGHTFUNCTION,	1); break;
+		case MD_Volume:					SET_SHADER_DEFINE(OutEnvironment, MATERIAL_DOMAIN_VOLUME,			1); break;
+		case MD_PostProcess:			SET_SHADER_DEFINE(OutEnvironment, MATERIAL_DOMAIN_POSTPROCESS,		1); break;
+		case MD_UI:						SET_SHADER_DEFINE(OutEnvironment, MATERIAL_DOMAIN_UI,				1); break;
+		default:
+			UE_LOG(LogMaterial, Warning, TEXT("Unknown material domain: %u  Setting to MD_Surface"),(int32)GetMaterialDomain());
+			SET_SHADER_DEFINE(OutEnvironment, MATERIAL_DOMAIN_SURFACE, 1);
+	};</div>
+<div class="note gloss">🔤 <strong>기호 사전</strong> — 드롭다운이 define으로<br>&bull;&nbsp;<strong><code>GetBlendMode()</code></strong> = 이 머티리얼이 <code>Opaque</code>인지 <code>Translucent</code>인지 돌려준다. 에디터 드롭다운 값 그대로야.<br>&bull;&nbsp;<strong><code>WritesEveryPixel()</code></strong> = 이 재질이 픽셀을 하나도 안 버리는지 확인. 마스크가 없으면 <code>Masked</code>로 설정돼 있어도 사실상 <code>Solid</code>로 취급해서 <strong>공짜로 최적화한다.</strong><br>&bull;&nbsp;<strong><code>SET_SHADER_DEFINE(OutEnvironment, NAME, 1)</code></strong> = 셰이더 컴파일 환경에 <code>#define NAME 1</code>을 박는 매크로. <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a>의 "도장 찍기"랑 똑같은 동작이야.<br>&bull;&nbsp;<strong><code>SET_SHADER_DEFINE_AND_COMPILE_ARGUMENT(...)</code></strong> = define을 박는 <strong>동시에</strong> 컴파일 인자로도 넘긴다. define은 셰이더 소스가 읽고, 컴파일 인자는 엔진의 컴파일 로직이 읽는다.<br>&bull;&nbsp;<strong><code>MATERIALBLENDING_SOLID</code></strong> = <code>.usf</code> 안의 <code>#if MATERIALBLENDING_SOLID</code>를 켜는 스위치.<br>&bull;&nbsp;<strong><code>case BLEND_AlphaComposite:</code> 가 <code>MATERIALBLENDING_TRANSLUCENT</code>도 켠다</strong> = 주석 그대로 "<strong>블렌드 모드가 TRANSLUCENT를 재사용한다</strong>"는 뜻. 반투명 계열은 결국 같은 셰이더 경로를 탄다.<br>&bull;&nbsp;<strong><code>MATERIAL_DOMAIN_SURFACE</code></strong> = 이 머티리얼이 일반 표면용인지, 포스트프로세스용인지, UI용인지 가른다. 도메인이 다르면 <strong>아예 다른 패스에서 다른 셰이더로 돈다.</strong><br>&bull;&nbsp;<strong><code>default: UE_LOG(...)</code></strong> = 모르는 값이 오면 경고를 찍고 <strong>안전한 기본값</strong>(Opaque / Surface)으로 되돌린다.</div>
+<div class="note reread">🔁 <strong>이제 다시 보자.</strong> 에디터의 드롭다운 하나 → <code>FMaterial::SetupMaterialEnvironment</code>가 <code>SET_SHADER_DEFINE</code>으로 번역 → <code>.usf</code>의 <code>#if</code>가 켜지고 꺼짐 → <strong>다른 셰이더가 나온다.</strong> 이게 <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a>에서 본 "도장 → define → <code>#if</code>" 흐름 그대로야. 차이는 도장을 C++ 프로그래머가 아니라 <strong>아티스트가 드롭다운으로 찍는다</strong>는 것뿐이지.</div>
+<h3>그래서 GBuffer로 이어진다</h3>
+<p>이제 <a class="xref" href="ch-20-basepass-gbuffer.html">basepass-gbuffer</a>와 <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>의 미스터리가 풀려.</p>
+<table class="compare-table"><thead><tr><th>아티스트가 고른 것</th><th>define</th><th>결과</th></tr></thead><tbody>
+<tr><td>Blend Mode = <code>Opaque</code></td><td><code>MATERIALBLENDING_SOLID</code></td><td><code>USES_GBUFFER</code> 경로 → <code>EncodeGBufferToMRT</code>로 GBuffer에 기록</td></tr>
+<tr><td>Blend Mode = <code>Translucent</code></td><td><code>MATERIALBLENDING_TRANSLUCENT</code></td><td>GBuffer 안 씀. <a class="xref" href="ch-25-translucency.html">translucency</a>의 포워드 경로로 감</td></tr>
+<tr><td>Shading Model = <code>Default Lit</code></td><td><code>MATERIAL_SHADINGMODEL_DEFAULT_LIT</code></td><td><code>GBuffer.ShadingModelID</code>에 그 번호가 찍힘</td></tr>
+<tr><td>Shading Model = <code>Unlit</code></td><td><code>MATERIAL_SHADINGMODEL_UNLIT</code></td><td><code>SetGBufferForUnlit</code> → 라이팅이 빛을 안 얹음</td></tr>
+<tr><td>Domain = <code>Post Process</code></td><td><code>MATERIAL_DOMAIN_POSTPROCESS</code></td><td>BasePass에 아예 안 들어감. <a class="xref" href="ch-33-postprocess-chain.html">postprocess-chain</a>에서 돎</td></tr>
+</tbody></table>
+<p>ch-21에서 우리가 봤던 <code>#if USES_GBUFFER</code>와 <code>if (GBuffer.ShadingModelID == SHADINGMODELID_UNLIT)</code>가 <strong>왜 거기 있었는지</strong>가 이제 보이지. 아티스트가 드롭다운에서 <code>Unlit</code>을 고른 그 순간, 그 갈림길이 켜진 거야.</p>
+</div>
+<div class="conversation"><h2>6. 흐름을 한 번에 펼치기</h2>
+<div class="code-block">아티스트가 노드를 연결하고 저장
+        │
+        ▼
+UMaterialExpression::Compile()  ← 노드마다 하나씩, 결과 핀에서 거꾸로 재귀
+        │                          MaterialExpressions.cpp:4610 (Multiply)
+        │                          MaterialExpressions.cpp:8749 (StaticSwitch — 여기서 갈래 확정)
+        ▼
+FHLSLMaterialTranslator          ← 코드 조각(Local0, Local1 ...)을 쌓는다
+        │                          HLSLMaterialTranslator.cpp
+        │                          + FMaterialUniformExpressionSet (유니폼 버퍼 배치표)
+        ▼
+PrepareMaterialSourceStringParameters()  ← (이름표 → 문자열) 짝을 쌓는다
+        │                          HLSLMaterialTranslator.cpp:16710
+        ▼
+GetMaterialShaderCode()          ← MaterialTemplate.ush의 %{이름} 빈칸을 채운다
+        │                          HLSLMaterialTranslator.cpp:3316
+        │                          FMaterialSourceTemplate → Resolver.Finalize()
+        ▼
+완성된 셰이더 소스 (문자열)
+        │
+        ├─ FMaterial::SetupMaterialEnvironment()  → MATERIALBLENDING_*, MATERIAL_DOMAIN_* define
+        │                                            MaterialShared.cpp:2466
+        ▼
+셰이더 컴파일 파이프라인          ← ch-09: 전처리 → 백엔드 → DDC
+        │
+        ▼
+FMaterialShaderMap               ← 구워진 셰이더 묶음 (키 = FMaterialShaderMapId)
+        │                              그 키 안에 FStaticParameterSet이 들어 있다
+        ▼
+드로우콜 시점 (ch-17)
+   FMaterialRenderProxy ──▶ FMaterial ──▶ FMaterialShaderMap ──▶ 셰이더
+             │
+             └──▶ FUniformExpressionCache (스칼라/벡터/텍스처 값) ──▶ 유니폼 버퍼 바인딩
+        │
+        ▼
+BasePassPixelShader.usf (ch-21)
+   CalcPixelMaterialInputs()  ← ★ 여기가 네 그래프
+   GetMaterialBaseColor()     ← 채워진 칸 꺼내기
+   EncodeGBufferToMRT()       ← GBuffer 기록 (ch-20)</div>
+<p>촬영장 비유로 다시 읽으면:</p>
+<div class="code-block">감독이 콘티를 그림
+  → 스크립터가 콘티를 보고 큐시트 양식지의 빈칸을 채움
+  → 완성된 큐시트를 인쇄소(컴파일러)에 넘김
+  → 인쇄된 큐시트를 창고(셰이더맵)에 보관
+  → 촬영 당일, 소품 담당(렌더 프록시)이 "오늘 벽 색은 빨강" 같은 값만 대줌
+  → 조명팀(GPU)이 큐시트대로 돌린다
+
+  색만 바꾸고 싶다? → 소품 담당한테 말하면 끝 (재인쇄 없음)
+  장면 구성을 바꾸고 싶다? → 콘티가 바뀜 → 큐시트 재작성 → 재인쇄 (재컴파일)</div>
+</div>
+<div class="conversation"><h2>우리 서버·DirectX랑 비교</h2>
+<p>DirectX로 직접 짜던 감각으로 매핑해보자. 놀랍게도 <strong>단계는 똑같은데, 사람이 하던 걸 엔진이 대신한다</strong>는 차이뿐이야.</p>
+<table class="compare-table"><thead><tr><th>DirectX에서 우리가 하던 것</th><th>언리얼이 대신 하는 것</th></tr></thead><tbody>
+<tr><td><code>.hlsl</code> 파일을 손으로 작성</td><td><code>HLSLMaterialTranslator</code>가 노드 그래프를 번역해서 자동 생성</td></tr>
+<tr><td>공통 코드는 <code>#include "Common.hlsli"</code></td><td><code>MaterialTemplate.ush</code> 양식지 + <code>%{이름}</code> 빈칸</td></tr>
+<tr><td><code>cbuffer PerMaterial { float4 Tint; }</code> 손으로 선언</td><td><code>FMaterialUniformExpressionSet</code>이 자동으로 배치표 생성</td></tr>
+<tr><td>C++ 구조체 만들고 <code>Map</code>/<code>memcpy</code>로 채우기</td><td><code>FMaterialRenderProxy</code> → <code>FUniformExpressionCache</code>가 자동으로 채움</td></tr>
+<tr><td><code>D3DCompile</code>에 <code>D3D_SHADER_MACRO</code> 배열 넘기기</td><td><code>SetupMaterialEnvironment</code>가 <code>SET_SHADER_DEFINE</code>으로 박음 (ch-09)</td></tr>
+<tr><td>매크로 조합마다 <code>D3DCompile</code> 여러 번</td><td><code>FMaterialShaderMap</code> = 순열별 셰이더 묶음 (ch-27)</td></tr>
+<tr><td>컴파일된 바이트코드를 PSO에 꽂기</td><td>드로우콜 시 셰이더맵에서 꺼내 <code>FMeshDrawCommand</code>에 (ch-17)</td></tr>
+<tr><td>색만 바꾸려면 → <code>memcpy</code> 한 줄</td><td>스칼라/벡터 파라미터 → 유니폼 버퍼 갱신 (<strong>재컴파일 X</strong>)</td></tr>
+<tr><td><code>#define USE_WET 1</code> 바꾸려면 → 재컴파일</td><td>스태틱 스위치 → 셰이더맵 ID 변경 → <strong>재컴파일</strong></td></tr>
+</tbody></table>
+<p>서버 감각으로도 하나 걸어두자. 우리가 <code>SP_*</code> 저장 프로시저를 쓸 때, <strong>파라미터만 바꾸는 것</strong>과 <strong>쿼리문 자체를 바꾸는 것</strong>은 완전히 다른 비용이잖아. 파라미터는 그냥 바인딩해서 넘기면 되고, 실행 계획은 재사용된다. 근데 쿼리 텍스트가 바뀌면? 파싱하고 실행 계획을 새로 짠다.</p>
+<p><strong>스칼라 파라미터 = 바인딩 파라미터. 스태틱 스위치 = 쿼리문 자체가 바뀜.</strong> 이렇게 보면 왜 하나는 공짜고 하나는 비싼지 몸으로 이해된다.</p>
+<p>그리고 한 가지 언리얼이 더 하는 게 있어. DirectX에서는 <strong>우리가 셰이더를 짰으니까 셰이더가 뭘 하는지 알았다.</strong> 언리얼은 그래프를 번역하니까, <strong>번역기가 그래프를 훑으면서 "이 재질은 UV를 몇 개 쓰나, 픽셀 깊이를 건드리나, 노멀을 커스텀으로 쓰나"까지 다 알아낸다.</strong> 그 정보가 <code>NumUserTexCoords</code> 같은 define으로도 나가고, 렌더러의 최적화 판단(<code>WritesEveryPixel()</code> 같은)에도 쓰여. 자동 번역의 부수입이야.</p>
+</div>
+<div class="conversation"><h2>이 챕터에서 딱 이것만</h2>
+<ul><li>머티리얼 노드 그래프는 <code>UMaterialExpression::Compile()</code>이 결과 핀에서 거꾸로 재귀하면서 <strong>코드 조각(<code>LocalN</code>)</strong>으로 번역된다.</li><li><code>MaterialTemplate.ush</code>는 <code>%{이름}</code> 빈칸이 뚫린 <strong>양식지</strong>고, <code>FHLSLMaterialTranslator::GetMaterialShaderCode()</code>가 그 빈칸을 채워 완성된 셰이더 소스를 만든다. <code>FPixelMaterialInputs</code>는 <strong>구조체 몸통(<code>%{pixel_material_inputs}</code>)조차 생성물</strong>이다.</li><li>ch-21의 <code>GetMaterialBaseColor()</code>는 <strong>구조체 필드를 꺼내는 창구</strong>일 뿐이고, 진짜 그래프는 <code>CalcPixelMaterialInputs()</code> 몸통이다.</li><li><code>FMaterial</code>=레시피 / <code>FMaterialShaderMap</code>=구워진 셰이더 / <code>FMaterialRenderProxy</code>=파라미터 값. 셋은 다른 층이다.</li><li><strong>스칼라/벡터/텍스처 파라미터는 유니폼 버퍼 값일 뿐이라 재컴파일이 없다.</strong> 머티리얼 인스턴스는 부모의 셰이더맵을 공유한다.</li><li><strong>스태틱 스위치는 번역 시점에 갈래를 확정해 한쪽만 코드로 만든다.</strong> 소스가 달라지므로 <code>FMaterialShaderMapId</code>가 갈리고 재컴파일된다.</li><li>Blend Mode / Shading Model / Domain은 <code>SET_SHADER_DEFINE</code>으로 번역되어 <code>USES_GBUFFER</code>, <code>SHADINGMODELID_*</code> 같은 ch-20/21의 갈림길을 만든다.</li></ul>
+</div>
+<div class="conversation"><h2>🧠 면접 리뷰 — 진짜 이해했는지 확인</h2>
+<p>면접관이 이 챕터를 파고든다고 생각해봐. 코드를 외웠나가 아니라, <strong>이게 왜 필요하고 큰 그림에서 어떻게 도는지</strong>를 네 말로 재구성할 수 있으면 통과야. 먼저 스스로 답해보고, 막히면 펴서 확인해. <strong>↳</strong> 표시는 앞 답을 파고드는 <strong>꼬리질문</strong>이야.</p>
+
+<h3>Q1. 아티스트가 노드를 연결하면 그게 어떻게 GPU에서 도는 픽셀 셰이더가 되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">노드마다 <code>UMaterialExpression::Compile()</code>이 있어서, <strong>결과 핀에서부터 거꾸로 재귀하며</strong> 자기를 코드 조각으로 번역해. 곱하기 노드면 왼쪽 핀 두 개를 먼저 컴파일해서 번호표를 받고, <code>Compiler-&gt;Mul(...)</code>로 새 번호표를 받는 식이야. 그 번호표가 결국 <code>MaterialFloat3 Local2 = (Local0.rgb * Local1);</code> 같은 <strong>지역변수 한 줄</strong>이 돼. 그렇게 쌓인 조각들을 <code>FHLSLMaterialTranslator</code>가 <code>MaterialTemplate.ush</code>의 <code>%{이름}</code> 빈칸에 꽂으면 <strong>완성된 셰이더 소스 문자열</strong>이 나오고, 그게 <a class="xref" href="ch-09-shader-compile.html">shader-compile</a> 파이프라인으로 들어가서 구워져. 감독이 그린 콘티를 스크립터가 큐시트 양식지에 옮겨 적는 거야 — DirectX에서 우리가 손으로 <code>.hlsl</code> 파일을 저장하던 그 순간을 C++ 문자열 조립이 대신하는 거지.</div></details>
+
+<h4>↳ 그럼 ch-21에서 봤던 <code>GetMaterialBaseColor()</code>는 어디서 온 함수인가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><code>MaterialTemplate.ush</code>에 <strong>미리 사람이 써둔 함수</strong>야. 그리고 하는 일은 <code>return PixelMaterialInputs.BaseColor;</code>가 전부 — 구조체 필드 하나 꺼내주는 <strong>창구</strong>일 뿐이야. 무거운 계산을 하는 함수가 아니라는 게 중요해. 진짜 네 그래프는 그 위쪽 <code>CalcPixelMaterialInputs()</code> 몸통에 들어 있고, 거기서 픽셀당 한 번 다 계산해서 <code>PixelMaterialInputs</code> 칸들을 채워놔. 그래서 <strong>BasePass 코드는 어떤 머티리얼이든 절대 안 바뀌어.</strong> 양식지의 창구는 고정이고, 빈칸만 그래프마다 다른 거지.</div></details>
+
+<h4>↳ 그럼 <code>MaterialTemplate.ush</code>를 열면 컴파일 가능한 HLSL인가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">아니야. 중간에 <code>%{pixel_material_inputs}</code>, <code>%{calc_pixel_material_inputs_normal}</code> 같은 <strong>이름표 달린 빈칸</strong>이 박혀 있는 <strong>반쪽짜리 파일</strong>이야. 그대로는 컴파일 안 돼. <code>FHLSLMaterialTranslator::PrepareMaterialSourceStringParameters()</code>가 <strong>(이름표 → 문자열)</strong> 짝을 수십 개 쌓아두고, <code>GetMaterialShaderCode()</code>가 <code>FStringTemplateResolver</code>로 그 빈칸들을 <strong>이름을 보고</strong> 채워야 비로소 진짜 HLSL이 돼. 심지어 <code>struct FPixelMaterialInputs</code>의 <strong>필드 목록조차</strong> 빈칸이라, 이 머티리얼이 실제로 쓰는 칸만 생성된다.</div></details>
+
+<h3>Q2. <code>FMaterial</code>, <code>FMaterialShaderMap</code>, <code>FMaterialRenderProxy</code>는 각각 뭘 하나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">촬영장으로 나누면 딱 떨어져. <code>FMaterial</code>은 <strong>대본 담당</strong> — 셰이딩 모델, 블렌드 모드, 도메인, 그래프 같은 <strong>레시피</strong>를 안다. <code>FMaterialShaderMap</code>은 <strong>구워진 필름 창고</strong> — 그 레시피로 실제 컴파일된 셰이더 바이트코드 묶음이야(버텍스 팩토리 × 셰이더 타입 × 순열별로 여러 벌). <code>FMaterialRenderProxy</code>는 <strong>현장 소품 담당</strong> — "이 벽돌 색은 빨강, 거칠기 0.7" 같은 <strong>파라미터 값</strong>만 대준다. 드로우콜을 만들 땐 프록시에서 시작해서 → <code>FMaterial</code>(레시피) → <code>FMaterialShaderMap</code>(셰이더)을 꺼내고, 프록시가 들고 있는 유니폼 버퍼를 그 셰이더에 꽂아.</div></details>
+
+<h4>↳ 왜 굳이 <code>FMaterialRenderProxy</code>를 따로 두나요? <code>FMaterial</code>이 값도 같이 들고 있으면 안 되나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">그러면 <strong>머티리얼 인스턴스가 성립을 안 해.</strong> 색만 다른 벽돌 20종을 만들 때, 레시피(코드)는 하나면 충분하고 값만 20벌 있으면 되잖아. 값을 <code>FMaterial</code>에 붙여버리면 값이 다른 만큼 <code>FMaterial</code>도 20개가 되고, 셰이더맵도 20벌 구워져 — 코드가 똑같은데도. 그래서 <strong>레시피 층(<code>FMaterial</code> + 셰이더맵)과 값 층(<code>FMaterialRenderProxy</code>)을 분리</strong>한 거야. 도장과 잉크를 분리하는 거지. 덕분에 인스턴스 100개가 부모의 셰이더맵 하나를 공유할 수 있어.</div></details>
+
+<h3>Q3. ⭐ 머티리얼 인스턴스에서 색 파라미터를 바꾸면 즉시 되는데, 스태틱 스위치를 켜면 왜 재컴파일되나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>스칼라/벡터 파라미터는 셰이더 코드에 흔적을 안 남기기 때문</strong>이야. <code>UMaterialExpressionScalarParameter::Compile()</code>은 <code>DefaultValue</code>를 상수로 박지 않고 <code>Compiler-&gt;ScalarParameter(...)</code>를 불러서 <strong>유니폼 버퍼에 칸을 하나 예약</strong>해. 생성된 HLSL에는 "유니폼 버퍼 N번 칸을 읽어라"만 남지. 그러니까 그 칸에 <code>0.5</code>를 넣든 <code>0.9</code>를 넣든 <strong>바이트코드는 글자 하나 안 바뀐다.</strong> 값만 <code>FUniformExpressionCache</code>에 다시 채우면 끝 — DirectX로 치면 <code>cbuffer</code>에 <code>memcpy</code> 한 줄이야.<br><br>반대로 <code>UMaterialExpressionStaticSwitchParameter::Compile()</code>은 <strong>번역 시점에</strong> <code>GetStaticBoolValue()</code>로 값을 확정하고 <strong>A 아니면 B 한쪽만 컴파일해.</strong> 안 쓰는 쪽 서브그래프는 HLSL에 <strong>아예 안 실려.</strong> 그러니까 스위치를 바꾸면 <strong>생성되는 소스 자체가 달라지고</strong>, 그건 정의상 다른 셰이더야. 다시 구울 수밖에 없어. <strong>파라미터는 잉크, 스태틱 스위치는 도장이야.</strong></div></details>
+
+<h4>↳ 엔진은 "다시 구워야 한다"는 걸 어디서 알아채나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">셰이더맵을 찾는 열쇠인 <code>FMaterialShaderMapId</code> 안에 <strong><code>FStaticParameterSet</code>이 들어 있어서</strong>야. 스태틱 스위치 값들이 열쇠의 일부인 거지. 스위치 하나를 켜면 열쇠가 달라지고, 열쇠가 달라지면 창고에서 기존 <code>FMaterialShaderMap</code>을 못 꺼내니까 새로 굽는다. <a class="xref" href="ch-09-shader-compile.html">shader-compile</a>에서 본 "define 하나 바뀌면 캐시 키(입력 지문)가 달라진다"의 머티리얼 버전이야. 열쇠엔 그 외에 퀄리티 레벨, 피처 레벨, 셰이더/버텍스팩토리 타입 의존성도 들어가.</div></details>
+
+<h4>↳ 그럼 실무에서 스태틱 스위치를 언제 쓰고 언제 피해야 하나요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread"><strong>런타임에 자주 바뀌는 건 스칼라/벡터로, 에셋마다 고정인 건 스태틱 스위치로.</strong> 스태틱 스위치는 조합이 <strong>곱셈으로</strong> 늘어(<a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a>). 스위치 3개면 8벌, 거기에 퀄리티 4단계 × 버텍스 팩토리 × 패스별 셰이더 타입까지 곱하면 머티리얼 하나에서 수백~수천 벌이 나와. "머티리얼 하나 저장했는데 왜 셰이더 400개를 굽지?"의 답이 이거야. 대신 스위치를 쓰면 <strong>안 쓰는 코드가 셰이더에 아예 없어서</strong> GPU에선 제일 빨라. <strong>컴파일 시간·메모리 vs GPU 시간의 거래</strong>고, 이걸 이해하고 고르는 게 핵심이야. 참고로 스태틱 스위치를 하나라도 덮어쓴 머티리얼 인스턴스는 그 순간 <strong>자기만의 셰이더맵을 갖게 돼</strong> — 더 이상 가벼운 인스턴스가 아니야.</div></details>
+
+<h3>Q4. Blend Mode를 <code>Translucent</code>로 바꾸면 왜 GBuffer에 안 찍히나요?</h3>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">에디터 드롭다운이 <strong>셰이더 컴파일 환경의 define</strong>으로 번역되기 때문이야. <code>FMaterial::SetupMaterialEnvironment()</code>가 블렌드 모드를 보고 <code>MATERIALBLENDING_SOLID</code>나 <code>MATERIALBLENDING_TRANSLUCENT</code>를 <code>SET_SHADER_DEFINE</code>으로 박아. 그러면 <code>.usf</code>의 <code>#if</code>들이 갈리면서 <strong>불투명 재질만 <code>USES_GBUFFER</code> 경로를 타고</strong> <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a>의 <code>EncodeGBufferToMRT</code>까지 가. 반투명은 GBuffer 한 칸에 표면 하나만 적을 수 있다는 디퍼드의 근본 한계 때문에 애초에 그 길로 못 가고, <a class="xref" href="ch-25-translucency.html">translucency</a>의 포워드 경로로 빠져. 셰이딩 모델도 똑같아 — <code>Unlit</code>을 고르면 <code>MATERIAL_SHADINGMODEL_UNLIT</code>이 박히고, ch-21에서 봤던 <code>SetGBufferForUnlit</code> 갈림길이 켜지는 거야.</div></details>
+
+<h4>↳ 이건 결국 <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a>에서 배운 거랑 같은 얘기 아닌가요?</h4>
+<details><summary style="cursor:pointer;color:#6a1b9a;font-weight:600;margin-bottom:8px;">답 보기</summary>
+<div class="note reread">맞아, <strong>메커니즘은 완전히 똑같아.</strong> "도장(define) → <code>#if</code> → 다른 셰이더"라는 흐름 그대로야. 차이는 <strong>도장을 누가 찍느냐</strong>뿐이야. ch-27에서는 C++ 프로그래머가 <code>SHADER_PERMUTATION_BOOL("TONEMAP")</code>으로 차원을 선언했지. 여기서는 <strong>아티스트가 드롭다운을 고르고 스태틱 스위치를 체크하면</strong> 그게 define이 돼. 그래서 머티리얼 순열 폭발은 프로그래머가 통제하기 더 어려워 — 아티스트가 스위치를 하나 추가할 때마다 빌드팜 시간이 두 배가 되는데, 그 사람은 그걸 모를 수도 있거든. 순열 예산 관리가 팀 문제가 되는 이유야.</div></details>
+</div>
+<div class="conversation"><h2>🎯 원리 한 줄 요약</h2>
+<p><strong>머티리얼 그래프는 <code>UMaterialExpression::Compile()</code>이 코드 조각으로 번역하고 <code>HLSLMaterialTranslator</code>가 <code>MaterialTemplate.ush</code>의 <code>%{이름}</code> 빈칸을 채워 셰이더가 된다 — 스칼라·벡터 파라미터는 유니폼 버퍼 값일 뿐이라 공짜지만, 스태틱 스위치는 생성되는 소스 자체를 바꿔 셰이더맵을 새로 굽게 만든다.</strong></p>
+<hr>
+<div class="note">막히면(선행 개념) → <a class="xref" href="ch-09-shader-compile.html">shader-compile</a> · <a class="xref" href="ch-27-shader-permutation.html">shader-permutation</a> · <a class="xref" href="ch-21-basepass-shader.html">basepass-shader</a><br>다음(같은 머티리얼이 스켈레탈 메시에서 다르게 도는 이유) → <a class="xref" href="ch-37-vertex-factory.html">vertex-factory</a></div></div><nav class="booknav"><a href="ch-35-finale.html"><span class="lbl">← 이전</span>피날레 — 한 프레임의 전체 여정</a><a class="nx" href="ch-37-vertex-factory.html"><span class="lbl">다음 →</span>Vertex Factory — 같은 머티리얼이 다르게 도는 이유</a></nav></div><script src="/MSH_Portfolio/study/notes.js"></script></body></html>

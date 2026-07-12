@@ -50,7 +50,7 @@ a.xref:hover { background:#bbdefb; }
 .toc-item:hover { color:#1565c0; }
 .toc-item .n { color:#aaa; font-variant-numeric:tabular-nums; font-size:.85rem; min-width:22px; }
 @media(max-width:600px){ .container{padding:36px 16px;} .conversation{padding:22px 20px;} .header h1{font-size:1.6rem;} }
-</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>IpNetDriver: 소켓과 실제로 만나는 곳</h1><p>언리얼 네트워크 · 10 / 43</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
+</style></head><body><div class="container"><a href="index.html" class="back-link">← 목차</a><header class="header"><h1>IpNetDriver: 소켓과 실제로 만나는 곳</h1><p>언리얼 네트워크 · 10 / 47</p></header><div class="conversation"><h2>왜 이걸 배워? — 문제의식부터</h2>
 <p>네가 게임 서버를 짜봤으면 이 장면은 익숙해. <code>CChosunPlayer</code>가 있고, IOCP 워커가 <code>WSARecv</code> 완료를 받고, <code>CM_*</code> 패킷을 풀어서 로직 큐에 넣고, 응답은 <code>SP_*</code>로 만들어 <code>WSASend</code>에 태워 보낸다. 그런데 UE 코드를 보면 이상해. 채널, 번치, Ack, <code>FlushNet</code>까지 다 보이는데, 정작 "진짜 소켓에 쏘는 줄"이 안 보인다.</p>
 <p>이걸 모르면 디버깅할 때 길을 잃어. "패킷이 안 나가요"라는 문제를 들고 <code>UNetConnection</code>만 뒤지다가 <code>LowLevelSend</code> 몸통이 비어 있는 걸 보고 멈춰버린다. 수신도 마찬가지야. <code>TickDispatch</code>가 받는다는데 <code>recvfrom</code>은 안 보이고, connectionless 핸드셰이크는 커넥션도 없는데 어떻게 답장을 보내는지 헷갈린다. 조선 서버로 치면 IOCP 워커, 세션 객체, 패킷 핸들러, 락 걸어야 하는 위치가 한 파일에 섞여 있는데 "진짜 IO는 어디야?"를 못 찾는 상태야.</p>
 <p>언리얼도 같은 문제를 만났고, 답은 <strong>계약과 구현을 갈라놓는 것</strong>이야. 엔진 코어의 <code>UNetDriver</code> / <code>UNetConnection</code>은 "소켓으로 보내라"는 규칙만 잡고, 실제 <code>recvfrom</code> / <code>SendTo</code>는 <code>UIpNetDriver</code> / <code>UIpConnection</code> 같은 아래쪽 구현체가 맡는다. 회사가 배송 규칙을 만들고, 기사가 실제 트럭을 모는 구조라고 보면 된다.</p>
