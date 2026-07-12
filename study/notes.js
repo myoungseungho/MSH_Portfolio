@@ -59,6 +59,19 @@
     + '.mshn-card .mshn-grip:active{cursor:grabbing;}'
     + '.mshn-card.mshn-dragging{opacity:.9;box-shadow:0 6px 18px rgba(0,0,0,.2);}'
     + '.mshn-card .mshn-txt.collapsed{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;}'
+    + '.mshn-imgs{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}'
+    + '.mshn-imgs .mshn-thumb{position:relative;width:56px;height:56px;border-radius:6px;overflow:hidden;border:1px solid #e6d98f;cursor:zoom-in;background:#fff;}'
+    + '.mshn-imgs .mshn-thumb img{width:100%;height:100%;object-fit:cover;display:block;}'
+    + '.mshn-imgs .mshn-thumb .x{position:absolute;top:1px;right:1px;width:15px;height:15px;line-height:14px;text-align:center;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:.62rem;cursor:pointer;opacity:0;transition:opacity .12s;}'
+    + '.mshn-imgs .mshn-thumb:hover .x{opacity:1;}'
+    + '.mshn-lightbox{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:24px;}'
+    + '.mshn-lightbox img{max-width:96vw;max-height:92vh;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.5);cursor:default;}'
+    + '.mshn-lightbox .nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.9);border:0;border-radius:50%;width:40px;height:40px;font-size:1.2rem;cursor:pointer;color:#333;}'
+    + '.mshn-lightbox .nav.prev{left:16px;} .mshn-lightbox .nav.next{right:16px;}'
+    + '.mshn-lightbox .cnt{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);color:#fff;font-size:.8rem;opacity:.85;}'
+    + '.mshn-paste{font-size:.68rem;color:#b3a25a;margin-top:4px;}'
+    + '.mshn-card .mshn-txt a{color:#1565c0;text-decoration:underline;word-break:break-all;}'
+    + '.mshn-card .mshn-txt a:hover{color:#0d47a1;}'
     + '.mshn-bar{position:fixed;right:16px;bottom:16px;z-index:90;display:flex;gap:4px;align-items:center;background:#fff;border:1px solid #e0e0e0;border-radius:999px;padding:5px 8px 5px 12px;box-shadow:0 3px 14px rgba(0,0,0,.13);font-family:inherit;font-size:.8rem;color:#555;}'
     + '.mshn-bar .mshn-count{font-weight:700;color:#6a1b9a;font-variant-numeric:tabular-nums;margin-right:2px;cursor:pointer;}'
     + '.mshn-bar button{border:0;background:transparent;cursor:pointer;font-size:1rem;line-height:1;padding:5px;border-radius:8px;}'
@@ -119,7 +132,7 @@
 
   /* ---------- actions ---------- */
   function addNote(docY) {
-    var n = { id: uid(), aIdx: nearestIdx(docY), y: docY, text: '', ts: Date.now(), editing: true, collapsed: false };
+    var n = { id: uid(), aIdx: nearestIdx(docY), y: docY, text: '', imgs: [], ts: Date.now(), editing: true, collapsed: false };
     state.push(n); pendingFocus = n.id; persist(); render();
     if (!wide()) openDrawer();
   }
@@ -171,24 +184,39 @@
       var autosize = function () { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; stackCards(); }; // 내용 높이만큼 펼침
       ta.addEventListener('input', autosize);
       requestAnimationFrame(autosize); // DOM에 붙은 뒤 초기 높이 맞추기
+      // 이미지 붙여넣기(Ctrl+V) / 드롭
+      ta.addEventListener('paste', function (e) { handleImageDrop(e.clipboardData, n, e); });
+      ta.addEventListener('dragover', function (e) { e.preventDefault(); });
+      ta.addEventListener('drop', function (e) { handleImageDrop(e.dataTransfer, n, e); });
+      var hintP = document.createElement('div'); hintP.className = 'mshn-paste'; hintP.textContent = '💡 이미지 복사 후 Ctrl+V로 첨부 · URL은 저장하면 링크가 됨';
       var tools = document.createElement('div'); tools.className = 'mshn-tools';
       var ok = document.createElement('button'); ok.textContent = n.text ? '저장' : '추가';
       var cancel = document.createElement('button'); cancel.textContent = '취소';
-      ok.onclick = function () { var v = ta.value.trim(); if (!v) { remove(n.id); return; } n.text = v; n.editing = false; n.ts = Date.now(); persist(); render(); };
-      cancel.onclick = function () { if (!n.text) remove(n.id); else { n.editing = false; render(); } };
+      ok.onclick = function () { var v = ta.value.trim(); if (!v && !(n.imgs && n.imgs.length)) { remove(n.id); return; } n.text = v; n.editing = false; n.ts = Date.now(); persist(); render(); };
+      cancel.onclick = function () { if (!n.text && !(n.imgs && n.imgs.length)) remove(n.id); else { n.editing = false; render(); } };
       ta.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') ok.click(); if (e.key === 'Escape') cancel.click(); });
       tools.appendChild(cancel); tools.appendChild(ok);
-      card.appendChild(ta); card.appendChild(tools);
+      card.appendChild(ta);
+      if (n.imgs && n.imgs.length) card.appendChild(buildThumbs(n, true));
+      card.appendChild(hintP); card.appendChild(tools);
     } else {
       var head = document.createElement('div'); head.className = 'mshn-head';
-      var fold = document.createElement('button'); fold.className = 'mshn-fold'; fold.textContent = n.collapsed ? '▸ 펼치기' : '▾ 접기';
+      var nimg = (n.imgs && n.imgs.length) ? n.imgs.length : 0;
+      var fold = document.createElement('button'); fold.className = 'mshn-fold';
+      fold.textContent = (n.collapsed ? '▸ 펼치기' : '▾ 접기') + (n.collapsed && nimg ? ' 🖼' + nimg : '');
       fold.onclick = function () { n.collapsed = !n.collapsed; persist(); render(); };
       var grip = document.createElement('span'); grip.className = 'mshn-grip'; grip.textContent = '⠿'; grip.title = '드래그해서 위아래로 이동';
       head.appendChild(fold); head.appendChild(grip);
-      var txt = document.createElement('div'); txt.className = 'mshn-txt' + (n.collapsed ? ' collapsed' : ''); txt.textContent = n.text; txt.title = n.collapsed ? '클릭하면 펼치기' : '클릭하면 편집';
-      txt.onclick = function () { if (n.collapsed) { n.collapsed = false; persist(); render(); return; } n.editing = true; pendingFocus = n.id; render(); };
+      var txt = document.createElement('div'); txt.className = 'mshn-txt' + (n.collapsed ? ' collapsed' : ''); txt.title = n.collapsed ? '클릭하면 펼치기' : '클릭하면 편집 (링크는 클릭해서 이동)';
+      linkify(txt, n.text);   // URL만 <a>로, 나머지는 텍스트 그대로(안전)
+      txt.onclick = function (e) {
+        if (e.target.tagName === 'A') return;   // 링크 클릭은 이동만, 편집 진입 안 함
+        if (n.collapsed) { n.collapsed = false; persist(); render(); return; }
+        n.editing = true; pendingFocus = n.id; render();
+      };
       card.appendChild(head); card.appendChild(txt);
       if (!n.collapsed) {
+        if (n.imgs && n.imgs.length) card.appendChild(buildThumbs(n, false));
         var meta = document.createElement('div'); meta.className = 'mshn-meta'; meta.textContent = fmt(n.ts);
         var tools = document.createElement('div'); tools.className = 'mshn-tools';
         var ed = document.createElement('button'); ed.textContent = '✏️ 편집'; ed.onclick = function () { n.editing = true; pendingFocus = n.id; render(); };
@@ -199,6 +227,129 @@
       enableDrag(card, grip, n);
     }
     return card;
+  }
+
+  /* ---------- URL을 클릭 가능한 링크로 (innerHTML 안 씀 = XSS 안전) ---------- */
+  var URL_RE = /(https?:\/\/[^\s<>()[\]{}"']+|www\.[^\s<>()[\]{}"']+)/gi;
+  function linkify(el, text) {
+    el.textContent = '';
+    var last = 0, m;
+    URL_RE.lastIndex = 0;
+    while ((m = URL_RE.exec(text)) !== null) {
+      if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));
+      var raw = m[0];
+      var trail = '';
+      while (/[.,!?;:)\]]$/.test(raw)) { trail = raw.slice(-1) + trail; raw = raw.slice(0, -1); } // 문장부호는 링크에서 제외
+      var a = document.createElement('a');
+      a.href = /^www\./i.test(raw) ? 'https://' + raw : raw;
+      a.textContent = raw;
+      a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.title = a.href + ' (새 탭에서 열기)';
+      el.appendChild(a);
+      if (trail) el.appendChild(document.createTextNode(trail));
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
+  }
+
+  /* ---------- 이미지: 붙여넣기 → 압축 → 저장 ---------- */
+  var MAX_W = 1000, JPEG_Q = 0.72, MAX_IMG_BYTES = 700 * 1024;
+
+  function handleImageDrop(dt, n, ev) {
+    if (!dt) return;
+    var files = [];
+    var items = dt.items || [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file' && items[i].type.indexOf('image/') === 0) { var f = items[i].getAsFile(); if (f) files.push(f); }
+    }
+    if (!files.length && dt.files) {
+      for (var j = 0; j < dt.files.length; j++) if (dt.files[j].type.indexOf('image/') === 0) files.push(dt.files[j]);
+    }
+    if (!files.length) return;             // 이미지 아니면 기본 텍스트 붙여넣기 그대로
+    ev.preventDefault();
+    files.forEach(function (f) {
+      shrink(f).then(function (dataUrl) {
+        if (dataUrl.length > MAX_IMG_BYTES * 1.37) { alert('이미지가 너무 커요. 더 작은 이미지를 써주세요.'); return; }
+        if (!n.imgs) n.imgs = [];
+        n.imgs.push({ id: uid(), src: dataUrl });
+        n.ts = Date.now(); persist(); render();
+      }).catch(function () { alert('이미지를 읽지 못했어요.'); });
+    });
+  }
+
+  // 캔버스로 리사이즈 + JPEG 압축 (Gist 용량 대비)
+  function shrink(file) {
+    return new Promise(function (resolve, reject) {
+      var fr = new FileReader();
+      fr.onerror = reject;
+      fr.onload = function () {
+        var img = new Image();
+        img.onerror = reject;
+        img.onload = function () {
+          var w = img.width, h = img.height;
+          if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+          var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+          var cx = cv.getContext('2d');
+          cx.fillStyle = '#fff'; cx.fillRect(0, 0, w, h);   // 투명 PNG → 흰 배경
+          cx.drawImage(img, 0, 0, w, h);
+          var out = cv.toDataURL('image/jpeg', JPEG_Q);
+          if (out.length > MAX_IMG_BYTES * 1.37) out = cv.toDataURL('image/jpeg', 0.55); // 더 줄이기
+          resolve(out);
+        };
+        img.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  function buildThumbs(n, editable) {
+    var wrap = document.createElement('div'); wrap.className = 'mshn-imgs';
+    n.imgs.forEach(function (im, idx) {
+      var th = document.createElement('div'); th.className = 'mshn-thumb'; th.title = '클릭하면 크게 보기';
+      var img = document.createElement('img'); img.src = im.src; img.alt = '메모 이미지';
+      th.appendChild(img);
+      th.onclick = function (e) { if (e.target.classList.contains('x')) return; openLightbox(n, idx); };
+      if (editable) {
+        var x = document.createElement('span'); x.className = 'x'; x.textContent = '×'; x.title = '이미지 삭제';
+        x.onclick = function (e) { e.stopPropagation(); if (confirm('이 이미지를 삭제할까요?')) { n.imgs.splice(idx, 1); n.ts = Date.now(); persist(); render(); } };
+        th.appendChild(x);
+      }
+      wrap.appendChild(th);
+    });
+    return wrap;
+  }
+
+  /* ---------- 라이트박스(팝업 확대) ---------- */
+  var lb = null, lbKey = null;
+  function openLightbox(n, idx) {
+    closeLightbox();
+    var cur = idx;
+    lb = document.createElement('div'); lb.className = 'mshn-lightbox';
+    var img = document.createElement('img');
+    var cnt = document.createElement('div'); cnt.className = 'cnt';
+    function show(i) {
+      cur = (i + n.imgs.length) % n.imgs.length;
+      img.src = n.imgs[cur].src;
+      cnt.textContent = (cur + 1) + ' / ' + n.imgs.length + '  ·  아무 데나 클릭하면 닫힘 (Esc)';
+    }
+    img.onclick = function (e) { e.stopPropagation(); };   // 이미지 자체 클릭은 안 닫힘
+    lb.onclick = closeLightbox;                            // 배경(여백) 클릭 → 닫힘
+    lb.appendChild(img); lb.appendChild(cnt);
+    if (n.imgs.length > 1) {
+      var p = document.createElement('button'); p.className = 'nav prev'; p.textContent = '‹';
+      var nx = document.createElement('button'); nx.className = 'nav next'; nx.textContent = '›';
+      p.onclick = function (e) { e.stopPropagation(); show(cur - 1); };
+      nx.onclick = function (e) { e.stopPropagation(); show(cur + 1); };
+      lb.appendChild(p); lb.appendChild(nx);
+    }
+    show(cur);
+    document.body.appendChild(lb);
+    lbKey = function (e) { if (e.key === 'Escape') closeLightbox(); if (e.key === 'ArrowLeft') show(cur - 1); if (e.key === 'ArrowRight') show(cur + 1); };
+    document.addEventListener('keydown', lbKey);
+  }
+  function closeLightbox() {
+    if (lb) { lb.remove(); lb = null; }
+    if (lbKey) { document.removeEventListener('keydown', lbKey); lbKey = null; }
   }
 
   /* ---------- 카드 드래그(위아래 이동) ---------- */
