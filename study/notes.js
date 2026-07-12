@@ -27,9 +27,10 @@
   function load() { return loadPage(PATH); }
   function getMeta(path) { return parseInt(localStorage.getItem(META_PRE + path) || '0', 10) || 0; }
   function setMeta(path, ts) { localStorage.setItem(META_PRE + path, String(ts)); }
+  function replacer(k, v) { return (k === '__refreshGallery' || k === 'editing') ? undefined : v; } // 함수·임시상태는 저장 안 함
   function persist() {
     try {
-      localStorage.setItem(PAGE, JSON.stringify(state));
+      localStorage.setItem(PAGE, JSON.stringify(state, replacer));
       setMeta(PATH, Date.now());
     } catch (e) { alert('메모 저장 실패 — localStorage가 꽉 찼거나 차단됐어요.'); return; }
     scheduleSync();
@@ -74,6 +75,7 @@
     + '.mshn-lightbox .nav.prev{left:16px;} .mshn-lightbox .nav.next{right:16px;}'
     + '.mshn-lightbox .cnt{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);color:#fff;font-size:.8rem;opacity:.85;}'
     + '.mshn-paste{font-size:.68rem;color:#b3a25a;margin-top:4px;}'
+    + '.mshn-editimgs{margin-top:6px;padding-top:6px;border-top:1px dashed #ece0a8;}'
     + '.mshn-card .mshn-txt a{color:#1565c0;text-decoration:underline;word-break:break-all;}'
     + '.mshn-card .mshn-txt a:hover{color:#0d47a1;}'
     + '.mshn-bar{position:fixed;right:16px;bottom:16px;z-index:90;display:flex;gap:4px;align-items:center;background:#fff;border:1px solid #e0e0e0;border-radius:999px;padding:5px 8px 5px 12px;box-shadow:0 3px 14px rgba(0,0,0,.13);font-family:inherit;font-size:.8rem;color:#555;}'
@@ -202,15 +204,48 @@
       ta.addEventListener('paste', function (e) { handleImageDrop(e.clipboardData, n, e, ta, autosize); });
       ta.addEventListener('dragover', function (e) { e.preventDefault(); });
       ta.addEventListener('drop', function (e) { handleImageDrop(e.dataTransfer, n, e, ta, autosize); });
+      // 편집 중에도 첨부된 사진을 보여주고 ×로 지울 수 있게 (자리표시자만으론 뭔지 알 수 없으니)
+      var gal = document.createElement('div'); gal.className = 'mshn-editimgs';
+      function renderGallery() {
+        gal.innerHTML = '';
+        var list = n.imgs || [];
+        if (!list.length) { gal.style.display = 'none'; return; }
+        gal.style.display = 'block';
+        var cap = document.createElement('div'); cap.className = 'mshn-paste'; cap.textContent = '📎 첨부된 사진 ' + list.length + '개 — ×를 누르면 삭제돼요';
+        gal.appendChild(cap);
+        var row = document.createElement('div'); row.className = 'mshn-imgs';
+        list.forEach(function (im) {
+          var th = document.createElement('div'); th.className = 'mshn-thumb';
+          var img = document.createElement('img'); img.src = im.src; img.alt = '';
+          th.appendChild(img);
+          th.title = '클릭하면 크게 보기';
+          th.onclick = function (e) { if (e.target.classList.contains('x')) return; openLightbox(n, (n.imgs || []).indexOf(im)); };
+          var x = document.createElement('span'); x.className = 'x'; x.textContent = '×'; x.title = '이 사진 삭제';
+          x.onclick = function (e) {
+            e.stopPropagation();
+            if (!confirm('이 사진을 삭제할까요?')) return;
+            ta.value = ta.value.replace(new RegExp('\\n?\\[\\[img:' + im.id + '\\]\\]\\n?', 'g'), '\n'); // 본문 자리표시자도 제거
+            n.text = ta.value;
+            n.imgs = (n.imgs || []).filter(function (o) { return o.id !== im.id; });
+            n.ts = Date.now(); persist(); renderGallery(); autosize();
+          };
+          th.appendChild(x);
+          row.appendChild(th);
+        });
+        gal.appendChild(row);
+      }
+      renderGallery();
+      n.__refreshGallery = renderGallery;   // 붙여넣기 후 갱신용
       var hintP = document.createElement('div'); hintP.className = 'mshn-paste'; hintP.textContent = '💡 이미지 복사 후 Ctrl+V로 첨부 · URL은 저장하면 링크가 됨';
       var tools = document.createElement('div'); tools.className = 'mshn-tools';
       var ok = document.createElement('button'); ok.textContent = n.text ? '저장' : '추가';
       var cancel = document.createElement('button'); cancel.textContent = '취소';
-      ok.onclick = function () { var v = ta.value.trim(); if (!v && !(n.imgs && n.imgs.length)) { remove(n.id); return; } n.text = v; n.editing = false; n.ts = Date.now(); persist(); render(); };
-      cancel.onclick = function () { if (!n.text && !(n.imgs && n.imgs.length)) remove(n.id); else { n.editing = false; render(); } };
+      ok.onclick = function () { var v = ta.value.trim(); if (!v && !(n.imgs && n.imgs.length)) { remove(n.id); return; } n.text = v; n.editing = false; delete n.__refreshGallery; n.ts = Date.now(); persist(); render(); };
+      cancel.onclick = function () { delete n.__refreshGallery; if (!n.text && !(n.imgs && n.imgs.length)) remove(n.id); else { n.editing = false; render(); } };
       ta.addEventListener('keydown', function (e) { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') ok.click(); if (e.key === 'Escape') cancel.click(); });
       tools.appendChild(cancel); tools.appendChild(ok);
       card.appendChild(ta);
+      card.appendChild(gal);
       card.appendChild(hintP); card.appendChild(tools);
     } else {
       var head = document.createElement('div'); head.className = 'mshn-head';
@@ -330,7 +365,9 @@
           if (autosize) autosize();
           ta.focus();
         }
-        n.ts = Date.now(); persist(); render();
+        n.ts = Date.now(); persist();
+        if (n.__refreshGallery) { n.__refreshGallery(); stackCards(); }  // 편집 중이면 갤러리만 갱신(편집 유지)
+        else render();
       }).catch(function () { alert('이미지를 읽지 못했어요.'); });
     });
   }
@@ -572,7 +609,7 @@
   function pushAll() {
     if (!token()) return Promise.resolve();
     setSync('syncing');
-    var payload = JSON.stringify({ v: 2, path: PATH, updatedAt: getMeta(PATH) || Date.now(), notes: state });
+    var payload = JSON.stringify({ v: 2, path: PATH, updatedAt: getMeta(PATH) || Date.now(), notes: state }, replacer);
     if (payload.length > 950 * 1024) {
       setSync('error');
       alert('이 페이지 메모가 너무 커요(약 ' + Math.round(payload.length / 1024) + 'KB). Gist 한 파일 한도(1MB)를 넘어 동기화가 안 됩니다.\n이미지 몇 장을 지워주세요.');
