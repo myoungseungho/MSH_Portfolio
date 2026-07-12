@@ -20,7 +20,10 @@
   var META_PRE = 'mshnotes:meta:';
   var GIST_FILE = 'msh-study-notes.json';
   var TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=gist&description=MSH%20study%20notes';
-  var GAP = 18, CARDW = 270, MINSPACE = 200;
+  var GAP = 18, CARDW = 270, MINSPACE = 200, MINW = 180;
+  var WIDTH_KEY = 'mshnotes:card-width';   // 카드 너비(전 페이지 공용, 이 브라우저에 저장)
+  function userWidth() { var v = parseInt(localStorage.getItem(WIDTH_KEY) || '0', 10); return v > 0 ? v : CARDW; }
+  function setUserWidth(w) { localStorage.setItem(WIDTH_KEY, String(Math.round(w))); }
 
   /* ---------- storage ---------- */
   function loadPage(path) { try { return JSON.parse(localStorage.getItem('mshnotes:' + path) || '[]'); } catch (e) { return []; } }
@@ -58,6 +61,11 @@
     + '.mshn-card .mshn-fold:hover{color:#6b5300;text-decoration:underline;}'
     + '.mshn-card .mshn-grip{cursor:grab;color:#cbb968;font-size:1rem;line-height:1;user-select:none;-webkit-user-select:none;touch-action:none;padding:0 2px;}'
     + '.mshn-card .mshn-grip:active{cursor:grabbing;}'
+    + '.mshn-card{position:absolute;}'   /* (아래 mshn-resize의 기준) */
+    + '.mshn-resize{position:absolute;left:-3px;top:0;bottom:0;width:10px;cursor:ew-resize;touch-action:none;z-index:2;}'
+    + '.mshn-resize::before{content:"";position:absolute;left:3px;top:50%;transform:translateY(-50%);width:3px;height:34px;border-radius:3px;background:#e6d98f;opacity:0;transition:opacity .12s;}'
+    + '.mshn-card:hover .mshn-resize::before{opacity:.9;}'
+    + '.mshn-resize:hover::before{background:#f6c945;opacity:1;height:48px;}'
     + '.mshn-card .mshn-headright{display:flex;align-items:center;gap:2px;}'
     + '.mshn-card .mshn-trash{border:0;background:transparent;cursor:pointer;font-size:.8rem;line-height:1;padding:2px 3px;border-radius:5px;opacity:.45;transition:opacity .12s,background .12s;}'
     + '.mshn-card:hover .mshn-trash{opacity:.85;}'
@@ -121,7 +129,9 @@
   function metrics() {
     var cr = container.getBoundingClientRect();
     var avail = window.innerWidth - cr.right - GAP;
-    return { left: cr.right + window.scrollX + GAP, avail: avail, width: Math.min(CARDW, Math.max(120, avail - GAP)) };
+    var maxW = Math.max(MINW, avail - GAP);                    // 여백이 허용하는 최대 너비
+    var w = Math.min(userWidth(), maxW);                       // 사용자가 정한 너비(여백 초과 시 클램프)
+    return { left: cr.right + window.scrollX + GAP, avail: avail, width: Math.max(MINW, w), maxW: maxW };
   }
   function wide() { return metrics().avail >= MINSPACE; }
 
@@ -198,6 +208,9 @@
 
   function buildCard(n) {
     var card = document.createElement('div'); card.className = 'mshn-card'; card.setAttribute('data-id', n.id);
+    var grab = document.createElement('div'); grab.className = 'mshn-resize'; grab.title = '드래그해서 메모 너비 조절 (더블클릭: 여백 꽉 채우기)';
+    enableResize(grab);
+    card.appendChild(grab);
     if (n.editing) {
       var ta = document.createElement('textarea');
       ta.value = n.text; ta.placeholder = '여기에 메모… (예: 이 부분 왜 이렇게 되는지 헷갈림)';
@@ -452,6 +465,40 @@
   function closeLightbox() {
     if (lb) { lb.remove(); lb = null; }
     if (lbKey) { document.removeEventListener('keydown', lbKey); lbKey = null; }
+  }
+
+  /* ---------- 너비 조절(가로 드래그) ---------- */
+  // 카드 왼쪽 모서리를 왼쪽으로 끌면 넓어짐(여백을 채움) → 세로가 짧아진다.
+  function enableResize(handle) {
+    var startX = 0, startW = 0, resizing = false;
+    handle.addEventListener('pointerdown', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      resizing = true; startX = e.clientX; startW = metrics().width;
+      document.body.style.cursor = 'ew-resize';
+      try { handle.setPointerCapture(e.pointerId); } catch (x) {}
+    });
+    handle.addEventListener('pointermove', function (e) {
+      if (!resizing) return;
+      var m = metrics();
+      var w = Math.max(MINW, Math.min(m.maxW, startW - (e.clientX - startX)));  // 왼쪽으로 끌수록 +
+      setUserWidth(w);
+      // 즉각 반영(재렌더 없이 폭만 갱신 → 부드럽게)
+      var cards = layer.querySelectorAll('.mshn-card');
+      var left = m.left + (m.width - w) * 0;   // 오른쪽 정렬 유지: left는 고정, 폭만 변경
+      for (var i = 0; i < cards.length; i++) { cards[i].style.width = w + 'px'; cards[i].style.left = left + 'px'; }
+      stackCards();
+    });
+    function end(e) {
+      if (!resizing) return; resizing = false;
+      document.body.style.cursor = '';
+      render();   // 최종 레이아웃 재계산
+    }
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    handle.addEventListener('dblclick', function (e) {   // 더블클릭 → 여백 꽉 채우기
+      e.preventDefault(); e.stopPropagation();
+      setUserWidth(metrics().maxW); render();
+    });
   }
 
   /* ---------- 카드 드래그(위아래 이동) ---------- */
