@@ -18,7 +18,8 @@
   var TOKEN_KEY = 'mshnotes:gh-token';
   var GISTID_KEY = 'mshnotes:gist-id';
   var META_PRE = 'mshnotes:meta:';
-  var GIST_FILE = 'msh-study-notes.json';
+  var GIST_FILE = 'msh-study-notes.json';   // 마커 파일 — 새 기기의 findGist()가 이 이름으로 기존 Gist를 찾는다
+  var GIST_DESC = 'MSH study — margin notes (auto)';
   var TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=gist&description=MSH%20study%20notes';
   var GAP = 18, CARDW = 270, MINSPACE = 200, MINW = 180;
   var WIDTH_KEY = 'mshnotes:card-width';   // 카드 너비(전 페이지 공용, 이 브라우저에 저장)
@@ -603,6 +604,12 @@
     if (gistId()) return Promise.resolve(gistId());
     return api('GET', '/gists?per_page=100').then(function (list) {
       for (var i = 0; i < list.length; i++) { if (list[i].files && list[i].files[GIST_FILE]) { localStorage.setItem(GISTID_KEY, list[i].id); return list[i].id; } }
+      // 마커 없이 만들어진 Gist 구제: 설명 문구 또는 note_*.json 파일명으로 식별
+      for (var j = 0; j < list.length; j++) {
+        var g = list[j], hit = (g.description === GIST_DESC);
+        if (!hit && g.files) { for (var fn in g.files) { if (/^note_.*\.json$/.test(fn)) { hit = true; break; } } }
+        if (hit) { localStorage.setItem(GISTID_KEY, g.id); return g.id; }
+      }
       return '';
     });
   }
@@ -669,11 +676,45 @@
       return Promise.resolve();
     }
     var files = {}; files[fileNameFor(PATH)] = { content: payload };
+    files[GIST_FILE] = markerFile();
     var id = gistId();
     var p = id ? api('PATCH', '/gists/' + id, { files: files })
-               : api('POST', '/gists', { description: 'MSH study — margin notes (auto)', public: false, files: files })
+               : api('POST', '/gists', { description: GIST_DESC, public: false, files: files })
                    .then(function (g) { localStorage.setItem(GISTID_KEY, g.id); });
     return p.then(function () { setSync('ok'); }).catch(function (e) { setSync('error'); });
+  }
+
+  function markerFile() { return { content: JSON.stringify({ v: 2, marker: true }) }; }
+
+  // 전 페이지 일괄 업로드 — 동기화 최초 활성화/수동 동기화 전용.
+  // pushAll은 현재 페이지만 올리므로, 동기화를 켜기 전에 쓴 다른 페이지 메모는 이 경로로만 올라간다.
+  function pushAllPages() {
+    if (!token()) return Promise.resolve();
+    setSync('syncing');
+    var pages = localPages(), skipped = [];
+    var batches = [], cur = {}, curBytes = 0;   // 요청당 약 3MB로 나눠 PATCH (이미지 메모 다수일 때 단일 요청 폭주 방지)
+    Object.keys(pages).forEach(function (p) {
+      var payload = JSON.stringify({ v: 2, path: p, updatedAt: pages[p].updatedAt || Date.now(), notes: pages[p].notes || [] });
+      if (payload.length > 950 * 1024) { skipped.push(p); return; }
+      if (curBytes + payload.length > 3 * 1024 * 1024) { batches.push(cur); cur = {}; curBytes = 0; }
+      cur[fileNameFor(p)] = { content: payload };
+      curBytes += payload.length;
+    });
+    cur[GIST_FILE] = markerFile();
+    batches.push(cur);
+    var chain = findGist().then(function (id) {
+      return batches.reduce(function (pr, files) {
+        return pr.then(function (curId) {
+          if (curId) return api('PATCH', '/gists/' + curId, { files: files }).then(function () { return curId; });
+          return api('POST', '/gists', { description: GIST_DESC, public: false, files: files })
+            .then(function (g) { localStorage.setItem(GISTID_KEY, g.id); return g.id; });
+        });
+      }, Promise.resolve(id));
+    });
+    return chain.then(function () {
+      setSync('ok');
+      if (skipped.length) alert('일부 페이지 메모가 너무 커서(1MB 초과) 동기화에서 빠졌어요:\n' + skipped.join('\n'));
+    }).catch(function (e) { setSync('error'); });
   }
 
   // 이 페이지 메모 용량(대략) — 바에 표시
@@ -700,7 +741,7 @@
         localStorage.setItem(TOKEN_KEY, t);
         toggleSyncPop(); setSync('syncing');
         // 검증 + 최초 병합(원격 불러오고 → 로컬 밀어넣기)
-        pullAll().then(pushAll).then(function () { if (syncState !== 'error') alert('동기화 켜졌어요 ✓ 이제 저장하면 자동 백업돼요.'); else alert('토큰이 잘못됐거나 gist 권한이 없어요. 다시 확인해 주세요.'); });
+        pullAll().then(pushAllPages).then(function () { if (syncState !== 'error') alert('동기화 켜졌어요 ✓ 이제 저장하면 자동 백업돼요.'); else alert('토큰이 잘못됐거나 gist 권한이 없어요. 다시 확인해 주세요.'); });
       };
     } else {
       pop.innerHTML =
@@ -708,7 +749,7 @@
         '<p>메모를 저장하면 자동으로 비밀 Gist에 백업돼요.' + (syncState === 'error' ? ' <b>지금 오류 상태</b> — 토큰이 만료됐을 수 있어요.' : '') + '</p>' +
         '<div class="row"><button class="now">🔄 지금 동기화</button><button class="pull">⬇ 다시 불러오기</button></div>' +
         '<div class="row"><button class="off">🔌 동기화 끄기</button><button class="close">닫기</button></div>';
-      pop.querySelector('.now').onclick = function () { toggleSyncPop(); pushAll(); };
+      pop.querySelector('.now').onclick = function () { toggleSyncPop(); pushAllPages(); };
       pop.querySelector('.pull').onclick = function () { toggleSyncPop(); pullAll(); };
       pop.querySelector('.close').onclick = toggleSyncPop;
       pop.querySelector('.off').onclick = function () {
