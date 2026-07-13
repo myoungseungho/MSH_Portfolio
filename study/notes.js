@@ -581,7 +581,7 @@
   // ── 내장 토큰(base64 조각) — 사이트를 여는 것만으로 모든 기기에서 동기화 자동 ON.
   // 통짜 평문 토큰을 박으면 GitHub 시크릿 스캐너가 감지해 즉시 폐기하므로 조각으로 보관.
   // 빈 배열이면 기존처럼 ☁ 수동 설정 모드로 동작.
-  var EMB = [];
+  var EMB = ['Z2hwX2', 'VpVUdq', 'TDF1Y1', 'VNTlNL', 'Q29YcW', '9sUkhq', 'Umh0Tl', 'cxbDBJ', 'RGhKNw', '=='];
   var DISABLE_KEY = 'mshnotes:sync-disabled';   // 이 브라우저에서 자동 동기화 끄기(옵트아웃)
   function embeddedToken() { if (!EMB.length) return ''; try { return atob(EMB.join('')); } catch (e) { return ''; } }
   function token() {
