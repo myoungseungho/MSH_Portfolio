@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>콜백 지옥은 어떻게 푸나? — 상태머신과 코루틴/async-await - MSH Portfolio</title>
+    <title>async/await, 왜 필요하고 뭘 해주나 — 블로킹의 재앙부터 책갈피 조수까지 - MSH Portfolio</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
@@ -87,29 +87,106 @@
         <a href="../category-thread/" class="back-link">← 멀티스레드</a>
 
         <header class="header">
-            <h1>콜백 지옥은 어떻게 푸나? — 상태머신과 코루틴/async-await</h1>
-            <p>중첩 콜백 → 상태머신 → 그걸 자동 생성하는 코루틴. 그리고 한 스레드로 수천 요청까지</p>
+            <h1>async/await, 왜 필요하고 뭘 해주나</h1>
+            <p>블로킹은 왜 서버를 통째로 얼리나 → 코드가 찢어진다 → 상태머신 → 그걸 컴파일러가 써주는 코루틴. '책갈피 조수'로 이해하기</p>
         </header>
 
         <div class="info-box">
             <h4>30초 요약</h4>
-            <p>비동기는 보통 '콜백'으로 짜는데, 단계를 이어붙이면 중첩 피라미드 + 흩어진 상태 + 에러처리 지옥(콜백 지옥).</p>
-            <p>첫 해결 = 상태머신: '지금 몇 단계(state)'와 '모은 데이터(필드)'를 명시적으로 들고, 이벤트마다 switch로 전이 → 중첩이 평탄해짐.</p>
-            <p>코루틴/async-await = 그 상태머신을 컴파일러가 자동 생성. 코드는 위→아래 동기처럼 읽히고, 실행은 비동기(스레드 안 막음).</p>
-            <p>덤으로: await는 I/O 대기 중 스레드를 안 막고 다른 요청을 처리 → 한 스레드로 수천 요청.</p>
+            <p>서버는 늘 '남'(느린 클라, DB, 다른 서버)을 기다린다. 블로킹으로 기다리면 그 스레드가 붙잡혀 <b>서버 전체가 언다</b> — 느린 한 명이 나머지 전부를 프리즈시킴.</p>
+            <p>안 막히려면 논블로킹으로. 그 순간 대가가 생긴다: recv가 안 기다리니 "요청"과 "완료 후 처리"가 <b>서로 다른 함수로 찢어진다</b>(콜백 지옥).</p>
+            <p>상태머신 = 찢어진 조각을 '몇 단계(state) + 모은 데이터(필드)'로 명시적으로 들고 이벤트마다 switch. 콜백 지옥을 평탄하게 편다.</p>
+            <p>async/await = 그 상태머신을 <b>컴파일러가 자동 생성</b>. 위→아래 동기처럼 쓰면 알아서 멈췄다 이어짐. await = "책갈피 꽂고 자리 비웠다 정확히 돌아오는 조수", async = 그 조수를 붙이는 허가증.</p>
         </div>
 
         <div class="conversation">
-            <h2>Part 1. 콜백 지옥 — 왜 누더기가 되나</h2>
+            <h2>Part 1. 왜 비동기가 필요한가 — 블로킹은 서버를 통째로 얼린다</h2>
 
             <div class="chat">
-                <div class="q">비동기를 콜백으로 짜면 뭐가 문제야?</div>
+                <div class="q">서버가 '기다림'을 왜 그렇게까지 특별히 다뤄야 해?</div>
                 <div class="a">
-                    <p>비동기는 "이거 해줘, 다 되면 이 함수 불러줘(콜백)"로 짜. 한 단계면 괜찮은데, <span class="warning">여러 단계를 이어붙이면</span> 콜백 안에 콜백이 겹겹이 쌓여:</p>
+                    <p>서버가 하는 일의 절반은 <span class="highlight">'남'을 기다리는 것</span>이거든. 느린 클라의 패킷, DB 응답, 다른 서버의 답장. 문제는 — 이 기다림을 잘못 다루면 <span class="warning">느린 한 명이 나머지 전부를 멈춘다</span>는 거야.</p>
+                    <p>게임 서버로 그려볼게. 100명 접속, 매 틱마다 각자 입력을 받아 월드를 갱신해. 그런데 3번 클라가 지하철이라 회선이 굼떠. <span class="warning">블로킹 recv</span>(데이터 올 때까지 기다리는 버전)로 짰다면:</p>
                 </div>
             </div>
 
-            <div class="code-block">// ❌ 콜백 지옥: 단계마다 중첩 + 상태가 콜백에 흩어짐
+            <div class="diagram-box">T=0.0ms  1번 recv() → 데이터 있음 → 처리 ✅
+T=0.1ms  2번 recv() → 데이터 있음 → 처리 ✅
+T=0.2ms  3번 recv() → ❌ 데이터 아직 안 옴(지하철) → 스레드가 여기서 '멈춤'
+         │  ← 스레드가 3번에 붙잡혀 꼼짝 못 함
+         │     4~100번? 처리 못 받음. 몬스터도 안 움직임. 틱이 안 끝남.
+         │     → 접속자 100명 화면이 통째로 '얼어붙음' 🧊
+T=500ms  드디어 3번 데이터 도착 → 그제서야 풀림 (99명이 0.5초 프리즈)</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>블로킹 <span class="warning">한 번</span>이 서버 <span class="warning">전체</span>를 멈춰. 클라가 많으면 이런 굼뜬 놈은 항상 있으니, 서버는 상시 버벅여.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 손님마다 스레드를 하나씩 주면 되잖아? 3번이 멈춰도 그 스레드만 멈추게.</div>
+                <div class="a">
+                    <p>제일 원초적인 해결이고, 실제 옛날 방식이야. 근데 <span class="warning">스레드가 너무 비싸</span>. 하나당 스택 ~1MB + 커널 스케줄러 관리 대상. 1만 명 = 1만 스레드 = 스택만 10GB에, CPU가 일보다 <span class="highlight">스레드 갈아끼우는 데(컨텍스트 스위칭)</span> 더 써. 이게 그 유명한 <span class="highlight">C10K 문제</span>야.</p>
+                    <p>그래서 방향이 잡혀: <span class="key-point">스레드 수를 손님 수에서 떼어내고, 한 스레드가 여러 소켓을 상대하게</span> 만들어야 해. 그 길은 이렇게 진화했어:</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">스레드-per-연결   →   폴링(계속 물어봄)   →   OS가 알려줌(epoll/IOCP)
+   (스레드 비쌈)        (CPU 100% 태움)        (조용하면 자다가, 올 때만 깨움)</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>끝판왕이 <span class="highlight">IOCP</span>야. "이 버퍼에 recv 해서 <b>데이터가 다 담기면</b> 그때 통지해" — OS가 I/O 자체를 완료해주고, 스레드는 그동안 다른 일을 해. 이걸로 <span class="key-point">'많은 연결을 한 스레드로'</span> 문제는 풀려.</p>
+                    <p>그런데 — 논블로킹으로 가는 바로 그 순간, <span class="warning">새로운 고통</span>이 태어나. 그게 async/await이 진짜로 풀려는 문제야.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 논블로킹의 대가 — 코드가 '찢어진다'</h2>
+
+            <div class="chat">
+                <div class="q">논블로킹으로 바꾸면 뭐가 그렇게 고통스러워?</div>
+                <div class="a">
+                    <p>핵심 한 줄: <span class="key-point">블로킹 recv는 '기다려줌', 논블로킹 recv는 '안 기다림'.</span> 이 차이 하나 때문에 코드가 찢어져.</p>
+                    <p>블로킹일 땐 이렇게 위→아래 한 줄로 써도 됐어:</p>
+                </div>
+            </div>
+
+            <div class="code-block">recv(헤더);      <span class="comment">// ⏸ 데이터 올 때까지 여기서 '멈춰서 기다림'</span>
+process(헤더);   <span class="comment">// 이 줄은 데이터가 온 뒤에야 실행됨 → 안심하고 씀</span>
+
+<span class="comment">// 'recv 줄이 끝났다' = '데이터가 이미 도착했다'와 같은 뜻이라, 순서가 저절로 지켜짐</span></div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>그런데 논블로킹 recv는 <span class="warning">안 기다리고 즉시 다음 줄로</span> 넘어가:</p>
+                </div>
+            </div>
+
+            <div class="code-block">recv(헤더);      <span class="comment">// ⚡ 즉시 리턴! 데이터? 아직 안 왔음. '요청만' 넣고 끝.</span>
+process(헤더);   <span class="comment">// ❌ 헤더는 지금 텅 비어있음 — 데이터가 아직 오는 중!</span></div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>"기다림"이 사라졌어. 데이터는 <span class="highlight">나중에, 완료 통지로</span> 와 — 내가 그 줄에 서 있을 때가 아니라 한참 뒤에. 그러니 "데이터 온 뒤 할 일(process)"을 <span class="warning">다음 줄에 둘 수가 없고</span>, 완료 통지를 받는 <span class="highlight">다른 함수(핸들러)</span>로 이사시켜야 해:</p>
+                </div>
+            </div>
+
+            <div class="code-block">recv요청(헤더);              <span class="comment">// 조각 1: 지금. 요청만 넣고 스레드는 딴 일 하러 감</span>
+
+OnHeaderDone() {             <span class="comment">// 조각 2: 나중에, 완료 통지가 오면 이 함수가 불림</span>
+    process(헤더);           <span class="comment">// ← process가 여기로 '이사'옴</span>
+}</div>
+
+            <div class="chat">
+                <div class="a">
+                    <p><span class="key-point">이게 '찢어짐'이야.</span> 원래 붙어있고 싶던 recv와 process가, 기다림이 사라지는 바람에 서로 다른 함수로 갈라진 거지. 그리고 단계가 늘면(예: TCP 스트림이라 헤더 먼저 읽고 → 길이 보고 바디 읽고 → 처리) 조각이 겹겹이 쌓여 — 흔한 예로 <b>유저 로드 → 인벤 로드 → 가격 로드</b>처럼 앞 결과가 있어야 다음이 가능한 체인이면:</p>
+                </div>
+            </div>
+
+            <div class="code-block"><span class="comment">// ❌ 콜백 지옥: 단계마다 중첩 + 상태가 콜백에 흩어짐</span>
 loadUser(id, (user) => {
   loadInventory(user, (inv) => {
     loadPrices(inv, (prices) => {
@@ -119,41 +196,42 @@ loadUser(id, (user) => {
     });
   });
 });
-// + 각 단계 에러처리까지 넣으면 피라미드가 더 깊어짐(파멸의 피라미드)</div>
-
+<span class="comment">// + 각 단계 에러처리까지 넣으면 피라미드가 더 깊어짐(파멸의 피라미드)</span></div>
 
             <div class="chat">
-                <div class="q">뭐가 그렇게 나빠? 돌아가긴 하잖아.</div>
+                <div class="q">그냥 <b>if</b>로 "다 오면 처리해라" 하면 되잖아? 왜 async 같은 문법씩이나 필요해?</div>
                 <div class="a">
-                    <p>세 가지가 아파:</p>
-                    <p>1. <span class="highlight">중첩</span>: 오른쪽으로 계속 밀려 읽기 힘들어(피라미드).</p>
-                    <p>2. <span class="warning">상태가 흩어짐</span>: 'user, inv, prices'가 각 콜백의 클로저에 갇혀 — 전체 진행 상황을 한눈에 못 봐.</p>
-                    <p>3. <span class="warning">에러·흐름제어 지옥</span>: 각 단계마다 try/에러 콜백을 또 달아야 하고, 반복문·조건문과 섞이면 답이 없어져.</p>
+                    <p>날카로운 질문이고, <span class="key-point">단계가 1개면 네 말이 맞아 — if(콜백) 하나면 충분해.</span> 근데 그 if를 실제로 짜보면 걸려. <b>"if를 누가·언제 실행하냐"</b>가 문제거든:</p>
+                    <p>• 계속 확인 → <span class="warning">폴링</span>(CPU 태움, 이미 버린 방법)</p>
+                    <p>• 완료 통지 때만 실행 → 그게 바로 <span class="highlight">콜백</span>이야. 즉 "if로 하면 되잖아" = "콜백으로 하면 되잖아"랑 같은 말.</p>
+                    <p>그리고 단계가 여러 개가 되면 그 if들이 위 피라미드처럼 <span class="warning">중첩</span>되고, 지역변수는 손으로 구조체에 대피시켜야 하고, 에러 처리도 조각마다 따로. 세 가지가 아파:</p>
+                    <p>1. <span class="warning">중첩</span>: 오른쪽으로 계속 밀려 읽기 힘들어(피라미드).</p>
+                    <p>2. <span class="warning">상태가 흩어짐</span>: user·inv·prices가 각 콜백의 클로저에 갇혀 — 진행 상황을 한눈에 못 봐.</p>
+                    <p>3. <span class="warning">에러·흐름제어 지옥</span>: 단계마다 try/에러 콜백을 또 달아야 하고, 반복문·조건문과 섞이면 답이 없어져.</p>
                 </div>
             </div>
-
         </div>
 
         <div class="conversation">
-            <h2>Part 2. 첫 해결 — 상태머신이 정확히 뭔데?</h2>
+            <h2>Part 3. 첫 해결 — 상태머신이 정확히 뭔데?</h2>
 
             <div class="chat">
                 <div class="q">상태머신이 뭐야? 이름만 들으면 어려워 보여.</div>
                 <div class="a">
                     <p>별거 아냐. <span class="key-point">'지금 몇 단계인지(state)'와 '지금까지 모은 데이터(필드)'를 명시적으로 들고 다니는 것</span>이야.</p>
-                    <p>콜백 지옥에선 이 정보가 중첩 클로저에 숨어있었지? 상태머신은 그걸 <span class="highlight">밖으로 꺼내</span> — state 변수 하나 + 데이터 필드들 + "이벤트 오면 지금 state 보고 다음으로 넘기는 switch". 아래에서 단계가 전이되는 걸 직접 봐 ↓</p>
+                    <p>콜백 지옥에선 이 정보가 중첩 클로저에 숨어있었지? 상태머신은 그걸 <span class="highlight">밖으로 꺼내</span> — state 변수 하나 + 데이터 필드들 + "이벤트 오면 지금 state 보고 다음으로 넘기는 switch". 아래에서 단계가 전이되는 걸 직접 눌러봐 ↓</p>
                 </div>
             </div>
 
             <div class="cow" id="co-w-sm"><h6>🔀 상태머신이 뭔데 — 단계와 데이터를 '명시적으로'</h6><p class="sub">▶ 결과 도착을 누를 때마다 '지금 몇 단계인지(state)'가 전이되고, 모은 데이터가 필드에 쌓여. 중첩 콜백을 평탄한 switch로 펴는 게 상태머신이야.</p><div class="co-ctrl"><button class="co-btn" data-sm="step">▶ 결과 도착</button><button class="co-btn" data-sm="reset">↺ 리셋</button></div><canvas class="co-canvas" id="sm-canvas" height="250"></canvas><div class="co-cap" id="sm-cap">유저 → 인벤 → 가격 → 완료. 각 단계는 이전 결과가 있어야 다음으로 가. 지금은 시작 전.</div></div>
 
-            <div class="code-block">// 콜백 지옥을 '평탄한 상태머신'으로 편 것
+            <div class="code-block"><span class="comment">// 콜백 지옥을 '평탄한 상태머신'으로 편 것</span>
 enum State { LOAD_USER, LOAD_INV, LOAD_PRICE, DONE };
 struct Session {
     State state = LOAD_USER;
-    User user; Inventory inv; Prices prices;   // 진행 중 데이터를 '필드'에 저장
+    User user; Inventory inv; Prices prices;   <span class="comment">// 진행 중 데이터를 '필드'에 저장</span>
     void onResult(Result r) {
-        switch (state) {                        // 지금 단계 보고 다음으로
+        switch (state) {                        <span class="comment">// 지금 단계 보고 다음으로</span>
         case LOAD_USER:  user = r;   state = LOAD_INV;   loadInventory(user); break;
         case LOAD_INV:   inv = r;    state = LOAD_PRICE; loadPrices(inv);     break;
         case LOAD_PRICE: prices = r; state = DONE;       send(render(user,inv,prices)); break;
@@ -161,56 +239,85 @@ struct Session {
     }
 };</div>
 
-        </div>
-
-        <div class="conversation">
-            <h2>Part 3. 왜 상태머신이 콜백지옥을 푸나</h2>
-
             <div class="chat">
-                <div class="q">이게 왜 더 나아?</div>
+                <div class="q">이게 왜 콜백 지옥보다 나아?</div>
                 <div class="a">
-                    <p>콜백 지옥의 세 가지 아픔이 다 풀려:</p>
+                    <p>세 가지 아픔이 다 풀려:</p>
                     <p>1. <span class="key-point">중첩 → 평탄</span>: 피라미드가 한 층짜리 switch로 펴져. 오른쪽으로 안 밀려.</p>
                     <p>2. <span class="key-point">흩어진 상태 → 한곳</span>: user·inv·prices가 <span class="highlight">구조체 필드 한 곳</span>에 모여 — 진행 상황이 명시적.</p>
                     <p>3. <span class="key-point">단계가 데이터로</span>: '지금 어디까지 했나'가 state 변수 하나라, 저장·복구·디버깅이 쉬워.</p>
                     <p><span class="warning">단점</span>: 손으로 짜면 지루하고 실수 나기 쉬워(단계 하나 빠뜨리면 버그). 그래서 다음이 나와 ↓</p>
                 </div>
             </div>
-
         </div>
 
         <div class="conversation">
-            <h2>Part 4. 코루틴 / async-await — 상태머신을 자동으로</h2>
+            <h2>Part 4. async/await — 상태머신을 컴파일러가 대신 써준다</h2>
 
             <div class="chat">
                 <div class="q">그럼 코루틴/async-await가 정확히 뭘 해주는 거야?</div>
                 <div class="a">
-                    <p><span class="key-point">위의 상태머신을 컴파일러가 자동으로 생성해줘.</span> 너는 <span class="highlight">동기 코드처럼 위→아래로 선형으로</span> 쓰면 돼:</p>
+                    <p><span class="key-point">위의 상태머신을 컴파일러가 자동으로 생성해줘.</span> 너는 Part 2의 찢어진 조각들을 다시 <span class="highlight">동기 코드처럼 위→아래로</span> 쓰면 돼:</p>
                 </div>
             </div>
 
-            <div class="code-block">// ✅ 코루틴: 컴파일러가 상태머신을 자동 생성. 코드는 선형(동기처럼 읽힘)
-task<void> handle(int id) {
-    User      user   = co_await loadUser(id);        // 여기서 suspend, 응답 오면 resume
+            <div class="code-block"><span class="comment">// ✅ 코루틴: 컴파일러가 상태머신을 자동 생성. 코드는 선형(동기처럼 읽힘)</span>
+task&lt;void&gt; handle(int id) {
+    User      user   = co_await loadUser(id);        <span class="comment">// 여기서 멈췄다, 응답 오면 이 줄부터 이어짐</span>
     Inventory inv    = co_await loadInventory(user);
     Prices    prices = co_await loadPrices(inv);
     co_await send(render(user, inv, prices));
 }
-// 중첩 0, 상태는 그냥 지역변수, 에러는 평범한 try/catch.
-// 읽기는 동기처럼, 실행은 비동기(스레드 안 막음).</div>
-
+<span class="comment">// 중첩 0, 상태는 그냥 지역변수, 에러는 평범한 try/catch.</span>
+<span class="comment">// 읽기는 동기처럼, 실행은 비동기(스레드 안 막음).</span></div>
 
             <div class="chat">
                 <div class="q">근데 await 지점에서 어떻게 '멈췄다 이어서'가 돼?</div>
                 <div class="a">
                     <p>바로 <span class="key-point">그게 상태머신으로 변환됐기 때문</span>이야. 컴파일러가:</p>
-                    <p>• <span class="highlight">각 co_await 지점 = state 하나</span></p>
-                    <p>• <span class="highlight">지역변수(user, inv…) = 상태머신의 필드</span>(그래서 suspend돼도 값이 살아남아)</p>
-                    <p>• resume되면 <span class="highlight">switch(state)로 멈춘 지점으로 점프</span></p>
-                    <p>즉 <span class="key-point">async-await는 Part 2의 손코딩 상태머신을 '자동으로 써주는' 것.</span> 그래서 둘은 같은 해법이고, async-await가 읽기 좋은 버전인 거야.</p>
+                    <p>• <span class="highlight">각 await 지점 = state 하나</span></p>
+                    <p>• <span class="highlight">지역변수(user, inv…) = 상태머신의 필드</span> (그래서 멈춰도 값이 살아남아)</p>
+                    <p>• 이어질 때 <span class="highlight">switch(state)로 멈춘 지점으로 점프</span></p>
+                    <p>즉 <span class="key-point">async-await는 Part 3의 손코딩 상태머신을 '자동으로 써주는' 것.</span> 둘은 같은 해법이고, async-await가 읽기 좋은 버전인 거야.</p>
                 </div>
             </div>
 
+            <div class="chat">
+                <div class="q">기능은 알겠는데, await가 '사람'이라 치면 나한테 뭘 해주는 건지 감이 안 와.</div>
+                <div class="a">
+                    <p>await를 조수로 만들어 옆에 세워볼게. 일꾼(스레드)이 <b>co_await loadUser(id)</b> 줄에 도착하면 조수가 튀어나와 이렇게 말해:</p>
+                </div>
+            </div>
+
+            <div class="warning-box" style="background:linear-gradient(135deg,#1565c0 0%,#0d47a1 100%)">
+                <h4>🔖 await 조수의 대사</h4>
+                <p>"오, 이거 결과가 아직 없네? 시간 걸리는 일이야. 자, 내가 처리할게:</p>
+                <p>① 네가 지금까지 한 거, 손에 든 변수(user·inv 뭐든) 전부 <b>내가 적어둘게</b> (책갈피).</p>
+                <p>② 넌 여기 멍하니 붙어있지 말고 <b>딴 손님(다른 요청) 보러 가</b>.</p>
+                <p>③ 이거 다 되면, 내가 딱 이 줄로 <b>널 다시 데려와서</b>, 결과를 손에 쥐여주고 다음 줄부터 이어가게 해줄게.</p>
+                <p>④ 그러니까 넌 그냥 '여기서 기다렸다가 다음 줄' 한 것처럼 편하게 쓰면 돼. 자리 비웠다 온 건 내가 티 안 나게 처리할게."</p>
+            </div>
+
+            <div class="chat">
+                <div class="a">
+                    <p>한 줄로 줄이면 — <span class="key-point">await = "시간 걸리는 일 앞에서, 변수 챙겨서 자리 비웠다가, 다 되면 정확히 이 자리로 (변수 그대로) 돌아오게 해주는 조수".</span></p>
+                    <p>그리고 <span class="highlight">async</span>는 훨씬 시시해. 함수 앞에 붙이면 컴파일러한테 <span class="key-point">"이 함수엔 저런 조수(await)가 등장할 거야 — 멈췄다 재개하는 특수 함수로 취급해줘"</span>라는 <b>허가증/표시</b>일 뿐이야. 그래서 await를 쓰려면 함수가 async여야 하는 거고.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그럼 코드에서 await를 볼 때 뭘 떠올리면 돼?</div>
+                <div class="a">
+                    <p>이 세 가지를 동시에. 특히 세 번째는 서버 개발자에게 중요해:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr><th>await 글자를 보면</th><th>뜻</th></tr>
+                <tr><td class="good">🅐 "여기서 일꾼이 잠깐 자리 뜬다"</td><td>스레드를 놓는 지점 (그래서 효율)</td></tr>
+                <tr><td class="warn">🅑 "이 사이에 다른 일이 끼어들 수 있다"</td><td>⚠️ <b>동시성 지점</b> — await 앞뒤로 공유 상태가 바뀔 수 있음</td></tr>
+                <tr><td class="good">🅒 "그래도 다음 줄은 결과 준비된 뒤 실행"</td><td>순서는 지켜짐 (블로킹처럼 읽힘)</td></tr>
+            </table>
         </div>
 
         <div class="conversation">
@@ -220,36 +327,78 @@ task<void> handle(int id) {
                 <div class="q">await로 '멈춘다'며. 그럼 스레드도 멈춰서 노는 거 아냐?</div>
                 <div class="a">
                     <p><span class="warning">아니 — 여기가 핵심 이득이야.</span> await는 <span class="key-point">'코루틴'은 멈추지만 '스레드'는 안 멈춰.</span> I/O 응답을 기다리는 동안 스레드는 <span class="highlight">다른 요청의 코루틴을 이어서 실행</span>해.</p>
-                    <p>블로킹이었다면 그 0.9초 I/O 대기 동안 스레드가 <span class="warning">그냥 놀아(유휴 낭비)</span>. 코루틴은 그 시간에 다른 일을 채워 → <span class="key-point">한 스레드로도 수천 요청을 유휴 없이</span> 처리해. 아래에서 총 시간을 비교해봐 ↓</p>
+                    <p>블로킹이었다면 그 I/O 대기 동안 스레드가 <span class="warning">그냥 놀아(유휴 낭비)</span>. 코루틴은 그 시간에 다른 일을 채워 → <span class="key-point">한 스레드로도 수천 요청을 유휴 없이</span> 처리해. 아래에서 총 시간을 비교해봐 ↓</p>
                 </div>
             </div>
 
             <div class="cow" id="co-w-await"><h6>🧵 await는 스레드를 안 막는다 — 한 스레드로 저글링</h6><p class="sub">블로킹은 I/O 기다리는 동안 스레드가 놀아(유휴). 코루틴은 await에서 다른 요청으로 갈아타 유휴를 채워. ▶ 실행해 총 시간을 비교해봐. (예시값)</p><div class="co-ctrl"><button class="co-btn active" data-aw="block">블로킹</button><button class="co-btn" data-aw="coro">코루틴(await)</button><button class="co-btn" data-aw="run">▶ 실행</button></div><canvas class="co-canvas" id="await-canvas" height="210"></canvas><div class="co-stat"><div class="co-chip"><div class="k">3요청 총 시간</div><div class="v" id="aw-total">-</div></div><div class="co-chip"><div class="k">스레드 유휴</div><div class="v" id="aw-idle">-</div></div><div class="co-chip"><div class="k">상대 처리량</div><div class="v" id="aw-rel">-</div></div></div><div class="co-cap" id="aw-cap">요청 하나 = CPU 0.3초 + I/O 대기 0.9초. 스레드 1개로 3요청을 처리해.</div></div>
-
         </div>
 
         <div class="conversation">
-            <h2>Part 6. 우리 서버는?</h2>
+            <h2>Part 6. 어떤 함수에 async를 쓰고, 어떤 건 안 쓰나</h2>
+
+            <div class="chat">
+                <div class="q">그럼 서버 함수는 다 async여야 하는 거야? 패킷 받아서 로직 처리하는 것도 전부?</div>
+                <div class="a">
+                    <p>아니 — 여기가 "문법 아는 사람"과 "설계할 줄 아는 사람"을 가르는 지점이야. 리트머스 시험지 하나면 끝나:</p>
+                    <p><span class="key-point">"이 함수가 '남'(네트워크·디스크·DB·다른 서버·타이머)을 기다려야 하나?"</span></p>
+                    <p>• 기다린다 → <span class="highlight">async</span></p>
+                    <p>• 내 손 안의 데이터로 계산만 한다 → <span class="key-point">그냥 sync (async 아님)</span></p>
+                    <p>중요한 오해 교정: <span class="warning">받는 것(recv)은 async지만, 받은 걸 처리하는 로직은 대부분 sync야.</span> 패킷을 손에 쥔 순간부턴 기다릴 '남'이 없거든 — CPU가 계산할 뿐.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr><th>함수</th><th>async?</th><th>왜</th></tr>
+                <tr><td>소켓에서 패킷 받기 (recv)</td><td class="good">✅ async</td><td>클라를 기다림</td></tr>
+                <tr><td>클라에게 브로드캐스트 (send)</td><td class="good">✅ async</td><td>송신 버퍼 여유를 기다림(아래)</td></tr>
+                <tr><td>캐릭터 로그인 / 인벤 저장 (DB)</td><td class="good">✅ async</td><td>DB를 기다림</td></tr>
+                <tr><td>다른 서버에 메시지 보내고 결과 받기</td><td class="good">✅ async</td><td>다른 서버를 기다림</td></tr>
+                <tr><td>데미지 계산 (공격력·방어력 → 숫자)</td><td class="bad">❌ sync</td><td>손 안의 숫자로 계산만</td></tr>
+                <tr><td>이동 검증 / 충돌 검사</td><td class="bad">❌ sync</td><td>메모리의 월드로 판단</td></tr>
+                <tr><td>몬스터 AI 상태 전이 / 드랍 확률</td><td class="bad">❌ sync</td><td>메모리 계산</td></tr>
+                <tr><td>패킷 파싱 (바이트 → 구조체)</td><td class="bad">❌ sync</td><td>받는 건 async, 파싱은 sync</td></tr>
+            </table>
+
+            <div class="chat">
+                <div class="a">
+                    <p>패턴 보이지? <span class="key-point">async는 '바깥세상과 닿는 얇은 껍데기'에만 바르고, 안쪽 게임 로직은 통째로 sync 덩어리로 크게 둬.</span> 왜 다 async로 안 하냐면 — async는 <span class="warning">부르는 쪽도 async여야 해서 위로 전염(coloring)</span>되고, 상태머신 할당 비용도 있고, 기다릴 게 없는 계산엔 아무 의미도 없거든.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">받는 건 알겠는데, send는 그냥 쏘고 끝 아냐? 왜 async가 필요해?</div>
+                <div class="a">
+                    <p>send도 '남'에 매여 있어서 기다릴 수 있어. <span class="highlight">send는 선에 직접 쓰는 게 아니라 '커널 송신 버퍼'에 복사</span>하는 거야. 자리 있으면 즉시 리턴이지만, <span class="warning">버퍼가 꽉 차면 블로킹</span>돼. 언제 꽉 차냐면 — <span class="key-point">받는 쪽(느린 클라)이 안 빼갈 때(TCP 흐름 제어=백프레셔)</span>야.</p>
+                    <p>그래서 블로킹 send로 100명에게 브로드캐스트하다 3번(지하철)에서 버퍼가 꽉 차면? <span class="warning">recv 때와 똑같이 거기서 스레드가 얼어붙어</span>. 그래서 send도 async(또는 논블로킹)로 해야 "3번 버퍼 찼으면 책갈피 꽂고 4번으로" 넘어갈 수 있어. IOCP에서 <b>WSASend</b>를 OVERLAPPED로 걸고 완료를 받는 게 바로 이 이유야.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 7. 우리 서버는?</h2>
 
             <div class="chat">
                 <div class="q">우리 서버는 이걸 어떻게 해?</div>
                 <div class="a">
                     <p>우리 서버는 <span class="highlight">싱글스레드 로직 + IOCP</span>야. DB에 요청(DCM_)을 던지고 응답을 기다리는 동안 <span class="key-point">스레드를 안 막고 다른 유저 패킷을 처리</span>해 — 그리고 DB 응답이 오면 <span class="highlight">'그 유저가 어느 단계였는지' 세션 상태를 보고 이어서</span> 처리하지.</p>
-                    <p>눈치챘어? <span class="key-point">이게 바로 손으로 짠 상태머신이야.</span> '세션에 진행 상태를 저장 → 응답 이벤트에 이어서'가 Part 2 그거거든. C++20 코루틴을 쓰면 이 수동 상태머신을 <span class="highlight">async-await처럼 자동화</span>할 수 있어 — 콜백/세션 상태 관리를 선형 코드로.</p>
+                    <p>눈치챘어? <span class="key-point">이게 바로 손으로 짠 상태머신이야.</span> '세션에 진행 상태를 저장 → 응답 이벤트에 이어서'가 Part 3 그거거든. C++20 코루틴을 쓰면 이 수동 상태머신을 <span class="highlight">async-await처럼 자동화</span>할 수 있어 — 콜백/세션 상태 관리를 선형 코드로.</p>
+                    <p>그리고 여러 프로세스로 나뉜 <span class="highlight">분산 서버</span>라면 async는 옵션이 아니라 필수야. 서버끼리 끊임없이 서로의 응답을 기다리는데, 그 기다림이 매번 세계를 멈추면 안 되니까 — 옆 서버 하나가 느리다고 내 존 전체가 얼면 분산 자체가 성립을 안 하거든.</p>
                 </div>
             </div>
-
         </div>
 
         <div class="summary-box">
             <h3>핵심 정리</h3>
             <ul>
-                <li>콜백 지옥 = 비동기 단계를 콜백으로 이어붙여 생기는 중첩 피라미드 + 흩어진 상태 + 에러 지옥.</li>
-                <li>상태머신 = '몇 단계(state) + 모은 데이터(필드)'를 명시적으로 들고 이벤트마다 switch로 전이 → 중첩을 평탄화.</li>
-                <li>코루틴/async-await = 그 상태머신을 컴파일러가 자동 생성. 선형 코드로 쓰면 알아서 suspend/resume.</li>
-                <li>await 지점 = state, 지역변수 = 상태머신 필드. 그래서 멈췄다 이어서가 가능.</li>
+                <li>블로킹은 '남'을 기다리며 스레드를 붙잡아 서버 전체를 얼린다 — 느린 한 명이 나머지 전부를 프리즈시킴.</li>
+                <li>안 막으려 논블로킹으로 가면 대가가 있다: recv가 안 기다려 '요청'과 '완료 후 처리'가 다른 함수로 찢어진다(콜백 지옥).</li>
+                <li>"그냥 if로 처리" = 폴링(나쁨) 아니면 콜백. 1단계면 OK, 여러 단계면 중첩 피라미드로 폭발.</li>
+                <li>상태머신 = '몇 단계(state) + 모은 데이터(필드)'를 명시적으로 들고 이벤트마다 switch → 중첩을 평탄화.</li>
+                <li>async/await = 그 상태머신을 컴파일러가 자동 생성. await 지점=state, 지역변수=필드. "책갈피 조수"가 자리 비웠다 정확히 돌아오게 해줌.</li>
                 <li>await는 코루틴만 멈추고 스레드는 안 막아 → 그 시간에 다른 요청 처리(한 스레드 수천 요청).</li>
-                <li>우리 서버는 IOCP+싱글스레드로 '세션 상태=수동 상태머신'. C++20 코루틴으로 자동화 가능.</li>
+                <li>리트머스: "남을 기다리나?" → async는 네트워크·DB 껍데기에만, 게임 로직(계산·판정)은 sync 덩어리로. send도 백프레셔 때문에 async.</li>
+                <li>우리 서버는 IOCP+싱글스레드로 '세션 상태=수동 상태머신'. C++20 코루틴으로 자동화 가능. 분산 서버라면 async는 필수.</li>
             </ul>
         </div>
 
