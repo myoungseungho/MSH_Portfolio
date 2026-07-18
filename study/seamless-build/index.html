@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>심리스 직접 구현해보기 - 네트워크 - MSH Portfolio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fafafa; color: #333; line-height: 1.9; }
+        .container { max-width: 820px; margin: 0 auto; padding: 60px 20px; }
+        .back-link { display: inline-block; margin-bottom: 24px; color: #666; text-decoration: none; }
+        .back-link:hover { color: #111; }
+        .header { margin-bottom: 40px; }
+        .header h1 { font-size: 2rem; font-weight: 700; color: #111; margin-bottom: 12px; }
+        .header p { color: #666; font-size: 1.1rem; }
+
+        .conversation { background: white; border-radius: 16px; padding: 32px; margin: 32px 0; border: 1px solid #e0e0e0; }
+        .conversation h2 { font-size: 1.3rem; color: #1a237e; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #e8eaf6; }
+
+        .chat { margin-bottom: 20px; }
+        .q { background: #fff3e0; border-left: 4px solid #ff9800; padding: 16px 20px; margin: 16px 0; border-radius: 0 12px 12px 0; font-weight: 500; }
+        .q::before { content: "Q. "; color: #e65100; font-weight: 700; }
+        .a { padding: 8px 0 8px 20px; border-left: 4px solid #e0e0e0; margin: 12px 0; }
+        .a p { margin-bottom: 12px; }
+        .a p:last-child { margin-bottom: 0; }
+
+        .highlight { background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #1565c0; }
+        .key-point { background: #c8e6c9; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #2e7d32; }
+        .warning { background: #ffcdd2; padding: 2px 8px; border-radius: 4px; font-weight: 600; color: #c62828; }
+
+        .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.88rem; }
+        .compare-table th, .compare-table td { padding: 12px; border: 1px solid #e0e0e0; text-align: left; vertical-align: top; }
+        .compare-table th { background: #f5f5f5; font-weight: 600; }
+        .compare-table .good { background: #c8e6c9; }
+        .compare-table .bad { background: #ffcdd2; }
+        .compare-table .warn { background: #fff3e0; }
+
+        .diagram-box { background: #f5f5f5; border-radius: 12px; padding: 24px; margin: 16px 0; font-family: 'Consolas', monospace; font-size: 0.85rem; line-height: 1.8; overflow-x: auto; white-space: pre-wrap; }
+
+        .summary-box { background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%); border-radius: 16px; padding: 32px; color: white; margin: 32px 0; }
+        .summary-box h3 { font-size: 1.2rem; margin-bottom: 20px; }
+        .summary-box ul { list-style: none; }
+        .summary-box li { padding: 8px 0; padding-left: 24px; position: relative; }
+        .summary-box li::before { content: "→"; position: absolute; left: 0; color: #90caf9; }
+
+        .info-box { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); border-radius: 16px; padding: 24px 32px; color: white; margin: 24px 0; }
+        .info-box h4 { font-size: 1rem; margin-bottom: 12px; }
+        .info-box p { opacity: 0.95; margin-bottom: 8px; }
+        .info-box p:last-child { margin-bottom: 0; }
+
+        .step-list { margin: 24px 0; }
+        .step-card { display: block; background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px 24px; margin: 12px 0; text-decoration: none; color: inherit; transition: all .2s ease; }
+        .step-card:hover { transform: translateY(-3px); box-shadow: 0 10px 22px rgba(0,0,0,.08); border-color: #90caf9; }
+        .step-card.todo { opacity: .6; pointer-events: none; }
+        .step-card .st-tag { display: inline-block; font-size: .72rem; font-weight: 800; color: #fff; background: #1e88e5; border-radius: 6px; padding: 2px 8px; margin-right: 8px; }
+        .step-card .st-tag.done { background: #2e7d32; }
+        .step-card .st-tag.wip { background: #9e9e9e; }
+        .step-card .st-title { font-size: 1.05rem; font-weight: 700; color: #111; margin: 6px 0 4px; }
+        .step-card .st-desc { font-size: .85rem; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="../network/" class="back-link">← 네트워크</a>
+
+        <header class="header">
+            <h1>9개 프로세스로 하나의 월드 만들기</h1>
+            <p>심리스 직접 구현 — STEP 0부터 하나씩 삽을 뜬다. 각 스텝이 <b>왜 이 순서</b>인지, 뭐가 되고 뭐가 안 되는지의 고뇌를 남긴다. (C#)</p>
+        </header>
+
+        <div class="info-box">
+            <h4>🎯 북극성 (이 시리즈가 향하는 단 하나의 장면)</h4>
+            <p><b>A존 유저가 쏜 로켓이 E존 몬스터를 격추한다 — 로딩도, 끊김도, 이질감도 없이.</b> 그리고 그게 '9개의 프로세스가 나눠 든 하나의 월드'에서 일어난다.</p>
+            <p>이걸 한 번에 짜는 게 아니라, 매 스텝이 '안 되는 것'을 남기고 그 결핍이 다음 스텝을 부르는 방식으로 오른다.</p>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 1. 왜 한 방에 안 짜고 '스텝'으로 쪼개?</h2>
+
+            <div class="chat">
+                <div class="q">목표가 명확하잖아. 그냥 9대 분산부터 바로 짜면 안 돼?</div>
+                <div class="a">
+                    <p>그 손이 근질거리는 거 알아. 근데 두 가지가 걸려:</p>
+                    <p><b>① 비교 대상이 없다.</b> "심리스하게 경계를 넘었다"가 됐는지 깨졌는지, <span class="warning">뭘 기준으로 판단</span>하지? 매끈한 단일 월드를 한 번도 안 본 상태에서 9대가 그걸 흉내 냈는지 알 수가 없어.</p>
+                    <p><b>② 범인이 둘이 된다.</b> 9대가 하는 일 = <span class="highlight">1대가 하는 일(틱·이동·브로드캐스트·몬스터) + 분산의 어려움</span>. 한 방에 짜다 버그가 나면 "게임 로직 버그냐, 분산 버그냐"를 <span class="warning">동시에</span> 디버깅하게 돼. 지옥이야.</p>
+                </div>
+            </div>
+
+            <div class="chat">
+                <div class="q">그래서 스텝으로 쪼개면 뭐가 좋아?</div>
+                <div class="a">
+                    <p>확실한 것 위에만 쌓게 돼. STEP 0에서 <span class="key-point">게임 로직을 먼저 고정</span>해두면, STEP 1부터 새로 나는 버그는 <span class="key-point">100% 분산 버그</span> — 범인이 절반으로 줄어.</p>
+                    <p>그리고 이 시리즈의 서사 규칙: <span class="key-point">각 스텝은 반드시 '안 되는 것'을 남기고, 그 결핍이 다음 스텝의 동기가 된다.</span> "실패가 목차"인 거지.</p>
+                </div>
+            </div>
+
+            <div class="diagram-box">STEP 0  단일 서버 미니 MMO (기준선)
+   └ ❌ 스케일 아웃 불가 ──────────────┐
+STEP 1  3×3 정적 분할                  ↓  "이 한 대를 어떻게 9대로 찢나"
+   └ ❌ 경계=벽, 옆 칸 안 보임 ─────────┐
+STEP 2  게이트 도입                    ↓  "연결은 풀렸는데 데이터는?"
+   └ ❌ 여전히 옆 칸 안 보임 ───────────┐
+STEP 3  고스팅 ★첫 마법                ↓  "보이는데 때리면 무반응"
+   └ ❌ 고스트 때려도 무반응 ───────────┐
+STEP 4  심리스 이주                    ↓  "걸어 넘는데 경계 너머 전투는?"
+   └ ❌ 경계 너머 공격 불가 ────────────┐
+STEP 5  위치 투명 라우팅 ★둘째 마법     ↓  "이제 너머를 때린다"
+   └ ✅ A→E 로켓 격추 = 북극성 도달
+STEP 6  다듬기 (로켓·AoE·이주 레이스·대시보드)</div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 2. 왜 '이 순서'인가 — 결핍이 다음을 부른다</h2>
+
+            <div class="chat">
+                <div class="a">
+                    <p>순서가 취향이 아니라 <span class="key-point">'앞 스텝의 결핍이 없으면 다음 스텝의 필요가 안 생긴다'</span>는 필연이야. 각 칸의 ❌를 읽어봐 — 그게 바로 다음 칸의 존재 이유거든.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <tr><th>STEP</th><th class="good">✅ 되는 것</th><th class="bad">❌ 안 되는 것 (= 다음 스텝의 동기)</th></tr>
+                <tr><td><b>0</b> 단일 서버</td><td class="good">두 클라가 서로 보이고 몬스터 잡힘</td><td class="bad">스케일 아웃 불가 → <b>9대로 찢어야</b></td></tr>
+                <tr><td><b>1</b> 3×3 분할</td><td class="good">9대가 나눠 서비스, 부하 1/9</td><td class="bad">경계=벽(프리즈+순간이동), 옆 칸 안 보임, 재접속 → <b>연결을 숨겨야</b></td></tr>
+                <tr><td><b>2</b> 게이트</td><td class="good">연결 1개 고정, 서버 교체가 클라 몰래</td><td class="bad">여전히 옆 칸 안 보임(연결만 풀림, 데이터는 그대로) → <b>이웃을 스트리밍해야</b></td></tr>
+                <tr><td><b>3</b> 고스팅 ★</td><td class="good">경계 너머 유저·몬스터 실시간 표시 — 세계가 붙음</td><td class="bad">고스트를 때리면 무반응(읽기전용), 경계 통과가 어색 → <b>권위를 옮겨야</b></td></tr>
+                <tr><td><b>4</b> 심리스 이주</td><td class="good">로딩·끊김 없이 9칸 산책 완성</td><td class="bad">이주 폭풍, 경계 너머 전투 불가 → <b>위치를 지워야</b></td></tr>
+                <tr><td><b>5</b> 위치 투명 ★</td><td class="good"><b>A색 유저 로켓 → E색 몬스터 격추</b> (북극성)</td><td class="bad">이주 중 레이스, 광역기, 투사체 정합 → <b>다듬어야</b></td></tr>
+                <tr><td><b>6</b> 다듬기</td><td class="good">로켓 원격판정·히스테리시스·강제 킬 복구</td><td class="warn">여기까지 오면 SPICA를 구현자 눈으로 재독</td></tr>
+            </table>
+
+            <div class="chat">
+                <div class="q">STEP 2(게이트)와 STEP 3(고스팅) 순서는 왜 이래? 바꾸면 안 돼?</div>
+                <div class="a">
+                    <p>여기가 이 로드맵의 핵심 통찰이야. <span class="key-point">'연결'과 '데이터'는 다른 문제거든.</span></p>
+                    <p>STEP 2는 <span class="highlight">연결 문제</span>만 푼다 — 클라가 어느 서버에 붙느냐. STEP 3은 <span class="highlight">데이터 문제</span>를 푼다 — 옆 칸 정보가 내 화면에 오느냐. 게이트를 붙여 연결을 하나로 고정해도, <span class="warning">옆 칸은 여전히 안 보여.</span> 그래서 "연결 다 풀었는데 왜 아직도 안 보이지?"라는 <span class="warning">결핍</span>이 STEP 3(고스팅)을 부르는 거야. 순서를 바꾸면 이 '아하'가 안 생겨.</p>
+                    <p>그리고 이 분리가 심리스의 헌법 <span class="key-point">'보인다 / 안다 / 정한다'</span>로 이어져 — 렌더는 클라, 고스트는 이웃 서버, 권위는 주인 딱 하나.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>Part 3. 어떻게 '눈으로' 보나</h2>
+
+            <div class="chat">
+                <div class="q">분산이 '돌아간다'는 걸 어떻게 증명해? 게임 화면만 찍으면 되나?</div>
+                <div class="a">
+                    <p>화면만 찍으면 <span class="warning">'그냥 게임'</span>이야. <span class="key-point">서버 콘솔 9개가 같이 보여야</span> 비로소 '분산'이 증명돼. 그래서 표준 녹화 포맷은 <b>게임 화면 + 콘솔 9개를 한 프레임에</b>.</p>
+                    <p>그리고 개념 하나를 GIF 한 장으로 만드는 <b>시각 장치 3종</b>:</p>
+                    <p>1. <span class="highlight">바닥 색 = 담당 서버</span> (9칸 체커보드 + "Server A~I")</p>
+                    <p>2. <span class="highlight">머리 위 색점 = 현재 권위 서버</span> — 땅색과 <b>불일치</b>=고스팅, 점색 <b>교체</b>=이주</p>
+                    <p>3. <span class="highlight">디버그 HUD</span> (<code>Gate→C / 권위: C / 시야 내 고스트: 4</code>)</p>
+                    <p>초반(STEP 0~2)엔 콘솔 로그 + 2D 탑다운으로 충분하고, "보인다"의 마법(STEP 3)부터 Unity 얇은 렌더러를 접착해.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="conversation">
+            <h2>📚 스텝 문서</h2>
+            <div class="step-list">
+                <a href="step0/" class="step-card">
+                    <span class="st-tag done">STEP 0</span><span class="st-tag" style="background:#455a64">작성됨</span>
+                    <div class="st-title">첫 삽은 왜 '파이프 뚫기'인가</div>
+                    <div class="st-desc">왜 STEP 0부터인지, 그 안에서도 왜 틱·몬스터가 아니라 '두 프로세스가 바이트를 주고받기'가 첫 삽인지. Walking Skeleton + 핵심 C# 코드.</div>
+                </a>
+                <span class="step-card todo"><span class="st-tag wip">STEP 1</span><div class="st-title">3×3으로 찢기 — 경계라는 새 문제</div><div class="st-desc">(예정) 공간 분할, 서버 디스커버리, 경계=벽의 프리즈.</div></span>
+                <span class="step-card todo"><span class="st-tag wip">STEP 2</span><div class="st-title">게이트 — 연결을 숨긴다</div><div class="st-desc">(예정) 리버스 프록시, 연결↔세션 분리.</div></span>
+                <span class="step-card todo"><span class="st-tag wip">STEP 3</span><div class="st-title">고스팅 — 이웃이 보인다 ★</div><div class="st-desc">(예정) AOI, 권위 vs 복제본, 서버간 pub-sub.</div></span>
+                <span class="step-card todo"><span class="st-tag wip">STEP 4~6</span><div class="st-title">이주 · 위치 투명 라우팅 · 다듬기</div><div class="st-desc">(예정) 소유권 이전, 액터 모델, 로켓 원격 판정.</div></span>
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>목표(9대 심리스)를 한 방에 짜지 않는 이유: '심리스'를 잴 기준선이 없고, 버그의 범인이 게임로직/분산 둘로 겹친다.</li>
+                <li>스텝으로 쪼개면 확실한 것 위에만 쌓게 되고, STEP 1부터의 버그는 100% 분산 버그.</li>
+                <li>순서는 취향이 아니라 필연 — 각 스텝의 '안 되는 것(❌)'이 다음 스텝의 존재 이유다.</li>
+                <li>STEP 2(연결)와 3(데이터)의 순서가 핵심: '보인다/안다/정한다' 분리를 몸으로 깨닫는 지점.</li>
+                <li>증명은 '게임 화면 + 콘솔 9개 한 프레임' + 시각 장치 3종(바닥색·머리위 색점·HUD).</li>
+            </ul>
+        </div>
+    </div>
+<script src="/MSH_Portfolio/study/notes.js"></script></body>
+</html>
