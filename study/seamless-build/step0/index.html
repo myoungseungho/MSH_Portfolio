@@ -133,47 +133,56 @@
 
             <div class="diagram-box">👁️ "됐다"의 그림
 
-[클라 콘솔]  → sent  Move(P1, x=10, y=5)
-[서버 콘솔]  ← recv  Move(P1, x=10, y=5)  auth=S0
-                                          └─ 값은 항상 0이어도 필드는 지금부터 있다</div>
+[클라 콘솔]  → sent  MoveRequest(x=10, y=5)               ← playerId 안 담음
+[서버 콘솔]  ← recv  from P1 (소켓으로 앎): move(10,5)  owner=S0
+                     └ 신원은 '연결'이 증명        └ 주인은 서버가 정함(지금은 늘 S0)</div>
         </div>
 
         <div class="conversation">
-            <h2>Part 4. 핵심 코드 — 왜 이렇게 짰나</h2>
+            <h2>Part 4. 3가지 설계 — 패킷 · 프레이밍 · 역할</h2>
 
             <div class="chat">
                 <div class="q">파이프 하나 뚫는데 정할 게 뭐가 있어? 그냥 소켓 열면 되잖아.</div>
                 <div class="a">
-                    <p>메시지 하나를 보내려는 순간, <span class="warning">세 가지를 반드시 답해야 해</span>: ① 패킷이 뭘 담나 ② 한 패킷이 어디서 끝나나(프레이밍) ③ 누가 listen이고 누가 connect냐. 하나씩 코드로 보자. (C#, .NET 콘솔)</p>
+                    <p>메시지 하나를 보내려는 순간, <span class="warning">세 가지를 반드시 답해야 해</span>: ① 패킷이 뭘 담나(+누가 신원을 정하나) ② 한 패킷이 어디서 끝나나(프레이밍) ③ 누가 listen이고 누가 connect냐. 하나씩 짚자. (C#, .NET 콘솔)</p>
                 </div>
             </div>
 
-            <div class="code-label">// ① Shared/Packet.cs — 서버·클라가 함께 쓰는 최소 패킷</div>
-            <div class="code-block"><span class="kw">enum</span> PacketType : <span class="kw">byte</span> { Move = <span class="num">1</span> }
+            <div class="code-label">// ① 패킷 — 방향에 따라 둘로 갈린다 (Shared/Packets.cs)</div>
+            <div class="code-block"><span class="kw">enum</span> PacketType : <span class="kw">byte</span> { MoveRequest = <span class="num">1</span>, ActorState = <span class="num">2</span> }   <span class="comment">// 메시지 '종류 번호'</span>
 
-<span class="comment">// 최소한만. 단 AuthorityServerId(권위 서버)는 지금 넣는다 —</span>
-<span class="comment">// 값은 STEP 0에서 항상 0이지만, STEP 3~4의 '머리 위 색점'을 공짜로 만든다.</span>
-<span class="kw">readonly record struct</span> MovePacket(
-    <span class="kw">int</span> PlayerId, <span class="kw">float</span> X, <span class="kw">float</span> Y, <span class="kw">byte</span> AuthorityServerId);</div>
+<span class="comment">// 클라 → 서버 (요청): playerId 없음(서버가 소켓으로 앎), authority 없음(서버가 정함)</span>
+<span class="kw">readonly record struct</span> MoveRequest(<span class="kw">float</span> X, <span class="kw">float</span> Y);
+
+<span class="comment">// 서버 → 클라 (상태 방송): '누구'인지 '주인이 누구'인지 서버가 찍어서 내려줌</span>
+<span class="kw">readonly record struct</span> ActorState(<span class="kw">int</span> PlayerId, <span class="kw">float</span> X, <span class="kw">float</span> Y, <span class="kw">byte</span> AuthorityServerId);</div>
 
             <div class="chat">
                 <div class="a">
-                    <p><span class="key-point">왜 AuthorityServerId를 지금?</span> STEP 3에서 클라가 각 액터의 주인 색을 칠하려면 그 값이 패킷에 있어야 해. 지금 1바이트를 넣으면, 나중에 <span class="warning">패킷 포맷을 바꾸고 직렬화를 전부 고치는 대공사</span>를 안 해도 돼. '권위'를 STEP 0부터 일급 개념으로 취급하는 습관이기도 하고.</p>
+                    <p><span class="key-point">왜 playerId를 클라가 안 보내나?</span> 서버는 접속 순간 그 소켓에 playerId를 배정하고 기억해둬. 그래서 그 소켓으로 온 요청은 <b>이미 누군지 앎</b>. 만약 클라가 playerId를 담으면? 악성 클라가 <span class="warning">"나 5번이야, 저기로 이동"</span>이라고 <b>남의 캐릭을 조종</b>할 수 있어. <span class="key-point">신원은 '연결'이 증명</span>하지, 클라의 자기신고로 정하지 않는다 — 이게 서버 권위의 첫 갈림길.</p>
+                    <p><span class="key-point">AuthorityServerId는 왜 ActorState(방송)에만?</span> '주인이 누구'는 <b>서버가 정하는 값</b>이라 클라 요청엔 자리가 없어. 값은 STEP 0에서 늘 0(서버 1대)이지만 지금 넣어두면, STEP 3~4에서 클라가 <span class="highlight">머리 위 색점</span>을 그 값으로 칠할 때 <span class="warning">패킷 포맷 대공사</span>를 안 해도 돼.</p>
                 </div>
             </div>
 
-            <div class="code-label">// ② 프레이밍 — TCP는 '스트림'이라 경계를 우리가 그려야 한다</div>
-            <div class="code-block"><span class="comment">// [4바이트 길이][페이로드]. 수신자는 먼저 길이를 읽어 '어디서 끝나는지'를 안다.</span>
-<span class="kw">static async</span> Task SendFramedAsync(NetworkStream s, <span class="kw">byte</span>[] payload) {
-    <span class="kw">var</span> len = BitConverter.GetBytes(payload.Length);   <span class="comment">// 길이 접두사 4바이트</span>
-    <span class="kw">await</span> s.WriteAsync(len);
-    <span class="kw">await</span> s.WriteAsync(payload);
+            <div class="code-label">// ② 프레이밍 — [길이 4][타입 1][데이터...] (TCP는 스트림이라 경계를 우리가 그린다)</div>
+            <div class="diagram-box">"무조건 8바이트 읽어"는 MoveRequest 하나뿐일 땐 되지만, 가변 패킷(채팅·방송)이 오면 무너진다:
+
+  선 위:  [MoveReq 8B][Chat "hello" 5B]       ← TCP라 한 덩어리로 뭉쳐 도착
+  8바이트씩:  [MoveReq ✓][hello + 다음 3B ✗]  → 이후 전부 밀림 = desync 💥
+
+  길이 접두사:  [8][MoveReq][5][hello]         → 항상 정확히 한 패킷씩 ✓</div>
+            <div class="code-block"><span class="comment">// [길이 4][타입 1][데이터]. 길이=어디서 끝나나, 타입=무슨 종류냐.</span>
+<span class="kw">static async</span> Task SendFramedAsync(NetworkStream s, PacketType type, <span class="kw">byte</span>[] data) {
+    <span class="kw">int</span> len = <span class="num">1</span> + data.Length;                          <span class="comment">// 타입 1 + 데이터</span>
+    <span class="kw">await</span> s.WriteAsync(BitConverter.GetBytes(len));      <span class="comment">// [길이 4]</span>
+    <span class="kw">await</span> s.WriteAsync(<span class="kw">new</span>[] { (<span class="kw">byte</span>)type });          <span class="comment">// [타입 1]</span>
+    <span class="kw">await</span> s.WriteAsync(data);                            <span class="comment">// [데이터]</span>
 }
 
-<span class="kw">static async</span> Task&lt;<span class="kw">byte</span>[]&gt; ReadFramedAsync(NetworkStream s) {
-    <span class="kw">var</span> lenBuf = <span class="kw">await</span> ReadExactlyAsync(s, <span class="num">4</span>);          <span class="comment">// 길이 4바이트 '정확히'</span>
-    <span class="kw">int</span> len = BitConverter.ToInt32(lenBuf);
-    <span class="kw">return await</span> ReadExactlyAsync(s, len);              <span class="comment">// 그만큼 페이로드 '정확히'</span>
+<span class="kw">static async</span> Task&lt;(PacketType type, <span class="kw">byte</span>[] data)&gt; ReadFramedAsync(NetworkStream s) {
+    <span class="kw">int</span> len = BitConverter.ToInt32(<span class="kw">await</span> ReadExactlyAsync(s, <span class="num">4</span>));  <span class="comment">// 길이</span>
+    <span class="kw">var</span> body = <span class="kw">await</span> ReadExactlyAsync(s, len);                   <span class="comment">// 타입+데이터 통째로</span>
+    <span class="kw">return</span> ((PacketType)body[<span class="num">0</span>], body[<span class="num">1</span>..]);                    <span class="comment">// 첫 바이트 = 타입</span>
 }
 
 <span class="comment">// TCP는 '요청한 만큼'이 아니라 '지금 온 만큼'을 준다 → 다 모일 때까지 루프</span>
@@ -189,43 +198,46 @@
 
             <div class="chat">
                 <div class="a">
-                    <p><span class="key-point">왜 길이 접두사?</span> TCP는 메시지 경계가 없는 바이트 스트림이라, <code>[패킷A][패킷B]</code>를 보내도 <span class="warning">뭉치거나 쪼개져</span> 도착해. "앞 4바이트 = 이 패킷 N바이트"를 붙이면 수신자가 <b>정확히 한 패킷</b>을 떼어낼 수 있어. <code>ReadExactlyAsync</code>의 <code>while</code>이 바로 '찔끔찔끔 오는 걸 다 모으는' 루프고. (.NET 7+엔 <code>Stream.ReadExactlyAsync</code>가 내장이지만, 원리를 보려 손으로 폈다.)</p>
+                    <p><span class="key-point">길이</span>는 "어디서 끝나나"(경계), <span class="key-point">타입</span>은 "무슨 종류냐"(해석법). 받는 쪽은 길이로 한 덩어리를 떼고 → 타입으로 <code>switch</code> 갈래를 나눠. 이 패킷 하나만 보면 과하지만, <b>가변 패킷이 오는 순간 필수</b>라 지금 깐다. (.NET 7+엔 <code>Stream.ReadExactlyAsync</code> 내장이지만 원리를 보려 손으로 폈다.)</p>
                 </div>
             </div>
 
-            <div class="code-label">// ③ Server — listen하고, 접속마다 'async 수신 루프'</div>
-            <div class="code-block"><span class="kw">var</span> listener = <span class="kw">new</span> TcpListener(IPAddress.Loopback, <span class="num">9001</span>);
+            <div class="code-label">// ③ 역할 — 서버 listen / 클라 connect. (프레이밍 함수는 Connection 클래스로 감싸 방향-무관)</div>
+            <div class="code-block"><span class="comment">// ── Server: listen하고, 접속마다 async 수신 루프 ──</span>
+<span class="kw">var</span> listener = <span class="kw">new</span> TcpListener(IPAddress.Loopback, <span class="num">9001</span>);   <span class="comment">// 클라용 포트</span>
 listener.Start();
-Console.WriteLine(<span class="str">"[S0] listen :9001"</span>);
-
+<span class="kw">int</span> nextId = <span class="num">1</span>;
 <span class="kw">while</span> (<span class="kw">true</span>) {
-    <span class="kw">var</span> client = <span class="kw">await</span> listener.AcceptTcpClientAsync();   <span class="comment">// 접속을 async로 기다림</span>
-    _ = HandleClientAsync(client);   <span class="comment">// ★ await 안 함 → 이 클라를 기다리며 다음 accept를 막지 않음</span>
+    <span class="kw">var</span> client = <span class="kw">await</span> listener.AcceptTcpClientAsync();
+    <span class="kw">int</span> playerId = nextId++;              <span class="comment">// ★ 접속 순간 '서버가' 신원 배정 (클라 아님)</span>
+    _ = HandleClientAsync(client, playerId);   <span class="comment">// ★ await 안 함 → 다음 accept를 안 막음</span>
 }
 
-<span class="kw">static async</span> Task HandleClientAsync(TcpClient client) {
+<span class="kw">static async</span> Task HandleClientAsync(TcpClient client, <span class="kw">int</span> playerId) {
     <span class="kw">using var</span> stream = client.GetStream();
     <span class="kw">while</span> (<span class="kw">true</span>) {
-        <span class="kw">var</span> payload = <span class="kw">await</span> ReadFramedAsync(stream);    <span class="comment">// 한 패킷 통째로</span>
-        <span class="kw">var</span> p = Packet.DecodeMove(payload);
-        Console.WriteLine($<span class="str">"[S0] ← recv Move(P{p.PlayerId}, {p.X}, {p.Y}) auth=S{p.AuthorityServerId}"</span>);
+        <span class="kw">var</span> (type, data) = <span class="kw">await</span> ReadFramedAsync(stream);
+        <span class="kw">if</span> (type == PacketType.MoveRequest) {
+            <span class="kw">var</span> m = Codec.DecodeMove(data);
+            <span class="comment">// 신원은 연결이 증명 → playerId는 서버가 앎. 주인도 서버(S0).</span>
+            Console.WriteLine($<span class="str">"[S0] ← from P{playerId}: move({m.X},{m.Y}) owner=S0"</span>);
+        }
     }
-}</div>
+}
+
+<span class="comment">// ── Client: connect하고 MoveRequest 하나 보냄 ──</span>
+<span class="kw">using var</span> conn = <span class="kw">new</span> TcpClient();
+<span class="kw">await</span> conn.ConnectAsync(IPAddress.Loopback, <span class="num">9001</span>);
+<span class="kw">var</span> data = Codec.EncodeMove(<span class="kw">new</span> MoveRequest(<span class="num">10</span>, <span class="num">5</span>));
+<span class="kw">await</span> SendFramedAsync(conn.GetStream(), PacketType.MoveRequest, data);  <span class="comment">// playerId 안 담음</span>
+Console.WriteLine(<span class="str">"[C] → sent MoveRequest(10, 5)"</span>);</div>
 
             <div class="chat">
                 <div class="a">
-                    <p><span class="key-point">왜 <code>_ = HandleClientAsync(client)</code>로 await를 안 걸까?</span> 여기서 <code>await</code>를 걸면 그 클라의 수신 루프가 끝날 때까지(=영원히) 다음 <code>accept</code>를 못 해. 그래서 <span class="warning">'막지 않고' 던져두고</span> 곧장 다음 접속을 받아. <span class="highlight">한 스레드가 여러 클라를 저글링</span>하는 그 구조야 — 느린 클라 하나가 전체를 얼리지 않게.</p>
+                    <p><span class="key-point">왜 <code>_ = HandleClientAsync(...)</code>로 await를 안 걸까?</span> await를 걸면 그 클라 수신 루프가 끝날 때까지(=영원히) 다음 <code>accept</code>를 못 해. '막지 않고' 던져두고 곧장 다음 접속을 받아 — <span class="highlight">한 스레드로 여러 클라를 저글링</span>.</p>
+                    <p><span class="key-point">역할은 지금 왜 이렇게 잡나?</span> 첫 삽엔 서버 listen·클라 connect만 쓰지만, STEP 1에선 <b>서버가 둘 다</b> 해(이웃에게 listen도, connect도). 그래서 프레이밍을 <span class="highlight">방향-무관 Connection 추상</span>으로 감싸두면 피어 연결을 갈아엎지 않고 덧붙여. 그때 중복 연결(A→B와 B→A)을 막으려 <span class="warning">"번호 작은 서버가 큰 서버에게만 connect"</span> 같은 규칙을 둔다.</p>
                 </div>
             </div>
-
-            <div class="code-label">// ④ Client — connect하고 Move 하나 보냄</div>
-            <div class="code-block"><span class="kw">using var</span> client = <span class="kw">new</span> TcpClient();
-<span class="kw">await</span> client.ConnectAsync(IPAddress.Loopback, <span class="num">9001</span>);
-<span class="kw">using var</span> stream = client.GetStream();
-
-<span class="kw">var</span> p = <span class="kw">new</span> MovePacket(PlayerId: <span class="num">1</span>, X: <span class="num">10</span>, Y: <span class="num">5</span>, AuthorityServerId: <span class="num">0</span>);
-<span class="kw">await</span> SendFramedAsync(stream, Packet.EncodeMove(p));
-Console.WriteLine(<span class="str">"[C] → sent Move(P1, 10, 5)"</span>);</div>
         </div>
 
         <div class="conversation">
@@ -247,8 +259,9 @@ Console.WriteLine(<span class="str">"[C] → sent Move(P1, 10, 5)"</span>);</div
             <ul>
                 <li>9대가 아니라 1대부터: ① 심리스를 잴 기준선 ② 어차피 필요한 토대 ③ 게임로직을 고정해 이후 버그를 '분산 버그'로 좁힘.</li>
                 <li>STEP 0 안의 첫 삽은 틱·몬스터가 아니라 '두 프로세스가 바이트를 주고받기' — 나머지 전부가 그 위에 선다(Walking Skeleton).</li>
-                <li>메시지 하나를 보내려면 세 가지를 답해야 한다: 패킷 내용 / 프레이밍(길이 접두사) / 역할(listen·connect).</li>
-                <li>AuthorityServerId는 값이 0이어도 지금 넣는다 — STEP 3~4 색점을 공짜로 만든다.</li>
+                <li>메시지 하나를 보내려면 세 가지를 답해야 한다: ① 패킷(방향 따라 MoveRequest/ActorState) ② 프레이밍 [길이][타입][데이터] ③ 역할(listen·connect).</li>
+                <li>신원은 '연결'이 증명한다 — playerId는 클라가 안 보내고 서버가 소켓으로 안다(서버 권위). authority도 서버가 정한다.</li>
+                <li>프레이밍의 길이=경계, 타입=종류. 가변 패킷이 오는 순간 필수(desync 방지). AuthorityServerId는 값이 0이어도 지금 넣어 STEP 3 색점을 공짜로.</li>
                 <li>accept 루프는 클라 핸들러를 await하지 않는다 — 한 스레드로 여러 클라를 저글링하기 위해.</li>
                 <li>첫 삽의 결핍(둘이 서로 못 봄 / 세상이 안 흐름)이 다음 삽(브로드캐스트 / 틱)을 부른다.</li>
             </ul>
