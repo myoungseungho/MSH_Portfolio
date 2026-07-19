@@ -1,0 +1,121 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Q12. lock-free 큐 도입, 말릴까 밀어줄까 — 게임 서버 실전 면접 100문 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#f6f7f9; color:#2b2f36; line-height:1.9; }
+.container { max-width:820px; margin:0 auto; padding:56px 20px 80px; }
+.back-link { display:inline-block; margin-bottom:22px; color:#667085; text-decoration:none; font-size:.92rem; }
+.back-link:hover { color:#111; }
+.cat-badge { display:inline-block; background:#e8eaf6; color:#3949ab; font-weight:700; font-size:.78rem; padding:4px 12px; border-radius:999px; margin-bottom:14px; letter-spacing:.02em; }
+.header h1 { font-size:1.6rem; font-weight:800; color:#171a1f; line-height:1.45; margin-bottom:8px; }
+.header h1 .qn { color:#3949ab; }
+.section-tag { display:inline-block; font-size:.72rem; font-weight:800; letter-spacing:.09em; color:#8a90a0; border:1px solid #dfe3ea; border-radius:6px; padding:3px 10px; margin:38px 0 14px; text-transform:uppercase; }
+.answer-block p, .fa p { margin:0 0 15px; font-size:1.02rem; }
+.answer-block h3, .fa h3 { font-size:1.06rem; color:#2c3550; margin:26px 0 8px; }
+strong { color:#171a1f; }
+.hl { background:#e3f0ff; color:#1565c0; padding:1px 7px; border-radius:5px; font-weight:600; }
+.key { background:#d9f2e3; color:#1e8f52; padding:1px 7px; border-radius:5px; font-weight:600; }
+.warn { background:#ffe0e0; color:#c62828; padding:1px 7px; border-radius:5px; font-weight:600; }
+code { background:#eef1f6; color:#c7254e; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:.86em; }
+.naive { background:#fff8ec; border-left:4px solid #f0a52a; padding:14px 18px; border-radius:0 12px 12px 0; margin:16px 0; color:#6b5220; }
+.naive b { color:#8a5a00; }
+.code-block { background:#263238; border-radius:8px; padding:14px 18px; margin:14px 0; font-family:'Consolas','Monaco',monospace; font-size:.84rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.principle { background:linear-gradient(135deg,#1f8a54 0%,#0f6b3c 100%); color:#fff; border-radius:14px; padding:18px 22px; margin:24px 0; font-size:1.03rem; }
+.principle .lbl { display:block; font-size:.74rem; opacity:.82; font-weight:700; letter-spacing:.07em; margin-bottom:6px; }
+.followup { margin:30px 0; }
+.fq { background:#fff2ee; border-left:4px solid #ef5b3c; padding:16px 20px; border-radius:0 12px 12px 0; font-weight:600; color:#9a3212; font-size:1.03rem; }
+.fq .who { display:block; font-size:.72rem; font-weight:800; letter-spacing:.06em; color:#ef5b3c; margin-bottom:6px; }
+.fa { padding:16px 4px 4px 22px; border-left:3px solid #eef0f4; margin:14px 0 0; }
+.tbl { width:100%; border-collapse:collapse; margin:18px 0; font-size:.92rem; }
+.tbl th, .tbl td { padding:10px 12px; border:1px solid #e4e7ee; text-align:left; vertical-align:top; }
+.tbl th { background:#f1f3f8; font-weight:700; }
+.tbl caption { text-align:left; font-weight:800; color:#3949ab; margin-bottom:8px; font-size:.95rem; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:46px; }
+.booknav a { flex:1; background:#fff; border:1px solid #e4e7ee; border-radius:12px; padding:14px 18px; color:#3949ab; text-decoration:none; font-weight:600; font-size:.92rem; }
+.booknav a:hover { border-color:#3949ab; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#99a; font-weight:400; margin-bottom:3px; }
+@media(max-width:600px){ .container{padding:40px 16px 60px;} .header h1{font-size:1.35rem;} }
+</style></head><body><div class="container">
+<a href="index.html" class="back-link">← 게임 서버 실전 면접 100문</a>
+<header class="header">
+<div class="cat-badge">B · 동시성·락·경합</div>
+<h1><span class="qn">Q12.</span> 후배가 성능 때문에 lock-free 큐를 도입하겠다고 한다. 말릴래 밀어줄래? 근거는?</h1>
+</header>
+
+<div class="section-tag">1차 답변</div>
+<div class="answer-block">
+<h3>0. 저는 "말린다/민다"를 바로 정하지 않고 두 가지를 먼저 묻습니다</h3>
+<p>이 질문의 함정은 <strong>답을 예/아니오로 몰아간다</strong>는 겁니다. 저는 여기서 바로 편을 들지 않고, 후배에게 두 가지를 묻습니다. <strong>"그 큐가 진짜 병목이라는 <span class="hl">측정치</span>가 있어? 그리고 그거 <span class="hl">SPSC야, MPMC야?</span>"</strong></p>
+<p>용어부터 풀면, <strong>lock-free 큐</strong>는 "락(자물쇠) 없이, 여러 스레드가 동시에 넣고 빼도 안 깨지게 만든 큐"입니다. 락을 안 쓰니 빠를 것 같죠. 그리고 <strong>SPSC</strong>는 넣는 스레드 1 · 빼는 스레드 1(single producer single consumer), <strong>MPMC</strong>는 넣는 쪽도 빼는 쪽도 여럿(multi producer multi consumer)입니다. 이 두 질문의 답에 따라 저는 <span class="key">같은 lock-free라도 밀어주기도, 결사반대하기도</span> 합니다. "lock-free 좋아요/나빠요"로 답하는 사람은 이 갈림길을 모르는 겁니다.</p>
+
+<h3>1. 순진한 전제 — "락이 느리니까 lock-free면 빨라진다"</h3>
+<div class="naive"><b>후배의 논리:</b> 락은 느리다(커널 진입, 대기). 그러니 락을 없앤 lock-free 큐로 바꾸면 성능이 오른다. 요즘 다들 쓴다더라.</div>
+<p>여기서 저는 첫 번째 오해를 짚습니다. <span class="warn">락은 "경합이 없으면" 거의 공짜입니다.</span> 아무도 안 다투는 락을 잡았다 푸는 건 수 나노초예요. 락이 느려지는 건 <strong>여러 스레드가 같은 락을 두고 실제로 싸울 때</strong>뿐입니다. 그러니 "락이 느리다"가 아니라 <strong>"우리 큐에 실제 경합이 있느냐"</strong>가 먼저 증명돼야 합니다. 대부분의 경우, 증명해보면 없습니다.</p>
+
+<h3>2. 어디서 터지나 — lock-free의 진짜 비용은 성능이 아니라 '정확성'</h3>
+<p>lock-free 큐를 직접 짜면, 성능을 얻기 전에 <strong>세 개의 지뢰</strong>를 밟습니다.</p>
+<div class="code-block">// lock-free pop — 겉보기엔 단순해 보이지만
+Node* pop() {
+    Node* head = head_.load();
+    while(!head_.compare_exchange_weak(head, head-&gt;next))
+        ; // head가 바뀌었으면 다시 시도(CAS 재시도)
+    return head;   // ← 이 head를 free() 하는 순간,
+}                  //    다른 스레드가 아직 head-&gt;next를 읽는 중이면 use-after-free</div>
+<p><strong>(1) 메모리 회수(reclamation).</strong> 위 코드처럼 노드를 빼서 free하는 순간, 다른 스레드가 그 노드를 아직 읽고 있으면 <span class="warn">이미 반납한 메모리를 읽는(use-after-free)</span> 크래시가 납니다. 락이 있으면 자동으로 막히던 게, lock-free에선 hazard pointer나 epoch 같은 별도 장치를 직접 만들어야 풀립니다.</p>
+<p><strong>(2) ABA 문제.</strong> 값이 A→B→A로 돌아오면 CAS는 "안 바뀌었네" 하고 속습니다. 그 사이 실제론 큐가 통째로 뒤집혔을 수 있고요.</p>
+<p><strong>(3) 메모리 순서(memory ordering).</strong> CPU와 컴파일러가 명령 순서를 바꿔서, acquire/release를 한 군데만 틀려도 <span class="warn">평소엔 멀쩡하다 라이브에서 백만분의 일 확률로</span> 깨집니다. 그리고 이 버그는 <strong>로컬에서 재현이 안 됩니다.</strong> 후배가 짠 lock-free 큐는 열에 아홉, 이 셋 중 하나가 미묘하게 틀려 있습니다.</p>
+
+<h3>3. 개선의 순서 — lock-free는 최후의 카드다</h3>
+<p>큐가 정말 병목이라고 <strong>측정으로 증명됐다</strong> 쳐도, 저는 lock-free를 첫 수로 두지 않습니다. 더 싸고 안전한 카드가 먼저입니다. <span class="hl">(1) 임계구역을 줄인다</span> — 락 안에서 무거운 일을 빼면 경합이 확 준다. <span class="hl">(2) 큐를 샤딩한다</span> — 큐 하나에 몰리는 걸 여러 개로 쪼개면 경합 자체가 사라진다. <span class="hl">(3) 구조를 바꾼다</span> — 애초에 그 데이터를 한 스레드만 만지게 소유권을 정리한다. 이 셋으로 대부분 해결됩니다.</p>
+
+<h3>4. 그런데 — 밀어줘야 하는 lock-free도 있다 (SPSC)</h3>
+<p>여기서 균형을 잡습니다. lock-free를 무조건 악마화하면 그것도 틀린 겁니다. <span class="key">SPSC 링버퍼</span>는 예외예요. 넣는 스레드 하나, 빼는 스레드 하나뿐이면, 원자적 인덱스 두 개(쓰기 위치·읽기 위치)만으로 <strong>단순하고, 검증돼 있고, ABA·회수 문제도 거의 없이</strong> lock-free가 됩니다. 제 배경인 IOCP 서버에서 <strong>네트워크 수신 스레드 → 로직 스레드</strong>로 패킷을 넘기는 통로가 딱 이 모양이라, 저는 여기엔 SPSC lock-free를 <span class="key">기꺼이 밀어줍니다.</span> 반대로 후배가 만들려는 게 아무나 넣고 아무나 빼는 <strong>범용 MPMC 큐를 직접 구현</strong>하는 거라면, 저는 말립니다 — 정 필요하면 moodycamel 같은 <strong>검증된 라이브러리</strong>를 쓰지, 손으로 짜지 않습니다.</p>
+
+<div class="principle"><span class="lbl">🧭 이 문제의 원칙</span><strong>"lock-free는 '락이 병목임을 측정으로 증명'하고 '형태가 SPSC처럼 안전'할 때만 밀어준다."</strong> 락이 느린 게 아니라 경합이 느린 것이다. 직접 짠 범용 lock-free는 얻는 성능보다 use-after-free·ABA·메모리 순서라는 재현 안 되는 디버깅 지옥이 훨씬 크다. 말리는 이유도, 미는 이유도 '멋'이 아니라 '측정과 형태'다.</div>
+
+<table class="tbl"><caption>상황별 결론</caption>
+<tr><th>후배의 상황</th><th>선택</th><th>이유</th></tr>
+<tr><td>측정 없이 "느낌상 빠를 것 같아서"</td><td class="warn">말린다</td><td>병목 증명이 먼저. 락은 경합 없으면 공짜</td></tr>
+<tr><td>SPSC (수신→로직 통로 등)</td><td class="key">밀어준다</td><td>인덱스 2개로 단순·안전, 검증된 패턴</td></tr>
+<tr><td>범용 MPMC를 직접 구현</td><td class="warn">말린다</td><td>회수·ABA·순서 지뢰. 재현 안 되는 버그</td></tr>
+<tr><td>MPMC가 정말 필요</td><td>검증된 라이브러리로 유도</td><td>손으로 짜는 것보다 압도적으로 안전</td></tr>
+<tr><td>측정해보니 진짜 병목이었다</td><td>먼저 축소·샤딩·구조 변경</td><td>lock-free는 그 뒤의 최후 카드</td></tr>
+</table>
+</div>
+
+<div class="section-tag">면접관 꼬리질문</div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "측정해봤어요. 진짜 그 락이 병목 맞아요. 프로파일러에 딱 찍혀요. 그래도 말릴 거예요?"</div>
+<div class="fa">
+<p>측정이 있으면 얘기가 완전히 달라집니다. 제 도피로였던 "측정부터 해"를 막으셨으니 정면으로 갑니다. 다만 병목이 확인됐다고 곧장 lock-free로 뛰지는 않고, <strong>더 싼 수부터 순서대로</strong> 태웁니다.</p>
+<p><strong>(1) 임계구역 축소.</strong> 락을 잡은 채로 직렬화·복사·I/O를 하고 있진 않은지 봅니다. 락 안을 "포인터 하나 넣고 빼는" 몇 줄로 줄이면 경합 시간이 급감해, lock-free 없이도 병목이 풀리는 경우가 많습니다.</p>
+<p><strong>(2) 경합 자체를 쪼갠다(샤딩).</strong> 큐 하나에 여러 스레드가 몰려 싸우는 거면, 큐를 여러 개로 나눠 스레드별·존별로 분산합니다. 경합이 사라지면 평범한 락이 다시 공짜가 됩니다.</p>
+<p><strong>(3) SPSC로 분해 가능한지.</strong> 그 MPMC 경합을 여러 개의 <span class="hl">1:1 통로</span>로 재설계할 수 있으면, 안전한 SPSC lock-free로 자연스럽게 내려옵니다.</p>
+<p>이 셋으로도 안 되고, 형태상 꼭 MPMC 무락 큐여야 한다면 — 그때는 <span class="key">직접 구현이 아니라 검증된 라이브러리</span>로 밀어줍니다. 정리하면 "측정됐으니 무락"이 아니라 <strong>"측정됐으니, 가장 싸고 안전한 수부터 태우다 정말 필요하면 검증된 무락"</strong>입니다. 핵심은 <span class="warn">직접 짠 범용 lock-free만은 끝까지 피한다</span>는 거예요.</p>
+</div></div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "우리 서버는 싱글스레드 액터 모델이에요. 그런데 후배가 '스레드 간 lock-free 큐'를 넣자고 합니다. 어때요?"</div>
+<div class="fa">
+<p>싱글스레드 액터 모델이라는 전제가 이 논의의 절반을 바꿉니다. 저는 먼저 후배에게 <strong>"네가 말하는 '스레드 간'이 정확히 어느 경계야?"</strong>를 특정하게 합니다.</p>
+<p>액터 모델에선 <span class="hl">로직이 한 스레드에서 순차 처리</span>되니, 로직 내부엔 애초에 경합이 없습니다. 락도, lock-free 큐도 들어갈 자리가 없어요. 그러니 후배가 무락 큐를 넣겠다는 곳은 로직 내부일 리가 없고, <strong>스레드 경계</strong>일 수밖에 없습니다. 실제로 그 경계는 대개 <span class="hl">네트워크 수신(IOCP 워커) → 로직 액터</span>로 패킷을 넘기는 곳, 혹은 <strong>로직 → DB/로그 워커</strong>로 작업을 넘기는 곳입니다.</p>
+<p>그런데 그 경계는 대부분 <strong>SPSC 또는 MPSC</strong>(여러 워커가 넣고 로직 하나가 뺌)입니다. 즉 후배가 원하는 게 로직으로 들어가는 입구 큐라면, 그건 <span class="key">밀어줄 만한 안전한 형태</span>예요. 반대로 후배가 "액터 내부 자료구조를 무락으로 바꾸자"고 하는 거라면, <span class="warn">그건 존재하지 않는 문제를 푸는 것</span>이라 말립니다 — 싱글스레드라 경합이 원천적으로 없거든요. 결론은 <strong>"경계를 특정하라. 경계면 SPSC/MPSC라 밀어주고, 내부면 풀 문제가 없어 말린다."</strong></p>
+</div></div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "lock-free면 데드락이 원천적으로 없다던데. 그것만으로도 큰 장점 아니에요?"</div>
+<div class="fa">
+<p>맞는 말인데, <strong>"데드락이 없다"가 "안전하다"는 뜻은 아닙니다.</strong> 여기서 용어를 정확히 나눠야 합니다.</p>
+<p>lock-free가 보장하는 건 <span class="hl">진행 보장(progress guarantee)</span> — "적어도 한 스레드는 항상 앞으로 나아간다, 그래서 전원이 서로를 기다리며 멈추는 데드락은 없다"입니다. 좋은 성질이죠. 하지만 이건 <strong>정확성이나 성능 보장이 아닙니다.</strong> lock-free에도 <span class="warn">라이브락</span>(서로 양보만 하다 CAS 재시도로 계속 헛돎), <span class="warn">기아</span>(특정 스레드만 계속 밀림), 그리고 아까 말한 <span class="warn">use-after-free·ABA</span>는 그대로 남습니다.</p>
+<p>오히려 저는 이렇게 봅니다. <strong>데드락은 잡기 쉬운 편입니다</strong> — 서버가 멈추면 스택을 떠서 "누가 뭘 기다리는지" 대개 보입니다(Q11에서 다루는 주제죠). 반면 lock-free의 <span class="warn">메모리 회수 버그는 크래시가 사건 현장에서 한참 떨어진 곳에서 터져서</span>, 데드락보다 훨씬 잡기 어렵습니다. 그래서 "데드락 없음"을 이유로 lock-free를 미는 건, <span class="key">잡기 쉬운 문제를 피하려고 잡기 어려운 문제를 사는 거래</span>예요. 저라면 그 거래는 형태가 SPSC처럼 안전할 때만, 그것도 측정을 근거로만 합니다.</p>
+</div></div>
+
+<table class="tbl"><caption>면접관이 여기서 보는 것</caption>
+<tr><th>꼬리질문</th><th>약한 답</th><th>이 답이 보여주는 것</th></tr>
+<tr><td>"진짜 병목 맞아요, 그래도?"</td><td>"그럼 lock-free 쓰죠"</td><td>측정돼도 <strong>축소·샤딩·SPSC 분해→검증 라이브러리</strong> 순. 직접 구현은 끝까지 회피</td></tr>
+<tr><td>"싱글스레드 액터인데 넣자네요"</td><td>"좋은 생각이네요"</td><td><strong>경계를 특정</strong> — 내부는 경합 자체가 없고, 입구(SPSC/MPSC)만 밀어줄 형태</td></tr>
+<tr><td>"데드락이 없잖아요"</td><td>"네 그게 최고 장점"</td><td><strong>진행 보장 ≠ 정확성</strong> — 라이브락·회수 버그는 남고, 그건 데드락보다 잡기 어렵다</td></tr>
+</table>
+
+<nav class="booknav"><a href="q11.html"><span class="lbl">← 이전</span>Q11. 라이브 데드락 재현</a><a class="nx" href="q13.html"><span class="lbl">다음 →</span>Q13. 액터모델 vs 존 스레드</a></nav>
+</div><script src="/MSH_Portfolio/study/notes.js"></script></body></html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Q65. 라이브 메모리 누수 — 게임 서버 실전 면접 100문 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#f6f7f9; color:#2b2f36; line-height:1.9; }
+.container { max-width:820px; margin:0 auto; padding:56px 20px 80px; }
+.back-link { display:inline-block; margin-bottom:22px; color:#667085; text-decoration:none; font-size:.92rem; }
+.back-link:hover { color:#111; }
+.cat-badge { display:inline-block; background:#e8eaf6; color:#3949ab; font-weight:700; font-size:.78rem; padding:4px 12px; border-radius:999px; margin-bottom:14px; letter-spacing:.02em; }
+.header h1 { font-size:1.6rem; font-weight:800; color:#171a1f; line-height:1.45; margin-bottom:8px; }
+.header h1 .qn { color:#3949ab; }
+.section-tag { display:inline-block; font-size:.72rem; font-weight:800; letter-spacing:.09em; color:#8a90a0; border:1px solid #dfe3ea; border-radius:6px; padding:3px 10px; margin:38px 0 14px; text-transform:uppercase; }
+.answer-block p, .fa p { margin:0 0 15px; font-size:1.02rem; }
+.answer-block h3, .fa h3 { font-size:1.06rem; color:#2c3550; margin:26px 0 8px; }
+strong { color:#171a1f; }
+.hl { background:#e3f0ff; color:#1565c0; padding:1px 7px; border-radius:5px; font-weight:600; }
+.key { background:#d9f2e3; color:#1e8f52; padding:1px 7px; border-radius:5px; font-weight:600; }
+.warn { background:#ffe0e0; color:#c62828; padding:1px 7px; border-radius:5px; font-weight:600; }
+code { background:#eef1f6; color:#c7254e; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:.86em; }
+.naive { background:#fff8ec; border-left:4px solid #f0a52a; padding:14px 18px; border-radius:0 12px 12px 0; margin:16px 0; color:#6b5220; }
+.naive b { color:#8a5a00; }
+.code-block { background:#263238; border-radius:8px; padding:14px 18px; margin:14px 0; font-family:'Consolas','Monaco',monospace; font-size:.84rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.principle { background:linear-gradient(135deg,#1f8a54 0%,#0f6b3c 100%); color:#fff; border-radius:14px; padding:18px 22px; margin:24px 0; font-size:1.03rem; }
+.principle .lbl { display:block; font-size:.74rem; opacity:.82; font-weight:700; letter-spacing:.07em; margin-bottom:6px; }
+.followup { margin:30px 0; }
+.fq { background:#fff2ee; border-left:4px solid #ef5b3c; padding:16px 20px; border-radius:0 12px 12px 0; font-weight:600; color:#9a3212; font-size:1.03rem; }
+.fq .who { display:block; font-size:.72rem; font-weight:800; letter-spacing:.06em; color:#ef5b3c; margin-bottom:6px; }
+.fa { padding:16px 4px 4px 22px; border-left:3px solid #eef0f4; margin:14px 0 0; }
+.tbl { width:100%; border-collapse:collapse; margin:18px 0; font-size:.92rem; }
+.tbl th, .tbl td { padding:10px 12px; border:1px solid #e4e7ee; text-align:left; vertical-align:top; }
+.tbl th { background:#f1f3f8; font-weight:700; }
+.tbl caption { text-align:left; font-weight:800; color:#3949ab; margin-bottom:8px; font-size:.95rem; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:46px; }
+.booknav a { flex:1; background:#fff; border:1px solid #e4e7ee; border-radius:12px; padding:14px 18px; color:#3949ab; text-decoration:none; font-weight:600; font-size:.92rem; }
+.booknav a:hover { border-color:#3949ab; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#99a; font-weight:400; margin-bottom:3px; }
+@media(max-width:600px){ .container{padding:40px 16px 60px;} .header h1{font-size:1.35rem;} }
+</style></head><body><div class="container">
+<a href="index.html" class="back-link">← 게임 서버 실전 면접 100문</a>
+<header class="header">
+<div class="cat-badge">K · 메모리·성능·프로파일링</div>
+<h1><span class="qn">Q65.</span> 라이브에서 메모리가 천천히 샌다(하루 2GB). 어떻게 잡나?</h1>
+</header>
+
+<div class="section-tag">1차 답변</div>
+<div class="answer-block">
+<h3>0. 저는 "이게 진짜 누수인가"부터 의심합니다</h3>
+<p>"메모리가 는다 = 누수다"라고 단정하지 않습니다. 먼저 세 가지를 묻습니다. <strong>(1) 무한히 느나, 어느 선에서 평평해지나(plateau)?</strong> 어느 순간 멈추면 그건 <span class="hl">캐시 성장이나 예약(reserve)</span>이지 누수가 아닐 수 있습니다. <strong>(2) 접속자 수에 비례하나, 시간에만 비례하나?</strong> 동접에 비례하면 "유저당 메모리"라 정상일 수 있고, <span class="warn">접속자가 그대로인데 시간에만 비례해서 늘면</span> 그게 진짜 누수 신호입니다. <strong>(3) 언제부터 늘었나 — 특정 배포부터인가?</strong> 그렇다면 그 배포의 diff가 1순위 용의자입니다.</p>
+<p>저희 서버는 C++ 네이티브라 GC가 없습니다. 그래서 누수의 정체는 대개 <span class="hl">new/delete 불균형, 컨테이너 무한 성장, 핸들·소켓 누수</span> 셋 중 하나입니다. 이 셋은 잡는 방법이 다르니, 정체를 먼저 좁히는 게 중요합니다.</p>
+
+<h3>1. 순진한 답 — "프로파일러 붙이면 되잖아"</h3>
+<div class="naive"><b>제일 먼저 떠오르는 안:</b> Valgrind 같은 메모리 검사기를 붙여서 누수 지점을 찾는다. → 라이브에 Valgrind를 붙이면 <b>수십 배 느려져</b> 서비스가 마비됩니다. 그리고 이 버그는 <b>라이브에서만, 하루에 걸쳐</b> 나타나는데, 로컬에서 몇 분 돌려선 하루치 신호가 노이즈에 묻혀 안 보입니다. "재현이 안 되는 것"이 이 문제의 본질이에요.</div>
+<p>이게 라이브 누수가 어려운 이유입니다. 정확한 도구는 라이브에서 못 쓰고, 라이브에서만 재현됩니다. <strong>하루 2GB = 느린 누수</strong>라 짧은 재현으론 신호 대 잡음비가 나쁩니다. 그래서 저는 "도구부터"가 아니라 <span class="key">"관측으로 범위부터 좁히기"</span>로 갑니다.</p>
+
+<h3>2. 먼저 '무엇이 자라나'를 관측합니다</h3>
+<p>전체 메모리(RSS) 숫자 하나만 보면 아무것도 못 잡습니다. <strong>종류별로 쪼개서 봐야</strong> 합니다. 저는 커스텀 얼로케이터나 카운터로 <span class="hl">태그별 할당량</span>(패킷 버퍼 몇 MB, 플레이어 객체 몇 개, 몹 객체 몇 개)을 메트릭으로 노출합니다. 그리고 주요 컨테이너·오브젝트 풀의 크기를 대시보드에 띄웁니다. <span class="key">"어떤 타입의 인스턴스 수가 시간에 정비례해 증가"</span>하는 걸 찾으면 이미 절반은 잡은 겁니다. 예를 들어 접속자는 5천으로 일정한데 <code>Session</code> 객체가 계속 는다? 그럼 세션 정리 누락입니다.</p>
+
+<h3>3. 상관관계로 좁힌 뒤, 저비용 도구로 콜스택을 찍습니다</h3>
+<p><strong>상관관계:</strong> 누수 속도가 무엇에 비례하는지 그래프를 겹쳐 봅니다. 동접? 특정 콘텐츠(공성전 열릴 때만 급증)? 특정 패킷 유입량? 배포 시점? 이 겹쳐보기가 용의자를 몇 개로 줄입니다.</p>
+<p><strong>저비용 프로파일링:</strong> Valgrind 대신 <span class="hl">샘플링 기반 힙 프로파일러</span>(tcmalloc/jemalloc의 heap profiler, Windows면 ETW)를 씁니다. 이건 오버헤드가 수 % 수준이라 라이브에서도 켤 만합니다. 할당 콜스택별로 집계해주니 <strong>"어디서 <code>new</code>하고 안 지우는지"</strong>가 콜스택으로 나옵니다.</p>
+<p><strong>경험칙 용의자 목록:</strong> ① 이벤트 핸들러·콜백 등록 후 해제 안 함, ② 컨테이너에 넣기만 하고 제거 안 함(플레이어 퇴장 시 정리 누락), ③ <code>shared_ptr</code> 순환 참조(서로를 붙잡아 영영 안 죽음), ④ 타이머·세션 객체 미해제, ⑤ 로그·캐시 무한 성장. 라이브 느린 누수의 대부분은 이 다섯 안에 있습니다.</p>
+
+<h3>4. 트레이드오프 — 지혈과 치료를 병행합니다</h3>
+<p>정밀한 도구(full heap tracking)는 라이브에서 못 쓰고, 저비용 샘플링은 정밀도가 낮습니다. 그리고 원인을 찾는 동안에도 <span class="warn">밤이 되면 OOM으로 서버가 죽을 수</span> 있습니다. 그래서 저는 두 트랙을 동시에 돌립니다. <strong>지혈:</strong> 메모리 상한 감시 + 필요하면 <span class="hl">계획된 롤링 재시작</span>으로 시간을 법니다(크래시로 죽는 것보다 계획 재시작이 압도적으로 안전). <strong>치료:</strong> 그 사이 상관관계·프로파일러로 근본 원인을 추적합니다. 재시작은 지혈이지 치료가 아니라는 걸 잊지 않습니다.</p>
+
+<div class="principle"><span class="lbl">🧭 이 문제의 원칙</span><strong>"재현 안 되는 버그의 90%는 도구 부족이 아니라 관측 부족이다."</strong> 라이브 누수는 도구를 붙이기 전에 '무엇에 비례해 자라는가'로 먼저 좁힌다. 종류별 계측 → 상관관계 → 저비용 콜스택. 그리고 잡기 전에 지혈부터 — 롤링 재시작으로 유저를 지키고 시간을 벌면서 추적한다.</div>
+
+<table class="tbl"><caption>상황별 결론</caption>
+<tr><th>상황</th><th>선택</th><th>이유</th></tr>
+<tr><td>밤마다 OOM으로 크래시 임박</td><td>롤링 재시작으로 지혈 + 병행 추적</td><td>유저 데이터 유실을 먼저 막는다</td></tr>
+<tr><td>특정 배포부터 시작됨</td><td>그 커밋들의 diff 집중 리뷰</td><td>변경점이 곧 용의자</td></tr>
+<tr><td>특정 콘텐츠(공성전)와 상관</td><td>그 경로만 스테이징서 반복 부하 + 정밀 도구</td><td>재현 경로를 특정하면 정밀 도구 사용 가능</td></tr>
+<tr><td>어떤 타입 인스턴스만 계속 증가</td><td>그 객체의 생성/소멸 짝 추적</td><td>등록만 있고 해제 없는 곳이 범인</td></tr>
+<tr><td>상시</td><td>타입별 인스턴스 카운터를 평소에 계측</td><td>누수가 라이브 되기 전 스테이징서 잡힘</td></tr>
+</table>
+</div>
+
+<div class="section-tag">면접관 꼬리질문</div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "메모리는 계속 느는데 힙 프로파일러엔 누수가 안 잡혀요. new/delete는 균형이 맞대요. 그럼 뭔가요?"</div>
+<div class="fa">
+<p>이건 "누수가 아닌 증가"이거나 "힙 밖의 누수"입니다. 몇 갈래로 나눠 봅니다.</p>
+<p><strong>(1) 단편화(fragmentation).</strong> <code>new</code>/<code>delete</code>는 균형이 맞아도, 얼로케이터가 확보한 큰 덩어리 안에 구멍이 숭숭 나서 OS에 반환을 못 하는 상태입니다. 실제로 쓰는 메모리보다 예약된 메모리가 계속 큽니다. 크기가 제각각인 객체를 마구 할당/해제하면 잘 생깁니다.</p>
+<p><strong>(2) 예약 성장 — 누수가 아니라 설계.</strong> 컨테이너 capacity가 피크 때 커진 뒤 안 줄어들거나(<code>vector</code>가 <code>reserve</code> 후 <code>shrink</code> 안 함), <span class="hl">오브젝트 풀이 피크 이후에도 안 줄어듦</span>. 이건 새는 게 아니라 "피크를 기억하는" 겁니다. 대책이 다르죠(풀 상한·주기적 수축).</p>
+<p><strong>(3) 힙 밖 메모리.</strong> 힙 프로파일러는 <code>malloc</code> 계열만 봅니다. <span class="warn">mmap, GPU 메모리, 그리고 커널 핸들(소켓·이벤트)</span>은 안 보입니다. 특히 저희 IOCP 서버에서 겪은 게 이거였어요 — 완료 통지를 받고 나서 <code>OVERLAPPED</code> 구조체나 소켓 핸들을 안 닫아서, 힙엔 아무 이상 없는데 <span class="hl">핸들 카운트만 계속 오르다</span> 결국 자원 고갈로 터졌습니다. Windows면 작업 관리자의 핸들 수·논페이지드 풀을 같이 봐야 잡힙니다. "힙에 없다"가 "안 샌다"는 아닙니다.</p>
+</div></div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "재시작으로 지혈한다는데, 그게 무슨 개발자 대응이냐고 하면 뭐라고 하겠어요?"</div>
+<div class="fa">
+<p>지혈과 치료를 구분하는 것뿐이라고 답합니다. <strong>계획된 롤링 재시작은 정당한 임시 조치</strong>입니다. 생각해보면, 새벽에 OOM으로 서버가 예고 없이 죽으면 진행 중이던 유저 데이터가 유실되고 다들 튕깁니다. 그에 비해 <span class="key">트래픽 적은 시간에 유저를 안전하게 드레이닝하며 도는 롤링 재시작</span>은 피해가 압도적으로 작습니다. 크래시를 방치하는 게 오히려 무책임입니다.</p>
+<p>다만 조건을 답니다. <strong>(1) 반드시 시한부</strong>여야 합니다 — 이슈 티켓과 데드라인을 걸고, "언제까지 근본 원인을 잡는다"를 명시합니다. <strong>(2) 병행 추적</strong>이 필수입니다. 재시작이 근본 대책 추적을 멈추는 핑계가 되면 안 됩니다. <strong>(3) 재시작이 상태 유실 없이</strong> 되게 앞서 말한 스냅샷·드레이닝이 받쳐줘야 합니다.</p>
+<p>정직하게 선도 긋습니다. <span class="warn">근본 원인을 못 찾고 재시작만 3개월째 돌리고 있다면, 그건 지혈이 아니라 도망입니다.</span> 재시작은 "추적할 시간을 버는 것"이지 "문제를 해결한 것"이 아니라는 걸 팀 전체가 공유해야 합니다.</p>
+</div></div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "이 누수, 애초에 안 생기게 짜려면 어떻게 하나요?"</div>
+<div class="fa">
+<p>사후에 잡는 것보다 <strong>샐 구조를 안 만드는 게 훨씬 쌉니다.</strong> 네 가지를 지킵니다.</p>
+<p><strong>(1) RAII</strong> — 자원을 객체 수명에 묶습니다. <code>new</code>/<code>delete</code>를 손으로 짝 맞추는 대신, 스마트 포인터와 컨테이너가 소멸자에서 알아서 정리하게 합니다. 사람이 <code>delete</code>를 잊는 경로 자체를 없애는 거죠.</p>
+<p><strong>(2) 소유권 명확화</strong> — 기본은 <code>unique_ptr</code>(주인이 하나), 진짜로 공유가 필요할 때만 <code>shared_ptr</code>, 그리고 순환을 끊어야 하는 역참조는 <code>weak_ptr</code>. <span class="hl">"이 객체의 주인이 누구냐"가 코드에 드러나면</span> 순환 참조 누수가 안 생깁니다.</p>
+<p><strong>(3) 진입-이탈 대칭</strong> — 플레이어가 접속할 때 등록한 모든 것(세션, 타이머, 이벤트 구독, 컨테이너 등록)을 <strong>이탈 시 정확히 역순으로 해제</strong>합니다. 등록과 해제를 한 곳에 짝지어 두면(예: 등록하는 함수 옆에 해제 함수), 나중에 등록만 추가하고 해제를 빠뜨리는 실수가 줄어듭니다. 라이브 누수의 최대 원인이 바로 이 "이탈 시 정리 누락"이에요.</p>
+<p><strong>(4) 상시 관측</strong> — 타입별 인스턴스 카운터를 평소에 대시보드에 띄워둡니다. 그러면 누수가 <span class="key">라이브에 나가기 전 스테이징 부하 테스트에서</span> "이 카운터가 안 줄어드네?"로 먼저 잡힙니다. 결론은, 누수는 잡는 기술보다 안 새게 하는 규율의 문제입니다.</p>
+</div></div>
+
+<table class="tbl"><caption>면접관이 여기서 보는 것</caption>
+<tr><th>꼬리질문</th><th>약한 답</th><th>이 답이 보여주는 것</th></tr>
+<tr><td>"프로파일러에 안 잡혀요"</td><td>"그럴 리가요…"</td><td>단편화·예약성장·<strong>힙 밖(핸들/소켓) 누수</strong>까지 의심하는 폭</td></tr>
+<tr><td>"재시작이 대응이냐?"</td><td>"임시로요…"</td><td>지혈/치료 구분, <strong>시한부·병행추적</strong> 조건을 아는 균형</td></tr>
+<tr><td>"애초에 안 생기게?"</td><td>"조심히 짜야죠"</td><td>RAII·소유권·<strong>진입-이탈 대칭</strong>·상시계측 — 구조로 예방</td></tr>
+</table>
+
+<nav class="booknav"><a href="q64.html"><span class="lbl">← 이전</span>Q64. 서버 죽어도 세계 유지</a><a class="nx" href="q66.html"><span class="lbl">다음 →</span>Q66. 오브젝트 풀 판단</a></nav>
+</div><script src="/MSH_Portfolio/study/notes.js"></script></body></html>

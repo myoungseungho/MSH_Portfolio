@@ -1,0 +1,127 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Q14. 인벤토리 락 범위 줄이기 — 게임 서버 실전 면접 100문 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#f6f7f9; color:#2b2f36; line-height:1.9; }
+.container { max-width:820px; margin:0 auto; padding:56px 20px 80px; }
+.back-link { display:inline-block; margin-bottom:22px; color:#667085; text-decoration:none; font-size:.92rem; }
+.back-link:hover { color:#111; }
+.cat-badge { display:inline-block; background:#e8eaf6; color:#3949ab; font-weight:700; font-size:.78rem; padding:4px 12px; border-radius:999px; margin-bottom:14px; letter-spacing:.02em; }
+.header h1 { font-size:1.6rem; font-weight:800; color:#171a1f; line-height:1.45; margin-bottom:8px; }
+.header h1 .qn { color:#3949ab; }
+.section-tag { display:inline-block; font-size:.72rem; font-weight:800; letter-spacing:.09em; color:#8a90a0; border:1px solid #dfe3ea; border-radius:6px; padding:3px 10px; margin:38px 0 14px; text-transform:uppercase; }
+.answer-block p, .fa p { margin:0 0 15px; font-size:1.02rem; }
+.answer-block h3, .fa h3 { font-size:1.06rem; color:#2c3550; margin:26px 0 8px; }
+strong { color:#171a1f; }
+.hl { background:#e3f0ff; color:#1565c0; padding:1px 7px; border-radius:5px; font-weight:600; }
+.key { background:#d9f2e3; color:#1e8f52; padding:1px 7px; border-radius:5px; font-weight:600; }
+.warn { background:#ffe0e0; color:#c62828; padding:1px 7px; border-radius:5px; font-weight:600; }
+code { background:#eef1f6; color:#c7254e; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:.86em; }
+.naive { background:#fff8ec; border-left:4px solid #f0a52a; padding:14px 18px; border-radius:0 12px 12px 0; margin:16px 0; color:#6b5220; }
+.naive b { color:#8a5a00; }
+.code-block { background:#263238; border-radius:8px; padding:14px 18px; margin:14px 0; font-family:'Consolas','Monaco',monospace; font-size:.84rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.principle { background:linear-gradient(135deg,#1f8a54 0%,#0f6b3c 100%); color:#fff; border-radius:14px; padding:18px 22px; margin:24px 0; font-size:1.03rem; }
+.principle .lbl { display:block; font-size:.74rem; opacity:.82; font-weight:700; letter-spacing:.07em; margin-bottom:6px; }
+.followup { margin:30px 0; }
+.fq { background:#fff2ee; border-left:4px solid #ef5b3c; padding:16px 20px; border-radius:0 12px 12px 0; font-weight:600; color:#9a3212; font-size:1.03rem; }
+.fq .who { display:block; font-size:.72rem; font-weight:800; letter-spacing:.06em; color:#ef5b3c; margin-bottom:6px; }
+.fa { padding:16px 4px 4px 22px; border-left:3px solid #eef0f4; margin:14px 0 0; }
+.tbl { width:100%; border-collapse:collapse; margin:18px 0; font-size:.92rem; }
+.tbl th, .tbl td { padding:10px 12px; border:1px solid #e4e7ee; text-align:left; vertical-align:top; }
+.tbl th { background:#f1f3f8; font-weight:700; }
+.tbl caption { text-align:left; font-weight:800; color:#3949ab; margin-bottom:8px; font-size:.95rem; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:46px; }
+.booknav a { flex:1; background:#fff; border:1px solid #e4e7ee; border-radius:12px; padding:14px 18px; color:#3949ab; text-decoration:none; font-weight:600; font-size:.92rem; }
+.booknav a:hover { border-color:#3949ab; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#99a; font-weight:400; margin-bottom:3px; }
+@media(max-width:600px){ .container{padding:40px 16px 60px;} .header h1{font-size:1.35rem;} }
+</style></head><body><div class="container">
+<a href="index.html" class="back-link">← 게임 서버 실전 면접 100문</a>
+<header class="header">
+<div class="cat-badge">B · 동시성·락·경합</div>
+<h1><span class="qn">Q14.</span> 인벤토리 접근에 락을 걸었더니 특정 상황에서 서버가 멈칫한다. 락 범위를 어떻게 줄이나?</h1>
+</header>
+
+<div class="section-tag">1차 답변</div>
+<div class="answer-block">
+<h3>0. 저는 "무엇이, 언제 멈칫하나"부터 좁힙니다</h3>
+<p>"멈칫한다"는 말이 뭉툭해서, 저는 코드를 고치기 전에 세 가지를 좁힙니다. <strong>"서버 전체가 멎습니까, 그 유저만 멎습니까? 아무 때나입니까, 특정 액션 때입니까? 그리고 — 애초에 왜 인벤에 락이 필요합니까?"</strong></p>
+<p>마지막 질문이 제일 중요합니다. <span class="hl">여러 스레드가 같은 인벤을 동시에 건드릴 때만 락이 필요</span>하거든요. 제 배경인 싱글스레드 액터 구조라면 한 유저의 인벤은 한 스레드만 만지니 <strong>락이 아예 없어야 정상</strong>입니다. 그런데도 락을 걸었고 멈칫한다면, 이건 "락 범위" 이전에 <span class="warn">누가 왜 여러 스레드에서 이 인벤을 건드리고 있나</span>를 물어야 합니다. 그 답이 "레거시라 멀티스레드 강제"라면 락 범위를 줄이는 정공법으로, "사실 그럴 필요 없었다"면 락을 없애는 근본책으로 갑니다. 방향이 완전히 달라져요.</p>
+
+<h3>1. 순진한 첫 안 — "인벤 전체에 락 하나"</h3>
+<div class="naive"><b>제일 먼저 하는 것:</b> 인벤토리 객체에 뮤텍스 하나 달고, 조회든 추가든 정렬이든 저장이든 <b>인벤을 건드리는 모든 곳에서 그 락을 잡는다.</b> 안전하니까.</div>
+<p>안전은 합니다. 그런데 이 "굵은 락 하나"가 멈칫의 원인이에요. 문제는 락을 걸었다는 게 아니라 <span class="warn">그 락을 쥔 채로 무슨 일을 하느냐</span>입니다.</p>
+
+<h3>2. 어디서 터지나 — 락을 쥔 채 무거운 일을 한다</h3>
+<div class="code-block">// 나쁜 예 — 락 안에서 I/O·직렬화까지
+lock(inv.mutex);
+    inv.add(item);
+    db.save(inv);      // 수십 ms DB 왕복 — 그동안 이 인벤 접근은 전부 대기
+    net.serialize_and_send(inv);   // 직렬화 + 네트워크 전송
+unlock(inv.mutex);</div>
+<p>여기서 락을 쥐고 있는 시간이 <code>add</code>의 몇 마이크로초가 아니라 <strong>DB 왕복 수십 ms + 직렬화</strong> 전체입니다. 그 수십 ms 동안 이 인벤을 만지려는 다른 모든 접근이 줄을 서서 기다려요. 이게 "멈칫"의 정체입니다. 평소엔 인벤이 작아 안 보이다가, <span class="warn">인벤이 꽉 찬 만렙 유저가 일괄 정렬·전체 판매를 하거나 DB가 잠깐 느려질 때</span> 락 보유 시간이 길어지며 눈에 띄게 터집니다. "특정 상황에서만"이라는 증상이 바로 이 신호예요 — <strong>락 안에서 O(n) 작업이나 I/O를 하고 있다</strong>는 뜻입니다.</p>
+
+<h3>3. 개선 — 락 범위를 줄이는 순서</h3>
+<p>제가 손대는 순서는 <strong>쪼개기가 아니라 들어내기가 먼저</strong>입니다.</p>
+<p><strong>(1) 락 안에서 I/O를 들어낸다(제일 큰 효과).</strong> 락은 <span class="hl">메모리 상태를 바꾸는 몇 줄</span>만 감싸고, DB 저장·직렬화·전송은 락 밖으로 뺍니다. 아래처럼요.</p>
+<div class="code-block">// 좋은 예 — 락은 메모리 변경만, I/O는 밖에서
+lock(inv.mutex);
+    inv.add(item);
+    Snapshot snap = inv.copy();   // 일관된 스냅샷만 짧게 확보
+unlock(inv.mutex);
+db.save(snap);                    // 락 밖 — 남을 안 막음
+net.serialize_and_send(snap);</div>
+<p><strong>(2) 락 입도를 줄인다.</strong> 서버 전체가 멎는다면 그건 인벤 전역에 <span class="warn">글로벌 락 하나</span>를 쓴다는 뜻이라, 최소한 <strong>유저별 락</strong>으로 쪼갭니다(내 인벤 정리가 남의 인벤을 막을 이유가 없죠). <strong>(3) 읽기/쓰기 분리.</strong> 조회가 훨씬 많으면 읽기는 공유, 쓰기만 배타로 하는 read-write 락을 고려합니다. <strong>(4) 근본책 — 소유권.</strong> 애초에 그 인벤을 <span class="key">한 스레드(소유 액터)만</span> 만지게 만들면 락 자체가 사라집니다. 이게 있으면 (1)~(3)이 필요 없어요.</p>
+
+<h3>4. 그런데 트레이드오프</h3>
+<p>락을 잘게 쪼개면 공짜가 아닙니다. <span class="warn">락이 여러 개면 데드락 위험</span>이 생기고(여러 락을 서로 다른 순서로 잡으면 교착), 락 획득 오버헤드도 늡니다. 더 미묘한 건 <strong>원자성이 깨질 수 있다</strong>는 점이에요 — 슬롯마다 락을 걸면, 두 슬롯을 한 번에 원자적으로 바꿔야 하는 작업(예: 아이템 합치기) 도중에 다른 스레드가 끼어들 수 있습니다. read-write 락도 쓰기가 잦으면 오히려 느려지고요. 그래서 <span class="hl">"무조건 잘게"가 아니라, I/O 들어내기로 대부분 해결하고 입도는 필요한 만큼만</span> 줄입니다.</p>
+
+<h3>5. 상황별 최적해</h3>
+<p><strong>멀티스레드가 강제된 레거시</strong> — 락 안 I/O 제거 + 유저별 락 + 짧은 임계구역, 이 셋이 가장 크고 안전한 효과를 냅니다. <strong>새로 설계한다면</strong> — 인벤은 소유 액터만 만지게 해서 락을 아예 없앱니다. <strong>거래·경매처럼 두 인벤을 함께 바꿔야 하면</strong> — 아래 꼬리질문의 락 순서 규칙 또는 단일 거래 처리로 갑니다.</p>
+
+<div class="principle"><span class="lbl">🧭 이 문제의 원칙</span><strong>"락 범위를 줄이는 첫 수는 '쪼개기'가 아니라 '락 안에서 I/O를 들어내기'다."</strong> 임계구역은 메모리를 만지는 몇 줄이어야 하고, DB·직렬화·전송은 스냅샷을 떠서 락 밖으로 내보내라. 그다음이 입도다. 그리고 가장 좋은 락은 없는 락 — 소유권으로 경합 자체를 없애는 게 근본이다.</div>
+
+<table class="tbl"><caption>상황별 결론</caption>
+<tr><th>증상/상황</th><th>선택</th><th>이유</th></tr>
+<tr><td>락 안에서 DB 저장·직렬화</td><td>스냅샷 뜨고 I/O는 락 밖으로</td><td>보유 시간이 수십 ms→수 µs. 최대 효과</td></tr>
+<tr><td>서버 전체가 멎음(글로벌 락)</td><td>유저별 락으로 분할</td><td>내 인벤 작업이 남을 막을 이유 없음</td></tr>
+<tr><td>조회가 압도적으로 많음</td><td>read-write 락(읽기 공유)</td><td>단, 쓰기 잦으면 역효과 — 측정 후</td></tr>
+<tr><td>신규 설계</td><td>소유 액터만 접근 → 락 제거</td><td>경합 자체를 없애는 게 근본</td></tr>
+<tr><td>두 인벤 동시 변경(거래)</td><td>락 순서 규칙 or 단일 거래 처리</td><td>데드락 회피 + 원자성 보장</td></tr>
+</table>
+</div>
+
+<div class="section-tag">면접관 꼬리질문</div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "락 안에서 DB 저장을 빼라고 했죠. 그런데 락 풀고 저장하는 사이에 인벤이 또 바뀌면, 저장한 게 옛날 데이터 아니에요?"</div>
+<div class="fa">
+<p>맞습니다. 그래서 저는 <strong>"인벤 객체를 저장"하지 않고 "락 안에서 뜬 스냅샷을 저장"</strong>합니다. 이 차이가 핵심이에요.</p>
+<p>락 안에서 만드는 건 <span class="hl">그 순간의 일관된 복사본(스냅샷)</span>입니다. 복사는 짧으니 락 보유 시간이 거의 안 늘죠. 락을 푼 뒤 인벤이 또 바뀌어도, 제가 저장하는 건 "그 시점의 온전한 상태"라 <strong>찢어진 데이터가 아닙니다.</strong> 저장의 목표는 "언제나 최신"이 아니라 <span class="key">"항상 일관된 어느 시점"</span>이에요. 뒤이은 변경은 다음 저장이 반영합니다.</p>
+<p>순서가 뒤집혀 저장되는 걸 막으려면, 스냅샷에 <strong>버전(시퀀스) 번호</strong>를 붙여 "더 낮은 버전이 최신을 덮어쓰지 못하게" 합니다. 여러 저장이 경쟁해도 최신 버전만 남죠. 즉 <span class="warn">락을 오래 쥐어 정합성을 지키는 대신</span>, <strong>스냅샷 + 버전으로 "짧은 락 + 일관성"을 동시에</strong> 얻습니다. 이게 write-behind 저장(Q16)의 기본 형태이기도 합니다.</p>
+</div></div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "거래는 두 사람의 인벤을 동시에 원자적으로 바꿔야 하잖아요. 유저별 락으로 쪼개면 락 두 개를 잡아야 하고, 그럼 데드락 나요."</div>
+<div class="fa">
+<p>정확합니다. 유저별 락으로 쪼갠 대가가 바로 이 <strong>"두 락을 잡을 때의 데드락"</strong>이에요. A가 <code>lockA→lockB</code> 순으로, B의 거래가 <code>lockB→lockA</code> 순으로 잡으면 서로 물고 멈춥니다. 해법은 두 가지입니다.</p>
+<p><strong>(1) 락 순서를 전역 규칙으로 고정한다.</strong> 누가 거래하든 <span class="hl">항상 유저 ID가 작은 쪽 락을 먼저</span> 잡게 강제하면, 순환 대기가 생길 수 없어 데드락이 원천 차단됩니다. 규칙 하나로 풀리는 고전적인 방법이에요.</p>
+<p><strong>(2) 더 나은 답 — 거래를 한 곳으로 직렬화한다.</strong> 저는 두 인벤 락을 각자 잡는 것보다, <span class="key">거래라는 상호작용 자체를 하나의 거래 처리 주체(액터)로 모아</span> 순차 처리하는 걸 선호합니다. 거래는 초당 몇 건 수준이라 순차로 해도 처리량에 문제가 없고, 그 안에서 양쪽 인벤을 <strong>한 걸음으로 원자적으로</strong> 바꾸면 락 순서 고민도, 데드락도 사라집니다. 게다가 거래는 아이템 복사 버그(Q15)가 가장 잘 나는 지점이라, <strong>한 곳에 모아 상태기계로 관리</strong>하면 "한쪽만 반영되는" 사고도 막기 쉽습니다. 즉 저는 "두 락을 안전하게 잡는 법"보다 <span class="warn">"두 락을 잡을 필요가 없게 상호작용을 한 소유자에게 모으는 법"</span>을 먼저 봅니다.</p>
+</div></div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "특정 상황에서만 멈칫한다면서요. 평소엔 멀쩡하면 그냥 두면 안 돼요? 굳이 지금 고쳐야 해요?"</div>
+<div class="fa">
+<p>도피로처럼 들리지만, 저는 <strong>방치하면 안 되는 이유</strong>를 데이터로 말합니다. 먼저 "특정 상황"의 정체를 밝히면, 대개 <span class="hl">락을 쥔 채 O(n) 작업을 할 때</span>입니다 — 인벤이 꽉 찬 유저의 정렬·일괄판매, DB가 잠깐 느려진 순간, 대량 아이템 지급. 즉 <strong>인벤이 클수록, 유저가 많을수록 락 보유 시간이 길어지는 구조</strong>예요.</p>
+<p>그래서 이건 "가끔 나는 우연한 렉"이 아니라 <span class="warn">부하에 비례해 빈도와 강도가 함께 커지는 시한폭탄</span>입니다. 지금은 만렙 유저 몇 명일 때만 보이지만, 유저가 늘고 인벤 상한이 커지고 이벤트로 아이템이 쏟아지면 <strong>평상시로 번집니다.</strong> 더구나 이런 "특정 상황 멈칫"은 서버 전체 틱을 잡아먹어 <span class="warn">한 유저의 인벤 정리가 그 존 전체를 멈추는</span> 사고로 번지기도 하고요(Q60의 주제).</p>
+<p>반면 고치는 비용은 쌉니다. 락 안의 I/O를 스냅샷으로 들어내는 건 <span class="key">구조를 안 바꾸고 임계구역만 줄이는 국소 수술</span>이라, 위험도 작고 효과는 즉시 나타납니다. "지금 싸게 고칠 수 있고, 안 고치면 부하와 함께 커지는" 문제라 저는 방치가 아니라 <strong>지금 들어내는 쪽</strong>을 택합니다.</p>
+</div></div>
+
+<table class="tbl"><caption>면접관이 여기서 보는 것</caption>
+<tr><th>꼬리질문</th><th>약한 답</th><th>이 답이 보여주는 것</th></tr>
+<tr><td>"락 밖 저장이면 옛날 데이터?"</td><td>"그럼 락을 다시 걸죠"</td><td><strong>스냅샷 + 버전</strong> — 저장 목표는 최신이 아니라 '일관된 시점'</td></tr>
+<tr><td>"두 인벤 거래는 데드락?"</td><td>"음… 어렵네요"</td><td><strong>락 순서 고정 + 거래를 한 소유자로 직렬화</strong> — 락을 잡을 필요 자체를 없앰</td></tr>
+<tr><td>"평소 멀쩡한데 그냥 둬요?"</td><td>"그래도 되죠"</td><td>증상을 <strong>부하 비례 시한폭탄</strong>으로 진단 → 싸게 지금 들어내는 판단</td></tr>
+</table>
+
+<nav class="booknav"><a href="q13.html"><span class="lbl">← 이전</span>Q13. 액터모델 vs 존 스레드</a><a class="nx" href="q15.html"><span class="lbl">다음 →</span>Q15. 아이템 복사 버그</a></nav>
+</div><script src="/MSH_Portfolio/study/notes.js"></script></body></html>

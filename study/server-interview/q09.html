@@ -1,0 +1,115 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Q9. 거래 원자성 — 게임 서버 실전 면접 100문 - MSH Portfolio</title><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#f6f7f9; color:#2b2f36; line-height:1.9; }
+.container { max-width:820px; margin:0 auto; padding:56px 20px 80px; }
+.back-link { display:inline-block; margin-bottom:22px; color:#667085; text-decoration:none; font-size:.92rem; }
+.back-link:hover { color:#111; }
+.cat-badge { display:inline-block; background:#e8eaf6; color:#3949ab; font-weight:700; font-size:.78rem; padding:4px 12px; border-radius:999px; margin-bottom:14px; letter-spacing:.02em; }
+.header h1 { font-size:1.6rem; font-weight:800; color:#171a1f; line-height:1.45; margin-bottom:8px; }
+.header h1 .qn { color:#3949ab; }
+.section-tag { display:inline-block; font-size:.72rem; font-weight:800; letter-spacing:.09em; color:#8a90a0; border:1px solid #dfe3ea; border-radius:6px; padding:3px 10px; margin:38px 0 14px; text-transform:uppercase; }
+.answer-block p, .fa p { margin:0 0 15px; font-size:1.02rem; }
+.answer-block h3, .fa h3 { font-size:1.06rem; color:#2c3550; margin:26px 0 8px; }
+strong { color:#171a1f; }
+.hl { background:#e3f0ff; color:#1565c0; padding:1px 7px; border-radius:5px; font-weight:600; }
+.key { background:#d9f2e3; color:#1e8f52; padding:1px 7px; border-radius:5px; font-weight:600; }
+.warn { background:#ffe0e0; color:#c62828; padding:1px 7px; border-radius:5px; font-weight:600; }
+code { background:#eef1f6; color:#c7254e; padding:2px 6px; border-radius:4px; font-family:'Consolas','Monaco',monospace; font-size:.86em; }
+.naive { background:#fff8ec; border-left:4px solid #f0a52a; padding:14px 18px; border-radius:0 12px 12px 0; margin:16px 0; color:#6b5220; }
+.naive b { color:#8a5a00; }
+.code-block { background:#263238; border-radius:8px; padding:14px 18px; margin:14px 0; font-family:'Consolas','Monaco',monospace; font-size:.84rem; color:#eceff1; overflow-x:auto; line-height:1.6; white-space:pre; }
+.principle { background:linear-gradient(135deg,#1f8a54 0%,#0f6b3c 100%); color:#fff; border-radius:14px; padding:18px 22px; margin:24px 0; font-size:1.03rem; }
+.principle .lbl { display:block; font-size:.74rem; opacity:.82; font-weight:700; letter-spacing:.07em; margin-bottom:6px; }
+.followup { margin:30px 0; }
+.fq { background:#fff2ee; border-left:4px solid #ef5b3c; padding:16px 20px; border-radius:0 12px 12px 0; font-weight:600; color:#9a3212; font-size:1.03rem; }
+.fq .who { display:block; font-size:.72rem; font-weight:800; letter-spacing:.06em; color:#ef5b3c; margin-bottom:6px; }
+.fa { padding:16px 4px 4px 22px; border-left:3px solid #eef0f4; margin:14px 0 0; }
+.tbl { width:100%; border-collapse:collapse; margin:18px 0; font-size:.92rem; }
+.tbl th, .tbl td { padding:10px 12px; border:1px solid #e4e7ee; text-align:left; vertical-align:top; }
+.tbl th { background:#f1f3f8; font-weight:700; }
+.tbl caption { text-align:left; font-weight:800; color:#3949ab; margin-bottom:8px; font-size:.95rem; }
+.booknav { display:flex; justify-content:space-between; gap:12px; margin-top:46px; }
+.booknav a { flex:1; background:#fff; border:1px solid #e4e7ee; border-radius:12px; padding:14px 18px; color:#3949ab; text-decoration:none; font-weight:600; font-size:.92rem; }
+.booknav a:hover { border-color:#3949ab; }
+.booknav .nx { text-align:right; }
+.booknav .lbl { display:block; font-size:.72rem; color:#99a; font-weight:400; margin-bottom:3px; }
+@media(max-width:600px){ .container{padding:40px 16px 60px;} .header h1{font-size:1.35rem;} }
+</style></head><body><div class="container">
+<a href="index.html" class="back-link">← 게임 서버 실전 면접 100문</a>
+<header class="header">
+<div class="cat-badge">B · 동시성·락·경합</div>
+<h1><span class="qn">Q9.</span> 거래 창에서 한쪽이 취소하는 순간 다른 쪽이 확정을 눌렀다. 원자성을 어떻게?</h1>
+</header>
+
+<div class="section-tag">1차 답변</div>
+<div class="answer-block">
+<h3>0. 저는 거래를 '오브젝트'가 아니라 '상태 기계'로 봅니다</h3>
+<p>이 질문을 받으면 저는 거래를 두 사람이 아이템을 주고받는 장면이 아니라, <strong>하나의 상태 기계(state machine)</strong>로 그립니다. 거래엔 상태가 있습니다 — <code>준비중</code> → <code>양쪽 확정</code> → <code>커밋</code>, 그리고 어느 단계에서든 갈 수 있는 <code>취소</code>. 두 유저의 모든 행동(아이템 올리기, 확정, 취소)은 이 상태 기계에 들어오는 <strong>이벤트</strong>일 뿐입니다.</p>
+<p>그리고 우리 서버는 존 로직이 <span class="hl">싱글스레드 액터 큐</span>로 돕니다. 그래서 "취소하는 순간 확정을 눌렀다"는 상황도, 실제로는 <strong>취소 메시지와 확정 메시지가 큐에 줄을 서서 하나씩 처리</strong>됩니다. 진짜 동시란 없고 <strong>순서</strong>만 있죠. 이 사실을 인정하는 게 답의 출발입니다.</p>
+
+<h3>1. 순진하게 짜면 왜 복사·증발이 나는가</h3>
+<div class="naive"><b>순진한 안:</b> 양쪽이 확정을 누르면, A의 아이템을 B에게 옮기고 B의 아이템을 A에게 옮긴다. 취소를 누르면 창을 닫는다.</div>
+<p>이 코드의 첫 번째 함정은 <strong>커밋을 여러 단계로 쪼갠다는 것</strong>입니다. "A에서 빼고 → B에 넣고 → B에서 빼고 → A에 넣고 → 골드 정산." 이 사이 어디서 취소나 크래시가 끼면 <span class="warn">한쪽만 잃거나 한쪽만 얻습니다.</span> 두 번째 함정은 <strong>확정과 커밋 사이의 시간차</strong>입니다. B가 확정한 뒤 실제 교환 전에 A가 아이템을 창에서 내리거나 다른 데 써버리면, 커밋 시점엔 없는 아이템을 옮기려 하죠.</p>
+<p>세 번째 함정이 이 질문의 핵심입니다 — <strong>"취소하는 순간 확정"</strong>. 순진한 코드는 확정 이벤트를 받자마자 "양쪽 다 확정됐나?" 보고 바로 교환합니다. 그런데 거래는 <span class="key">양쪽이 모두 확정</span>해야 성립합니다. 한쪽 확정만으론 커밋이 아니죠. 그러니 취소와 확정의 순서만 제대로 지키면 이 경합은 사실 자연히 풀립니다.</p>
+
+<h3>2. 핵심 — 커밋은 '양쪽 확정이 되는 그 한 스텝'에서 원자적으로</h3>
+<p>제가 잡는 규칙은 이렇습니다. 거래 상태 기계는 <span class="hl">단일 소유자(거래 오브젝트 하나)</span>가 쥐고, 양쪽의 모든 이벤트가 그 하나의 큐로 들어옵니다. 그리고 <strong>실제 교환은 "이 이벤트로 인해 양쪽 확정이 완성되는 바로 그 순간, 같은 동기 스텝 안에서" 딱 한 번</strong> 일어납니다. 중간에 await가 끼지 않습니다.</p>
+<p>이 규칙 아래서 "취소 vs 확정" 경합을 따라가 보죠. 두 메시지가 큐에 줄을 섰고, <strong>둘 중 뭐가 먼저 처리되느냐</strong>로 결판납니다.</p>
+<p><strong>취소가 먼저 처리되면</strong> → 상태가 <code>취소됨</code>으로 확정되고 아이템은 각자에게 그대로. 뒤이어 처리되는 확정 메시지는 <span class="hl">"이미 취소된 거래"를 보고 무시</span>됩니다. 아무것도 안 옮겨졌으니 깔끔합니다.</p>
+<p><strong>확정이 먼저 처리되면</strong> → B의 확정 플래그만 <code>true</code>가 됩니다. 하지만 <strong>A는 아직 확정 안 했으니 커밋 조건(양쪽 확정)이 안 찼습니다.</strong> 교환은 안 일어나요. 뒤이어 A의 취소가 처리되면 그대로 <code>취소됨</code>. 역시 아무것도 안 옮겨집니다. <span class="key">즉 어느 순서로 처리되든, 커밋은 '양쪽 확정'이 완성되는 단일 스텝에서만 일어나므로 취소가 조금이라도 앞서면 교환은 없습니다.</span></p>
+
+<h3>3. 확정 후 미끼 바꿔치기 방어 — 확정 무효화</h3>
+<p>여기에 반드시 붙는 규칙이 <strong>확정 잠금</strong>입니다. 한쪽이 확정을 누르면 그 사람이 올린 아이템은 잠기고, <span class="warn">어느 쪽이든 창의 내용물이 바뀌면 양쪽 확정이 즉시 풀립니다.</span> 이게 없으면 고전적 사기가 통합니다 — 전설템을 보여주고 상대가 확정하게 한 뒤, 커밋 직전에 잡템으로 바꿔치기. 확정 무효화가 있으면 <strong>상대가 확정한 스냅샷과 조금이라도 달라지는 순간 그의 확정이 취소</strong>돼서, 바뀐 걸 못 본 채로 거래가 성사되지 않습니다.</p>
+
+<h3>4. 트레이드오프 — 같은 서버냐, 두 서버냐</h3>
+<p>지금까지는 <strong>두 유저가 같은 존(같은 스레드)</strong>에 있다는 전제였습니다. 그럼 교환이 <span class="key">메모리 안의 동기 스왑</span>이라 원자성이 거의 공짜입니다. 그런데 두 유저가 <strong>다른 존/다른 프로세스</strong>에 있으면 이야기가 완전히 달라집니다. 이건 분산 트랜잭션이고, 2단계 커밋(2PC) 같은 무거운 장치를 꺼내야 하며(Q25의 영역), 한 노드만 흔들려도 거래가 멈춥니다.</p>
+<p>그래서 저는 정직하게 <strong>요구를 협상</strong>합니다 — 거래는 <span class="hl">같은 샤드/거래 서비스 안으로 모으는 게 최선</span>이라고. 서로 다른 서버의 두 유저가 즉석 거래를 해야 한다면, 두 사람의 거래 세션을 <strong>전담 거래 액터 한 곳으로 끌어와</strong> 그 안에서 동기 스왑으로 처리합니다(꼬리질문에서 자세히). "아무 데 있는 둘이 2PC로 거래"는 가능은 해도 비용이 게임을 죽이니, 저는 그 요구를 먼저 완화하려 합니다.</p>
+
+<div class="principle"><span class="lbl">🧭 이 문제의 원칙</span><strong>"거래는 상태 기계고, 커밋은 '양쪽 확정이 완성되는 단일 스텝'에서만 일어난다."</strong> 취소가 조금이라도 먼저 처리되면 교환은 없다. 원자성은 락으로 만드는 게 아니라, 판정을 한 소유자에 모으고 교환을 쪼개지 않는 하나의 동기 스텝으로 두는 데서 나온다.</div>
+
+<table class="tbl"><caption>상황별 결론</caption>
+<tr><th>상황</th><th>선택</th><th>이유</th></tr>
+<tr><td>같은 존, 취소 vs 확정 경합</td><td>큐 순서대로 처리, 커밋은 양쪽 확정 완성 스텝에서만</td><td>취소가 앞서면 교환 없음 — 자연히 안전</td></tr>
+<tr><td>확정 후 커밋 전 아이템 변경</td><td>내용 변경 시 양쪽 확정 자동 무효화</td><td>미끼 바꿔치기(bait-and-switch) 차단</td></tr>
+<tr><td>같은 존 커밋</td><td>메모리 동기 스왑(쪼개지 않음) + 거래 로그</td><td>원자성이 거의 공짜, 로그로 영속화</td></tr>
+<tr><td>두 존/프로세스에 걸친 거래</td><td>전담 거래 액터로 세션을 모아 처리</td><td>2PC의 비용을 피하고 단일 소유자로 환원</td></tr>
+<tr><td>정말 서버 간 원자성 불가피</td><td>2PC/사가 — 단, 요구를 먼저 협상</td><td>강한 원자성과 처리량은 맞바꿈</td></tr>
+</table>
+</div>
+
+<div class="section-tag">면접관 꼬리질문</div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "두 유저가 서로 다른 존 스레드에 있어요. 거래 오브젝트는 누가 소유하죠? A 인벤 잠그고 B 인벤 잠그다가 데드락 나는 거 아니에요?"</div>
+<div class="fa">
+<p>정확히 제가 피하려던 지점입니다. 두 인벤에 락을 걸어 교환하려 들면 <span class="warn">고전적 데드락</span>이 납니다 — A 스레드는 "내 인벤 잠그고 상대 인벤 잠그자", B 스레드도 똑같이 "내 것 먼저, 상대 것 다음". 서로 상대가 쥔 걸 기다리며 영원히 멈추죠. 그래서 저는 <strong>락으로 풀지 않습니다.</strong></p>
+<p>제 1순위는 <span class="key">전담 거래 액터(coordinator)</span>입니다. 거래가 성사될 두 사람을 위해 거래 오브젝트를 하나 만들고, 그 오브젝트가 <strong>단일 소유자</strong>가 됩니다. A와 B의 모든 행동은 각자 존이 아니라 이 거래 액터의 큐로 메시지로 들어오고, 아이템도 각 플레이어 액터에 "이 아이템 내놔" / "이 아이템 받아"라는 <strong>메시지로 주고받습니다.</strong> 어느 스레드도 남의 메모리를 직접 잠그지 않으니 데드락이 구조적으로 없습니다. 대신 교환이 여러 메시지 왕복이 되어 그 사이 상태 변화(접속 끊김 등)를 상태 기계가 감당해야 하는데, 그건 원래 거래가 감당해야 할 몫입니다.</p>
+<p>만약 정말 코디네이터 없이 두 인벤을 직접 락으로 잡아야만 하는 레거시라면, 차선책은 <span class="hl">전역 락 순서</span>입니다 — 항상 <strong>플레이어 ID가 작은 쪽을 먼저</strong> 잠급니다. 두 스레드가 같은 순서로 잠그면 사이클이 안 생겨 데드락이 사라집니다. 하지만 이건 규율에 의존하는 방식이라(Q11에서 다룰 결), 저는 <strong>애초에 락을 안 쓰는 코디네이터</strong>를 선호합니다. 데드락을 '조심해서 피하는' 것보다 '구조적으로 불가능하게' 만드는 게 낫거든요.</p>
+</div></div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "메모리 스왑이 원자적이라 쳐요. A 것 빼고 B에 넣는 도중에 서버가 죽으면요? A는 잃고 B는 못 받았어요. 영속성은요?"</div>
+<div class="fa">
+<p>메모리 스왑 자체는 사실 이 걱정에서 자유롭습니다 — <span class="hl">싱글스레드의 한 동기 스텝은 통째로 실행되거나, 그 틱이 아예 안 돈 것</span>입니다. "A에서 빼고 B에 넣는 중간"에 스레드가 멈추는 지점이 없어요. 진짜 크래시 창은 <strong>메모리에선 스왑이 끝났는데 그게 아직 DB에 안 내려간 사이</strong>입니다. 여기가 위험 구간이죠.</p>
+<p>그래서 저는 <strong>거래를 '두 인벤에 대한 각각의 UPDATE'로 영속화하지 않습니다.</strong> 그렇게 하면 A 인벤 저장은 됐는데 B 인벤 저장 전에 죽는 창이 또 생기니까요. 대신 <span class="key">완결된 거래를 '하나의 거래 로그(원장) 레코드'로 먼저 append</span>합니다 — "거래 #1234: A가 X를 B에게, B가 Y를 A에게, 골드 얼마." 이 한 줄이 <strong>가벼운 단일 진실</strong>이고, 이게 durable하게 박히면 거래는 '성사된 것'으로 간주됩니다.</p>
+<p>그다음 두 인벤의 실제 영속화가 그 로그로부터 파생됩니다. 크래시가 나도 서버가 다시 뜨며 <strong>거래 로그를 재생</strong>합니다 — "1234번 거래는 커밋됐는데 A 인벤엔 반영이 없네?" → 로그 기준으로 <span class="key">멱등하게 재적용</span>(이미 반영됐으면 건너뜀). 이건 Q1·Q8에서 쓴 것과 정확히 같은 원리입니다 — <strong>"가벼운 진실을 먼저 못 박고, 무거운 반영은 그 진실에서 언제든 재생 가능하게."</strong> 이 거래 로그는 덤으로 복사 버그 추적(Q15)과 롤백(Q61)의 근거 자료도 됩니다.</p>
+</div></div>
+
+<div class="followup">
+<div class="fq"><span class="who">면접관</span>🔥 "확정 무효화를 걸어도, 제가 전설템 보여주고 상대 확정 받자마자 그걸 다른 창에서 팔아버리면요? 커밋 때 그 아이템이 이미 없잖아요."</div>
+<div class="fa">
+<p>좋은 공격입니다. 확정 무효화가 <strong>거래 창 안의 변경</strong>은 막지만, 같은 아이템을 <span class="warn">다른 경로(다른 거래, 상점 판매, 사용)로 빼돌리는 것</span>은 별개 문제죠. 이건 "확정 스냅샷"과 "커밋 시점 실재"의 불일치입니다. 두 겹으로 막습니다.</p>
+<p>첫째, <span class="hl">거래에 올린 아이템은 '에스크로(잠금)' 상태로 묶습니다.</span> 창에 올리는 순간 그 아이템은 인벤에서 '거래 중'으로 표시되어 <strong>다른 어떤 경로로도 못 쓰고 못 팔고 못 버립니다.</strong> 상점·다른 거래·사용 모두 "거래 중인 아이템"을 거부하죠. 그러면 상대가 확정한 그 아이템은 커밋까지 확실히 붙잡혀 있습니다. 이게 근본 방어입니다.</p>
+<p>둘째, 에스크로가 없거나 못 믿는다면 <strong>커밋 시점 재검증</strong>이 안전망입니다. 커밋하는 그 동기 스텝에서, 옮기기 직전에 <span class="key">"양쪽이 지금 이 순간에도 확정된 그 아이템을 정확히 갖고 있는가"</span>를 다시 확인합니다. 하나라도 어긋나면 커밋을 통째로 취소하고 원상복구합니다. 싱글스레드라 이 "재검증→교환"이 <strong>중간에 안 끊기는 한 스텝</strong>으로 도니, 재검증과 실제 교환 사이에 또 빼돌릴 틈이 없습니다. TOCTOU(검사와 사용 사이의 틈) 자체가 안 생기는 거죠.</p>
+<p>정리하면 방어는 <strong>에스크로로 애초에 못 빼돌리게 + 커밋 스텝에서 원자적 재검증</strong> 두 겹입니다. "확정했으니 됐겠지" 하고 커밋 시점 실재를 안 보는 게 바로 복사·증발 버그의 단골 원인이라, 저는 확정을 신뢰의 끝이 아니라 <strong>재검증의 입력</strong>으로만 씁니다.</p>
+</div></div>
+
+<table class="tbl"><caption>면접관이 여기서 보는 것</caption>
+<tr><th>꼬리질문</th><th>약한 답</th><th>이 답이 보여주는 것</th></tr>
+<tr><td>"다른 스레드면 누가 소유?"</td><td>"양쪽 인벤 락 걸죠"</td><td>락 대신 <strong>단일 거래 코디네이터</strong>로 데드락을 구조적으로 제거(차선은 전역 락 순서)</td></tr>
+<tr><td>"스왑 중 크래시면?"</td><td>"트랜잭션으로 묶죠"</td><td>동기 스텝은 안 쪼개짐을 알고, <strong>거래 원장 먼저·인벤 반영은 멱등 재생</strong>으로 영속성 확보</td></tr>
+<tr><td>"확정 후 딴 데서 팔면?"</td><td>"확정하면 못 바꾸게 했는데요"</td><td><strong>에스크로 잠금 + 커밋 시점 원자 재검증</strong>으로 TOCTOU를 차단</td></tr>
+</table>
+
+<nav class="booknav"><a href="q08.html"><span class="lbl">← 이전</span>Q8. 동시에 같은 아이템 줍기</a><a class="nx" href="q10.html"><span class="lbl">다음 →</span>Q10. 싱글스레드 vs 멀티+락</a></nav>
+</div><script src="/MSH_Portfolio/study/notes.js"></script></body></html>
