@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>암순응 · 자동 노출 데모</title>
+<style>
+  :root{
+    --bg:#0a0c11; --panel:#12161f; --panel2:#171d29; --line:#242c3a; --line2:#303a4c;
+    --ink:#e9edf5; --muted:#8994a7; --faint:#5a6373;
+    --amber:#f4a63a; --amber-dim:#5a441f; --amber-ink:#ffcf85;
+    --cyan:#4fd4e8; --cyan-dim:#204b55; --cyan-ink:#a7ecf6;
+    --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; }
+  body{ background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.5;
+    -webkit-font-smoothing:antialiased; overflow:hidden; }
+  #root{ padding:14px; }
+
+  .vp{ position:relative; aspect-ratio:16/9; width:100%; border-radius:12px; overflow:hidden;
+    background:#000; border:1px solid var(--line2);
+    box-shadow:0 20px 50px -24px rgba(0,0,0,.9), inset 0 0 0 1px rgba(255,255,255,.02); }
+  #gl{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .hud{ position:absolute; top:10px; left:10px; right:10px; display:flex; justify-content:space-between;
+    gap:8px; pointer-events:none; font-family:var(--mono); font-size:11px; text-shadow:0 1px 3px rgba(0,0,0,.9); }
+  .chip{ background:rgba(8,10,15,.5); border:1px solid rgba(255,255,255,.1); border-radius:999px;
+    padding:4px 10px; letter-spacing:.03em; }
+  .chip b{ color:var(--amber-ink); font-weight:600; }
+  .chip.dark b{ color:var(--cyan-ink); }
+  .cap{ position:absolute; left:12px; bottom:11px; right:12px; font-family:var(--mono); font-size:10.5px;
+    color:rgba(255,255,255,.5); pointer-events:none; text-shadow:0 1px 3px rgba(0,0,0,.9); }
+
+  .bar{ display:flex; flex-wrap:wrap; gap:16px; margin-top:13px; }
+  .grp{ display:flex; flex-direction:column; gap:6px; }
+  .grp .l{ font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); }
+  .seg{ display:flex; gap:5px; }
+  .seg button{ font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--muted);
+    background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:8px 11px; cursor:pointer;
+    transition:.15s; display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.2; white-space:nowrap; }
+  .seg button .n{ font-family:var(--mono); font-size:9.5px; color:var(--faint); font-weight:400; }
+  .seg button:hover{ border-color:var(--line2); color:var(--ink); }
+  .seg button:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
+  .seg button[aria-pressed="true"]{ color:#111; background:var(--amber); border-color:var(--amber); }
+  .seg button[aria-pressed="true"] .n{ color:rgba(0,0,0,.55); }
+  .seg.env button[data-env="1"][aria-pressed="true"]{ background:var(--cyan); border-color:var(--cyan); }
+
+  .legend{ font-size:12.5px; color:var(--muted); border-left:2px solid var(--cyan-dim);
+    padding-left:11px; margin:14px 0 0; }
+  .legend b{ color:var(--cyan-ink); font-weight:600; }
+
+  .metrics{ display:grid; grid-template-columns:repeat(5,1fr); gap:1px; background:var(--line);
+    border:1px solid var(--line); border-radius:10px; overflow:hidden; margin-top:13px; }
+  .m{ background:var(--panel); padding:8px 10px; }
+  .m .k{ font-family:var(--mono); font-size:9.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); }
+  .m .v{ font-family:var(--mono); font-size:15px; font-weight:600; color:var(--ink);
+    font-variant-numeric:tabular-nums; margin-top:2px; }
+  .m .v small{ font-size:10px; color:var(--faint); font-weight:400; }
+  .m.hl .v{ color:var(--amber-ink); }
+  @media (max-width:560px){ .metrics{ grid-template-columns:repeat(3,1fr); } }
+
+  details.adv{ margin-top:12px; }
+  details.adv > summary{ font-family:var(--mono); font-size:11px; color:var(--faint); cursor:pointer;
+    list-style:none; user-select:none; }
+  details.adv > summary::-webkit-details-marker{ display:none; }
+  details.adv > summary::before{ content:"▸ "; }
+  details.adv[open] > summary::before{ content:"▾ "; }
+  .sliders{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-top:11px; }
+  @media (max-width:560px){ .sliders{ grid-template-columns:1fr; } }
+  .slider label{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--muted); margin-bottom:5px; }
+  .slider label .v{ font-family:var(--mono); color:var(--ink); }
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:4px; border-radius:99px;
+    background:var(--line2); outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+    background:var(--amber); cursor:pointer; border:2px solid #1a1206; }
+  input[type=range]::-moz-range-thumb{ width:14px; height:14px; border-radius:50%; background:var(--amber);
+    cursor:pointer; border:2px solid #1a1206; }
+  input[type=range]:focus-visible{ box-shadow:0 0 0 3px rgba(79,212,232,.35); }
+
+  .foot{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; gap:10px; flex-wrap:wrap; }
+  .foot .keys{ font-family:var(--mono); font-size:10.5px; color:var(--faint); }
+  kbd{ font-family:var(--mono); background:var(--panel2); border:1px solid var(--line2); border-bottom-width:2px;
+    border-radius:4px; padding:0 5px; font-size:10px; color:var(--muted); }
+  .ghost{ font-family:var(--sans); font-size:12px; color:var(--muted); background:transparent;
+    border:1px solid var(--line2); border-radius:8px; padding:6px 12px; cursor:pointer; }
+  .ghost:hover{ color:var(--ink); border-color:var(--faint); }
+  .ghost:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="vp">
+    <canvas id="gl"></canvas>
+    <div class="hud">
+      <span class="chip" id="chipEnv">🌵 <b id="envName">사막</b></span>
+      <span class="chip" id="chipStep">STEP <b id="stepNum">0</b></span>
+    </div>
+    <div class="cap" id="cap">전환 후 <span id="tSince">0.0</span>s · 유효 밝기가 중간 회색(0.16)으로 수렴하면 “적응 완료”</div>
+  </div>
+
+  <div class="bar">
+    <div class="grp">
+      <span class="l">위치</span>
+      <div class="seg env" role="group" aria-label="위치">
+        <button data-env="0" aria-pressed="true">🌵 사막<span class="n">밝음 L≈6</span></button>
+        <button data-env="1" aria-pressed="false">🕳 동굴<span class="n">어둠 L≈0.03</span></button>
+      </div>
+    </div>
+    <div class="grp">
+      <span class="l">구현 단계</span>
+      <div class="seg step" role="group" aria-label="구현 단계">
+        <button data-step="0" aria-pressed="true">순진<span class="n">타이머</span></button>
+        <button data-step="1" aria-pressed="false">자동노출<span class="n">대칭</span></button>
+        <button data-step="2" aria-pressed="false">비대칭<span class="n">명↔암</span></button>
+        <button data-step="3" aria-pressed="false">스코토픽<span class="n">푸르키녜</span></button>
+      </div>
+    </div>
+  </div>
+
+  <p class="legend" id="legend"></p>
+
+  <div class="metrics">
+    <div class="m"><div class="k">장면 휘도 L</div><div class="v" id="mL">6.00</div></div>
+    <div class="m"><div class="k">현재 노출 E</div><div class="v" id="mE">0.027</div></div>
+    <div class="m hl"><div class="k">유효 밝기 E·L</div><div class="v" id="mEff">0.16</div></div>
+    <div class="m"><div class="k">스코토픽</div><div class="v" id="mScot">0%</div></div>
+    <div class="m"><div class="k">경과</div><div class="v" id="mT">0.0<small>s</small></div></div>
+  </div>
+
+  <details class="adv">
+    <summary>시간 상수 조절</summary>
+    <div class="sliders">
+      <div class="slider"><label>암순응 τ <span class="v"><span id="vDark">6.0</span>s</span></label>
+        <input type="range" id="sDark" min="0.5" max="20" step="0.1" value="6"></div>
+      <div class="slider"><label>명순응 τ <span class="v"><span id="vLight">0.5</span>s</span></label>
+        <input type="range" id="sLight" min="0.1" max="5" step="0.05" value="0.5"></div>
+      <div class="slider"><label>순진 페이드 <span class="v"><span id="vFade">6.0</span>s</span></label>
+        <input type="range" id="sFade" min="0.5" max="12" step="0.1" value="6"></div>
+    </div>
+  </details>
+
+  <div class="foot">
+    <span class="keys"><kbd>Space</kbd> 전환 · <kbd>1</kbd>~<kbd>4</kbd> 단계</span>
+    <button class="ghost" id="reset">↺ 사막·순진으로 리셋</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('gl');
+  const gl = canvas.getContext('webgl', {antialias:true, alpha:false});
+  if(!gl){ document.getElementById('root').innerHTML =
+    '<p style="padding:30px;color:#8994a7;font-family:monospace">이 브라우저에서 WebGL을 쓸 수 없어요.</p>'; postH(); return; }
+
+  const VERT = `attribute vec2 aPos; varying vec2 vUv;
+    void main(){ vUv = aPos*0.5+0.5; gl_Position = vec4(aPos,0.0,1.0); }`;
+
+  const FRAG = `precision highp float;
+    varying vec2 vUv;
+    uniform vec2 uRes;
+    uniform float uEnv, uExposure, uOverlay, uScotopic, uTime, uGrain;
+
+    float hash(vec2 p){ p = fract(p*vec2(123.34,345.45)); p += dot(p, p+34.345); return fract(p.x*p.y); }
+    float noise(vec2 p){
+      vec2 i = floor(p), f = fract(p);
+      float a = hash(i), b = hash(i+vec2(1.0,0.0)), c = hash(i+vec2(0.0,1.0)), d = hash(i+vec2(1.0,1.0));
+      vec2 u = f*f*(3.0-2.0*f);
+      return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
+    }
+    float fbm(vec2 p){ float v=0.0, a=0.5; for(int i=0;i<5;i++){ v += a*noise(p); p*=2.0; a*=0.5; } return v; }
+
+    // ---------- desert (bright) ----------
+    vec3 desert(vec2 uv, vec2 asp){
+      float horizon = 0.44;
+      vec3 col;
+      if(uv.y > horizon){
+        float t = (uv.y-horizon)/(1.0-horizon);
+        vec3 zenith = vec3(0.25,0.45,0.98)*2.2;
+        vec3 haze   = vec3(1.15,0.92,0.62)*3.4;
+        col = mix(haze, zenith, pow(t,0.8));
+        float d = distance(uv*asp, vec2(0.70,0.86)*asp);
+        col += vec3(40.0,31.0,18.0) * smoothstep(0.05,0.0,d);
+        col += vec3(4.0,2.6,1.2) * smoothstep(0.42,0.0,d) * 0.45;
+      } else {
+        float t = (horizon-uv.y)/horizon;
+        float ripple = fbm(uv*vec2(46.0,11.0))*0.16;
+        vec3 sand = vec3(1.05,0.74,0.42);
+        col = sand * (1.5 + t*1.9) * (0.84 + ripple);
+        col *= (0.9 + 0.22*fbm(uv*8.0));
+      }
+      return col;
+    }
+
+    // ---------- cave (dark): looking at the bright mouth from inside ----------
+    vec3 cave(vec2 uv, vec2 asp){
+      // organic bright opening (desert light through the cave mouth)
+      vec2 o = (uv - vec2(0.5, 0.53));
+      o.x *= asp.x*0.9;
+      float ang = atan(o.x, o.y);      // 0 = up
+      float rr  = length(o);
+      float jag = 0.050*fbm(vec2(ang*2.5+2.0, 3.7)) + 0.022*fbm(vec2(ang*7.0, 8.1));
+      float rim = 0.235 + jag;
+      // stalactite teeth bite down from the top edge
+      float top   = smoothstep(0.95, 0.0, abs(ang));
+      float teeth = fbm(vec2(uv.x*12.0, 0.0));
+      rim -= top * (teeth*teeth) * 0.13;
+      // rocky floor rises at the bottom
+      float bot = smoothstep(0.95, 0.0, abs(abs(ang)-3.14159));
+      rim += bot * (0.03 + 0.05*fbm(vec2(uv.x*7.0,4.0)));
+      float open = smoothstep(0.014, -0.014, rr - rim);
+
+      // content of the opening: warm desert light, hot core
+      vec3 exitCol = mix(vec3(4.4,3.5,2.4), vec3(7.2,5.7,3.5), smoothstep(0.24,0.0,rr));
+      exitCol += vec3(1.4,0.9,0.45) * smoothstep(0.14,0.0,rr);
+
+      // rock body
+      float n = fbm(uv*6.0)*0.55 + fbm(uv*17.0)*0.30 + fbm(uv*42.0)*0.15;
+      vec3 rock = vec3(0.019,0.021,0.027) * (0.22 + 1.8*n);
+      // depth: corners fall into darkness
+      float vig = smoothstep(1.15, 0.30, length((uv-0.5)*vec2(asp.x,1.0)));
+      rock *= (0.30 + 0.70*vig);
+      // rim light where rock meets the bright mouth
+      float band = smoothstep(0.0,0.05, rr-rim) * smoothstep(0.16,0.0, rr-rim);
+      rock += vec3(0.95,0.62,0.34) * band * 1.5;
+      // faint blue crystals — only emerge once the eye adapts
+      rock += vec3(0.05,0.13,0.22)*smoothstep(0.028,0.0,distance(uv*vec2(asp.x,1.0), vec2(0.19,0.30)*vec2(asp.x,1.0)));
+      rock += vec3(0.04,0.11,0.19)*smoothstep(0.022,0.0,distance(uv*vec2(asp.x,1.0), vec2(0.85,0.36)*vec2(asp.x,1.0)));
+      rock += vec3(0.05,0.14,0.21)*smoothstep(0.018,0.0,distance(uv*vec2(asp.x,1.0), vec2(0.74,0.75)*vec2(asp.x,1.0)));
+
+      return mix(rock, exitCol, open);
+    }
+
+    void main(){
+      vec2 uv = vUv;
+      vec2 asp = vec2(uRes.x/uRes.y, 1.0);
+      vec3 scene = mix(desert(uv,asp), cave(uv,asp), clamp(uEnv,0.0,1.0));
+      vec3 c = scene * uExposure;
+      c = clamp((c*(2.51*c+0.03))/(c*(2.43*c+0.59)+0.14), 0.0, 1.0); // ACES approx
+      if(uScotopic > 0.001){
+        float lum = dot(c, vec3(0.2126,0.7152,0.0722));
+        vec3 scot = vec3(lum) * vec3(0.72,0.90,1.32);
+        c = mix(c, scot, clamp(uScotopic,0.0,1.0)*0.85);
+      }
+      c = pow(max(c,0.0), vec3(1.0/2.2));
+      if(uGrain > 0.001){
+        float g = hash(uv*uRes + uTime) - 0.5;
+        c += g * 0.055 * uGrain;
+      }
+      c = mix(c, vec3(0.0), clamp(uOverlay,0.0,1.0));
+      gl_FragColor = vec4(c, 1.0);
+    }`;
+
+  function compile(type, src){
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+  gl.linkProgram(prog); gl.useProgram(prog);
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  const U = {};
+  ['uRes','uEnv','uExposure','uOverlay','uScotopic','uTime','uGrain'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+
+  // ---- model ----
+  const KEY = 0.16, Ldes = 6.0, Lcav = 0.03;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const clamp = (x,a,b) => Math.min(b, Math.max(a, x));
+  const lerp = (a,b,t) => a + (b-a)*t;
+
+  const S = {
+    step:0, envTarget:0, env:0, E:KEY/Ldes, overlay:0, since:0, rod:1, fadeInto:6,
+    tauDark:6.0, tauLight:0.5, tauSym:2.0, fadeDur:6.0, L:Ldes, scot:0
+  };
+
+  function transition(env){
+    if(env === S.envTarget) return;
+    const goingDark = env > S.envTarget;
+    S.envTarget = env; S.since = 0;
+    if(S.step === 0){ S.overlay = 1; S.fadeInto = goingDark ? S.fadeDur : Math.min(0.6, S.fadeDur); }
+  }
+
+  function update(dt){
+    S.env += (S.envTarget - S.env) * (1 - Math.exp(-dt/0.35));
+    const L = Math.exp(lerp(Math.log(Ldes), Math.log(Lcav), clamp(S.env,0,1)));
+    S.L = L;
+    let Et = clamp(KEY/L, 0.04, 80);
+    S.since += dt;
+
+    if(S.step === 0){
+      S.E = Et;
+      S.overlay = Math.max(0, S.overlay - dt/(S.fadeInto || S.fadeDur));
+      S.rod = 1; S.scot = 0;
+    } else {
+      S.overlay = 0;
+      if(S.step === 3){
+        const inDark = clamp((0.12 - L)/0.12, 0, 1);
+        const rbTarget = 1 + inDark*1.2;
+        const rbTau = inDark > 0.5 ? 12 : 3;
+        S.rod += (rbTarget - S.rod) * (1 - Math.exp(-dt/rbTau));
+        Et = clamp(Et * S.rod, 0.04, 220);
+        S.scot = clamp((0.6 - L)/0.6, 0, 1);
+      } else { S.rod = 1; S.scot = 0; }
+      let tau;
+      if(S.step === 1) tau = S.tauSym;
+      else tau = (Et > S.E) ? S.tauDark : S.tauLight;
+      S.E += (Et - S.E) * (1 - Math.exp(-dt/tau));
+    }
+  }
+
+  function resize(){
+    const r = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(r.width*dpr)), h = Math.max(1, Math.round(r.height*dpr));
+    if(canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; gl.viewport(0,0,w,h); }
+  }
+
+  function render(now){
+    gl.uniform2f(U.uRes, canvas.width, canvas.height);
+    gl.uniform1f(U.uEnv, S.env);
+    gl.uniform1f(U.uExposure, S.E);
+    gl.uniform1f(U.uOverlay, S.overlay);
+    gl.uniform1f(U.uScotopic, S.scot);
+    gl.uniform1f(U.uTime, now);
+    gl.uniform1f(U.uGrain, reduce ? 0 : S.scot);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  const el = id => document.getElementById(id);
+  let tick = 0;
+  function hud(){
+    if(tick++ % 5) return;
+    el('mL').textContent = S.L >= 1 ? S.L.toFixed(2) : S.L.toFixed(3);
+    el('mE').textContent = S.E < 1 ? S.E.toFixed(3) : S.E.toFixed(2);
+    el('mEff').innerHTML = (S.E*S.L).toFixed(3) + ' <small>→0.16</small>';
+    el('mScot').textContent = Math.round(S.scot*100) + '%';
+    el('mT').innerHTML = Math.min(S.since,99).toFixed(1) + '<small>s</small>';
+    el('tSince').textContent = Math.min(S.since,99).toFixed(1);
+  }
+
+  let last = 0;
+  function frame(t){
+    const now = t/1000;
+    let dt = last ? now-last : 0; last = now; dt = Math.min(dt, 0.05);
+    update(dt); resize(); render(now); hud();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---- controls ----
+  const LEGENDS = [
+    '<b>순진한 버전.</b> 노출은 그대로 두고, 검은 화면을 타이머로 서서히 걷어냅니다. 그럴듯하지만 밝기와 무관하게 늘 같은 시간 — 진짜 적응이 아니라 눈속임이에요.',
+    '<b>진짜 자동 노출(대칭).</b> 장면 평균 휘도를 재서 목표 노출로 매 프레임 부드럽게 수렴. 시뮬레이션이지만 밝아질 때·어두워질 때 속도가 같아 어색합니다.',
+    '<b>비대칭 속도.</b> 명순응(밝게 보기)은 몇 초 안에 끝나고, 암순응은 느리게. 방향에 따라 시간상수를 달리 줘 실제 눈의 비대칭을 재현.',
+    '<b>스코토픽까지.</b> 깊은 어둠에서 색이 빠지고 푸르스름해지며(푸르키녜), 로드 세포가 천천히 감도를 더 끌어올리고, 미세한 그레인이 낍니다.'
+  ];
+
+  function setStep(n){
+    S.step = n; if(n === 0) S.overlay = 0;
+    document.querySelectorAll('.step button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.step === n)));
+    el('legend').innerHTML = LEGENDS[n];
+    el('stepNum').textContent = n;
+    el('chipStep').className = 'chip' + (n === 3 ? ' dark' : '');
+    postH();
+  }
+  function setEnv(n){
+    transition(n);
+    document.querySelectorAll('.env button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.env === n)));
+    const dark = n === 1;
+    el('envName').textContent = dark ? '동굴' : '사막';
+    el('chipEnv').innerHTML = (dark ? '🕳 ' : '🌵 ') + '<b>' + (dark ? '동굴' : '사막') + '</b>';
+    el('chipEnv').className = 'chip' + (dark ? ' dark' : '');
+  }
+
+  document.querySelectorAll('.step button').forEach(b => b.addEventListener('click', () => setStep(+b.dataset.step)));
+  document.querySelectorAll('.env button').forEach(b => b.addEventListener('click', () => setEnv(+b.dataset.env)));
+  el('sDark').addEventListener('input', e => { S.tauDark = +e.target.value; el('vDark').textContent = S.tauDark.toFixed(1); });
+  el('sLight').addEventListener('input', e => { S.tauLight = +e.target.value; el('vLight').textContent = S.tauLight.toFixed(2); });
+  el('sFade').addEventListener('input', e => { S.fadeDur = +e.target.value; el('vFade').textContent = S.fadeDur.toFixed(1); });
+  el('reset').addEventListener('click', () => {
+    S.env = 0; S.envTarget = 0; S.E = KEY/Ldes; S.overlay = 0; S.rod = 1; S.since = 0;
+    setEnv(0); setStep(0);
+  });
+  document.querySelector('details.adv').addEventListener('toggle', postH);
+  window.addEventListener('keydown', e => {
+    if(e.code === 'Space'){ e.preventDefault(); setEnv(S.envTarget === 0 ? 1 : 0); }
+    else if(e.key >= '1' && e.key <= '4'){ setStep(+e.key - 1); }
+  });
+
+  // ---- report height to the embedding article ----
+  function postH(){
+    const h = Math.ceil(document.getElementById('root').getBoundingClientRect().height) + 4;
+    try{ parent.postMessage({ type:'ea-h', h:h }, '*'); }catch(e){}
+  }
+  window.postH = postH;
+  window.addEventListener('load', postH);
+  window.addEventListener('resize', postH);
+
+  setStep(0); setEnv(0); postH();
+})();
+</script>
+</body>
+</html>
