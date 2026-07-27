@@ -67,6 +67,55 @@ SpawnNPC(id) / GiveReward(id) / ChangePhase(id)
 &lt;/Trigger&gt;
                  ▲
         [디자이너: 이미 허용된 부품을 조합]</div>
+        <div class="q">같은 기믹을 C++만으로 만들면, 실제로 뭐가 달라져?</div>
+        <div class="a"><p><strong>상황을 하나 정해 보자.</strong> 던전의 수정 3개를 모두 부수면 2초 뒤 북문이 열리고, 경비병 4명이 나오며, 파티에 보상을 준다. 기획자가 다음 날 “수정은 5개, 대기는 5초, 경비병은 궁수 2명으로 바꾸자”고 말하는 상황이야.</p><p>C++만으로 만들면 프로그래머가 그 기믹 전용 코드를 작성한다. 조건·시간·문 ID·스폰 그룹·보상 ID가 코드 안에 들어가므로, 숫자 하나를 바꿔도 수정→컴파일→빌드→게임 실행→검증의 경로를 다시 탄다.</p></div>
+        <div class="code-block">// C++ 전용 방식: 이 기믹의 순서가 코드에 직접 들어간다.
+void CrystalGate::OnCrystalDestroyed()
+{
+    ++m_destroyedCrystalCount;
+    if (m_destroyedCrystalCount != 3) return;
+
+    StartTimer(2.0f, [this]()
+    {
+        OpenDoor("north_gate");
+        SpawnGroup("gate_guard", 4);
+        GivePartyReward("crystal_gate_reward");
+    });
+}
+
+// “수정 5개 / 5초 / 궁수 2명”으로 바꾸려면
+// 이 코드를 고치고 다시 빌드해야 한다.</div>
+        <div class="q">XML을 쓰면 “코드가 알아서 바뀌는” 거야?</div>
+        <div class="a"><p>정확히는 <strong>새 코드를 만드는 것이 아니라, 이미 만들어 둔 명령의 순서와 값을 바꾸는 것</strong>이야. 프로그래머가 한 번 만들어 둔 범용 기믹 실행기는 XML을 읽어 “수정 파괴 횟수 조건”, “대기”, “문 열기”, “NPC 스폰”, “보상 지급”을 차례로 실행한다.</p><p>기획자는 아래처럼 데이터를 바꾼다. 이 파일에는 C++ 문법도 포인터도 없다. 대신 엔진이 알아듣기로 약속한 태그와 ID만 쓴다.</p></div>
+        <div class="code-block">&lt;Gimmick id="crystal_gate"&gt;
+  &lt;Trigger event="crystal_destroyed" count="5"&gt;
+    &lt;Wait seconds="5" /&gt;
+    &lt;OpenDoor id="north_gate" /&gt;
+    &lt;SpawnGroup id="archer_guard" count="2" /&gt;
+    &lt;GiveReward table="crystal_gate_reward" /&gt;
+  &lt;/Trigger&gt;
+&lt;/Gimmick&gt;
+
+기획자가 바꾸는 곳: count="5", seconds="5", archer_guard, count="2"</div>
+        <div class="q">그 XML을 C++ 엔진은 어떻게 읽고, 실제 행동까지 시켜?</div>
+        <div class="a"><p>로드할 때 C++의 <strong>XML 파서</strong>가 파일을 읽어 메모리 안의 기믹 구조로 바꾼다. 그리고 `OpenDoor` 같은 태그 이름을 미리 등록된 C++ 명령에 연결한다. 게임 중 수정이 부서지면 실행기는 해당 트리거를 찾고, 조건이 맞으면 XML에 적힌 노드를 위에서 아래로 읽으며 연결된 C++ 함수를 호출한다.</p></div>
+        <div class="diagram-box">1. 로딩 때: XML 텍스트를 읽는다
+   &lt;OpenDoor id="north_gate" /&gt;
+                 ↓
+   메모리의 Command { type = OpenDoor, id = "north_gate" }
+
+2. 프로그래머가 한 번 등록해 둔 연결표
+   "OpenDoor"  →  C++ OpenDoor(id)
+   "SpawnGroup"→  C++ SpawnGroup(id, count)
+   "GiveReward"→  C++ GivePartyReward(table)
+
+3. 게임 중: 세 번째 수정이 아니라 다섯 번째 수정이 부서짐
+   이벤트 수신 → count 조건 확인 → Wait(5초) 예약
+   → OpenDoor("north_gate") 호출
+   → SpawnGroup("archer_guard", 2) 호출
+   → GivePartyReward("crystal_gate_reward") 호출</div>
+        <div class="a"><p>즉 XML이 C++의 분기문을 마법처럼 고치는 것은 아니야. <span class="key-point">C++가 “어떤 종류의 행동을 할 수 있는가”를 정의하고, XML은 “이번 콘텐츠에서 그 행동을 어떤 조건·순서·값으로 쓸 것인가”를 정의</span>해. 그래서 XML 변경은 보통 데이터 검증과 로딩/핫리로드만 거치면 되고, 엔진 재컴파일까지 가지 않는 거야.</p></div>
+        <table class="compare-table"><tr><th>기획 변경: 수정 3→5개, 2→5초</th><th>C++ 전용</th><th>C++ + XML</th></tr><tr><td>누가 주로 수정?</td><td class="bad">프로그래머</td><td class="good">기획자/콘텐츠 디자이너</td></tr><tr><td>바꾸는 대상</td><td>기믹 전용 분기 코드</td><td>기믹 XML의 속성값</td></tr><tr><td>확인 경로</td><td class="bad">코드 리뷰 → 컴파일 → 빌드 → 실행</td><td class="good">데이터 검증 → 로드/핫리로드 → 플레이 테스트</td></tr><tr><td>프로그래머가 다시 필요한 때</td><td>매 변경마다</td><td>“조건 비교”, “문 열기”처럼 새 행동 종류가 필요할 때</td></tr></table>
         <div class="q">그럼 디자이너도 로직에 관여하는 거네?</div>
         <div class="a"><p>맞아. 단, “아무 C++나 고칠 수 있다”가 아니라 <span class="key-point">콘텐츠 로직의 조합과 파라미터</span>에 관여하는 거야. 예를 들어 기믹의 상태 전환, 발동 조건, 타이밍, 등장 NPC, 보상 테이블을 바꾸고 게임에서 바로 테스트할 수 있어.</p><p>새로운 물리 기능, 네트워크 권한 검증, 저장 방식, 성능이 민감한 AI 알고리즘처럼 <strong>새 능력 자체</strong>가 필요하면 프로그래머가 C++ 도구 상자에 새 기능을 추가해야 해.</p></div>
         <table class="compare-table"><tr><th>변경 요청</th><th>XML로 가능한 쪽</th><th>C++ 작업이 필요한 쪽</th></tr><tr><td>상자 열기 뒤 2초 후 몬스터 등장</td><td class="good">기존 이벤트·대기·스폰 노드 조합</td><td>그 노드들이 이미 존재한다는 전제</td></tr><tr><td>보스가 체력 30%에 광폭화</td><td class="good">조건값·행동 차트·이펙트 연결</td><td>광폭화 전용 전투 시스템이 없으면 구현 필요</td></tr><tr><td>“물체를 들어 던져 다리를 무너뜨리는” 새 상호작용</td><td class="warn">기존 물리/파괴 부품이 있으면 조합 가능</td><td class="good">새 런타임 규칙·동기화·검증을 엔진에 추가</td></tr></table>
