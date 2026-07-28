@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Q50 절벽 균형 제어 단계형 실험실</title>
+<style>
+:root{--bg:#081019;--panel:#111d28;--line:#2d4354;--ink:#f2f8fc;--muted:#97aab8;--blue:#72c9ff;--amber:#ffd17f;--green:#8ce4b4;--red:#ff8179}*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;overflow:hidden}#root{padding:14px}.viewport{position:relative;aspect-ratio:16/7.1;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:#13222d}canvas{width:100%;height:100%;display:block}.hud{position:absolute;inset:10px 10px auto;display:flex;justify-content:space-between;gap:8px;pointer-events:none;font:11px ui-monospace,Consolas,monospace}.hud span{padding:5px 9px;border:1px solid #ffffff20;border-radius:999px;background:#081019dd}.hud b{color:var(--blue)}.steps{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-top:11px}button{min-height:40px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--muted);font:600 11px inherit;padding:7px 5px;cursor:pointer}button:hover{color:var(--ink);border-color:#577187}button:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}button[aria-pressed=true]{background:var(--blue);border-color:var(--blue);color:#06131d}.n{display:block;font:9px ui-monospace,Consolas,monospace;opacity:.64}.explain{margin:10px 0 0;border-left:2px solid var(--blue);padding:1px 0 1px 11px;color:var(--muted);font-size:12px;line-height:1.5;min-height:38px}.explain b{color:var(--ink)}.controls{display:grid;grid-template-columns:1fr 1fr 1.35fr;gap:14px;margin-top:8px}.ct{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin-bottom:4px}.ct output{color:var(--ink);font-family:ui-monospace,Consolas,monospace}input{width:100%;accent-color:var(--blue)}.toggles{display:flex;gap:5px}.toggles button{flex:1;min-height:34px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-top:8px;background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden}.m{background:var(--panel);padding:7px 9px}.m small{display:block;color:#758b9b;font:9px ui-monospace,Consolas,monospace}.m strong{font:14px ui-monospace,Consolas,monospace}@media(max-width:720px){.steps{grid-template-columns:repeat(3,1fr)}.controls{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.viewport{aspect-ratio:4/3}}
+</style></head>
+<body><div id="root">
+<div class="viewport"><canvas id="scene" role="img" aria-label="발밑 레이로 지지면을 찾고 무게중심 오차를 린과 발끝 IK로 되먹여 절벽에서 균형을 잡는 과정"></canvas><div class="hud"><span>Q50 · <b id="stage">수동 트리거 클립</b></span><span id="status">클립은 실제 모서리를 모름</span></div></div>
+<div class="steps" role="group" aria-label="절벽 균형 구현 단계">
+<button data-step="0" aria-pressed="true"><span class="n">STEP 0</span>고정 클립</button><button data-step="1" aria-pressed="false"><span class="n">STEP 1</span>지지면 레이</button><button data-step="2" aria-pressed="false"><span class="n">STEP 2</span>COM 오차</button><button data-step="3" aria-pressed="false"><span class="n">STEP 3</span>교정 포즈</button><button data-step="4" aria-pressed="false"><span class="n">STEP 4</span>발끝 IK</button><button data-step="5" aria-pressed="false"><span class="n">STEP 5</span>안정화·낙하</button>
+</div>
+<p class="explain" id="explain"></p>
+<div class="controls">
+<div><div class="ct"><label for="edge">절벽 접근 거리</label><output id="edgeOut">72%</output></div><input id="edge" type="range" min="0" max="115" value="72"></div>
+<div><div class="ct"><label for="damping">제어 감쇠</label><output id="dampingOut">68%</output></div><input id="damping" type="range" min="0" max="100" value="68"></div>
+<div class="toggles" role="group" aria-label="발끝 IK와 안정 제어 설정"><button id="ik" aria-pressed="false">발끝 IK</button><button id="stable" aria-pressed="false">댐핑+낙하 게이트</button></div>
+</div>
+<div class="metrics"><div class="m"><small>바닥에 닿은 레이</small><strong id="mRays">고정 트리거</strong></div><div class="m"><small>COM 지지면 오차</small><strong id="mCom">측정 안 함</strong></div><div class="m"><small>몸 흔들림</small><strong id="mSway">18.0°</strong></div><div class="m"><small>발 디딤 판정</small><strong id="mFoot">연출만 재생</strong></div></div>
+</div>
+<script>
+(()=>{
+const c=document.getElementById('scene'),x=c.getContext('2d'),$=id=>document.getElementById(id),S={step:0,edge:72,damping:68,ik:false,stable:false,t:0};
+const names=['수동 트리거 클립','발밑 3×3 지지면 탐색','지지 다각형과 COM 비교','오차를 애디티브 포즈로 되먹임','발끝을 실제 모서리 립에 고정','댐핑·데드존과 낙하 판정 분리'];
+const status=['클립은 실제 모서리를 모름','어느 방향이 허공인지 측정','COM이 지지면 밖으로 나간 거리 계산','허공 반대로 척추·팔을 교정','바닥이 있을 때만 IK 허용','발진은 감쇠하고 한계 밖은 낙하'];
+const desc=[
+'<b>문제 재현:</b> 손으로 둔 트리거가 같은 휘청 클립을 틀 뿐, 실제 모서리 방향·높이·발 위치를 모르므로 발이 뜨고 기울 방향도 틀립니다.',
+'<b>세계 읽기:</b> 발밑 3×3 레이를 아래로 쏴 초록은 바닥, 빨강은 허공으로 분류합니다. 접근 슬라이더를 밀어 지지 레이가 하나씩 사라지는 모습을 보세요.',
+'<b>위험 신호:</b> 살아 있는 레이의 볼록 영역을 지지면으로 삼고, COM 투영점이 경계 밖으로 벗어난 거리를 연속값으로 계산합니다.',
+'<b>피드백 교정:</b> COM 오차만큼 척추를 허공 반대로 젖히고 팔을 벌립니다. 고정 클립이 아니라 어느 방향의 모서리에도 같은 규칙이 반응합니다.',
+'<b>접촉 정렬:</b> Foot IK는 앞발 뒤꿈치를 마지막 유효 바닥에 두고 발끝만 립 너머로 보냅니다. 토글을 꺼 허공에 뜨는 발과 비교하세요.',
+'<b>안전한 완성:</b> 댐핑·데드존이 작은 오차의 발진을 죽이고, 지지면 한계를 넘으면 IK로 속이지 않고 Stumble/Fall로 넘깁니다. 안정 제어를 꺼 진동과 유령 디딤을 재현하세요.'
+];
+function resize(){const r=c.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2),w=Math.round(r.width*d),h=Math.round(r.height*d);if(c.width!==w||c.height!==h){c.width=w;c.height=h}x.setTransform(d,0,0,d,0,0)}
+function line(ax,ay,bx,by,co='#526b79',lw=2,dash=[]){x.beginPath();x.setLineDash(dash);x.moveTo(ax,ay);x.lineTo(bx,by);x.strokeStyle=co;x.lineWidth=lw;x.stroke();x.setLineDash([])}
+function label(t,px,py,co='#f2f8fc',align='left'){x.font='600 10px ui-monospace,Consolas,monospace';x.textAlign=align;const tw=x.measureText(t).width,ox=align==='center'?-tw/2:align==='right'?-tw:0;x.fillStyle='rgba(5,11,16,.88)';x.fillRect(px+ox-5,py-12,tw+10,18);x.fillStyle=co;x.fillText(t,px,py);x.textAlign='left'}
+function values(){const supported=Math.max(0,Math.min(9,Math.round(9-S.edge/14)));const com=Math.max(0,(S.edge-45)*.42);const danger=S.edge>96;const stabilized=S.step>=5&&S.stable;const sway=S.step<3?18:stabilized?Math.max(.8,(100-S.damping)*.04):6+Math.sin(S.t*.23)*5;const foot=S.step<4?'연출만 재생':danger?(stabilized?'낙하 전이':'허공 IK 고정'):(S.ik?'립 접지':'발 14cm 뜸');return{supported,com,danger,stabilized,sway,foot}}
+function topView(w,h,v){
+ const ox=w*.055,oy=h*.20,gw=w*.37,gh=h*.60,edgeX=ox+gw*(1-S.edge/145);
+ label(S.step===0?'HAND-PLACED TRIGGER':'TOP VIEW · SUPPORT SAMPLES',ox,oy-18,S.step===0?'#ff8179':'#8ce4b4');
+ x.fillStyle='#263b47';x.fillRect(ox,oy,Math.max(0,edgeX-ox),gh);x.fillStyle='#0b151d';x.fillRect(edgeX,oy,ox+gw-edgeX,gh);line(edgeX,oy,edgeX,oy+gh,'#ffd17f',3);
+ if(S.step===0){x.strokeStyle='#ff8179';x.lineWidth=2;x.setLineDash([7,5]);x.strokeRect(ox+gw*.28,oy+gh*.18,gw*.42,gh*.64);x.setLineDash([]);label('TRIGGER → PLAY EDGE_IDLE',ox+gw*.5,oy+gh*.88,'#ff8179','center');return}
+ const points=[];for(let row=0;row<3;row++)for(let col=0;col<3;col++){const px=ox+gw*(.27+col*.19),py=oy+gh*(.25+row*.25),hit=px<edgeX-2;line(px,py-22,px,py+16,hit?'#8ce4b4':'#ff8179',1.5,[3,3]);x.fillStyle=hit?'#8ce4b4':'#ff8179';x.beginPath();x.arc(px,py,6,0,7);x.fill();points.push({px,py,hit})}
+ if(S.step>=2){const hits=points.filter(p=>p.hit);if(hits.length){const minX=Math.min(...hits.map(p=>p.px)),maxX=Math.max(...hits.map(p=>p.px)),minY=Math.min(...hits.map(p=>p.py)),maxY=Math.max(...hits.map(p=>p.py));x.fillStyle='#8ce4b422';x.strokeStyle='#8ce4b4';x.lineWidth=2;x.fillRect(minX-12,minY-12,maxX-minX+24,maxY-minY+24);x.strokeRect(minX-12,minY-12,maxX-minX+24,maxY-minY+24);label('SUPPORT POLYGON',minX,minY-22,'#8ce4b4')}
+ const comX=ox+gw*(.48+S.edge/220),comY=oy+gh*.50;x.fillStyle=v.com>0?'#ff8179':'#72c9ff';x.beginPath();x.arc(comX,comY,9,0,7);x.fill();line(comX,comY-24,comX,comY+24,v.com>0?'#ff8179':'#72c9ff',2);line(comX-24,comY,comX+24,comY,v.com>0?'#ff8179':'#72c9ff',2);label(`COM ERROR ${v.com.toFixed(1)} cm`,comX,comY+43,v.com>0?'#ff8179':'#72c9ff','center')}
+}
+function sideView(w,h,v){
+ const cliff=w*.77,ground=h*.80,cx=cliff-58+(S.edge-72)*.8,lean=S.step>=3?-Math.min(22,v.com*.45):0,osc=v.stabilized?Math.sin(S.t*.04)*v.sway:Math.sin(S.t*.23)*v.sway,fall=v.danger&&v.stabilized?.55+.45*Math.abs(Math.sin(S.t*.018)):0;
+ label('SIDE VIEW · CORRECTION',w*.52,h*.16,S.step>=3?'#8ce4b4':'#72c9ff');x.fillStyle='#263b47';x.fillRect(w*.48,ground,w*.29,h-ground);x.fillStyle='#0b151d';x.fillRect(cliff,ground,w-cliff,h-ground);line(w*.48,ground,cliff,ground,'#ffd17f',3);line(cliff,ground,cliff,h,'#ffd17f',3);
+ if(v.danger&&v.stabilized){label('SUPPORT LOST → STUMBLE / FALL',w*.72,h*.33,'#ff8179','center')}
+ x.save();x.translate(cx+fall*72,ground+fall*28);x.rotate((lean+osc+fall*58)*Math.PI/180);
+ x.strokeStyle='#72c9ff';x.lineCap='round';x.lineWidth=10;x.beginPath();x.moveTo(-10,-78);x.lineTo(-26,-10);x.moveTo(10,-78);x.lineTo(v.danger&&!v.stabilized?46:-2,-10);x.stroke();
+ if(S.step>=4&&S.ik&&!v.danger){line(-2,-10,cliff-cx+8,-10,'#8ce4b4',9);label('TOE IK',cliff-cx-12,-22,'#8ce4b4','center')}
+ if(S.step>=4&&!S.ik)label('FOOT FLOAT',22,-22,'#ff8179','center');
+ x.strokeStyle=S.step>=3?'#8ce4b4':'#72c9ff';x.lineWidth=12;x.beginPath();x.moveTo(0,-78);x.lineTo(lean*.65,-150);x.stroke();x.fillStyle='#f2f8fc';x.beginPath();x.arc(lean*.72,-167,15,0,7);x.fill();
+ const spread=S.step>=3?Math.min(66,28+v.com):24;x.strokeStyle='#8ce4b4';x.lineWidth=8;x.beginPath();x.moveTo(lean*.5,-132);x.lineTo(-spread,-117);x.moveTo(lean*.5,-132);x.lineTo(spread,-117);x.stroke();x.restore();
+ if(S.step>=3){line(cx,ground-177,cx,ground,'#72c9ff',1,[4,4]);line(cx,ground-30,cx+lean*.7,ground-177,'#8ce4b4',2);label(`LEAN ${lean.toFixed(1)}°`,w*.53,h*.63,'#8ce4b4')}
+ if(S.step>=5)label(v.stabilized?`CRITICAL DAMPING ${S.damping}% · DEADZONE ON`:'UNDAMPED FEEDBACK · OSCILLATING',w*.70,h*.75,v.stabilized?'#8ce4b4':'#ff8179','center');
+}
+function draw(){resize();const w=c.clientWidth,h=c.clientHeight,v=values();x.clearRect(0,0,w,h);x.fillStyle='#132631';x.fillRect(0,0,w,h);topView(w,h,v);sideView(w,h,v)}
+function update(){document.querySelectorAll('[data-step]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.step===S.step)));$('stage').textContent=names[S.step];$('status').textContent=status[S.step];$('explain').innerHTML=desc[S.step];$('ik').setAttribute('aria-pressed',String(S.ik));$('stable').setAttribute('aria-pressed',String(S.stable));const v=values();$('mRays').textContent=S.step<1?'고정 트리거':v.supported+'/9';$('mCom').textContent=S.step<2?'측정 안 함':v.com.toFixed(1)+' cm';$('mSway').textContent=Math.abs(v.sway).toFixed(1)+'°';$('mFoot').textContent=v.foot;draw()}
+document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{S.step=+b.dataset.step;S.ik=S.step>=4;S.stable=S.step>=5;update()});$('edge').oninput=e=>{S.edge=+e.target.value;$('edgeOut').textContent=S.edge+'%';update()};$('damping').oninput=e=>{S.damping=+e.target.value;$('dampingOut').textContent=S.damping+'%';update()};$('ik').onclick=()=>{S.ik=!S.ik;update()};$('stable').onclick=()=>{S.stable=!S.stable;update()};function tick(){S.t++;draw();if(S.t%8===0)update();requestAnimationFrame(tick)}update();tick();addEventListener('resize',draw);
+})();
+</script></body></html>
