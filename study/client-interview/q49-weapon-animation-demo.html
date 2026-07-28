@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Q49 무기 애니메이션 교체 단계형 실험실</title>
+<style>
+:root{--bg:#081019;--panel:#111d28;--line:#2d4354;--ink:#f2f8fc;--muted:#97aab8;--blue:#72c9ff;--amber:#ffd17f;--green:#8ce4b4;--red:#ff8179}*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;overflow:hidden}#root{padding:14px}.viewport{position:relative;aspect-ratio:16/7.1;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:#13222d}canvas{width:100%;height:100%;display:block}.hud{position:absolute;inset:10px 10px auto;display:flex;justify-content:space-between;gap:8px;pointer-events:none;font:11px ui-monospace,Consolas,monospace}.hud span{padding:5px 9px;border:1px solid #ffffff20;border-radius:999px;background:#081019dd}.hud b{color:var(--blue)}.steps{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-top:11px}button{min-height:40px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--muted);font:600 11px inherit;padding:7px 5px;cursor:pointer}button:hover{color:var(--ink);border-color:#577187}button:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}button[aria-pressed=true]{background:var(--blue);border-color:var(--blue);color:#06131d}.n{display:block;font:9px ui-monospace,Consolas,monospace;opacity:.64}.explain{margin:10px 0 0;border-left:2px solid var(--blue);padding:1px 0 1px 11px;color:var(--muted);font-size:12px;line-height:1.5;min-height:38px}.explain b{color:var(--ink)}.controls{display:grid;grid-template-columns:1fr 1fr 1.35fr;gap:14px;margin-top:8px}.ct{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin-bottom:4px}.ct output{color:var(--ink);font-family:ui-monospace,Consolas,monospace}input{width:100%;accent-color:var(--blue)}.toggles{display:flex;gap:5px}.toggles button{flex:1;min-height:34px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-top:8px;background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden}.m{background:var(--panel);padding:7px 9px}.m small{display:block;color:#758b9b;font:9px ui-monospace,Consolas,monospace}.m strong{font:14px ui-monospace,Consolas,monospace}@media(max-width:720px){.steps{grid-template-columns:repeat(3,1fr)}.controls{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.viewport{aspect-ratio:4/3}}
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="viewport">
+    <canvas id="scene" role="img" aria-label="거대한 무기별 상태 머신을 공용 로코모션, 데이터 애니메이션 세트, 상체 전환 몽타주와 입력 버퍼로 분리하는 과정"></canvas>
+    <div class="hud"><span>Q49 · <b id="stage">무기마다 그래프 복제</b></span><span id="status">무기 추가가 그래프 공사로 번짐</span></div>
+  </div>
+  <div class="steps" role="group" aria-label="무기 애니메이션 구조 개선 단계">
+    <button data-step="0" aria-pressed="true"><span class="n">STEP 0</span>거대 그래프</button>
+    <button data-step="1" aria-pressed="false"><span class="n">STEP 1</span>블렌드 전이</button>
+    <button data-step="2" aria-pressed="false"><span class="n">STEP 2</span>상·하체 분리</button>
+    <button data-step="3" aria-pressed="false"><span class="n">STEP 3</span>데이터 세트</button>
+    <button data-step="4" aria-pressed="false"><span class="n">STEP 4</span>몽타주·노티파이</button>
+    <button data-step="5" aria-pressed="false"><span class="n">STEP 5</span>인터럽트 안전</button>
+  </div>
+  <p class="explain" id="explain"></p>
+  <div class="controls">
+    <div><div class="ct"><label for="blend">전환 블렌드</label><output id="blendOut">180 ms</output></div><input id="blend" type="range" min="0" max="600" step="20" value="180"></div>
+    <div><div class="ct"><label for="notify">손 부착 노티파이</label><output id="notifyOut">58%</output></div><input id="notify" type="range" min="10" max="90" value="58"></div>
+    <div class="toggles" role="group" aria-label="상체 마스크와 준비 게이트 설정"><button id="mask" aria-pressed="false">상체 마스크</button><button id="buffer" aria-pressed="false">Ready+입력 버퍼</button></div>
+  </div>
+  <div class="metrics">
+    <div class="m"><small>무기 1개 추가 비용</small><strong id="mCost">18 nodes</strong></div>
+    <div class="m"><small>발 미끄러짐</small><strong id="mFoot">34 cm</strong></div>
+    <div class="m"><small>손↔무기 오차</small><strong id="mHand">42 cm</strong></div>
+    <div class="m"><small>전환 중 공격</small><strong id="mAttack">이전 검 공격</strong></div>
+  </div>
+</div>
+<script>
+(()=>{
+const c=document.getElementById('scene'),x=c.getContext('2d'),$=id=>document.getElementById(id);
+const S={step:0,blend:180,notify:58,mask:false,buffer:false,t:0};
+const names=['무기마다 그래프 복제','전환은 부드럽지만 중복 유지','공용 하체 + 무기별 상체','무기는 코드가 아닌 데이터','몽타주 프레임에서 소켓 교체','이동·전환·공격을 독립적으로 게이트'];
+const status=['무기 추가가 그래프 공사로 번짐','스냅은 줄었지만 N배 복제','달리기는 계속, 상체만 교체','새 무기는 세트 등록 한 번','손이 손잡이에 닿는 순간 Attach','입력은 새 무기가 Ready일 때 실행'];
+const desc=[
+'<b>문제 재현:</b> 검·활·맨손마다 Idle/Run/Jump/Attack를 복제하면 무기 하나에 노드 18개가 늘고, 교체 프레임에는 포즈와 공격 소유권이 함께 튑니다.',
+'<b>첫 개선:</b> 블렌드 타임으로 검 포즈에서 활 포즈로 스르륵 넘어갑니다. 하지만 이동 상태까지 무기마다 복제되어 그래프 유지비는 그대로입니다.',
+'<b>관심사 분리:</b> 하체는 공용 로코모션을 계속 재생하고, 척추 위만 무기 오버레이로 바꿉니다. 상체 마스크를 껐다 켜 발 미끄러짐 차이를 확인하세요.',
+'<b>데이터 드리븐:</b> 무기 행 하나가 Grip·Attack·Draw 세트를 공급합니다. N+1번째 무기는 상태 머신 수정 없이 데이터 등록만 하면 됩니다.',
+'<b>시간축 분리:</b> Draw 몽타주가 진행되고 노티파이 프레임에 무기를 등 소켓에서 손 소켓으로 옮깁니다. 슬라이더로 너무 이른·늦은 부착 오차를 확인하세요.',
+'<b>완성 구조:</b> 상체 마스크가 이동을 보존하고, Ready 게이트가 전환 중 공격을 버퍼링해 새 활 공격으로 실행합니다. 두 토글을 꺼 실패 경로와 비교하세요.'
+];
+function resize(){const r=c.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2),w=Math.round(r.width*d),h=Math.round(r.height*d);if(c.width!==w||c.height!==h){c.width=w;c.height=h}x.setTransform(d,0,0,d,0,0)}
+function rr(px,py,w,h,r,fill,stroke){x.beginPath();x.roundRect(px,py,w,h,r);if(fill){x.fillStyle=fill;x.fill()}if(stroke){x.strokeStyle=stroke;x.lineWidth=1;x.stroke()}}
+function line(ax,ay,bx,by,co='#526b79',lw=2,dash=[]){x.beginPath();x.setLineDash(dash);x.moveTo(ax,ay);x.lineTo(bx,by);x.strokeStyle=co;x.lineWidth=lw;x.stroke();x.setLineDash([])}
+function label(t,px,py,co='#f2f8fc',align='left'){x.font='600 10px ui-monospace,Consolas,monospace';x.textAlign=align;x.fillStyle='rgba(5,11,16,.88)';const tw=x.measureText(t).width,ox=align==='center'?-tw/2:align==='right'?-tw:0;x.fillRect(px+ox-5,py-12,tw+10,18);x.fillStyle=co;x.fillText(t,px,py);x.textAlign='left'}
+function node(t,px,py,w,active=false,bad=false){rr(px,py,w,25,5,bad?'#4b2428':active?'#173f45':'#1d303c',bad?'#ff8179':active?'#8ce4b4':'#526b79');x.fillStyle=active?'#8ce4b4':bad?'#ffb1ac':'#c7d5de';x.font='600 9px ui-monospace,Consolas,monospace';x.textAlign='center';x.fillText(t,px+w/2,py+16);x.textAlign='left'}
+function values(){const masked=S.step>=2&&S.mask;const ready=S.step>=5&&S.buffer;const cost=S.step<2?18:S.step===2?6:1;const foot=S.step<2?34:masked?2:31;const hand=S.step<4?42:Math.abs(S.notify-58)*1.8;const attack=S.step<5?'이전 검 공격':ready?'버퍼→활 공격':'입력 소실';return{masked,ready,cost,foot,hand,attack}}
+function graph(w,h){
+ const gx=w*.035,gy=h*.16,gw=w*.40,gh=h*.68;
+ label(S.step<2?'ONE GIANT ANIM GRAPH':'SHARED LOCOMOTION SPINE',gx,gy-12,S.step<2?'#ff8179':'#8ce4b4');
+ if(S.step<2){
+  const weapons=['SWORD','BOW','FIST'],cols=['#72c9ff','#ffd17f','#8ce4b4'];
+  weapons.forEach((wep,j)=>{const yy=gy+j*gh*.31;label(wep,gx,yy+9,cols[j]);['IDLE','RUN','JUMP','ATK'].forEach((n,i)=>{const nx=gx+62+i*gw*.195;node(n,nx,yy-8,gw*.16,j===1&&i===1);if(i)line(nx-10,yy+4,nx,yy+4,cols[j],1.5)});if(j<2)for(let i=0;i<4;i++)line(gx+62+i*gw*.195+gw*.08,yy+18,gx+62+i*gw*.195+gw*.08,yy+gh*.22,'#ff8179',1,[3,3])});
+  label(S.step===0?'POSE SNAP + DUPLICATED TRANSITIONS':`CROSSFADE ${S.blend} ms · DUPLICATION REMAINS`,gx+gw*.5,gy+gh*.95,S.step===0?'#ff8179':'#ffd17f','center');
+ }else{
+  const baseY=gy+gh*.53;['IDLE','RUN','JUMP','FALL'].forEach((n,i)=>{const nx=gx+i*gw*.24;node(n,nx,baseY,gw*.19,S.step>=2&&i===1);if(i)line(nx-12,baseY+12,nx,baseY+12,'#72c9ff')});
+  line(gx+gw*.48,baseY,gx+gw*.48,gy+gh*.24,'#72c9ff',2);
+  label('LOWER BODY · ALWAYS RUNNING',gx,baseY+47,'#72c9ff');
+  if(S.step===2){node('SWORD UPPER',gx+gw*.05,gy+24,gw*.25);node('BOW UPPER',gx+gw*.37,gy+24,gw*.25,true);node('FIST UPPER',gx+gw*.69,gy+24,gw*.25);label('BONE MASK: SPINE_01 → HANDS',gx+gw*.5,gy+83,S.mask?'#8ce4b4':'#ff8179','center')}
+  if(S.step>=3){const rows=[['SWORD','Grip_S','Atk_S','Draw_S'],['BOW','Grip_B','Atk_B','Draw_B'],['FIST','Grip_F','Atk_F','—']];label('WEAPON ANIM-SET TABLE',gx,gy+4,'#8ce4b4');rows.forEach((r,j)=>r.forEach((v,i)=>node(v,gx+i*gw*.245,gy+18+j*34,gw*.21,j===1)));const dataBottom=gy+111;if(baseY-dataBottom>34)label('+ NEW WEAPON = +1 DATA ROW',gx+gw*.5,(dataBottom+baseY)/2+4,'#8ce4b4','center')}
+ }
+}
+function character(w,h){
+ const v=values(),cx=w*.70,ground=h*.82,phase=Math.sin(S.t*.07),progress=S.step>=4?((S.t%180)/180):.72;
+ line(w*.48,ground,w*.97,ground,'#526b79',3);
+ for(let i=0;i<8;i++){const ox=((S.t*2.2+i*85)%(w*.48));line(w*.49+ox,ground+7,w*.54+ox,ground+7,'#2d4354',2)}
+ label('RUNTIME POSE',w*.52,h*.16,'#72c9ff');
+ x.save();x.translate(cx,ground);
+ const lowerBob=Math.abs(phase)*3,rootSlide=v.masked?0:phase*16;
+ x.translate(rootSlide,-lowerBob);
+ x.lineCap='round';
+ x.strokeStyle='#72c9ff';x.lineWidth=10;
+ x.beginPath();x.moveTo(-10,-78);x.lineTo(-28+phase*20,-10);x.moveTo(10,-78);x.lineTo(31-phase*20,-10);x.stroke();
+ x.fillStyle='#31576b';x.fillRect(-34,-130,68,53);
+ const blend=Math.min(1,S.blend/300),bowPose=S.step===0?1:blend;
+ x.strokeStyle=S.step>=2?'#8ce4b4':'#72c9ff';x.lineWidth=11;
+ x.beginPath();x.moveTo(0,-128);x.lineTo(0,-181);x.stroke();
+ x.fillStyle='#f2f8fc';x.beginPath();x.arc(0,-197,15,0,7);x.fill();
+ const armY=-151-bowPose*10;
+ x.strokeStyle='#8ce4b4';x.lineWidth=9;
+ x.beginPath();x.moveTo(-5,-161);x.lineTo(-43,armY);x.lineTo(-74,armY-5);x.moveTo(5,-161);x.lineTo(42,armY-4);x.lineTo(70,armY-4);x.stroke();
+ let attachProgress=S.step>=4?progress:1,handAttached=attachProgress>=S.notify/100;
+ if(S.step<4||handAttached){x.strokeStyle='#ffd17f';x.lineWidth=6;x.beginPath();x.arc(73,armY-5,31,-1.4,1.4);x.stroke();line(79,armY-34,79,armY+24,'#ffd17f',2)}
+ else{x.strokeStyle='#ffd17f';x.lineWidth=6;x.beginPath();x.arc(35,-139,28,-1.3,1.3);x.stroke();line(41,-166,41,-112,'#ffd17f',2)}
+ x.restore();
+ if(S.step>=2){line(w*.50,h*.55,w*.89,h*.55,S.mask?'#8ce4b4':'#ff8179',2,[6,4]);label(S.mask?'UPPER MONTAGE / LOWER LOCOMOTION PRESERVED':'FULL-BODY MONTAGE LEAKS INTO LEGS',w*.69,h*.52,S.mask?'#8ce4b4':'#ff8179','center')}
+ if(S.step>=4){const tx=w*.53,ty=h*.24,tw=w*.40;line(tx,ty,tx+tw,ty,'#526b79',5);x.fillStyle='#72c9ff';x.fillRect(tx,ty-4,tw*progress,8);const np=tx+tw*S.notify/100;line(np,ty-16,np,ty+18,'#ffd17f',2);label(`ATTACH NOTIFY ${S.notify}%`,np,ty+37,'#ffd17f','center');x.fillStyle=progress>=S.notify/100?'#8ce4b4':'#ffd17f';x.beginPath();x.arc(tx+tw*progress,ty,6,0,7);x.fill()}
+ if(S.step>=5){const bx=w*.52,by=h*.37;node('ATTACK INPUT',bx,by,w*.09,true);node('READY?',bx+w*.11,by,w*.08,S.buffer,!S.buffer);node(S.buffer?'QUEUE':'DROP',bx+w*.21,by,w*.08,S.buffer,!S.buffer);node(S.buffer?'BOW ATTACK':'NO ATTACK',bx+w*.31,by,w*.12,S.buffer,!S.buffer);line(bx+w*.09,by+12,bx+w*.11,by+12,'#72c9ff');line(bx+w*.19,by+12,bx+w*.21,by+12,S.buffer?'#8ce4b4':'#ff8179');line(bx+w*.29,by+12,bx+w*.31,by+12,S.buffer?'#8ce4b4':'#ff8179')}
+}
+function draw(){resize();const w=c.clientWidth,h=c.clientHeight;x.clearRect(0,0,w,h);x.fillStyle='#132631';x.fillRect(0,0,w,h);graph(w,h);character(w,h)}
+function update(){
+ document.querySelectorAll('[data-step]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.step===S.step)));
+ $('stage').textContent=names[S.step];$('status').textContent=status[S.step];$('explain').innerHTML=desc[S.step];
+ $('mask').setAttribute('aria-pressed',String(S.mask));$('buffer').setAttribute('aria-pressed',String(S.buffer));
+ const v=values();$('mCost').textContent=v.cost+(v.cost===1?' data row':' nodes');$('mFoot').textContent=v.foot.toFixed(0)+' cm';$('mHand').textContent=v.hand.toFixed(0)+' cm';$('mAttack').textContent=v.attack;draw()
+}
+document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{S.step=+b.dataset.step;S.mask=S.step>=2;S.buffer=S.step>=5;update()});
+$('blend').oninput=e=>{S.blend=+e.target.value;$('blendOut').textContent=S.blend+' ms';update()};
+$('notify').oninput=e=>{S.notify=+e.target.value;$('notifyOut').textContent=S.notify+'%';update()};
+$('mask').onclick=()=>{S.mask=!S.mask;update()};$('buffer').onclick=()=>{S.buffer=!S.buffer;update()};
+function tick(){S.t++;draw();requestAnimationFrame(tick)}update();tick();addEventListener('resize',draw);
+})();
+</script>
+</body>
+</html>
