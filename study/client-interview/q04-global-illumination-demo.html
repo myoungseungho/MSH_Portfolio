@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Q4 간접광 단계형 실험실</title>
+<style>
+:root{--bg:#090d14;--panel:#121925;--line:#2b3748;--ink:#edf3fb;--muted:#98a7ba;--amber:#ffb54a;--cyan:#6ed7e5;--red:#ff7469;--green:#7fd59a}
+*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;overflow:hidden}
+#root{padding:14px}.viewport{position:relative;aspect-ratio:16/8.6;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:#070a0f}
+canvas{display:block;width:100%;height:100%}.hud{position:absolute;inset:10px 10px auto;display:flex;justify-content:space-between;gap:8px;pointer-events:none;font:11px ui-monospace,Consolas,monospace}
+.hud span{padding:5px 9px;border:1px solid #ffffff20;border-radius:999px;background:#07101ad9}.hud b{color:#ffd184}.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:12px}
+button{min-height:40px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--muted);font:600 12px inherit;cursor:pointer;padding:7px 8px}
+button:hover{color:var(--ink);border-color:#52627a}button:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+button[aria-pressed=true]{background:var(--amber);border-color:var(--amber);color:#171006}.step-no{display:block;font:9px ui-monospace,Consolas,monospace;opacity:.65}
+.explain{margin:11px 0 0;border-left:2px solid var(--cyan);padding:1px 0 1px 11px;color:var(--muted);font-size:12px;line-height:1.55;min-height:40px}.explain b{color:var(--ink)}
+.controls{display:grid;grid-template-columns:1.15fr 1fr;gap:14px;margin-top:11px}.control-title{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin-bottom:5px}.control-title output{color:var(--ink);font-family:ui-monospace,Consolas,monospace}
+input[type=range]{width:100%;accent-color:var(--amber)}.switches{display:flex;gap:5px}.switches button{flex:1;min-height:34px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin-top:11px;background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.metric{background:var(--panel);padding:7px 9px}.metric small{display:block;color:#69798e;font:9px ui-monospace,Consolas,monospace}.metric strong{font:14px ui-monospace,Consolas,monospace}
+.pipeline{display:flex;align-items:center;gap:5px;margin-top:10px;color:#65758b;font:10px ui-monospace,Consolas,monospace}.pipe{padding:4px 7px;border:1px solid var(--line);border-radius:6px}.pipe.on{color:#171006;background:var(--amber);border-color:var(--amber)}.arrow{opacity:.55}
+@media(max-width:650px){.steps{grid-template-columns:repeat(2,1fr)}.steps button:last-child{grid-column:1/-1}.controls{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.pipeline{flex-wrap:wrap}.viewport{aspect-ratio:4/3}}
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="viewport">
+    <canvas id="scene" role="img" aria-label="창문으로 들어온 빛이 방 안에서 반사되어 간접광을 만드는 단계별 시뮬레이션"></canvas>
+    <div class="hud"><span>Q4 · <b id="stageName">직접광만</b></span><span id="sceneState">고정된 낮</span></div>
+  </div>
+
+  <div class="steps" role="group" aria-label="간접광 구현 단계">
+    <button data-step="0" aria-pressed="true"><span class="step-no">STEP 0</span>직접광만</button>
+    <button data-step="1" aria-pressed="false"><span class="step-no">STEP 1</span>상수 앰비언트</button>
+    <button data-step="2" aria-pressed="false"><span class="step-no">STEP 2</span>라이트맵</button>
+    <button data-step="3" aria-pressed="false"><span class="step-no">STEP 3</span>라이트 프로브</button>
+    <button data-step="4" aria-pressed="false"><span class="step-no">STEP 4</span>실시간 GI</button>
+  </div>
+
+  <p class="explain" id="explain"></p>
+
+  <div class="controls">
+    <div>
+      <div class="control-title"><label for="bounce">벽 반사율 — 간접광 재료</label><output id="bounceOut">65%</output></div>
+      <input id="bounce" type="range" min="0" max="100" value="65">
+    </div>
+    <div class="switches" role="group" aria-label="조명 상황">
+      <button data-scene="0" aria-pressed="true">☀ 고정된 낮</button>
+      <button data-scene="1" aria-pressed="false">↗ 태양 이동</button>
+      <button data-scene="2" aria-pressed="false">▣ 창문 닫힘</button>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><small>직접광</small><strong id="mDirect">100%</strong></div>
+    <div class="metric"><small>벽 바운스</small><strong id="mBounce">0%</strong></div>
+    <div class="metric"><small>동적 물체 GI</small><strong id="mDynamic">0%</strong></div>
+    <div class="metric"><small>현재 한계</small><strong id="mLimit">암부 소실</strong></div>
+  </div>
+
+  <div class="pipeline" aria-label="현재 활성화된 조명 파이프라인">
+    <span class="pipe on" data-pipe="0">직접광</span><span class="arrow">→</span>
+    <span class="pipe" data-pipe="1">앰비언트</span><span class="arrow">→</span>
+    <span class="pipe" data-pipe="2">정적 바운스</span><span class="arrow">→</span>
+    <span class="pipe" data-pipe="3">동적 샘플</span><span class="arrow">→</span>
+    <span class="pipe" data-pipe="4">실시간 갱신</span>
+  </div>
+</div>
+<script>
+(()=>{
+const canvas=document.querySelector('#scene'),ctx=canvas.getContext('2d'),$=id=>document.getElementById(id);
+const state={step:0,scene:0,bounce:.65,time:0};
+const names=['직접광만','상수 앰비언트','라이트맵','라이트 프로브','실시간 GI'];
+const copy=[
+  '<b>문제 재현:</b> 창문에서 직선으로 닿는 곳만 밝습니다. 빛을 받은 바닥이 다시 벽을 밝히지 않아 방 구석의 형태가 사라집니다.',
+  '<b>첫 시도:</b> 화면 전체에 같은 밝기를 더하면 구석은 보이지만, 빛의 방향과 벽 색이 사라져 방이 평평하게 뜹니다.',
+  '<b>정적 해결:</b> 바닥과 벽에서 튕긴 빛을 미리 구운 라이트맵으로 복원합니다. 고정된 방은 자연스럽지만 움직이는 캐릭터에는 결과가 붙지 않습니다.',
+  '<b>동적 물체 연결:</b> 공간에 저장한 라이트 프로브를 캐릭터 위치에서 보간합니다. 캐릭터도 주변의 따뜻한 간접광을 받지만, 조명이 바뀌면 구운 값은 낡습니다.',
+  '<b>최종:</b> 화면이나 프로브를 계속 갱신해 현재의 창문·태양 상태로 바운스를 다시 계산합니다. 움직이는 빛에는 맞지만 비용과 누수가 새로운 과제입니다.'
+];
+function resize(){
+  const r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2),w=Math.max(1,Math.round(r.width*d)),h=Math.max(1,Math.round(r.height*d));
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}
+  ctx.setTransform(d,0,0,d,0,0);
+}
+function mix(a,b,t){return a+(b-a)*t}
+function rgb(a,b,t=1){return `rgb(${Math.round(a[0]*t+b[0]*(1-t))},${Math.round(a[1]*t+b[1]*(1-t))},${Math.round(a[2]*t+b[2]*(1-t))})`}
+function poly(points,fill){ctx.fillStyle=fill;ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);for(let i=1;i<points.length;i++)ctx.lineTo(points[i][0],points[i][1]);ctx.closePath();ctx.fill()}
+function glow(x,y,r,color,alpha){const g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,color.replace('A',alpha));g.addColorStop(1,color.replace('A','0'));ctx.fillStyle=g;ctx.fillRect(x-r,y-r,r*2,r*2)}
+function drawRoom(w,h){
+  const floorY=h*.73,windowOpen=state.scene!==2,sunShift=state.scene===1?Math.sin(state.time*.8)*w*.13:0;
+  const ambient=state.step>=1?.13:0,staticGI=state.step>=2?state.bounce*.56:0,realtime=state.step>=4;
+  const validGI=windowOpen&&(state.scene===0||realtime),gi=validGI?staticGI:(realtime?0:staticGI);
+
+  ctx.fillStyle='#070a0f';ctx.fillRect(0,0,w,h);
+  const wallBase=12+ambient*70,wallWarm=gi*70;
+  ctx.fillStyle=`rgb(${wallBase+wallWarm},${wallBase+ambient*25+gi*38},${wallBase+ambient*18+gi*18})`;
+  ctx.fillRect(w*.08,h*.08,w*.84,h*.65);
+  poly([[w*.08,floorY],[w*.92,floorY],[w,h],[0,h]],`rgb(${18+ambient*55+gi*70},${16+ambient*42+gi*38},${17+ambient*34+gi*20})`);
+
+  ctx.fillStyle='#181b21';ctx.fillRect(w*.08,h*.08,w*.035,h*.67);ctx.fillRect(w*.885,h*.08,w*.035,h*.67);
+  const wx=w*.15,wy=h*.16,ww=w*.16,wh=h*.33;
+  ctx.fillStyle=windowOpen?'#87cbea':'#222934';ctx.fillRect(wx,wy,ww,wh);
+  ctx.strokeStyle='#dce9ec';ctx.lineWidth=4;ctx.strokeRect(wx,wy,ww,wh);ctx.beginPath();ctx.moveTo(wx+ww*.5,wy);ctx.lineTo(wx+ww*.5,wy+wh);ctx.moveTo(wx,wy+wh*.52);ctx.lineTo(wx+ww,wy+wh*.52);ctx.stroke();
+
+  if(windowOpen){
+    const bx=wx+ww*.48+sunShift;
+    const alpha=state.scene===1&&state.step<4?.38:.78;
+    const beam=ctx.createLinearGradient(bx,wy,bx+w*.23,floorY);
+    beam.addColorStop(0,`rgba(255,235,175,${alpha})`);beam.addColorStop(1,'rgba(255,178,70,.08)');
+    poly([[wx+ww*.06,wy+wh],[wx+ww*.92,wy+wh],[bx+w*.32,floorY],[bx+w*.08,floorY]],beam);
+    glow(bx+w*.18,floorY,w*.24,'rgba(255,158,55,A)',gi*.48);
+  }
+
+  if(state.step===1){
+    ctx.fillStyle='rgba(164,188,208,.11)';ctx.fillRect(w*.08,h*.08,w*.84,h*.65);
+  }
+  if(state.step>=2){
+    glow(w*.41,h*.47,w*.28,'rgba(255,129,48,A)',gi*.42);
+    glow(w*.76,h*.42,w*.20,'rgba(255,166,82,A)',gi*.25);
+    ctx.strokeStyle=`rgba(255,180,85,${Math.max(.08,gi*.55)})`;ctx.lineWidth=2;
+    for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(w*(.36+i*.12),floorY-i*4,w*(.10+i*.04),Math.PI*1.05,Math.PI*1.9);ctx.stroke()}
+  }
+
+  // crate: a static object that receives baked light
+  const cx=w*.67,cy=floorY-h*.18,cw=w*.13,ch=h*.18;
+  const crateLight=(windowOpen?.20:0)+ambient+(state.step>=2?gi*.72:0);
+  ctx.fillStyle=`rgb(${35+crateLight*130},${25+crateLight*72},${20+crateLight*36})`;ctx.fillRect(cx,cy,cw,ch);
+  ctx.strokeStyle=`rgba(255,205,130,${.12+crateLight*.5})`;ctx.lineWidth=2;ctx.strokeRect(cx,cy,cw,ch);ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+cw,cy+ch);ctx.moveTo(cx+cw,cy);ctx.lineTo(cx,cy+ch);ctx.stroke();
+
+  // moving character: lightmap cannot follow it, probes can
+  const charX=w*(.46+Math.sin(state.time*.7)*.055),charY=floorY-h*.22;
+  const dyn=state.step>=3?(state.step>=4?(windowOpen?gi:ambient):staticGI):0;
+  if(state.step===2){ctx.strokeStyle='rgba(255,116,105,.8)';ctx.setLineDash([5,4]);ctx.beginPath();ctx.arc(charX,charY+h*.09,h*.14,0,Math.PI*2);ctx.stroke();ctx.setLineDash([])}
+  if(state.step>=3){
+    for(let ix=0;ix<4;ix++)for(let iy=0;iy<2;iy++){const px=w*(.38+ix*.11),py=h*(.39+iy*.18);ctx.fillStyle=`rgba(110,215,229,${.16+dyn*.45})`;ctx.beginPath();ctx.arc(px,py,3,0,Math.PI*2);ctx.fill()}
+  }
+  glow(charX,charY+h*.1,h*.13,'rgba(255,154,70,A)',dyn*.35);
+  ctx.fillStyle=`rgb(${55+dyn*155},${61+dyn*88},${72+dyn*48})`;ctx.beginPath();ctx.arc(charX,charY,12,0,Math.PI*2);ctx.fill();ctx.fillRect(charX-9,charY+11,18,h*.14);
+  ctx.strokeStyle=`rgba(240,246,255,${.24+dyn*.55})`;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(charX-6,charY+h*.08);ctx.lineTo(charX-w*.025,charY+h*.16);ctx.moveTo(charX+6,charY+h*.08);ctx.lineTo(charX+w*.025,charY+h*.16);ctx.stroke();
+
+  if((state.scene===1||state.scene===2)&&state.step>=2&&state.step<4){
+    ctx.fillStyle='rgba(9,13,20,.82)';ctx.fillRect(w*.50,h*.12,w*.37,h*.10);
+    ctx.fillStyle='#ff7469';ctx.font='600 11px system-ui';ctx.fillText('구운 GI가 현재 조명과 불일치',w*.52,h*.16);
+    ctx.fillStyle='#aeb9c8';ctx.font='10px system-ui';ctx.fillText('STEP 4에서 실시간으로 갱신됩니다',w*.52,h*.195);
+  }
+  if(state.step===0){
+    ctx.fillStyle='rgba(7,10,15,.72)';ctx.fillRect(w*.57,h*.29,w*.27,h*.11);ctx.fillStyle='#ffcf80';ctx.font='600 11px system-ui';ctx.fillText('직접광이 닿지 않는 구석',w*.59,h*.34);ctx.fillStyle='#8e9caf';ctx.font='10px system-ui';ctx.fillText('형태와 재질 정보가 사라짐',w*.59,h*.375);
+  }
+}
+function updateUI(){
+  document.querySelectorAll('[data-step]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.step===state.step)));
+  document.querySelectorAll('[data-pipe]').forEach(p=>p.classList.toggle('on',+p.dataset.pipe<=state.step));
+  document.querySelectorAll('[data-scene]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.scene===state.scene)));
+  $('stageName').textContent=names[state.step];$('explain').innerHTML=copy[state.step];
+  $('sceneState').textContent=['고정된 낮','태양이 이동 중','창문이 닫힘'][state.scene];
+  const direct=state.scene===2?0:100;
+  const baked=state.step>=2?Math.round(state.bounce*62):0;
+  const dyn=state.step>=3?Math.round(state.bounce*(state.step===3?48:(state.scene===2?8:58))):0;
+  $('mDirect').textContent=direct+'%';$('mBounce').textContent=(state.step===1?'균일 '+Math.round(state.bounce*20):baked)+'%';$('mDynamic').textContent=dyn+'%';
+  $('mLimit').textContent=['암부 소실','평면적','동적 물체 제외','조명 변화 불일치','비용·누수'][state.step];
+}
+function frame(t){
+  state.time=t/1000;resize();ctx.setTransform(canvas.width/canvas.clientWidth,0,0,canvas.height/canvas.clientHeight,0,0);
+  drawRoom(canvas.clientWidth,canvas.clientHeight);requestAnimationFrame(frame);
+}
+document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{state.step=+b.dataset.step;updateUI()});
+document.querySelectorAll('[data-scene]').forEach(b=>b.onclick=()=>{state.scene=+b.dataset.scene;updateUI()});
+$('bounce').oninput=e=>{state.bounce=+e.target.value/100;$('bounceOut').textContent=e.target.value+'%';updateUI()};
+addEventListener('resize',resize);updateUI();requestAnimationFrame(frame);
+try{parent.postMessage({type:'q-lab-h',h:Math.ceil($('root').getBoundingClientRect().height)+4},'*')}catch(e){}
+})();
+</script>
+</body>
+</html>
