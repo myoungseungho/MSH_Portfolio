@@ -1,24 +1,365 @@
-(function(){'use strict';let a=null;
-const H=(k,t,d)=>`<div class="concept-head"><div><span>${k}</span><h3>${t}</h3><p>${d}</p></div><button data-rf-action="close">닫기</button></div>`,S=(l,m)=>`<div class="concept-status" aria-live="polite"><b data-rf-label>${l}</b><span data-rf-message>${m}</span></div>`;
-const h=()=>a?document.querySelector(`[data-flow-host="${a.id}"]`):null,q=s=>h()?.querySelector(s)||null,qa=s=>h()?[...h().querySelectorAll(s)]:[],tx=(s,v)=>{const n=q(s);if(n)n.textContent=v},say=(l,m)=>{tx('[data-rf-label]',l);tx('[data-rf-message]',m)};
-function arm(name,vals,biased){return `<div class="experiment-arm ${biased?'is-biased':''}" data-arm="${name}"><h4>${name}</h4><div class="experiment-bars">${[['신규 유저',vals[0]],['평균 MMR',vals[1]],['고핑',vals[2]]].map(x=>`<div class="experiment-bar"><b><span>${x[0]}</span><span>${x[1]}%</span></b><i style="--w:${x[1]}%"></i></div>`).join('')}</div></div>`}
-function m116(){return `<section class="concept-demo">${H('Q116 · 실험군 covariate balance','승률 차이가 기능 때문인지 고수 유저가 한쪽에 몰린 결과인지 어떻게 알까?','naive 배정과 층화 randomization을 비교해 사전 특성 균형을 확인하세요.')}<div class="mm-arena"><div class="experiment-balance" data-experiment>${arm('A',[28,62,18],true)}${arm('B',[51,44,33],true)}</div><div class="experiment-result" data-experiment-result>A win 54% · B win 48% · 구성 편향 큼</div></div><div class="concept-controls"><button data-rf-action="naive116">naive assignment</button><button class="primary" data-rf-action="balance116">MMR·지역 층화 randomize</button></div>${S('인과 추론 전 균형 검사','assignment 이전 특성과 exposure·noncompliance를 확인하고 결과 metric 정의를 고정합니다.')}</section>`}
-function balance116(ok){q('[data-experiment]').innerHTML=ok?arm('A',[40,53,24],false)+arm('B',[41,52,25],false):arm('A',[28,62,18],true)+arm('B',[51,44,33],true);tx('[data-experiment-result]',ok?'A win 51.2% · B win 49.8% · balanced uplift +1.4pp':'A win 54% · B win 48% · 구성 편향 큼');say(ok?'비교 가능한 실험군':'교란된 차이',ok?'사전 특성이 균형인 상태에서 confidence interval과 guardrail을 함께 봅니다.':'관측 승률만으로 기능 효과라고 결론낼 수 없습니다.')}
-function m117(){return `<section class="concept-demo">${H('Q117 · durable priority telemetry','오프라인 동안 쌓인 모든 debug 로그를 같은 우선순위로 보낼까?','버퍼 크기와 연결 상태를 바꿔 critical event 보존·debug drop·재전송 ack를 확인하세요.')}<div class="concept-controls"><label>buffer 한도 <input type="range" min="4" max="12" value="8" data-buffer-limit><output data-buffer-limit-v>8개</output></label></div><div class="mm-arena"><div class="telemetry-queue"><div class="telemetry-buffer" data-telemetry></div><div class="telemetry-meter"><i data-telemetry-meter style="--fill:0%"></i></div><div class="telemetry-stats"><span data-telemetry-count>0 queued</span><span data-telemetry-drop>0 dropped</span></div></div></div><div class="concept-controls"><button data-rf-action="offline117">오프라인 event 12개 생성</button><button class="primary" data-rf-action="reconnect117">재연결·batch ack</button><button data-rf-action="reset">초기화</button></div>${S('local durable queue','event ID·우선순위·TTL을 가진 append-only queue를 disk에 두고 ack 뒤에만 삭제합니다.')}</section>`}
-function offline117(){const limit=+q('[data-buffer-limit]').value,events=Array.from({length:12},(_,i)=>({kind:i%5===0?'critical':i%3===0?'product':'debug',i})),rank={critical:3,product:2,debug:1};events.sort((x,y)=>rank[y.kind]-rank[x.kind]);const kept=events.slice(0,limit),drop=12-limit;q('[data-telemetry]').innerHTML=kept.map(x=>`<i class="telemetry-event ${x.kind}" style="--h:${30+(x.i*17)%70}%"></i>`).join('')+Array.from({length:drop},()=>'<i class="telemetry-event debug is-dropped" style="--h:20%"></i>').join('');q('[data-telemetry-meter]').style.setProperty('--fill',`${limit/12*100}%`);tx('[data-buffer-limit-v]',`${limit}개`);tx('[data-telemetry-count]',`${limit} queued`);tx('[data-telemetry-drop]',`${drop} debug dropped`);a.queued=limit;say('우선순위 eviction','공간이 부족하면 critical·product를 남기고 TTL 지난 debug부터 제거합니다.')}
-function reconnect117(){if(!a.queued){say('전송할 queue 없음','먼저 오프라인 event를 만드세요.');return}qa('.telemetry-event:not(.is-dropped)').forEach(n=>n.style.opacity='.18');q('[data-telemetry-meter]').style.setProperty('--fill','0%');tx('[data-telemetry-count]','0 queued · batch B117 ack');say('멱등 batch 전송 완료','event ID dedup와 server ack를 받은 뒤 local record를 삭제했습니다.')}
-function m118(){const steps=[['CAPTURE','minidump'],['SCRUB','PII·secret'],['ENCRYPT','per-case key'],['UPLOAD','consent·quota'],['ACCESS','RBAC·TTL']];return `<section class="concept-demo">${H('Q118 · privacy-safe crash pipeline','크래시 덤프에 토큰·채팅·키가 섞여도 그대로 업로드할까?','민감 범위를 최소화하고 redaction·암호화·접근 통제를 순서대로 실행하세요.')}<div class="mm-arena"><div class="dump-pipeline">${steps.map((x,i)=>`<div class="dump-step" data-dump="${i}"><b>${x[0]}</b>${x[1]}</div>`).join('')}</div><div class="dump-secret" data-dump-secret>memory: token=sk_live_ABC · email=user@example · stack=0x91AF</div></div><div class="concept-controls"><button class="primary" data-rf-action="dump118">다음 보호 단계</button><button data-rf-action="reset">초기화</button></div>${S('민감 원본 local','가능하면 client에서 먼저 secret pattern과 불필요 memory page를 제거합니다.')}</section>`}
-function dump118(){a.phase=Math.min(5,a.phase+1);qa('[data-dump]').forEach((n,i)=>n.classList.toggle('is-on',i<a.phase));if(a.phase>=2){q('[data-dump="1"]').classList.add('is-redacted');q('[data-dump-secret]').classList.add('is-safe');tx('[data-dump-secret]','memory: token=[REDACTED] · email=[HASHED] · stack=module+0x1AF')}if(a.phase===5)qa('[data-dump]').forEach(n=>n.classList.add('is-redacted'));const msg=[['최소 dump 생성','전체 memory 대신 stack·module·필요 page만 캡처합니다.'],['local scrub','토큰·이메일·채팅 pattern을 업로드 전에 제거했습니다.'],['case key 암호화','전송과 저장 모두 case별 key로 보호합니다.'],['동의·quota 업로드','사용자 고지와 네트워크·보관 예산을 적용합니다.'],['제한 접근','incident 역할, 접근 audit, TTL 삭제를 강제합니다.']][a.phase-1];say(msg[0],msg[1])}
-function m119(){const stages=[['QUEUE','admission'],['LOGIN','session'],['WORLD','handoff'],['PAYMENT','saga'],['RECOVERY','invariants']];return `<section class="concept-demo">${H('Q119 · production-like chaos rehearsal','출시 전에 정상 부하 테스트만 통과하면 장애에도 안전할까?','가상 사용자 흐름을 실행하고 한 단계에 장애를 주입해 불변식과 복구를 확인하세요.')}<div class="concept-controls"><label>fault 위치 <select data-chaos-fault><option value="2">WORLD timeout</option><option value="3">PAYMENT response loss</option><option value="0">QUEUE restart</option></select></label></div><div class="mm-arena"><div class="chaos-board">${stages.map((x,i)=>`<div class="chaos-stage" data-chaos="${i}"><b>${x[0]}</b>${x[1]}</div>`).join('')}</div><div class="chaos-invariants"><span data-invariant="0">session ≤1</span><span data-invariant="1">charge effect ≤1</span><span data-invariant="2">lost reservation=0</span></div></div><div class="concept-controls"><button data-rf-action="load119">10× synthetic flow</button><button class="primary" data-rf-action="fault119">fault inject·recovery</button><button data-rf-action="reset">초기화</button></div>${S('실제 경로의 격리 환경','production schema·rate·timeout을 닮게 하되 실제 결제·사용자 자산과 분리합니다.')}</section>`}
-function load119(){qa('[data-chaos]').forEach(n=>n.classList.add('is-on'));a.loaded=true;say('10× 흐름 안정','queue depth와 p99뿐 아니라 session·payment·reservation 불변식을 계속 검사합니다.')}
-function fault119(){if(!a.loaded){say('부하 흐름 없음','먼저 end-to-end synthetic flow를 실행하세요.');return}const i=+q('[data-chaos-fault]').value,n=q(`[data-chaos="${i}"]`);n.classList.add('is-fault');setTimeout(()=>{if(!a||a.id!==119)return;n.classList.remove('is-fault');n.classList.add('is-safe');say('복구 후 불변식 유지','timeout·restart에도 idempotency, lease, outbox가 중복·유실 없이 수렴했습니다.')},120);say('fault 주입','실패 시점과 영향 범위를 기록하며 자동 복구를 기다립니다.')}
-function m120(){return `<section class="concept-demo">${H('Q120 · fenced region failover','주 리전이 끊기면 DNS만 보조 리전으로 돌려도 안전할까?','복제 lag를 확인하고 primary fencing→secondary 승격→traffic 전환을 순서대로 실행하세요.')}<div class="mm-arena"><div class="dr-map"><div class="region-box is-primary" data-region-a><h4>REGION A · PRIMARY</h4><div class="region-state">epoch 81</div><div class="region-state">write owner</div><div class="region-state" data-a-state>healthy</div></div><div class="dr-link" data-dr-link>async replica<i></i><span data-dr-lag>lag 2s</span></div><div class="region-box" data-region-b><h4>REGION B · STANDBY</h4><div class="region-state">epoch 80</div><div class="region-state">read replica</div><div class="region-state" data-b-state>ready</div></div><div class="dr-fence" data-dr-fence>global lease owner A · epoch 81</div></div></div><div class="concept-controls"><label>replication lag <input type="range" min="0" max="30" value="2" data-dr-lag-input><output data-dr-lag-v>2s</output></label><button data-rf-action="fail120">REGION A 장애</button><button data-rf-action="fence120">A write fencing</button><button class="primary" data-rf-action="promote120">B 승격·traffic 전환</button></div>${S('RPO 확인','failover 전에 데이터 lag, 세션 재인증, 외부 dependency, split-brain fencing을 함께 판단합니다.')}</section>`}
-function lag120(v){tx('[data-dr-lag-v]',`${v}s`);tx('[data-dr-lag]',`lag ${v}s`);say(+v>10?'RPO 초과 위험':'RPO 안','복제 지연만큼 최근 write가 유실될 수 있어 제품 정책과 비교합니다.')}
-function fail120(){q('[data-region-a]').classList.add('is-failed');tx('[data-a-state]','UNREACHABLE');q('[data-dr-link]').classList.add('is-cut');a.failed=true;say('primary 장애 감지','즉시 양쪽 write를 열지 않고 quorum과 global lease를 확인합니다.')}
-function fence120(){if(!a.failed){say('장애 확인 전','정상 primary를 임의로 fence하지 않습니다.');return}a.fenced=true;q('[data-region-a]').classList.remove('is-primary');tx('[data-dr-fence]','A lease revoked · next epoch 82 reserved for B');say('old primary write 차단','A가 늦게 살아나도 epoch 81 write는 저장 경계에서 거부됩니다.')}
-function promote120(){if(!a.fenced){say('승격 차단','old primary fencing이 증명되지 않아 split brain 위험이 있습니다.');return}q('[data-region-b]').classList.add('is-promoted');tx('[data-b-state]','PRIMARY epoch 82 · traffic ON');tx('[data-dr-fence]','global lease owner B · epoch 82 · session resume tokens rotated');say('REGION B 승격 완료','DNS·edge route와 세션 token을 새 epoch로 전환하고 lag 범위의 복구 안내를 제공합니다.')}
-const M={116:m116,117:m117,118:m118,119:m119,120:m120};
-function open(id){close(false);document.dispatchEvent(new CustomEvent('interview-demo-open',{detail:{id}}));a={id,phase:0,queued:0,loaded:false,failed:false,fenced:false};const x=document.querySelector(`[data-flow-host="${id}"]`),b=document.querySelector(`[data-flow-open="${id}"]`);if(b){b.hidden=true;b.setAttribute('aria-expanded','true')}x.innerHTML=M[id]()}
-function reset(){const id=a.id;a={id,phase:0,queued:0,loaded:false,failed:false,fenced:false};h().innerHTML=M[id]()}
-function close(f=true){if(!a)return;const id=a.id,x=document.querySelector(`[data-flow-host="${id}"]`),b=document.querySelector(`[data-flow-open="${id}"]`);if(x)x.innerHTML='';if(b){b.hidden=false;b.setAttribute('aria-expanded','false');if(f)b.focus({preventScroll:true})}a=null}
-function init(){document.addEventListener('click',e=>{const o=e.target.closest('[data-flow-open]');if(o){const id=+o.dataset.flowOpen;if(id>=116&&id<=120){open(id);return}}const b=e.target.closest('[data-rf-action]');if(!b||!a)return;const x=b.dataset.rfAction;if(x==='close')close();if(x==='reset')reset();if(x==='naive116')balance116(false);if(x==='balance116')balance116(true);if(x==='offline117')offline117();if(x==='reconnect117')reconnect117();if(x==='dump118')dump118();if(x==='load119')load119();if(x==='fault119')fault119();if(x==='fail120')fail120();if(x==='fence120')fence120();if(x==='promote120')promote120()});document.addEventListener('input',e=>{if(e.target.matches('[data-buffer-limit]'))tx('[data-buffer-limit-v]',`${e.target.value}개`);if(e.target.matches('[data-dr-lag-input]'))lag120(e.target.value)});document.addEventListener('interview-demo-open',e=>{if(a&&a.id!==e.detail.id)close(false)})}window.ReliabilityFinal={init}})();
+(function () {
+  'use strict';
+
+  let active = null;
+  const host = () => active ? document.querySelector(`[data-flow-host="${active.id}"]`) : null;
+  const one = selector => host()?.querySelector(selector) || null;
+  const all = selector => host() ? [...host().querySelectorAll(selector)] : [];
+  const setText = (selector, value) => {
+    const node = one(selector);
+    if (node) node.textContent = value;
+  };
+
+  function header(kicker, title, description) {
+    return `<div class="concept-head">
+      <div><span>${kicker}</span><h3>${title}</h3><p>${description}</p></div>
+      <button type="button" data-rf-action="close">닫기</button>
+    </div>`;
+  }
+
+  function status(label, message) {
+    return `<div class="concept-status" aria-live="polite">
+      <b data-rf-label>${label}</b><span data-rf-message>${message}</span>
+    </div>`;
+  }
+
+  function announce(label, message) {
+    setText('[data-rf-label]', label);
+    setText('[data-rf-message]', message);
+  }
+
+  function experimentArm(name, values, biased) {
+    const rows = [['신규 유저', values[0]], ['평균 MMR', values[1]], ['고핑', values[2]]];
+    return `<div class="experiment-arm ${biased ? 'is-biased' : ''}" data-arm="${name}">
+      <h4>${name}군</h4>
+      <div class="experiment-bars">${rows.map(([label, value]) => `
+        <div class="experiment-bar">
+          <b><span>${label}</span><span>${value}%</span></b>
+          <i style="--w:${value}%"></i>
+        </div>`).join('')}</div>
+    </div>`;
+  }
+
+  function mount116() {
+    return `<section class="concept-demo">
+      ${header('Q116 · 실험군 균형', '승률 차이가 기능 효과인지 구성 편향인지 가려내기', '편향 배정과 층화 무작위 배정을 번갈아 적용해 사전 특성의 균형을 비교해 보세요.')}
+      <div class="mm-arena">
+        <div class="experiment-balance" data-experiment>
+          ${experimentArm('A', [28, 62, 18], true)}
+          ${experimentArm('B', [51, 44, 33], true)}
+        </div>
+        <div class="experiment-result" data-experiment-result>A 승률 54% · B 승률 48% · 구성 편향 의심</div>
+      </div>
+      <div class="concept-controls">
+        <button type="button" data-rf-action="naive116">편향 배정 보기</button>
+        <button type="button" class="primary" data-rf-action="balance116">MMR·지역 층화 배정</button>
+      </div>
+      ${status('결과를 바로 믿을 수 없음', '승률만 비교하기 전에 배정 방식과 사전 특성의 균형을 확인해야 합니다.')}
+    </section>`;
+  }
+
+  function balance116(balanced) {
+    one('[data-experiment]').innerHTML = balanced
+      ? experimentArm('A', [40, 53, 24], false) + experimentArm('B', [41, 52, 25], false)
+      : experimentArm('A', [28, 62, 18], true) + experimentArm('B', [51, 44, 33], true);
+    setText('[data-experiment-result]', balanced
+      ? 'A 승률 51.2% · B 승률 49.8% · 보정된 상승폭 +1.4%p'
+      : 'A 승률 54% · B 승률 48% · 구성 편향 의심');
+    announce(
+      balanced ? '비교 가능한 실험군' : '교란된 차이',
+      balanced
+        ? '사전 특성이 균형인 상태에서 신뢰구간과 가드레일 지표를 함께 봅니다.'
+        : '관측된 승률 차이만으로 기능 효과라고 결론낼 수 없습니다.'
+    );
+  }
+
+  function mount117() {
+    return `<section class="concept-demo">
+      ${header('Q117 · 오프라인 텔레메트리', '끊긴 동안 중요한 이벤트부터 보존하기', '버퍼 한도를 바꾼 뒤 이벤트를 쌓고 재연결해 우선순위 제거와 ACK 이후 삭제를 확인해 보세요.')}
+      <div class="concept-controls">
+        <label>로컬 버퍼 한도
+          <input type="range" min="4" max="12" value="8" data-buffer-limit>
+          <output data-buffer-limit-v>8개</output>
+        </label>
+      </div>
+      <div class="mm-arena">
+        <div class="telemetry-queue">
+          <div class="telemetry-buffer" data-telemetry></div>
+          <div class="telemetry-meter"><i data-telemetry-meter style="--fill:0%"></i></div>
+          <div class="telemetry-stats">
+            <span data-telemetry-count>0 queued</span><span data-telemetry-drop>0 dropped</span>
+          </div>
+        </div>
+      </div>
+      <div class="concept-controls">
+        <button type="button" data-rf-action="offline117">오프라인 이벤트 12개 생성</button>
+        <button type="button" class="primary" data-rf-action="reconnect117">재연결·배치 ACK</button>
+        <button type="button" data-rf-action="reset">초기화</button>
+      </div>
+      ${status('내구성 있는 로컬 큐', '이벤트 ID·우선순위·TTL을 기록하고 서버 ACK를 받은 항목만 삭제합니다.')}
+    </section>`;
+  }
+
+  function offline117() {
+    const limit = Number(one('[data-buffer-limit]').value);
+    const priority = { critical: 3, product: 2, debug: 1 };
+    const events = Array.from({ length: 12 }, (_, index) => ({
+      kind: index % 5 === 0 ? 'critical' : index % 3 === 0 ? 'product' : 'debug',
+      index
+    })).sort((a, b) => priority[b.kind] - priority[a.kind]);
+    const kept = events.slice(0, limit);
+    const dropped = 12 - limit;
+    one('[data-telemetry]').innerHTML =
+      kept.map(event => `<i class="telemetry-event ${event.kind}" style="--h:${30 + (event.index * 17) % 70}%"></i>`).join('') +
+      Array.from({ length: dropped }, () => '<i class="telemetry-event debug is-dropped" style="--h:20%"></i>').join('');
+    one('[data-telemetry-meter]').style.setProperty('--fill', `${limit / 12 * 100}%`);
+    setText('[data-buffer-limit-v]', `${limit}개`);
+    setText('[data-telemetry-count]', `${limit} queued`);
+    setText('[data-telemetry-drop]', `${dropped} debug dropped`);
+    active.queued = limit;
+    announce('우선순위 기반 축출', '공간이 부족하면 critical·product를 남기고 오래된 debug부터 제거합니다.');
+  }
+
+  function reconnect117() {
+    if (!active.queued) {
+      announce('전송할 이벤트 없음', '먼저 오프라인 이벤트를 생성하세요.');
+      return;
+    }
+    all('.telemetry-event:not(.is-dropped)').forEach(node => node.classList.add('is-dropped'));
+    one('[data-telemetry-meter]').style.setProperty('--fill', '0%');
+    setText('[data-telemetry-count]', '0 queued · batch B117 ACK');
+    active.queued = 0;
+    announce('멱등 배치 전송 완료', '이벤트 ID로 중복을 막고 서버 ACK 이후 로컬 레코드를 삭제했습니다.');
+  }
+
+  function mount118() {
+    const steps = [
+      ['CAPTURE', '최소 덤프'], ['SCRUB', 'PII·비밀 제거'], ['ENCRYPT', '건별 키'],
+      ['UPLOAD', '동의·쿼터'], ['ACCESS', 'RBAC·TTL']
+    ];
+    return `<section class="concept-demo">
+      ${header('Q118 · 개인정보 보호 크래시 덤프', '민감한 메모리를 그대로 업로드하지 않는 수집 파이프라인', '단계를 진행하며 최소 수집·로컬 삭제·암호화·동의·접근 통제가 적용되는 순서를 확인해 보세요.')}
+      <div class="mm-arena">
+        <div class="dump-pipeline">${steps.map(([name, detail], index) => `
+          <div class="dump-step" data-dump="${index}"><b>${name}</b>${detail}</div>`).join('')}</div>
+        <div class="dump-secret" data-dump-secret>memory: token=sk_live_ABC · email=user@example · stack=0x91AF</div>
+      </div>
+      <div class="concept-controls">
+        <button type="button" class="primary" data-rf-action="dump118">다음 보호 단계</button>
+        <button type="button" data-rf-action="reset">초기화</button>
+      </div>
+      ${status('민감 원본은 로컬에 있음', '가능하면 클라이언트에서 비밀 패턴과 불필요한 메모리 페이지부터 제거합니다.')}
+    </section>`;
+  }
+
+  function dump118() {
+    active.phase = Math.min(5, active.phase + 1);
+    all('[data-dump]').forEach((node, index) => node.classList.toggle('is-on', index < active.phase));
+    if (active.phase >= 2) {
+      one('[data-dump="1"]').classList.add('is-redacted');
+      one('[data-dump-secret]').classList.add('is-safe');
+      setText('[data-dump-secret]', 'memory: token=[REDACTED] · email=[HASHED] · stack=module+0x1AF');
+    }
+    if (active.phase === 5) all('[data-dump]').forEach(node => node.classList.add('is-redacted'));
+    const messages = [
+      ['최소 덤프 생성', '전체 메모리가 아니라 스택·모듈·필요 페이지만 캡처합니다.'],
+      ['로컬 스크럽', '토큰·이메일·경로 패턴을 업로드 전에 제거했습니다.'],
+      ['건별 키 암호화', '전송과 저장 모두 사고 건별 키로 보호합니다.'],
+      ['동의·쿼터 업로드', '사용자 고지와 네트워크·보관 예산을 적용합니다.'],
+      ['제한된 접근', '사고 담당자만 접근하며 감사를 남기고 TTL 후 삭제합니다.']
+    ];
+    announce(...messages[active.phase - 1]);
+  }
+
+  function mount119() {
+    const stages = [['QUEUE', '입장'], ['LOGIN', '세션'], ['WORLD', '이관'], ['PAYMENT', '사가'], ['RECOVERY', '불변식']];
+    return `<section class="concept-demo">
+      ${header('Q119 · 실전형 부하·장애 훈련', '정상 부하를 통과한 전체 경로에 장애를 주입하기', '합성 사용자 흐름을 먼저 실행하고 특정 단계에 장애를 넣어 복구와 불변식을 확인해 보세요.')}
+      <div class="concept-controls">
+        <label>장애 위치
+          <select data-chaos-fault>
+            <option value="2">WORLD timeout</option>
+            <option value="3">PAYMENT response loss</option>
+            <option value="0">QUEUE restart</option>
+          </select>
+        </label>
+      </div>
+      <div class="mm-arena">
+        <div class="chaos-board">${stages.map(([name, detail], index) => `
+          <div class="chaos-stage" data-chaos="${index}"><b>${name}</b>${detail}</div>`).join('')}</div>
+        <div class="chaos-invariants">
+          <span>세션 1개</span><span>결제 효과 1회</span><span>유실 예약 0</span>
+        </div>
+      </div>
+      <div class="concept-controls">
+        <button type="button" data-rf-action="load119">1만 합성 흐름</button>
+        <button type="button" class="primary" data-rf-action="fault119">장애 주입·복구</button>
+        <button type="button" data-rf-action="reset">초기화</button>
+      </div>
+      ${status('실제 경로와 격리된 환경', '운영과 같은 스키마·비율·타임아웃을 쓰되 실제 결제와 사용자 자산은 분리합니다.')}
+    </section>`;
+  }
+
+  function load119() {
+    all('[data-chaos]').forEach(node => node.classList.add('is-on'));
+    active.loaded = true;
+    announce('1만 흐름 안정', '지연만 보지 않고 세션·결제·예약 불변식을 계속 검사합니다.');
+  }
+
+  function fault119() {
+    if (!active.loaded) {
+      announce('부하 흐름이 없음', '먼저 종단 간 합성 흐름을 실행하세요.');
+      return;
+    }
+    const index = Number(one('[data-chaos-fault]').value);
+    const stage = one(`[data-chaos="${index}"]`);
+    stage.classList.add('is-fault');
+    setTimeout(() => {
+      if (!active || active.id !== 119) return;
+      stage.classList.remove('is-fault');
+      stage.classList.add('is-safe');
+      announce('복구 후 불변식 유지', '타임아웃·재시작에도 멱등성, lease, outbox가 중복과 유실을 막았습니다.');
+    }, 120);
+    announce('장애 주입', '실패 시점과 영향 범위를 기록하며 자동 복구를 기다립니다.');
+  }
+
+  function mount120() {
+    return `<section class="concept-demo">
+      ${header('Q120 · 리전 재해복구', '쓰기 권한을 격리한 뒤 대기 리전을 승격하기', '주 리전 장애, 이전 리전 fencing, 대기 리전 승격 순서를 직접 실행해 split brain 방지를 확인해 보세요.')}
+      <div class="mm-arena">
+        <div class="dr-map">
+          <div class="region-box is-primary" data-region-a>
+            <h4>REGION A · PRIMARY</h4>
+            <div class="region-state">epoch 81</div><div class="region-state">write owner</div>
+            <div class="region-state" data-a-state>healthy</div>
+          </div>
+          <div class="dr-link" data-dr-link>async replica<i></i><span data-dr-lag>lag 2s</span></div>
+          <div class="region-box" data-region-b>
+            <h4>REGION B · STANDBY</h4>
+            <div class="region-state">epoch 80</div><div class="region-state">read replica</div>
+            <div class="region-state" data-b-state>ready</div>
+          </div>
+          <div class="dr-fence" data-dr-fence>global lease owner A · epoch 81</div>
+        </div>
+      </div>
+      <div class="concept-controls">
+        <label>복제 지연
+          <input type="range" min="0" max="30" value="2" data-dr-lag-input>
+          <output data-dr-lag-v>2s</output>
+        </label>
+        <button type="button" data-rf-action="fail120">REGION A 장애</button>
+        <button type="button" data-rf-action="fence120">A 쓰기 차단</button>
+        <button type="button" class="primary" data-rf-action="promote120">B 승격·트래픽 전환</button>
+      </div>
+      ${status('RPO를 먼저 확인', '복제 지연과 외부 의존성, split-brain 차단 상태를 함께 판단합니다.')}
+    </section>`;
+  }
+
+  function lag120(value) {
+    setText('[data-dr-lag-v]', `${value}s`);
+    setText('[data-dr-lag]', `lag ${value}s`);
+    announce(Number(value) > 10 ? 'RPO 초과 위험' : 'RPO 범위', '복제 지연만큼 최근 쓰기가 유실될 수 있어 제품 정책과 비교합니다.');
+  }
+
+  function fail120() {
+    one('[data-region-a]').classList.add('is-failed');
+    setText('[data-a-state]', 'UNREACHABLE');
+    one('[data-dr-link]').classList.add('is-cut');
+    active.failed = true;
+    announce('주 리전 장애 감지', '즉시 반대편 쓰기를 열지 않고 global lease를 확인합니다.');
+  }
+
+  function fence120() {
+    if (!active.failed) {
+      announce('장애 확인 필요', '정상 주 리전을 임의로 차단하지 않습니다.');
+      return;
+    }
+    active.fenced = true;
+    one('[data-region-a]').classList.remove('is-primary');
+    setText('[data-dr-fence]', 'A lease revoked · next epoch 82 reserved for B');
+    announce('이전 주 리전 쓰기 차단', 'A가 늦게 살아나도 epoch 81 쓰기는 저장 경계에서 거부됩니다.');
+  }
+
+  function promote120() {
+    if (!active.fenced) {
+      announce('승격 차단', '이전 주 리전 차단을 증명하지 못해 split brain 위험이 있습니다.');
+      return;
+    }
+    one('[data-region-b]').classList.add('is-promoted', 'is-primary');
+    setText('[data-b-state]', 'PRIMARY epoch 82 · traffic ON');
+    setText('[data-dr-fence]', 'global lease owner B · epoch 82 · resume tokens rotated');
+    announce('REGION B 승격 완료', 'edge route와 세션 토큰을 새 epoch로 전환하고 유실 범위를 안내합니다.');
+  }
+
+  const mounts = { 116: mount116, 117: mount117, 118: mount118, 119: mount119, 120: mount120 };
+
+  function close(restoreFocus = true) {
+    if (!active) return;
+    const id = active.id;
+    const target = document.querySelector(`[data-flow-host="${id}"]`);
+    const opener = document.querySelector(`[data-flow-open="${id}"]`);
+    if (target) target.innerHTML = '';
+    if (opener) {
+      opener.hidden = false;
+      opener.setAttribute('aria-expanded', 'false');
+      if (restoreFocus) opener.focus({ preventScroll: true });
+    }
+    active = null;
+  }
+
+  function open(id) {
+    close(false);
+    document.dispatchEvent(new CustomEvent('interview-demo-open', { detail: { id } }));
+    active = { id, phase: 0, queued: 0, loaded: false, failed: false, fenced: false };
+    const target = document.querySelector(`[data-flow-host="${id}"]`);
+    const opener = document.querySelector(`[data-flow-open="${id}"]`);
+    if (opener) {
+      opener.hidden = true;
+      opener.setAttribute('aria-expanded', 'true');
+    }
+    target.innerHTML = mounts[id]();
+  }
+
+  function reset() {
+    const id = active.id;
+    active = { id, phase: 0, queued: 0, loaded: false, failed: false, fenced: false };
+    host().innerHTML = mounts[id]();
+  }
+
+  function init() {
+    document.addEventListener('click', event => {
+      const opener = event.target.closest('[data-flow-open]');
+      if (opener) {
+        const id = Number(opener.dataset.flowOpen);
+        if (id >= 116 && id <= 120) {
+          open(id);
+          return;
+        }
+      }
+      const button = event.target.closest('[data-rf-action]');
+      if (!button || !active) return;
+      const action = button.dataset.rfAction;
+      if (action === 'close') close();
+      if (action === 'reset') reset();
+      if (action === 'naive116') balance116(false);
+      if (action === 'balance116') balance116(true);
+      if (action === 'offline117') offline117();
+      if (action === 'reconnect117') reconnect117();
+      if (action === 'dump118') dump118();
+      if (action === 'load119') load119();
+      if (action === 'fault119') fault119();
+      if (action === 'fail120') fail120();
+      if (action === 'fence120') fence120();
+      if (action === 'promote120') promote120();
+    });
+    document.addEventListener('input', event => {
+      if (event.target.matches('[data-buffer-limit]')) setText('[data-buffer-limit-v]', `${event.target.value}개`);
+      if (event.target.matches('[data-dr-lag-input]')) lag120(event.target.value);
+    });
+    document.addEventListener('interview-demo-open', event => {
+      if (active && active.id !== event.detail.id) close(false);
+    });
+  }
+
+  window.ReliabilityFinal = { init };
+})();
