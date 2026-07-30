@@ -28,6 +28,21 @@
     setText('[data-rf-message]', message);
   }
 
+  function after(callback, delay) {
+    if (!active) return;
+    const id = window.setTimeout(() => {
+      if (active) active.timers.delete(id);
+      callback();
+    }, delay);
+    active.timers.add(id);
+  }
+
+  function stopTimers() {
+    if (!active) return;
+    active.timers.forEach(id => window.clearTimeout(id));
+    active.timers.clear();
+  }
+
   function experimentArm(name, values, biased) {
     const rows = [['신규 유저', values[0]], ['평균 MMR', values[1]], ['고핑', values[2]]];
     return `<div class="experiment-arm ${biased ? 'is-biased' : ''}" data-arm="${name}">
@@ -214,7 +229,7 @@
     const index = Number(one('[data-chaos-fault]').value);
     const stage = one(`[data-chaos="${index}"]`);
     stage.classList.add('is-fault');
-    setTimeout(() => {
+    after(() => {
       if (!active || active.id !== 119) return;
       stage.classList.remove('is-fault');
       stage.classList.add('is-safe');
@@ -295,6 +310,7 @@
 
   function close(restoreFocus = true) {
     if (!active) return;
+    stopTimers();
     const id = active.id;
     const target = document.querySelector(`[data-flow-host="${id}"]`);
     const opener = document.querySelector(`[data-flow-open="${id}"]`);
@@ -310,7 +326,7 @@
   function open(id) {
     close(false);
     document.dispatchEvent(new CustomEvent('interview-demo-open', { detail: { id } }));
-    active = { id, phase: 0, queued: 0, loaded: false, failed: false, fenced: false };
+    active = { id, phase: 0, queued: 0, loaded: false, failed: false, fenced: false, timers: new Set() };
     const target = document.querySelector(`[data-flow-host="${id}"]`);
     const opener = document.querySelector(`[data-flow-open="${id}"]`);
     if (opener) {
@@ -322,7 +338,8 @@
 
   function reset() {
     const id = active.id;
-    active = { id, phase: 0, queued: 0, loaded: false, failed: false, fenced: false };
+    stopTimers();
+    active = { id, phase: 0, queued: 0, loaded: false, failed: false, fenced: false, timers: new Set() };
     host().innerHTML = mounts[id]();
   }
 
