@@ -114,7 +114,7 @@
       labLabel: '할당 heap과 해제 heap을 연결해 cross-module corruption 확인하기',
       boundary: '주소가 현재 매핑되어 있다는 것과 같은 allocator가 그 block의 metadata를 소유한다는 것을 구분한다.',
       naive: 'C++ 타입이 같고 포인터가 정상이라 어느 모듈에서 delete해도 같다고 생각한다.',
-      failure: '다른 heap의 free list에 чуж block을 넣거나 STL 구현·debug iterator 상태가 달라 즉시 또는 나중에 손상된다.',
+      failure: '다른 heap의 free list에 낯선 block을 넣거나 STL 구현·debug iterator 상태가 달라 즉시 또는 나중에 손상된다.',
       reasoning: '할당한 모듈이 해제하거나 양쪽이 명시적으로 같은 allocator callback을 사용해야 한다.',
       build: 'API에 `ReleaseString`을 제공하거나 caller-owned buffer와 size query 패턴을 쓴다. STL 객체와 exception을 경계 밖으로 내보내지 않는다.',
       verify: 'CRT 조합, Debug/Release, plugin unload 직전 outstanding allocation을 추적하고 heap verifier를 사용한다.',

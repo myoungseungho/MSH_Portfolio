@@ -177,7 +177,7 @@
   CSLabs.register(70, {
     html: () => `<section class="cs-lab symbol-lab">${H(70, '주소의 의미를 가진 build 찾기', '동일 RVA를 서로 다른 linker map에 대입해 symbol 이름이 바뀌는 것을 확인하세요.')}
       <div class="symbol-maps"><div><b>BUILD A · 8F21</b><span data-map-a></span></div><div><b>BUILD B · C904</b><span data-map-b></span></div></div>
-      <div class="crash-ticket">crash build <select data-crash-build><option value="a">8F21</option><option value="b">C904</option></select> · RVA <input type="range" min="100" max="900" value="520" data-crash-rva><output data-rva-out>0x208</output></div>
+      <div class="crash-ticket"><label>crash build <select data-crash-build><option value="a">8F21</option><option value="b">C904</option></select></label> · <label>RVA <input type="range" min="100" max="900" value="520" data-crash-rva><output data-rva-out>0x208</output></label></div>
       <div class="symbol-result" data-symbol-result></div>
       <div class="lab-controls"><label>symbol artifact <select data-symbol-build><option value="a">BUILD A symbols</option><option value="b">BUILD B symbols</option><option value="latest">latest alias</option></select></label><label><input type="checkbox" data-require-build-id> build ID 일치 강제</label><button type="button" class="primary" data-symbolize-build>symbolize</button></div>
       ${S('crash는 BUILD A에서 발생', 'exact build의 linker layout만 RVA에 의미를 부여합니다.')}</section>`,
