@@ -11,7 +11,7 @@
       <div class="lab-controls"><button type="button" data-float-prev disabled>이전 질문</button><button type="button" class="primary" data-float-next>다음 질문</button><button type="button" data-float-reset>처음부터</button></div>
       ${status('1 / 10 · 정수만 써 보기','0.1m 이동을 정수로 저장하면 실제 캐릭터가 어떻게 되는지 눌러 보세요.')}</section>`,
     bind:host=>{
-      let step=0,position=0,unit='meter',scale=-3,significandBits=4,exponentBits=3,choice={};
+      let step=0,position=0,unit='meter',scale=-3,significandBits=23,exponentBits=8,choice={};
       const scene=host.querySelector('[data-float-scene]');
       const setStatus=(label,message)=>{set(host,'[data-status-label]',label);set(host,'[data-status-message]',message)};
       const render=()=>{
@@ -47,13 +47,13 @@
           scene.querySelectorAll('[data-float-field]').forEach(button=>button.onclick=()=>{set(scene,'[data-field-explanation]',messages[button.dataset.floatField]);setStatus('6 / 10 · 실제 float32 한 묶음','32비트 하나 안에 부호 1비트, 지수 8비트, 가수부 23비트가 함께 들어갑니다. 각 영역은 따로 변수가 아니라 한 값의 부품입니다.')});
           setStatus('6 / 10 · 이제 실제 저장 칸을 본다','앞에서 직접 만든 “유효 숫자 + 소수점 위치”를 컴퓨터는 이진수 32칸에 나누어 넣습니다.');
         }else if(step===6){
-          const gap=Math.pow(10,4-significandBits),base=Math.floor(1234/gap)*gap;
-          scene.innerHTML=`<label class="decimal-shift">유효 숫자를 기억할 칸 <b>${significandBits}개</b><input type="range" min="2" max="4" value="${significandBits}" data-significand-bits></label><div class="precision-neighbors"><span>${base.toLocaleString()}</span><i>다음 값까지 ${gap.toLocaleString()}</i><span>${(base+gap).toLocaleString()}</span></div><p>소수점 위치는 그대로 두고, 숫자 모양을 기억하는 칸만 바꾸고 있습니다.</p>`;
+          const gap=Math.pow(2,3-significandBits),base=8,format=value=>value.toLocaleString(undefined,{maximumFractionDigits:9});
+          scene.innerHTML=`<label class="decimal-shift">저장할 가수부 비트 <b>${significandBits} bits${significandBits===23?' · 실제 float32':''}</b><input type="range" min="2" max="23" value="${significandBits}" data-significand-bits></label><div class="fraction-bits"><b>1.</b>${Array.from({length:23},(_,i)=>`<i class="${i<significandBits?'kept':''}">${i%3===0?'1':'0'}</i>`).join('')}<span>₂ × 2³</span></div><div class="precision-neighbors"><span>${format(base)}</span><i>다음 표현 값까지 ${format(gap)}</i><span>${format(base+gap)}</span></div><p>앞의 1은 정규화 규칙으로 생략하고, 뒤의 ${significandBits}비트를 저장합니다. float32의 기본 상태는 23비트이며 슬라이더는 비교를 위해 일부 비트를 일부러 버려 보는 실험입니다.</p>`;
           scene.querySelector('[data-significand-bits]').oninput=e=>{significandBits=Number(e.target.value);render()};
-          setStatus('7 / 10 · 가수는 촘촘함을 맡는다',`${significandBits}자리만 기억하면 1,234 부근의 간격은 ${gap.toLocaleString()}입니다. 가수 칸이 많아질수록 같은 크기 구간 안에 더 많은 눈금을 놓습니다.`);
+          setStatus('7 / 10 · 가수부는 같은 크기 안의 촘촘함을 맡는다',`2³, 즉 8 근처에서 가수부 ${significandBits}비트를 쓰면 이웃 float 간격은 ${format(gap)}입니다. 23비트를 모두 쓰는 상태가 실제 float32입니다.`);
         }else if(step===7){
           const bias=Math.pow(2,exponentBits-1)-1,min=1-bias,max=Math.pow(2,exponentBits)-2-bias;
-          scene.innerHTML=`<label class="decimal-shift">위치 정보를 기억할 칸 <b>${exponentBits} bits</b><input type="range" min="3" max="8" value="${exponentBits}" data-exponent-bits></label><div class="exponent-range"><span>가장 작은 보통 지수 <b>2<sup>${min}</sup></b></span><i>…</i><span>가장 큰 보통 지수 <b>2<sup>${max}</sup></b></span></div><p>유효 숫자 칸 수는 그대로 두고, 소수점 위치가 이동할 수 있는 범위만 넓히고 있습니다.</p>`;
+          scene.innerHTML=`<label class="decimal-shift">저장할 지수 비트 <b>${exponentBits} bits${exponentBits===8?' · 실제 float32':''}</b><input type="range" min="3" max="8" value="${exponentBits}" data-exponent-bits></label><div class="exponent-range"><span>가장 작은 보통 지수 <b>2<sup>${min}</sup></b></span><i>…</i><span>가장 큰 보통 지수 <b>2<sup>${max}</sup></b></span></div><p>가수부는 그대로 두고 지수부만 일부러 줄여 보는 비교입니다. 8비트를 모두 쓰는 상태가 실제 float32입니다.</p>`;
           scene.querySelector('[data-exponent-bits]').oninput=e=>{exponentBits=Number(e.target.value);render()};
           setStatus('8 / 10 · 지수는 범위를 맡는다',`${exponentBits}비트면 보통 값의 크기를 대략 2^${min}부터 2^${max}까지 옮길 수 있습니다. 지수 칸은 멀리 가게 하지만 그 구간의 눈금을 촘촘하게 만들지는 않습니다.`);
         }else if(step===8){
@@ -69,7 +69,7 @@
         host.querySelector('[data-float-prev]').disabled=step===0;
         host.querySelector('[data-float-next]').textContent=step===9?'처음부터 다시':'다음 질문';
       };
-      host.querySelectorAll('[data-float-jump]').forEach(button=>button.onclick=()=>{step=Number(button.dataset.floatJump);render()});host.querySelector('[data-float-prev]').onclick=()=>{if(step>0){step--;render()}};host.querySelector('[data-float-next]').onclick=()=>{step=(step+1)%10;render()};host.querySelector('[data-float-reset]').onclick=()=>{step=0;position=0;unit='meter';scale=-3;significandBits=4;exponentBits=3;choice={};render()};render();
+      host.querySelectorAll('[data-float-jump]').forEach(button=>button.onclick=()=>{step=Number(button.dataset.floatJump);render()});host.querySelector('[data-float-prev]').onclick=()=>{if(step>0){step--;render()}};host.querySelector('[data-float-next]').onclick=()=>{step=(step+1)%10;render()};host.querySelector('[data-float-reset]').onclick=()=>{step=0;position=0;unit='meter';scale=-3;significandBits=23;exponentBits=8;choice={};render()};render();
     }
   });
 
