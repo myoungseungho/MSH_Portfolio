@@ -5,7 +5,7 @@
   const set=(host,selector,value)=>{const node=host.querySelector(selector);if(node)node.textContent=value};
 
   CSLabs.register(1,{
-    html:()=>`<section class="cs-lab float-origin-lab">${head(1,'숫자를 접어 넣는 발명','고정 단위가 막히는 곳에서 출발해, float의 지수와 가수가 무엇을 맡는지 순서대로 확인하세요.')}
+    html:()=>`<section class="cs-lab float-origin-lab">${head(1,'숫자를 접어 넣는 발명','고정 단위가 막히는 곳에서 출발해, 숫자를 크기와 세부 모양으로 나누는 이유를 순서대로 확인하세요.')}
       <ol class="float-path" data-float-path><li class="active">1. 고정 단위</li><li>2. 과학 표기법</li><li>3. 움직이는 간격</li><li>4. 타입 경계</li></ol>
       <div class="float-scene" data-float-scene></div>
       <div class="lab-controls"><button type="button" class="primary" data-float-next>다음 발견</button><button type="button" data-float-reset>처음부터</button></div>
@@ -22,8 +22,9 @@
           scene.querySelectorAll('[data-unit]').forEach(button=>button.onclick=()=>{unit=button.dataset.unit;render()});
           setStatus('1 / 4 · 고정 단위의 선택',dark?'어두운 빛을 남기면 1,000,000을 담을 수 없습니다.':'밝은 빛을 담으면 0.000001은 저장값 0으로 사라집니다.');
         }else if(step===1){
-          scene.innerHTML=`<div class="notation-stage"><div class="number-break"><b>13.5</b><span>=</span><b>1101.1₂</b><span>=</span><strong>1.1011₂ × 2³</strong></div><div class="bit-roles"><i>부호<br><b>±</b></i><i class="exp">지수<br><b>3</b><small>소수점 위치</small></i><i class="sig">가수<br><b>1011</b><small>유효 숫자</small></i></div></div>`;
-          setStatus('2 / 4 · 숫자를 두 역할로 분리', '지수는 “얼마나 큰 구간인가”를, 가수는 그 구간 안에서 “몇 조각으로 나눌까”를 저장합니다. 이것이 이진 과학 표기법입니다.');
+          scene.innerHTML=`<div class="notation-stage"><div class="number-break"><b>13.5</b><span>=</span><b>1101.1₂</b><span>=</span><strong>1.1011₂ × 2³</strong></div><p class="float-question">질문: 숫자를 크게 또는 작게 만드는 역할은 어느 쪽일까요?</p><div class="float-role-choice"><button type="button" data-role="scale">2³<br><small>소수점의 위치를 옮긴다</small></button><button type="button" data-role="detail">1.1011₂<br><small>그 위치 주변의 모양을 정한다</small></button></div><div data-role-answer></div></div>`;
+          scene.querySelectorAll('[data-role]').forEach(button=>button.onclick=()=>{const isScale=button.dataset.role==='scale';scene.querySelector('[data-role-answer]').innerHTML=isScale?'<b>맞습니다.</b> 2³이 숫자의 크기를 정합니다. 이 칸의 정식 이름은 <b>지수</b>입니다. 1.1011₂은 그 구간 안에서 얼마나 촘촘하게 표현할지 정하며, 정식 이름은 <b>가수(유효숫자부)</b>입니다.':'1.1011₂은 구간의 세부 모양을 정합니다. 다만 숫자를 크게 또는 작게 옮기는 쪽은 2³이며, 이것을 <b>지수</b>라고 합니다. 1.1011₂의 이름은 <b>가수(유효숫자부)</b>입니다.';setStatus('2 / 4 · 스스로 찾은 두 역할', '이제 이름을 외운 것이 아니라, 왜 숫자를 “크기”와 “세부 모양”으로 쪼갰는지 확인했습니다. 다음 단계에서 세부 모양의 칸 수가 고정될 때 벌어지는 일을 보세요.')});
+          setStatus('2 / 4 · 숫자를 두 역할로 나누는 발상', '숫자를 한 칸의 고정 자로 재지 않고, 먼저 크기를 고른 뒤 그 주변을 세는 방식입니다. 두 조각을 눌러 각각의 역할을 추론해 보세요.');
         }else if(step===2){
           const e=host.querySelector('[data-exp]')?.value??3,spacing=Math.pow(2,Number(e)-4);
           scene.innerHTML=`<div class="spacing-stage"><label>지수: 2<sup><output data-exp-out>${e}</output></sup> <input type="range" min="0" max="10" value="${e}" data-exp></label><div class="float-ruler" data-ruler></div><p>가수에 4비트만 있다고 가정하면, 이 구간의 이웃 값 간격은 <b data-spacing>${spacing}</b>입니다.</p></div>`;
@@ -42,21 +43,24 @@
   });
 
   CSLabs.register(2,{
-    html:()=>`<section class="cs-lab determinism-lab">${head(2,'두 플랫폼 물리 발산','같은 입력이 작은 수학 차이를 만나 언제 다른 충돌 경로로 갈라지는지 진행해 보세요.')}
+    html:()=>`<section class="cs-lab determinism-lab">${head(2,'반올림 한 번이 세계를 가르는 과정','한 줄의 계산에서 먼저 다른 결과를 만든 뒤, 같은 차이가 충돌 분기로 증폭되는 순서를 진행하세요.')}
+      <div class="det-math" data-det-math><b>1.01 × 1.01 − 1.02</b><span>정확한 답은 0.0001입니다.</span></div>
       <div class="det-track">
         <div class="det-wall"></div><div class="det-car pc" data-pc-car><span>PC</span></div><div class="det-car console" data-console-car><span>CONSOLE</span></div>
         <div class="det-marker" data-det-marker>충돌 분기 72.0m</div>
       </div>
       <div class="det-readout"><span>tick <b data-tick>0</b></span><span>PC <b data-pc>0.000000</b></span><span>Console <b data-console>0.000000</b></span><span>오차 <b data-error>0</b></span></div>
-      <div class="lab-controls"><button type="button" data-step>1 tick</button><button type="button" class="primary" data-run>30 tick 진행</button><button type="button" data-reset>초기화</button></div>
-      ${status('같은 초기 상태','작은 반올림 차이는 접촉·분기 전까지 눈에 띄지 않습니다.')}</section>`,
+      <div class="lab-controls"><button type="button" data-round>중간에서 반올림</button><button type="button" data-fuse>한 번에 반올림</button><button type="button" data-step>1 tick</button><button type="button" class="primary" data-run>30 tick 진행</button><button type="button" data-reset>초기화</button></div>
+      ${status('1 / 2 · 같은 식, 다른 반올림 지점','먼저 두 계산 경로가 왜 같은 수학식인데 다른 값이 되는지 확인하세요.')}</section>`,
     bind:host=>{
       let tick=0,pc=0,consoleX=0,run=0,timers=new Set();
       const draw=()=>{const scale=x=>Math.min(92,x/80*92);host.querySelector('[data-pc-car]').style.left=`${scale(pc)}%`;host.querySelector('[data-console-car]').style.left=`${scale(consoleX)}%`;set(host,'[data-tick]',tick);set(host,'[data-pc]',pc.toFixed(6));set(host,'[data-console]',consoleX.toFixed(6));set(host,'[data-error]',Math.abs(pc-consoleX).toExponential(2));if((pc>=72)!==(consoleX>=72)){set(host,'[data-status-label]','코드 경로 발산');set(host,'[data-status-message]','한 플랫폼만 충돌 임계값을 넘었습니다. 이후 상태는 작은 오차가 아니라 다른 사건입니다.')}};
       const step=()=>{tick++;const a=Math.fround(Math.fround(tick*.0137)*.91);pc=Math.fround(pc+Math.fround(1.001+a));consoleX=Math.fround(consoleX+1.001)+Math.fround(a);if(pc>=72)pc=Math.fround(pc*.82);if(consoleX>=72)consoleX=Math.fround(consoleX*.82);draw()};
-      host.querySelector('[data-step]').addEventListener('click',step);
+      const calc=mode=>{const round=x=>{if(x===0)return 0;const p=Math.pow(10,2-Math.floor(Math.log10(Math.abs(x))));return Math.round(x*p)/p};const value=mode==='split'?round(round(1.01*1.01)-1.02):round(1.01*1.01-1.02);host.querySelector('[data-det-math]').innerHTML=mode==='split'?`<b>round₃(round₃(1.01 × 1.01) − 1.02)</b><span>1.0201 → 1.02 → <strong>${value}</strong> : 곱셈 뒤 이미 정보가 사라졌습니다.</span>`:`<b>round₃(1.01 × 1.01 − 1.02)</b><span>1.0201 − 1.02 → <strong>${value}</strong> : 마지막에 한 번만 반올림했습니다.</span>`;set(host,'[data-status-label]',mode==='split'?'1 / 2 · 중간 반올림으로 0이 됨':'1 / 2 · 계산 경로가 결과의 일부');set(host,'[data-status-message]',mode==='split'?'FMA 사용 여부처럼 중간 결과를 언제 반올림하는지가 다르면 같은 소스 수식도 다른 비트 결과가 됩니다.':'이제 아래에서 이 작은 차이가 충돌 임계값을 넘으며 어떻게 다른 사건이 되는지 진행해 보세요.')};
+      host.querySelector('[data-round]').addEventListener('click',()=>calc('split'));host.querySelector('[data-fuse]').addEventListener('click',()=>calc('fuse'));
+      host.querySelector('[data-step]').addEventListener('click',()=>{calc('fuse');step()});
       host.querySelector('[data-run]').addEventListener('click',()=>{const token=++run;let n=0;const next=()=>{if(token!==run||n++>=30)return;step();const id=setTimeout(()=>{timers.delete(id);next()},22);timers.add(id)};next()});
-      host.querySelector('[data-reset]').addEventListener('click',()=>{run++;timers.forEach(clearTimeout);timers.clear();tick=0;pc=0;consoleX=0;set(host,'[data-status-label]','같은 초기 상태');set(host,'[data-status-message]','연산 순서만 다른 두 플랫폼을 다시 시작했습니다.');draw()});draw();
+      host.querySelector('[data-reset]').addEventListener('click',()=>{run++;timers.forEach(clearTimeout);timers.clear();tick=0;pc=0;consoleX=0;host.querySelector('[data-det-math]').innerHTML='<b>1.01 × 1.01 − 1.02</b><span>정확한 답은 0.0001입니다.</span>';set(host,'[data-status-label]','1 / 2 · 같은 식, 다른 반올림 지점');set(host,'[data-status-message]','먼저 두 계산 경로가 왜 같은 수학식인데 다른 값이 되는지 확인하세요.');draw()});draw();
       return()=>{run++;timers.forEach(clearTimeout)};
     }
   });
