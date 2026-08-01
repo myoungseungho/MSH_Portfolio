@@ -28,10 +28,10 @@
         </header>
         ${q.customJourney?'':`<section class="discovery" data-discovery="${q.id}" aria-label="Q${q.id} 추론 단계">
           <div class="discovery-intro"><b>답을 열기 전에 한 단계씩 추론해 보세요.</b><span>각 질문에 잠시 답해 본 뒤 열면, 마지막에 정식 개념명이 연결됩니다.</span></div>
-          ${discovery.map((item,index)=>`<div class="discovery-step ${index===0?'ready':''}" data-discovery-step="${index}">
-            <button type="button" ${index===0?'':'disabled'} aria-expanded="false"><small>${index+1}</small>${item[0]}</button>
+          ${discovery.map((item,index)=>`<div class="discovery-step" data-discovery-step="${index}">
+            <button type="button" data-discovery-jump="${index}" aria-expanded="false"><small>${index+1}</small>${item[0]}</button>
             <div class="discovery-answer" hidden><p>${item[1]}</p>${index===3?`<div class="concepts">${q.concepts.map(concept=>`<span>${concept}</span>`).join('')}</div>`:''}</div>
-          </div>`).join('')}
+          </div>`).join('')}<div class="discovery-controls"><button type="button" data-discovery-prev disabled>이전</button><button type="button" data-discovery-next>1단계 열기</button><button type="button" data-discovery-reset>초기화</button></div>
         </section>`}
         <div class="lab-entry"><button type="button" class="lab-open" data-lab-open="${q.id}" aria-expanded="false" aria-controls="lab-host-${q.id}">▶ ${q.labLabel}</button><div id="lab-host-${q.id}" data-lab-host="${q.id}"></div></div>
         <div class="answer-body" data-answer-body="${q.id}" hidden>
@@ -51,15 +51,11 @@
   document.getElementById('questions').innerHTML=html;
   document.querySelectorAll('[data-discovery]').forEach(discovery=>{
     const steps=[...discovery.querySelectorAll('[data-discovery-step]')];
-    steps.forEach((step,index)=>{
-      const button=step.querySelector('button'),answer=step.querySelector('.discovery-answer');
-      button.addEventListener('click',()=>{
-        const opening=answer.hidden;
-        answer.hidden=!opening;button.setAttribute('aria-expanded',String(opening));step.classList.toggle('opened',opening);
-        if(opening&&steps[index+1]){steps[index+1].classList.add('ready');steps[index+1].querySelector('button').disabled=false;}
-        if(opening&&index===steps.length-1){const body=document.querySelector(`[data-answer-body="${discovery.dataset.discovery}"]`);if(body)body.hidden=false;}
-      });
-    });
+    const prev=discovery.querySelector('[data-discovery-prev]'),next=discovery.querySelector('[data-discovery-next]');let current=-1;
+    const show=index=>{current=Math.max(0,Math.min(steps.length-1,index));steps.forEach((step,i)=>{const active=i===current,button=step.querySelector('[data-discovery-jump]'),answer=step.querySelector('.discovery-answer');answer.hidden=!active;button.setAttribute('aria-expanded',String(active));if(active)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');step.classList.toggle('opened',active)});prev.disabled=current===0;next.textContent=current===steps.length-1?'마지막 단계':'다음';if(current===steps.length-1){const body=document.querySelector(`[data-answer-body="${discovery.dataset.discovery}"]`);if(body)body.hidden=false;}};
+    steps.forEach((step,index)=>step.querySelector('[data-discovery-jump]').addEventListener('click',()=>show(index)));
+    prev.addEventListener('click',()=>show(current<=0?0:current-1));next.addEventListener('click',()=>show(current<0?0:Math.min(steps.length-1,current+1)));
+    discovery.querySelector('[data-discovery-reset]').addEventListener('click',()=>{current=-1;steps.forEach(step=>{step.classList.remove('opened');step.querySelector('.discovery-answer').hidden=true;step.querySelector('[data-discovery-jump]').setAttribute('aria-expanded','false');step.querySelector('[data-discovery-jump]').removeAttribute('aria-current')});const body=document.querySelector(`[data-answer-body="${discovery.dataset.discovery}"]`);if(body)body.hidden=true;prev.disabled=true;next.textContent='1단계 열기'});
   });
   document.addEventListener('cs-discovery-complete',event=>{
     const body=document.querySelector(`[data-answer-body="${event.detail?.id}"]`);if(body)body.hidden=false;
