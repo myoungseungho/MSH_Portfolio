@@ -11,7 +11,7 @@
       <div class="lab-controls"><button type="button" data-float-prev disabled>이전 질문</button><button type="button" class="primary" data-float-next>다음 질문</button><button type="button" data-float-reset>처음부터</button></div>
       ${status('1 / 10 · 정수만 써 보기','0.1m 이동을 정수로 저장하면 실제 캐릭터가 어떻게 되는지 눌러 보세요.')}</section>`,
     bind:host=>{
-      let step=0,position=0,unit='meter',scale=-3,significandBits=23,exponentBits=8,choice={};
+      let step=0,position=0,unit='meter',scale=-3,significandBits=23,exponentBits=8,ulpExponent=10,choice={};
       const scene=host.querySelector('[data-float-scene]');
       const setStatus=(label,message)=>{set(host,'[data-status-label]',label);set(host,'[data-status-message]',message)};
       const render=()=>{
@@ -57,10 +57,10 @@
           scene.querySelector('[data-exponent-bits]').oninput=e=>{exponentBits=Number(e.target.value);render()};
           setStatus('8 / 10 · 지수는 범위를 맡는다',`${exponentBits}비트면 보통 값의 크기를 대략 2^${min}부터 2^${max}까지 옮길 수 있습니다. 지수 칸은 멀리 가게 하지만 그 구간의 눈금을 촘촘하게 만들지는 않습니다.`);
         }else if(step===8){
-          const gap=Math.pow(10,scale),start=1234*gap;
-          scene.innerHTML=`<label class="decimal-shift">소수점 위치 <input type="range" min="-3" max="3" value="${scale}" data-gap-scale></label><div class="float-ruler">${Array.from({length:6},(_,i)=>`<i><b>${(start+i*gap).toLocaleString()}</b></i>`).join('')}</div><p>기억하는 숫자는 네 자리로 고정되어 있습니다. 현재 이웃 숫자 사이의 간격은 <b>${gap.toLocaleString()}</b>입니다.</p>`;
-          scene.querySelector('[data-gap-scale]').oninput=e=>{scale=Number(e.target.value);render()};
-          setStatus('9 / 10 · 넓은 범위의 대가',`지수가 소수점을 오른쪽으로 옮겨도 가수가 기억하는 숫자 칸은 네 개 그대로입니다. 그래서 더 큰 수를 담는 대신 이웃 값의 간격도 ${gap.toLocaleString()}만큼 벌어집니다.`);
+          const fixedSignificand=1234/1024,gap=Math.pow(2,ulpExponent-23),base=fixedSignificand*Math.pow(2,ulpExponent),format=value=>value>=1000000||value<.001?value.toExponential(6):value.toLocaleString(undefined,{maximumFractionDigits:9});
+          scene.innerHTML=`<div class="actual-float-equation"><strong>1.0011010010₂</strong><span>×</span><strong>2<sup>${ulpExponent}</sup></strong><span>=</span><b>${format(base)}</b></div><div class="stored-value-map"><span>고정한 가수부 모양 <b>0011010010…</b></span><span>바꾸는 지수 값 <b>${ulpExponent}</b></span></div><label class="decimal-shift">지수만 움직여 보세요 <b>${ulpExponent}</b><input type="range" min="0" max="30" value="${ulpExponent}" data-ulp-exponent></label><div class="precision-neighbors"><span>${format(base)}</span><i>다음 float까지 ${format(gap)}</i><span>${format(base+gap)}</span></div><p>가수부는 실제 float32의 23비트 그대로 고정했습니다. 지수가 10일 때 이 값이 1,234가 됩니다.</p>`;
+          scene.querySelector('[data-ulp-exponent]').oninput=e=>{ulpExponent=Number(e.target.value);render()};
+          setStatus('9 / 10 · 지수는 크기를 옮기고, 가수부 간격도 함께 확대된다',`지수가 ${ulpExponent}일 때 이 구간의 간격은 2^(${ulpExponent}−23) = ${format(gap)}입니다. 지수는 유효 숫자를 추가하지 않고 가수부가 만든 눈금 전체를 같은 비율로 확대합니다.`);
         }else{
           scene.innerHTML=`<p class="float-question">마지막 질문: 값마다 필요한 약속은 무엇일까요?</p><div class="type-choice"><button type="button" data-value-type="gold">골드 10,001<br><small>1골드도 사라지면 안 됨</small></button><button type="button" data-value-type="motion">캐릭터 위치 12.347m<br><small>아주 작은 오차 허용</small></button><button type="button" data-value-type="light">빛의 세기<br><small>작은 값부터 큰 값까지 필요</small></button></div>`;
           scene.querySelectorAll('[data-value-type]').forEach(button=>button.onclick=()=>{const type=button.dataset.valueType;choice[type]=true;const answer=type==='gold'?'정수: 개수의 정확성이 계약입니다.':type==='motion'?'float: 연속적인 측정값을 충분한 정밀도로 빠르게 다룹니다.':'float: 넓은 크기 범위를 제한된 칸에 담는 장점이 큽니다.';setStatus('10 / 10 · 숫자 타입은 값의 약속',answer);if(Object.keys(choice).length===3)document.dispatchEvent(new CustomEvent('cs-discovery-complete',{detail:{id:1}}))});
@@ -69,7 +69,7 @@
         host.querySelector('[data-float-prev]').disabled=step===0;
         host.querySelector('[data-float-next]').textContent=step===9?'처음부터 다시':'다음 질문';
       };
-      host.querySelectorAll('[data-float-jump]').forEach(button=>button.onclick=()=>{step=Number(button.dataset.floatJump);render()});host.querySelector('[data-float-prev]').onclick=()=>{if(step>0){step--;render()}};host.querySelector('[data-float-next]').onclick=()=>{step=(step+1)%10;render()};host.querySelector('[data-float-reset]').onclick=()=>{step=0;position=0;unit='meter';scale=-3;significandBits=23;exponentBits=8;choice={};render()};render();
+      host.querySelectorAll('[data-float-jump]').forEach(button=>button.onclick=()=>{step=Number(button.dataset.floatJump);render()});host.querySelector('[data-float-prev]').onclick=()=>{if(step>0){step--;render()}};host.querySelector('[data-float-next]').onclick=()=>{step=(step+1)%10;render()};host.querySelector('[data-float-reset]').onclick=()=>{step=0;position=0;unit='meter';scale=-3;significandBits=23;exponentBits=8;ulpExponent=10;choice={};render()};render();
     }
   });
 
