@@ -9,7 +9,7 @@
   'use strict';
   if (window.__mshNotes) return; window.__mshNotes = true;
   if (window.top !== window.self) return;
-  var container = document.querySelector('.container');
+  var container = document.querySelector('.container, .page');
   if (!container) return;
 
   var PATH = decodeURIComponent(location.pathname);
