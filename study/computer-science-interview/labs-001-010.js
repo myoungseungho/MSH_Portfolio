@@ -8,7 +8,7 @@
     html:()=>`<section class="cs-lab float-origin-lab">${head(1,'0과 1 사이의 숫자를 저장하는 방법','전문 용어 없이 출발합니다. 정수만으로 움직여 보고, 막힐 때마다 다음 저장 방법을 직접 만들어 보세요.')}
       <ol class="float-path" data-float-path><li class="active">1. 정수</li><li>2. 단위</li><li>3. 칸의 한계</li><li>4. 위치 저장</li><li>5. 한 가지 꼴</li><li>6. 실제 32비트</li><li>7. 가수의 일</li><li>8. 지수의 일</li><li>9. 생긴 대가</li><li>10. 타입 선택</li></ol>
       <div class="float-scene" data-float-scene></div>
-      <div class="lab-controls"><button type="button" class="primary" data-float-next>다음 질문</button><button type="button" data-float-reset>처음부터</button></div>
+      <div class="lab-controls"><button type="button" data-float-prev disabled>이전 질문</button><button type="button" class="primary" data-float-next>다음 질문</button><button type="button" data-float-reset>처음부터</button></div>
       ${status('1 / 10 · 정수만 써 보기','0.1m 이동을 정수로 저장하면 실제 캐릭터가 어떻게 되는지 눌러 보세요.')}</section>`,
     bind:host=>{
       let step=0,position=0,unit='meter',scale=-3,significandBits=4,exponentBits=3,choice={};
@@ -66,9 +66,10 @@
           scene.querySelectorAll('[data-value-type]').forEach(button=>button.onclick=()=>{const type=button.dataset.valueType;choice[type]=true;const answer=type==='gold'?'정수: 개수의 정확성이 계약입니다.':type==='motion'?'float: 연속적인 측정값을 충분한 정밀도로 빠르게 다룹니다.':'float: 넓은 크기 범위를 제한된 칸에 담는 장점이 큽니다.';setStatus('10 / 10 · 숫자 타입은 값의 약속',answer);if(Object.keys(choice).length===3)document.dispatchEvent(new CustomEvent('cs-discovery-complete',{detail:{id:1}}))});
           setStatus('10 / 10 · 이제 타입을 고를 수 있음','float가 더 좋은 숫자도, 나쁜 숫자도 아닙니다. 각 값을 눌러 정확한 개수와 근사 가능한 측정값을 구분해 보세요.');
         }
+        host.querySelector('[data-float-prev]').disabled=step===0;
         host.querySelector('[data-float-next]').textContent=step===9?'처음부터 다시':'다음 질문';
       };
-      host.querySelector('[data-float-next]').onclick=()=>{step=(step+1)%10;render()};host.querySelector('[data-float-reset]').onclick=()=>{step=0;position=0;unit='meter';scale=-3;significandBits=4;exponentBits=3;choice={};render()};render();
+      host.querySelector('[data-float-prev]').onclick=()=>{if(step>0){step--;render()}};host.querySelector('[data-float-next]').onclick=()=>{step=(step+1)%10;render()};host.querySelector('[data-float-reset]').onclick=()=>{step=0;position=0;unit='meter';scale=-3;significandBits=4;exponentBits=3;choice={};render()};render();
     }
   });
 
