@@ -5,28 +5,39 @@
   const set=(host,selector,value)=>{const node=host.querySelector(selector);if(node)node.textContent=value};
 
   CSLabs.register(1,{
-    html:()=>`<section class="cs-lab coin-lab">${head(1,'float 골드 원장','보유량을 키운 뒤 +1 거래가 실제 비트에 반영되는지 확인하세요.')}
-      <div class="coin-ledger">
-        <div class="coin-vault"><span>float32 잔액</span><strong data-float-balance>16,777,214</strong><div class="coin-stack" data-coin-stack></div></div>
-        <div class="coin-gap"><span>다음 표현 가능 값 간격</span><b data-ulp>1 gold</b></div>
-        <div class="coin-vault exact"><span>int64 잔액</span><strong data-int-balance>16,777,214</strong><div class="coin-stack" data-int-stack></div></div>
-      </div>
-      <div class="lab-controls"><label>시작 금액 <input type="range" min="1000000" max="100000000" step="1000000" value="16000000" data-amount><output data-amount-out>16,000,000</output></label><button type="button" class="primary" data-add-one>+1 거래</button><button type="button" data-add-hundred>+100 거래</button></div>
-      ${status('정확한 구간','금액을 높여 float32의 인접 값 간격이 넓어지는 지점을 찾으세요.')}</section>`,
+    html:()=>`<section class="cs-lab float-origin-lab">${head(1,'숫자를 접어 넣는 발명','고정 단위가 막히는 곳에서 출발해, float의 지수와 가수가 무엇을 맡는지 순서대로 확인하세요.')}
+      <ol class="float-path" data-float-path><li class="active">1. 고정 단위</li><li>2. 과학 표기법</li><li>3. 움직이는 간격</li><li>4. 타입 경계</li></ol>
+      <div class="float-scene" data-float-scene></div>
+      <div class="lab-controls"><button type="button" class="primary" data-float-next>다음 발견</button><button type="button" data-float-reset>처음부터</button></div>
+      ${status('1 / 4 · 고정 단위의 선택','먼저 같은 32비트에서 아주 어두운 빛과 강한 빛을 함께 담아 보세요.')}</section>`,
     bind:host=>{
-      let f=Math.fround(16000000),i=16000000;
-      const ulp=value=>{const a=new Float32Array([value]),u=new Uint32Array(a.buffer);u[0]+=1;return new Float32Array(u.buffer)[0]-value};
-      const draw=()=>{
-        set(host,'[data-float-balance]',f.toLocaleString());set(host,'[data-int-balance]',i.toLocaleString());
-        const gap=ulp(f);set(host,'[data-ulp]',`${gap.toLocaleString()} gold`);
-        host.querySelector('[data-coin-stack]').style.setProperty('--fill',`${Math.min(100,f/1000000)}%`);
-        host.querySelector('[data-int-stack]').style.setProperty('--fill',`${Math.min(100,i/1000000)}%`);
-        set(host,'[data-status-label]',f===i?'두 원장 일치':'1골드가 사라짐');
-        set(host,'[data-status-message]',f===i?'현재 범위에서는 float가 정수를 표현했습니다.':`float32=${f.toLocaleString()}, int64=${i.toLocaleString()} — 화폐 불변식이 깨졌습니다.`);
+      let step=0,unit='dark',wallet=16777216;
+      const scene=host.querySelector('[data-float-scene]');
+      const setStatus=(label,message)=>{set(host,'[data-status-label]',label);set(host,'[data-status-message]',message)};
+      const render=()=>{
+        host.querySelectorAll('[data-float-path] li').forEach((node,i)=>node.classList.toggle('active',i===step));
+        if(step===0){
+          const dark=unit==='dark';
+          scene.innerHTML=`<div class="range-stage"><div class="range-light dark">동굴<br><b>0.000001</b></div><div class="range-light sun">태양 반사<br><b>1,000,000</b></div></div><div class="fixed-choice"><div><b>32비트 고정소수점</b><span>저장값 × 단위</span></div><button type="button" data-unit="dark" class="${dark?'selected':''}">어둠 보존<br><small>단위 0.000001<br>최대 4,294.967</small></button><button type="button" data-unit="sun" class="${dark?'':'selected'}">밝음 보존<br><small>단위 0.001<br>0.000001 → 0</small></button></div>`;
+          scene.querySelectorAll('[data-unit]').forEach(button=>button.onclick=()=>{unit=button.dataset.unit;render()});
+          setStatus('1 / 4 · 고정 단위의 선택',dark?'어두운 빛을 남기면 1,000,000을 담을 수 없습니다.':'밝은 빛을 담으면 0.000001은 저장값 0으로 사라집니다.');
+        }else if(step===1){
+          scene.innerHTML=`<div class="notation-stage"><div class="number-break"><b>13.5</b><span>=</span><b>1101.1₂</b><span>=</span><strong>1.1011₂ × 2³</strong></div><div class="bit-roles"><i>부호<br><b>±</b></i><i class="exp">지수<br><b>3</b><small>소수점 위치</small></i><i class="sig">가수<br><b>1011</b><small>유효 숫자</small></i></div></div>`;
+          setStatus('2 / 4 · 숫자를 두 역할로 분리', '지수는 “얼마나 큰 구간인가”를, 가수는 그 구간 안에서 “몇 조각으로 나눌까”를 저장합니다. 이것이 이진 과학 표기법입니다.');
+        }else if(step===2){
+          const e=host.querySelector('[data-exp]')?.value??3,spacing=Math.pow(2,Number(e)-4);
+          scene.innerHTML=`<div class="spacing-stage"><label>지수: 2<sup><output data-exp-out>${e}</output></sup> <input type="range" min="0" max="10" value="${e}" data-exp></label><div class="float-ruler" data-ruler></div><p>가수에 4비트만 있다고 가정하면, 이 구간의 이웃 값 간격은 <b data-spacing>${spacing}</b>입니다.</p></div>`;
+          const draw=()=>{const exponent=Number(scene.querySelector('[data-exp]').value),gap=Math.pow(2,exponent-4),start=Math.pow(2,exponent);set(scene,'[data-exp-out]',exponent);set(scene,'[data-spacing]',gap);scene.querySelector('[data-ruler]').innerHTML=Array.from({length:8},(_,i)=>`<i><b>${start+i*gap}</b></i>`).join('');setStatus('3 / 4 · 같은 가수, 달라지는 절대 간격',`2^${exponent} 근처에서는 ${gap}보다 작은 변화가 다음 표현 가능 값 사이에 끼지 못합니다. 지수가 1 늘면 간격도 2배가 됩니다.`)};
+          scene.querySelector('[data-exp]').oninput=draw;draw();
+        }else{
+          const f=Math.fround(wallet),after=Math.fround(f+1),lost=f===after;
+          scene.innerHTML=`<div class="boundary-stage"><div><span>float32로 근사한 값</span><b data-wallet-float>${f.toLocaleString()}</b></div><span class="operator">+ 1</span><div><span>정확한 정수 원장</span><b data-wallet-int>${wallet.toLocaleString()}</b></div></div><div class="lab-controls"><button type="button" class="primary" data-wallet-add>각각 +1 적용</button><button type="button" data-wallet-reset>2²⁴로 되돌리기</button></div>`;
+          const draw=()=>{const now=Math.fround(wallet),next=Math.fround(now+1),isLost=now===next;set(scene,'[data-wallet-float]',now.toLocaleString());set(scene,'[data-wallet-int]',wallet.toLocaleString());setStatus(isLost?'4 / 4 · 화폐에선 계약 위반':'4 / 4 · 아직 우연히 일치',isLost?'float는 원래 넓은 범위와 상대 정밀도를 위한 타입입니다. “+1이 반드시 반영된다”는 화폐 계약에는 정수 원장이 필요합니다.':'float32는 2²⁴ 전까지 모든 정수를 정확히 표현합니다. 경계를 한 번 더 넘겨 보세요.');};
+          scene.querySelector('[data-wallet-add]').onclick=()=>{wallet+=1;draw()};scene.querySelector('[data-wallet-reset]').onclick=()=>{wallet=16777216;draw()};draw();
+        }
+        host.querySelector('[data-float-next]').textContent=step===3?'처음부터 다시':'다음 발견';
       };
-      host.querySelector('[data-amount]').addEventListener('input',e=>{i=Number(e.target.value);f=Math.fround(i);set(host,'[data-amount-out]',i.toLocaleString());draw()});
-      host.querySelector('[data-add-one]').addEventListener('click',()=>{f=Math.fround(f+1);i+=1;draw()});
-      host.querySelector('[data-add-hundred]').addEventListener('click',()=>{f=Math.fround(f+100);i+=100;draw()});draw();
+      host.querySelector('[data-float-next]').onclick=()=>{step=(step+1)%4;render()};host.querySelector('[data-float-reset]').onclick=()=>{step=0;unit='dark';wallet=16777216;render()};render();
     }
   });
 

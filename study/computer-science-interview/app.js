@@ -18,6 +18,7 @@
       html+=`<article class="qa" id="q${q.id}">
         <header class="qhead"><span class="qnum">Q${q.id}</span><h2>${q.question}</h2>
           <div class="scenario">${q.scenario}</div>
+          ${q.foundation ? `<aside class="concept-foundation">${q.foundation}</aside>` : ''}
           <div class="concepts">${q.concepts.map(concept=>`<span>${concept}</span>`).join('')}</div>
         </header>
         <div class="lab-entry"><button type="button" class="lab-open" data-lab-open="${q.id}" aria-expanded="false" aria-controls="lab-host-${q.id}">▶ ${q.labLabel}</button><div id="lab-host-${q.id}" data-lab-host="${q.id}"></div></div>
