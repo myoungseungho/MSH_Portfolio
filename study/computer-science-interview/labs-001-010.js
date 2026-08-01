@@ -6,7 +6,7 @@
 
   CSLabs.register(1,{
     html:()=>`<section class="cs-lab float-origin-lab">${head(1,'0과 1 사이의 숫자를 저장하는 방법','전문 용어 없이 출발합니다. 정수만으로 움직여 보고, 막힐 때마다 다음 저장 방법을 직접 만들어 보세요.')}
-      <ol class="float-path" data-float-path><li class="active">1. 정수</li><li>2. 단위</li><li>3. 칸의 한계</li><li>4. 위치 저장</li><li>5. 한 가지 꼴</li><li>6. 실제 32비트</li><li>7. 가수의 일</li><li>8. 지수의 일</li><li>9. 생긴 대가</li><li>10. 타입 선택</li></ol>
+      <ol class="float-path" data-float-path><li class="active"><button type="button" data-float-jump="0" aria-current="step">1. 정수</button></li><li><button type="button" data-float-jump="1">2. 단위</button></li><li><button type="button" data-float-jump="2">3. 칸의 한계</button></li><li><button type="button" data-float-jump="3">4. 위치 저장</button></li><li><button type="button" data-float-jump="4">5. 한 가지 꼴</button></li><li><button type="button" data-float-jump="5">6. 실제 32비트</button></li><li><button type="button" data-float-jump="6">7. 가수의 일</button></li><li><button type="button" data-float-jump="7">8. 지수의 일</button></li><li><button type="button" data-float-jump="8">9. 생긴 대가</button></li><li><button type="button" data-float-jump="9">10. 타입 선택</button></li></ol>
       <div class="float-scene" data-float-scene></div>
       <div class="lab-controls"><button type="button" data-float-prev disabled>이전 질문</button><button type="button" class="primary" data-float-next>다음 질문</button><button type="button" data-float-reset>처음부터</button></div>
       ${status('1 / 10 · 정수만 써 보기','0.1m 이동을 정수로 저장하면 실제 캐릭터가 어떻게 되는지 눌러 보세요.')}</section>`,
@@ -15,7 +15,7 @@
       const scene=host.querySelector('[data-float-scene]');
       const setStatus=(label,message)=>{set(host,'[data-status-label]',label);set(host,'[data-status-message]',message)};
       const render=()=>{
-        host.querySelectorAll('[data-float-path] li').forEach((node,i)=>node.classList.toggle('active',i===step));
+        host.querySelectorAll('[data-float-path] li').forEach((node,i)=>{const active=i===step;node.classList.toggle('active',active);const button=node.querySelector('button');if(active)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current')});
         if(step===0){
           scene.innerHTML=`<div class="first-number-world"><div class="potion-count"><span>포션</span><b>🧪 🧪 🧪</b><small>3개 → 정수 3</small></div><div class="integer-track"><i data-runner style="left:${position*8}%">캐릭터</i><span>0m</span><span>1m</span></div></div><p class="float-question">캐릭터를 0.1m 움직이라는 명령을 정수 칸 하나에 넣으면?</p><div class="float-role-choice"><button type="button" data-integer-move="round">가까운 정수로 저장</button><button type="button" data-integer-move="keep">0.1을 그대로 적기</button></div>`;
           scene.querySelector('[data-integer-move="round"]').onclick=()=>{setStatus('1 / 10 · 0.1이 0으로 사라짐','정수 칸에는 0과 1만 있고 그 사이는 없습니다. 매 프레임 0.1을 0으로 만들면 캐릭터는 영원히 움직이지 않습니다.')};
@@ -69,7 +69,7 @@
         host.querySelector('[data-float-prev]').disabled=step===0;
         host.querySelector('[data-float-next]').textContent=step===9?'처음부터 다시':'다음 질문';
       };
-      host.querySelector('[data-float-prev]').onclick=()=>{if(step>0){step--;render()}};host.querySelector('[data-float-next]').onclick=()=>{step=(step+1)%10;render()};host.querySelector('[data-float-reset]').onclick=()=>{step=0;position=0;unit='meter';scale=-3;significandBits=4;exponentBits=3;choice={};render()};render();
+      host.querySelectorAll('[data-float-jump]').forEach(button=>button.onclick=()=>{step=Number(button.dataset.floatJump);render()});host.querySelector('[data-float-prev]').onclick=()=>{if(step>0){step--;render()}};host.querySelector('[data-float-next]').onclick=()=>{step=(step+1)%10;render()};host.querySelector('[data-float-reset]').onclick=()=>{step=0;position=0;unit='meter';scale=-3;significandBits=4;exponentBits=3;choice={};render()};render();
     }
   });
 
