@@ -26,13 +26,13 @@
           <div class="scenario">${q.scenario}</div>
           ${q.foundation ? `<aside class="concept-foundation">${q.foundation}</aside>` : ''}
         </header>
-        <section class="discovery" data-discovery="${q.id}" aria-label="Q${q.id} 추론 단계">
+        ${q.customJourney?'':`<section class="discovery" data-discovery="${q.id}" aria-label="Q${q.id} 추론 단계">
           <div class="discovery-intro"><b>답을 열기 전에 한 단계씩 추론해 보세요.</b><span>각 질문에 잠시 답해 본 뒤 열면, 마지막에 정식 개념명이 연결됩니다.</span></div>
           ${discovery.map((item,index)=>`<div class="discovery-step ${index===0?'ready':''}" data-discovery-step="${index}">
             <button type="button" ${index===0?'':'disabled'} aria-expanded="false"><small>${index+1}</small>${item[0]}</button>
             <div class="discovery-answer" hidden><p>${item[1]}</p>${index===3?`<div class="concepts">${q.concepts.map(concept=>`<span>${concept}</span>`).join('')}</div>`:''}</div>
           </div>`).join('')}
-        </section>
+        </section>`}
         <div class="lab-entry"><button type="button" class="lab-open" data-lab-open="${q.id}" aria-expanded="false" aria-controls="lab-host-${q.id}">▶ ${q.labLabel}</button><div id="lab-host-${q.id}" data-lab-host="${q.id}"></div></div>
         <div class="answer-body" data-answer-body="${q.id}" hidden>
         <section class="answer-step"><h3>0. 먼저 문제의 경계를 정한다</h3><p>${q.boundary}</p></section>
@@ -60,5 +60,8 @@
         if(opening&&index===steps.length-1){const body=document.querySelector(`[data-answer-body="${discovery.dataset.discovery}"]`);if(body)body.hidden=false;}
       });
     });
+  });
+  document.addEventListener('cs-discovery-complete',event=>{
+    const body=document.querySelector(`[data-answer-body="${event.detail?.id}"]`);if(body)body.hidden=false;
   });
 })();

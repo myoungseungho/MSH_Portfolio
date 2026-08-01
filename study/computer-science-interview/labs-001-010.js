@@ -5,40 +5,51 @@
   const set=(host,selector,value)=>{const node=host.querySelector(selector);if(node)node.textContent=value};
 
   CSLabs.register(1,{
-    html:()=>`<section class="cs-lab float-origin-lab">${head(1,'숫자를 접어 넣는 발명','고정 단위가 막히는 곳에서 출발해, 숫자를 크기와 세부 모양으로 나누는 이유를 순서대로 확인하세요.')}
-      <ol class="float-path" data-float-path><li class="active">1. 고정 단위</li><li>2. 과학 표기법</li><li>3. 움직이는 간격</li><li>4. 타입 경계</li></ol>
+    html:()=>`<section class="cs-lab float-origin-lab">${head(1,'0과 1 사이의 숫자를 저장하는 방법','전문 용어 없이 출발합니다. 정수만으로 움직여 보고, 막힐 때마다 다음 저장 방법을 직접 만들어 보세요.')}
+      <ol class="float-path" data-float-path><li class="active">1. 정수로 이동</li><li>2. 단위 바꾸기</li><li>3. 숫자 칸의 한계</li><li>4. 소수점도 저장</li><li>5. 생긴 대가</li><li>6. 알맞은 타입</li></ol>
       <div class="float-scene" data-float-scene></div>
-      <div class="lab-controls"><button type="button" class="primary" data-float-next>다음 발견</button><button type="button" data-float-reset>처음부터</button></div>
-      ${status('1 / 4 · 고정 단위의 선택','먼저 같은 32비트에서 아주 어두운 빛과 강한 빛을 함께 담아 보세요.')}</section>`,
+      <div class="lab-controls"><button type="button" class="primary" data-float-next>다음 질문</button><button type="button" data-float-reset>처음부터</button></div>
+      ${status('1 / 6 · 정수만 써 보기','0.1m 이동을 정수로 저장하면 실제 캐릭터가 어떻게 되는지 눌러 보세요.')}</section>`,
     bind:host=>{
-      let step=0,unit='dark',wallet=16777216;
+      let step=0,position=0,unit='meter',scale=-3,choice={};
       const scene=host.querySelector('[data-float-scene]');
       const setStatus=(label,message)=>{set(host,'[data-status-label]',label);set(host,'[data-status-message]',message)};
       const render=()=>{
         host.querySelectorAll('[data-float-path] li').forEach((node,i)=>node.classList.toggle('active',i===step));
         if(step===0){
-          const dark=unit==='dark';
-          scene.innerHTML=`<div class="range-stage"><div class="range-light dark">동굴<br><b>0.000001</b></div><div class="range-light sun">태양 반사<br><b>1,000,000</b></div></div><div class="fixed-choice"><div><b>32비트 고정소수점</b><span>저장값 × 단위</span></div><button type="button" data-unit="dark" class="${dark?'selected':''}">어둠 보존<br><small>단위 0.000001<br>최대 4,294.967</small></button><button type="button" data-unit="sun" class="${dark?'':'selected'}">밝음 보존<br><small>단위 0.001<br>0.000001 → 0</small></button></div>`;
-          scene.querySelectorAll('[data-unit]').forEach(button=>button.onclick=()=>{unit=button.dataset.unit;render()});
-          setStatus('1 / 4 · 고정 단위의 선택',dark?'어두운 빛을 남기면 1,000,000을 담을 수 없습니다.':'밝은 빛을 담으면 0.000001은 저장값 0으로 사라집니다.');
+          scene.innerHTML=`<div class="first-number-world"><div class="potion-count"><span>포션</span><b>🧪 🧪 🧪</b><small>3개 → 정수 3</small></div><div class="integer-track"><i data-runner style="left:${position*8}%">캐릭터</i><span>0m</span><span>1m</span></div></div><p class="float-question">캐릭터를 0.1m 움직이라는 명령을 정수 칸 하나에 넣으면?</p><div class="float-role-choice"><button type="button" data-integer-move="round">가까운 정수로 저장</button><button type="button" data-integer-move="keep">0.1을 그대로 적기</button></div>`;
+          scene.querySelector('[data-integer-move="round"]').onclick=()=>{setStatus('1 / 6 · 0.1이 0으로 사라짐','정수 칸에는 0과 1만 있고 그 사이는 없습니다. 매 프레임 0.1을 0으로 만들면 캐릭터는 영원히 움직이지 않습니다.')};
+          scene.querySelector('[data-integer-move="keep"]').onclick=()=>{setStatus('1 / 6 · 새로운 저장 규칙이 필요','“0.1을 적자”가 바로 문제입니다. 컴퓨터는 제한된 칸에 어떤 규칙으로 0.1을 기록할지 정해야 합니다.')};
+          setStatus('1 / 6 · 세는 수와 재는 수','포션처럼 개수를 세는 값에는 정수가 완벽합니다. 하지만 이동 거리는 두 정수 사이의 값도 필요합니다.');
         }else if(step===1){
-          scene.innerHTML=`<div class="notation-stage"><div class="number-break"><b>13.5</b><span>=</span><b>1101.1₂</b><span>=</span><strong>1.1011₂ × 2³</strong></div><p class="float-question">질문: 숫자를 크게 또는 작게 만드는 역할은 어느 쪽일까요?</p><div class="float-role-choice"><button type="button" data-role="scale">2³<br><small>소수점의 위치를 옮긴다</small></button><button type="button" data-role="detail">1.1011₂<br><small>그 위치 주변의 모양을 정한다</small></button></div><div data-role-answer></div></div>`;
-          scene.querySelectorAll('[data-role]').forEach(button=>button.onclick=()=>{const isScale=button.dataset.role==='scale';scene.querySelector('[data-role-answer]').innerHTML=isScale?'<b>맞습니다.</b> 2³이 숫자의 크기를 정합니다. 이 칸의 정식 이름은 <b>지수</b>입니다. 1.1011₂은 그 구간 안에서 얼마나 촘촘하게 표현할지 정하며, 정식 이름은 <b>가수(유효숫자부)</b>입니다.':'1.1011₂은 구간의 세부 모양을 정합니다. 다만 숫자를 크게 또는 작게 옮기는 쪽은 2³이며, 이것을 <b>지수</b>라고 합니다. 1.1011₂의 이름은 <b>가수(유효숫자부)</b>입니다.';setStatus('2 / 4 · 스스로 찾은 두 역할', '이제 이름을 외운 것이 아니라, 왜 숫자를 “크기”와 “세부 모양”으로 쪼갰는지 확인했습니다. 다음 단계에서 세부 모양의 칸 수가 고정될 때 벌어지는 일을 보세요.')});
-          setStatus('2 / 4 · 숫자를 두 역할로 나누는 발상', '숫자를 한 칸의 고정 자로 재지 않고, 먼저 크기를 고른 뒤 그 주변을 세는 방식입니다. 두 조각을 눌러 각각의 역할을 추론해 보세요.');
+          const cm=unit==='centimeter';
+          scene.innerHTML=`<div class="unit-conversion"><div><span>이동 명령</span><b>0.1 m</b></div><i>=</i><div><span>저장할 정수</span><b>${cm?'10 cm':'0 m'}</b></div></div><p class="float-question">소수 대신 더 작은 단위의 개수를 세면 어떨까요?</p><div class="float-role-choice"><button type="button" data-unit-choice="meter" class="${cm?'':'selected'}">1칸 = 1m</button><button type="button" data-unit-choice="centimeter" class="${cm?'selected':''}">1칸 = 1cm</button></div>`;
+          scene.querySelectorAll('[data-unit-choice]').forEach(button=>button.onclick=()=>{unit=button.dataset.unitChoice;render()});
+          setStatus('2 / 6 · 단위를 바꾸면 정수로 가능',cm?'0.1m는 10cm입니다. 소수 없이 정수 10으로 정확히 저장했습니다. 이것이 고정소수점의 가장 쉬운 생각입니다.':'1m 단위에서는 0.1m가 정수 0이 됩니다. 더 작은 단위를 골라 보세요.');
         }else if(step===2){
-          const e=host.querySelector('[data-exp]')?.value??3,spacing=Math.pow(2,Number(e)-4);
-          scene.innerHTML=`<div class="spacing-stage"><label>지수: 2<sup><output data-exp-out>${e}</output></sup> <input type="range" min="0" max="10" value="${e}" data-exp></label><div class="float-ruler" data-ruler></div><p>가수에 4비트만 있다고 가정하면, 이 구간의 이웃 값 간격은 <b data-spacing>${spacing}</b>입니다.</p></div>`;
-          const draw=()=>{const exponent=Number(scene.querySelector('[data-exp]').value),gap=Math.pow(2,exponent-4),start=Math.pow(2,exponent);set(scene,'[data-exp-out]',exponent);set(scene,'[data-spacing]',gap);scene.querySelector('[data-ruler]').innerHTML=Array.from({length:8},(_,i)=>`<i><b>${start+i*gap}</b></i>`).join('');setStatus('3 / 4 · 같은 가수, 달라지는 절대 간격',`2^${exponent} 근처에서는 ${gap}보다 작은 변화가 다음 표현 가능 값 사이에 끼지 못합니다. 지수가 1 늘면 간격도 2배가 됩니다.`)};
-          scene.querySelector('[data-exp]').oninput=draw;draw();
+          scene.innerHTML=`<div class="digit-box"><b>숫자를 적을 칸은 6개뿐</b><div>□ □ □ □ □ □</div></div><div class="fixed-choice"><button type="button" data-box-unit="small">1칸 = 0.001m<br><small>작은 이동 0.001m ✓<br>최대 거리 999.999m</small></button><button type="button" data-box-unit="large">1칸 = 1m<br><small>최대 거리 999,999m ✓<br>0.001m 이동 → 0</small></button></div>`;
+          scene.querySelector('[data-box-unit="small"]').onclick=()=>setStatus('3 / 6 · 작은 값을 살리면 큰 값이 안 들어감','칸 수가 정해져 있으므로 단위를 1,000배 작게 만들면 최대 범위도 1,000배 짧아집니다.');
+          scene.querySelector('[data-box-unit="large"]').onclick=()=>setStatus('3 / 6 · 큰 값을 살리면 작은 값이 사라짐','단위를 크게 잡으면 멀리 갈 수 있지만 그 단위보다 작은 움직임은 정수 0이 됩니다. 한 가지 고정 단위에는 양쪽을 모두 얻을 수 없습니다.');
+          setStatus('3 / 6 · “가장 작은 단위”도 공짜가 아님','숫자를 적을 칸이 무한하지 않다면 정밀한 단위와 넓은 범위가 서로 자리를 빼앗습니다. 두 선택을 눌러 보세요.');
+        }else if(step===3){
+          const value=1234*Math.pow(10,scale),shown=scale>=0?value.toLocaleString():value.toFixed(Math.abs(scale));
+          scene.innerHTML=`<div class="floating-invention"><div><span>기억할 네 숫자</span><b>1 2 3 4</b></div><div><span>소수점 이동 정보</span><b>10<sup>${scale}</sup></b></div><strong>= ${shown}</strong></div><label class="decimal-shift">소수점 위치를 움직여 보세요 <input type="range" min="-6" max="3" value="${scale}" data-scale></label><div class="name-reveal" data-name-reveal></div>`;
+          scene.querySelector('[data-scale]').oninput=e=>{scale=Number(e.target.value);render()};
+          scene.querySelector('[data-name-reveal]').innerHTML='<b>개발자의 발상:</b> 숫자 네 자리는 그대로 두고 소수점 위치만 함께 저장하면, 같은 칸으로 아주 작은 값과 큰 값을 오갈 수 있습니다.';
+          setStatus('4 / 6 · 소수점 위치도 숫자의 일부로 저장','소수점이 한곳에 고정되지 않고 값에 따라 떠다닙니다. 그래서 이 방식의 이름이 floating point, 부동소수점입니다. 1234 쪽은 가수, 위치 정보는 지수라고 부릅니다.');
+        }else if(step===4){
+          const gap=Math.pow(10,scale),start=1234*gap;
+          scene.innerHTML=`<label class="decimal-shift">소수점 위치 <input type="range" min="-3" max="3" value="${scale}" data-gap-scale></label><div class="float-ruler">${Array.from({length:6},(_,i)=>`<i><b>${(start+i*gap).toLocaleString()}</b></i>`).join('')}</div><p>기억하는 숫자는 네 자리로 고정되어 있습니다. 현재 이웃 숫자 사이의 간격은 <b>${gap.toLocaleString()}</b>입니다.</p>`;
+          scene.querySelector('[data-gap-scale]').oninput=e=>{scale=Number(e.target.value);render()};
+          setStatus('5 / 6 · 넓은 범위의 대가',`소수점 위치가 오른쪽으로 갈수록 같은 네 자리로 더 큰 수를 담지만 눈금 간격도 ${gap.toLocaleString()}만큼 벌어집니다. float가 큰 값에서 작은 차이를 잃는 이유입니다.`);
         }else{
-          const f=Math.fround(wallet),after=Math.fround(f+1),lost=f===after;
-          scene.innerHTML=`<div class="boundary-stage"><div><span>float32로 근사한 값</span><b data-wallet-float>${f.toLocaleString()}</b></div><span class="operator">+ 1</span><div><span>정확한 정수 원장</span><b data-wallet-int>${wallet.toLocaleString()}</b></div></div><div class="lab-controls"><button type="button" class="primary" data-wallet-add>각각 +1 적용</button><button type="button" data-wallet-reset>2²⁴로 되돌리기</button></div>`;
-          const draw=()=>{const now=Math.fround(wallet),next=Math.fround(now+1),isLost=now===next;set(scene,'[data-wallet-float]',now.toLocaleString());set(scene,'[data-wallet-int]',wallet.toLocaleString());setStatus(isLost?'4 / 4 · 화폐에선 계약 위반':'4 / 4 · 아직 우연히 일치',isLost?'float는 원래 넓은 범위와 상대 정밀도를 위한 타입입니다. “+1이 반드시 반영된다”는 화폐 계약에는 정수 원장이 필요합니다.':'float32는 2²⁴ 전까지 모든 정수를 정확히 표현합니다. 경계를 한 번 더 넘겨 보세요.');};
-          scene.querySelector('[data-wallet-add]').onclick=()=>{wallet+=1;draw()};scene.querySelector('[data-wallet-reset]').onclick=()=>{wallet=16777216;draw()};draw();
+          scene.innerHTML=`<p class="float-question">마지막 질문: 값마다 필요한 약속은 무엇일까요?</p><div class="type-choice"><button type="button" data-value-type="gold">골드 10,001<br><small>1골드도 사라지면 안 됨</small></button><button type="button" data-value-type="motion">캐릭터 위치 12.347m<br><small>아주 작은 오차 허용</small></button><button type="button" data-value-type="light">빛의 세기<br><small>작은 값부터 큰 값까지 필요</small></button></div>`;
+          scene.querySelectorAll('[data-value-type]').forEach(button=>button.onclick=()=>{const type=button.dataset.valueType;choice[type]=true;const answer=type==='gold'?'정수: 개수의 정확성이 계약입니다.':type==='motion'?'float: 연속적인 측정값을 충분한 정밀도로 빠르게 다룹니다.':'float: 넓은 크기 범위를 제한된 칸에 담는 장점이 큽니다.';setStatus('6 / 6 · 숫자 타입은 값의 약속',answer);if(Object.keys(choice).length===3)document.dispatchEvent(new CustomEvent('cs-discovery-complete',{detail:{id:1}}))});
+          setStatus('6 / 6 · 이제 타입을 고를 수 있음','float가 더 좋은 숫자도, 나쁜 숫자도 아닙니다. 각 값을 눌러 정확한 개수와 근사 가능한 측정값을 구분해 보세요.');
         }
-        host.querySelector('[data-float-next]').textContent=step===3?'처음부터 다시':'다음 발견';
+        host.querySelector('[data-float-next]').textContent=step===5?'처음부터 다시':'다음 질문';
       };
-      host.querySelector('[data-float-next]').onclick=()=>{step=(step+1)%4;render()};host.querySelector('[data-float-reset]').onclick=()=>{step=0;unit='dark';wallet=16777216;render()};render();
+      host.querySelector('[data-float-next]').onclick=()=>{step=(step+1)%6;render()};host.querySelector('[data-float-reset]').onclick=()=>{step=0;position=0;unit='meter';scale=-3;choice={};render()};render();
     }
   });
 
