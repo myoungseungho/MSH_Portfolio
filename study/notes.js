@@ -121,10 +121,48 @@
 
   /* ---------- anchors ---------- */
   var ANCHOR_SEL = 'h1,h2,h3,h4,p,li,.code-block,table,.note';
-  function anchors() { return Array.prototype.slice.call(container.querySelectorAll(ANCHOR_SEL)); }
+  function rawAnchors() { return Array.prototype.slice.call(container.querySelectorAll(ANCHOR_SEL)); }
+  // 숫자 인덱스만 저장하면 펼침/접힘으로 중간에 p·li가 생길 때 같은 번호가 다른
+  // 요소를 가리킨다. 문서 안에서 변하지 않는 의미 키를 함께 저장해 그 문제를 막는다.
+  function textKey(el) {
+    var t = (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120), h = 2166136261;
+    for (var i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0).toString(36);
+  }
+  function anchorBase(el) {
+    var scope = el.closest('[id]');
+    return (scope ? scope.id : 'page') + '|' + el.tagName.toLowerCase() + '|' + textKey(el);
+  }
+  function anchors() {
+    var list = rawAnchors(), seen = {};
+    list.forEach(function (el) {
+      if (!el.dataset.mshnAnchor) return;
+      var base = anchorBase(el), suffix = Number(el.dataset.mshnAnchor.slice(base.length + 1));
+      seen[base] = Math.max(seen[base] || 0, (isNaN(suffix) ? 0 : suffix + 1));
+    });
+    list.forEach(function (el) {
+      if (el.dataset.mshnAnchor) return;
+      var base = anchorBase(el), nth = seen[base] || 0;
+      seen[base] = nth + 1;
+      el.dataset.mshnAnchor = base + '|' + nth;
+    });
+    return list;
+  }
   function topOf(el) { return el.getBoundingClientRect().top + window.scrollY; }
-  function anchorTop(i) { var a = anchors(); var el = a[Math.max(0, Math.min(i, a.length - 1))]; return el ? topOf(el) : 0; }
-  function nearestIdx(docY) { var a = anchors(), best = 0, bd = 1e9; for (var i = 0; i < a.length; i++) { var d = Math.abs(topOf(a[i]) - docY); if (d < bd) { bd = d; best = i; } } return best; }
+  function anchorFor(n) {
+    var a = anchors(), el = null;
+    if (n.aKey) {
+      for (var i = 0; i < a.length; i++) if (a[i].dataset.mshnAnchor === n.aKey) { el = a[i]; break; }
+    }
+    if (!el) el = a[Math.max(0, Math.min(n.aIdx || 0, a.length - 1))];
+    return el || null;
+  }
+  function anchorTop(n) { var el = anchorFor(n); return el ? topOf(el) : 0; }
+  function nearestAnchor(docY) {
+    var a = anchors(), best = 0, bd = 1e9;
+    for (var i = 0; i < a.length; i++) { var d = Math.abs(topOf(a[i]) - docY); if (d < bd) { bd = d; best = i; } }
+    return { idx: best, key: a[best] ? a[best].dataset.mshnAnchor : '' };
+  }
 
   /* ---------- metrics ---------- */
   function metrics() {
@@ -158,7 +196,8 @@
 
   /* ---------- actions ---------- */
   function addNote(docY) {
-    var n = { id: uid(), aIdx: nearestIdx(docY), y: docY, text: '', imgs: [], ts: Date.now(), editing: true, collapsed: false };
+    var anchor = nearestAnchor(docY);
+    var n = { id: uid(), aIdx: anchor.idx, aKey: anchor.key, y: docY, text: '', imgs: [], ts: Date.now(), editing: true, collapsed: false };
     state.push(n); pendingFocus = n.id; persist(); render();
     if (!wide()) openDrawer();
   }
@@ -174,7 +213,7 @@
     countEl.title = '이 페이지 메모 ' + state.length + '개 · ' + fmtKB(kb) + (kb > 500 * 1024 ? ' (한도 1MB 근접 — 이미지 정리 권장)' : '');
     if (isWide) {
       // 앵커는 본문 기준으로만 계산 (카드는 host로 격리돼 문서 높이에 영향 없음)
-      var tops = state.map(function (n) { return anchorTop(n.aIdx); });
+      var tops = state.map(function (n) { return anchorTop(n); });
       strip.style.display = 'block';
       strip.style.left = m.left + 'px';
       strip.style.width = Math.max(0, m.avail - GAP) + 'px';
@@ -517,7 +556,11 @@
     function end() {
       if (!dragging) return; dragging = false; card.classList.remove('mshn-dragging');
       var finalTop = parseFloat(card.style.top) || 0;
-      if (Math.abs(finalTop - startTop) > 6) { n.aIdx = nearestIdx(finalTop); persist(); } // 실제로 옮겼을 때만 재앵커(오클릭 방지)
+      if (Math.abs(finalTop - startTop) > 6) {
+        var anchor = nearestAnchor(finalTop);
+        n.aIdx = anchor.idx; n.aKey = anchor.key; n.y = finalTop;
+        persist();
+      } // 실제로 옮겼을 때만 재앵커(오클릭 방지)
       render();
     }
     handle.addEventListener('pointerup', end);
@@ -538,11 +581,11 @@
   function renderDrawer() {
     var list = drawer.querySelector('.mshn-list'); list.innerHTML = '';
     if (!state.length) { list.innerHTML = '<p style="color:#999;font-size:.85rem;">아직 메모가 없어요. ＋ 로 추가하세요.</p>'; return; }
-    state.slice().sort(function (a, b) { return anchorTop(a.aIdx) - anchorTop(b.aIdx); }).forEach(function (n) {
+    state.slice().sort(function (a, b) { return anchorTop(a) - anchorTop(b); }).forEach(function (n) {
       var it = document.createElement('div'); it.className = 'mshn-item';
       var t = document.createElement('div'); t.className = 't'; t.textContent = n.text || '(빈 메모)';
       var r = document.createElement('div'); r.className = 'r';
-      var go = document.createElement('button'); go.textContent = '📍 위치'; go.onclick = function () { closeDrawer(); window.scrollTo({ top: Math.max(0, anchorTop(n.aIdx) - 80), behavior: 'smooth' }); };
+      var go = document.createElement('button'); go.textContent = '📍 위치'; go.onclick = function () { closeDrawer(); window.scrollTo({ top: Math.max(0, anchorTop(n) - 80), behavior: 'smooth' }); };
       var ed = document.createElement('button'); ed.textContent = '✏️'; ed.onclick = function () { var v = prompt('메모 편집', n.text); if (v !== null) { n.text = v.trim(); n.ts = Date.now(); persist(); renderDrawer(); render(); } };
       var del = document.createElement('button'); del.textContent = '🗑'; del.onclick = function () { if (confirm('삭제할까요?')) { remove(n.id); renderDrawer(); } };
       r.appendChild(go); r.appendChild(ed); r.appendChild(del);
@@ -779,6 +822,12 @@
   }
 
   /* ---------- lifecycle ---------- */
+  // 기존 메모는 최초 로드 시점의 인덱스로 의미 키를 한 번 부여해 이전 데이터도 보호한다.
+  var migratedAnchors = false;
+  state.forEach(function (n) {
+    if (!n.aKey) { var el = anchorFor(n); if (el) { n.aKey = el.dataset.mshnAnchor; migratedAnchors = true; } }
+  });
+  if (migratedAnchors) persist();
   var rt;
   function reflow() { clearTimeout(rt); rt = setTimeout(render, 120); }
   window.addEventListener('resize', reflow);
