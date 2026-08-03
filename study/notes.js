@@ -157,11 +157,24 @@
     if (!el) el = a[Math.max(0, Math.min(n.aIdx || 0, a.length - 1))];
     return el || null;
   }
-  function anchorTop(n) { var el = anchorFor(n); return el ? topOf(el) : 0; }
+  function isLaidOut(el) {
+    if (!el || el.closest('[hidden],details:not([open])')) return false;
+    var r = el.getBoundingClientRect();
+    return !!(r.width || r.height);
+  }
+  // 새로고침 후 답변/실험이 접혀 있으면 그 안쪽 앵커의 rect는 (0, 0)이 된다.
+  // 그 값을 쓰면 카드가 위로 몰리므로, 메모를 만들거나 마지막으로 옮긴 좌표를 유지한다.
+  function anchorTop(n) {
+    var el = anchorFor(n);
+    if (isLaidOut(el)) return topOf(el);
+    return typeof n.y === 'number' && isFinite(n.y) ? n.y : 0;
+  }
   function nearestAnchor(docY) {
-    var a = anchors(), best = 0, bd = 1e9;
+    var all = anchors(), a = all.filter(isLaidOut), best = 0, bd = 1e9;
+    if (!a.length) a = all;
     for (var i = 0; i < a.length; i++) { var d = Math.abs(topOf(a[i]) - docY); if (d < bd) { bd = d; best = i; } }
-    return { idx: best, key: a[best] ? a[best].dataset.mshnAnchor : '' };
+    // aIdx는 기존 메모 하위호환용이다. 새 메모의 실제 기준은 aKey다.
+    return { idx: a[best] ? all.indexOf(a[best]) : 0, key: a[best] ? a[best].dataset.mshnAnchor : '' };
   }
 
   /* ---------- metrics ---------- */
