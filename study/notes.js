@@ -153,8 +153,11 @@
     var a = anchors(), el = null;
     if (n.aKey) {
       for (var i = 0; i < a.length; i++) if (a[i].dataset.mshnAnchor === n.aKey) { el = a[i]; break; }
+      // 실험처럼 필요할 때만 DOM에 생기는 영역은 재방문 직후 아직 없다.
+      // 이때 옛 인덱스로 다른 문단을 가리키지 말고 저장 좌표를 사용한다.
+      return el;
     }
-    if (!el) el = a[Math.max(0, Math.min(n.aIdx || 0, a.length - 1))];
+    el = a[Math.max(0, Math.min(n.aIdx || 0, a.length - 1))];
     return el || null;
   }
   function isLaidOut(el) {
