@@ -555,19 +555,28 @@
 
   /* ---------- 카드 드래그(위아래 이동) ---------- */
   function enableDrag(card, handle, n) {
-    var startY = 0, startTop = 0, dragging = false;
+    var startY = 0, startTop = 0, startScrollY = 0, pointerY = 0, dragging = false;
+    function moveCard() {
+      if (!dragging) return;
+      // clientY는 화면 기준, card.top은 문서 기준이다. 드래그 중 휠/트랙패드로
+      // 스크롤한 거리도 더해야 카드가 커서를 붙잡고 따라간다.
+      card.style.top = (startTop + (pointerY - startY) + (window.scrollY - startScrollY)) + 'px';
+    }
+    function followScroll() { moveCard(); }
     handle.addEventListener('pointerdown', function (e) {
       e.preventDefault();
-      dragging = true; startY = e.clientY; startTop = parseFloat(card.style.top) || 0;
+      dragging = true; startY = pointerY = e.clientY; startTop = parseFloat(card.style.top) || 0; startScrollY = window.scrollY;
       card.style.zIndex = 70; card.classList.add('mshn-dragging');
+      window.addEventListener('scroll', followScroll, { passive: true });
       try { handle.setPointerCapture(e.pointerId); } catch (x) {}
     });
     handle.addEventListener('pointermove', function (e) {
       if (!dragging) return;
-      card.style.top = (startTop + (e.clientY - startY)) + 'px';
+      pointerY = e.clientY; moveCard();
     });
     function end() {
       if (!dragging) return; dragging = false; card.classList.remove('mshn-dragging');
+      window.removeEventListener('scroll', followScroll);
       var finalTop = parseFloat(card.style.top) || 0;
       if (Math.abs(finalTop - startTop) > 6) {
         var anchor = nearestAnchor(finalTop);
