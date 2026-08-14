@@ -1,0 +1,318 @@
+{
+  "slug": "game-server-profiler-metrics",
+  "title": "CPU는 멀쩡한데 왜 렉이 걸릴까?",
+  "subtitle": "게임 서버 프로파일러의 Windows·네트워크·MSSQL 52개 지표를 컴퓨터 안에서 실제로 생기는 일부터 읽는 법",
+  "category": "데브옵스 / 인프라",
+  "category_path": "../devops/",
+  "prev_link": "../monitoring-alerting/",
+  "prev_text": "← 서버 장애를 30초 만에 알아채는 법",
+  "next_link": "../distributed-tracing/",
+  "next_text": "장애 원인을 빠르게 찾는 법 →",
+  "extra_head": "    <style>\n    .metric-lab{background:#0e1426;border-radius:16px;padding:22px;margin:24px 0;color:#e3eaf5;font-family:'Pretendard',-apple-system,sans-serif}.metric-lab h3{margin:0 0 7px;color:#fff;font-size:1.05rem}.metric-lab .ml-note{margin:0 0 16px;color:#aab9d5;font-size:.86rem;line-height:1.65}.ml-controls{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}.ml-btn{min-height:39px;padding:8px 11px;border:1px solid #2c3b59;border-radius:9px;background:#152039;color:#b6c5df;font-weight:700;font-size:.82rem;cursor:pointer}.ml-btn:hover{border-color:#42a5f5;color:#fff}.ml-btn.active{border-color:#42a5f5;background:#1e88e5;color:#fff}.ml-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.ml-card{min-height:92px;padding:11px;border:1px solid #273653;border-radius:10px;background:#121a30}.ml-card small{display:block;color:#90a4c4;font-size:.72rem}.ml-card b{display:block;margin:4px 0;color:#fff;font-family:Consolas,monospace;font-size:1.05rem}.ml-card p{margin:0;color:#aebbd1;font-size:.73rem;line-height:1.55}.ml-card.warn b{color:#ff8a80}.ml-card.ok b{color:#9ccc65}.ml-result{margin-top:12px;padding:13px 15px;border-left:3px solid #42a5f5;border-radius:0 10px 10px 0;background:#121a30;color:#c7d4e8;font-size:.88rem;line-height:1.7}.ml-result b{color:#fff}@media(max-width:600px){.ml-grid{grid-template-columns:1fr 1fr}.metric-lab{padding:16px}}\n    </style>\n    <script src=\"widget.js\" defer></script>",
+  "parts": [
+    {
+      "type": "conversation",
+      "title": "Part 1. '서버가 느리다'는 말만으로는 아무것도 못 고쳐",
+      "items": [
+        {
+          "type": "qa",
+          "q": "유저가 렉 걸린다고 하면 CPU부터 보면 되는 거 아냐?",
+          "a": "먼저 맞춰봐. CPU가 20%인데도 저장 버튼이 3초 걸릴 수 있을까? <span class='key-point'>충분히 가능해.</span> CPU는 계산하는 사람이고, 디스크·네트워크·DB 잠금은 그 사람이 기다리는 대상이거든.\n식당으로 보면 CPU는 요리사, 메모리는 손 닿는 조리대, 디스크는 창고, 네트워크는 배달 도로, MSSQL은 주문 장부야. 요리사가 놀고 있어도 장부를 잡은 사람이 비키지 않으면 주문은 못 나가.\n그래서 프로파일러는 '느리다'를 한 숫자로 답하지 않아. <span class='highlight'>어느 층에서 줄이 생겼는지</span>를 나눠서 보는 도구야."
+        },
+        {
+          "type": "qa",
+          "q": "그럼 높은 숫자 하나만 잡으면 원인인 거네?",
+          "a": "그게 첫 번째 함정이야. 숫자 하나는 <b>관측</b>이지 판결문이 아니야. 예를 들어 페이지 폴트가 많아도, 실제로 RAM과 디스크를 왕복하는 페이지 입출력이 낮으면 정상적인 메모리 탐색일 수 있어.\n반대로 디스크 쓰기 지연이 20ms를 한 번 찍었다고 DB가 망가진 것도 아니야. 다음 2~3개 표본에도 계속 높은지, 같은 시각 데이터 쓰기 작업 수와 Windows 디스크 지연도 올랐는지를 봐야 해.\n<span class='key-point'>한 값 → 같은 층의 보조 값 → 바로 아래 층의 값</span> 순서로 이어 보는 게 기본이야."
+        },
+        {
+          "type": "qa",
+          "q": "5초마다 보는 숫자로 순간 렉을 어떻게 잡아? 이미 지나간 거 아니야?",
+          "a": "맞아. 5초 표본은 30ms짜리 아주 짧은 멈춤을 그대로 찍는 카메라는 아니야. 대신 '그 5초 동안 평균적으로 어디에 부담이 있었는가'를 남겨.\n그래서 프로파일러는 <span class='highlight'>원인 후보를 좁히는 지도</span>고, 정확한 SQL 문장·파일·스택은 그다음 사건 로그나 SQL DMV 상세에서 찾는 구조야. 표본이 짧을수록 정밀하지만 수집 비용이 늘고, 길수록 싸지만 순간을 놓쳐. 현재 5초는 운영 관측에 쓰는 타협점이야."
+        },
+        {
+          "type": "diagram",
+          "content": "유저 체감 렉\n   ↓\n[CPU가 계산 못 함?]  [RAM이 모자람?]  [디스크가 기다리게 함?]  [도로에서 잃어버림?]  [DB 장부가 잠김?]\n   ↓                    ↓                 ↓                     ↓                    ↓\nCPU/큐/인터럽트     페이지/커밋       I/O 지연/대기열      TCP/NIC/Ping         차단/로그 I/O\n\n한 값으로 고르는 게 아니라, 각 길의 '같이 변한 지표'를 따라간다."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 2. CPU — 요리사가 바쁜가, 아니면 줄만 긴가?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "CPU 사용률은 그냥 100%에 가까우면 위험한 거지?",
+          "a": "대체로 맞아. <span class='highlight'>CPU 사용률</span>은 모든 코어가 실제 계산에 쓴 비율이야. 16코어 머신이 50%면 평균적으로 8코어어치가 바쁜 셈이지.\n그런데 평균의 함정이 있어. 게임 로직 스레드 하나가 코어 1개를 100% 쓰고 나머지 15개가 놀면 전체는 6% 정도로 보일 수 있어. 'CPU 낮으니 안전'이라고 결론 내리면 안 돼.\n그래서 CPU가 높을 때는 프로세스별 CPU와 요청량을, 낮은데 체감 렉이 있을 때는 <span class='key-point'>CPU 대기열과 특정 스레드 편중</span>을 같이 봐."
+        },
+        {
+          "type": "qa",
+          "q": "커널 CPU는 게임 코드 CPU랑 뭐가 달라?",
+          "a": "프로그램이 직접 계산하는 시간은 사용자 모드 CPU고, Windows·드라이버가 대신 처리하는 시간은 <span class='highlight'>커널 CPU</span>야. 패킷을 랜카드에서 꺼내고, 파일을 읽고, 드라이버가 하드웨어를 다루는 일이 여기에 들어가.\n전체 CPU보다 커널 CPU가 유난히 높다면 '게임 로직이 무거운가?'보다 <span class='warning'>네트워크·디스크·드라이버가 CPU를 잡아먹는가?</span>를 먼저 의심해야 해. 이때 DPC·인터럽트·NIC 오류·디스크 I/O를 이어서 봐."
+        },
+        {
+          "type": "qa",
+          "q": "CPU가 50%인데 CPU 대기열은 왜 높을 수 있어?",
+          "a": "🧱 먼저 알아야 할 것: CPU는 '전체 평균'으로 일을 나눠주지 않아. 실행할 수 있는 작업은 특정 코어, 특정 락, 특정 단일 스레드에 몰릴 수 있어.\n<span class='highlight'>CPU 대기열</span>은 당장 CPU를 얻지 못해 줄 선 실행 가능 작업 수야. CPU가 낮은데 큐가 높다면 전체 코어 부족보다는 게임 로직 한 스레드·락·CPU affinity·짧은 작업 폭증처럼 <span class='key-point'>한 지점의 병목</span>일 가능성이 커.\n그럼 코어만 늘리면 끝일까? 단일 스레드나 락을 기다리는 문제라면 새 코어는 놀아. 이게 CPU 사용률과 대기열을 같이 보는 이유야."
+        },
+        {
+          "type": "qa",
+          "q": "컨텍스트 전환, DPC, 인터럽트는 왜 갑자기 등장해?",
+          "a": "컨텍스트 전환/초는 CPU가 A 작업을 멈추고 B 작업으로 바꾸는 횟수야. 너무 많으면 요리사가 요리보다 교대에 시간을 쓰는 상태가 돼. CPU도 높다면 스레드 과다·짧은 작업 폭증·락 경합을 의심해.\n<span class='highlight'>인터럽트</span>는 랜카드·디스크 같은 하드웨어가 CPU를 급히 부르는 벨이고, <span class='highlight'>DPC</span>는 '이건 조금 뒤에 처리해'라고 미뤄 둔 드라이버 후처리야. 둘이 급증하면서 커널 CPU도 높다면 서버 코드보다 NIC·스토리지 드라이버 쪽에 눈을 돌려야 해.\n둘은 나쁜 기능이 아니야. 하드웨어와 OS가 대화하는 정상 통로야. <span class='warning'>평소보다 갑자기 늘고, 체감 문제와 같은 시각에 겹칠 때</span>만 의미가 커져."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 3. 메모리 — 조리대가 모자라 창고까지 뛰어가고 있나?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "메모리 사용률과 남은 메모리는 같은 말 아니야?",
+          "a": "반대 방향에서 보는 같은 방의 상태야. <span class='highlight'>메모리 사용률</span>은 물리 RAM 중 차 있는 비율, <span class='highlight'>남은 메모리</span>는 새 작업에 바로 줄 수 있는 빈 공간이야.\n90%라는 숫자 하나보다 '남은 메모리가 계속 내려가고 있나, 다시 회복하나'가 더 중요해. 캐시를 위해 RAM을 많이 쓰는 건 정상일 수 있지만, 빈 공간이 바닥나면 Windows는 덜 급한 메모리를 디스크로 내보내기 시작해. 그때부터 문제가 디스크로 번져."
+        },
+        {
+          "type": "qa",
+          "q": "커밋 메모리는 실제 RAM 사용량이랑 왜 달라?",
+          "a": "프로그램은 '이만큼 메모리를 나중에 써도 되게 자리 예약해줘'라고 OS에 약속을 받아. 그 예약 총량이 <span class='highlight'>커밋 메모리</span>야. 실제 RAM에 다 올려놓지 않았어도 RAM+페이지 파일이라는 뒷받침이 필요해.\n그래서 커밋 사용률이 한계에 가까우면 실제 RAM 여유가 있어 보여도 새 할당이 실패할 수 있어. 반대로 커밋이 높다고 바로 느린 건 아니야. <span class='key-point'>커밋 사용률 + 남은 메모리 + 페이지 입출력</span>을 묶어야 '예약만 큰가, 진짜 RAM이 모자란가'가 갈려."
+        },
+        {
+          "type": "qa",
+          "q": "페이지 폴트가 많으면 무조건 메모리 부족이야?",
+          "a": "아니. 이게 두 번째 큰 함정이야. 🧱 메모리는 작은 페이지 단위로 관리되고, 프로그램이 필요한 페이지를 찾는 과정 자체를 <span class='highlight'>페이지 폴트</span>라고 해. 이미 RAM에 있는 페이지를 다시 연결하는 가벼운 폴트도 많아.\n진짜 경계할 건 <span class='highlight'>페이지 입출력/초</span>야. 이건 RAM과 디스크 사이를 실제로 오간 횟수라서, 높으면서 디스크 지연도 높으면 조리대가 모자라 창고를 왕복하는 상태가 맞아.\n'폴트 많음 → 메모리 증설'로 점프하지 말고, '폴트 + 페이지 입출력 + 디스크 지연' 세 개를 확인해."
+        },
+        {
+          "type": "qa",
+          "q": "페이지드 풀·논페이지드 풀은 게임 메모리랑 뭐가 달라?",
+          "a": "둘은 게임 프로세스가 아니라 <span class='highlight'>Windows와 드라이버가 쓰는 메모리</span>야. 페이지드 풀은 필요하면 디스크로 내보낼 수 있고, 논페이지드 풀은 하드웨어 처리 때문에 반드시 RAM에 남아 있어야 해.\n둘 중 하나가 며칠 동안 계속 우상향하면 게임 객체 누수보다 드라이버·커널 객체 누수도 후보가 돼. 특히 논페이지드 풀은 RAM에 고정되므로 계속 불어나면 더 위험해.\n그럼 프로세스 메모리만 보면 되나? 안 돼. 프로세스는 평평한데 시스템 전체 메모리만 줄어드는 이상 현상을 이 두 지표가 잡아줘."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 4. 디스크 — 창고가 느린 건지, 창고 앞에 줄이 긴 건지",
+      "items": [
+        {
+          "type": "qa",
+          "q": "읽기 지연과 쓰기 지연은 왜 따로 봐? 디스크 하나잖아.",
+          "a": "읽기와 쓰기는 서버에서 만드는 문제 모양이 달라. <span class='highlight'>읽기 지연</span>은 대량 조회·백업 읽기·파일 로딩과 연결되기 쉽고, <span class='highlight'>쓰기 지연</span>은 DB 로그·덤프·백업·대량 저장과 연결되기 쉬워.\n둘 다 높으면 스토리지 자체나 공용 I/O 경합을 의심하고, 쓰기만 높으면 로그 디스크·저장 폭증을 먼저 봐. 대표적으로 20ms 이상이 몇 표본 계속되면 조사 후보지만, SSD/HDD·워크로드마다 정상선은 다르니 <span class='key-point'>평소 기준선과 지속성</span>이 먼저야."
+        },
+        {
+          "type": "qa",
+          "q": "디스크 대기열은 정확히 누가 기다리는 줄이야?",
+          "a": "🧱 디스크는 요청을 받자마자 마법처럼 끝내지 못해. 읽기·쓰기 요청을 큐에 넣고 차례로 처리해. <span class='highlight'>디스크 대기열</span>은 아직 처리를 못 시작했거나 끝내지 못한 요청의 줄이야.\n대기열만 높고 지연이 낮으면 잠깐 요청이 몰린 뒤 빨리 해소되는 정상 피크일 수 있어. 대기열과 읽기·쓰기 지연이 함께 지속적으로 높다면 <span class='warning'>저장장치가 수요를 못 따라가는 병목</span>이야.\n그럼 큐를 크게 잡으면 해결될까? 메모리 큐는 버틸 시간을 늘릴 뿐이고, 처리 속도보다 유입이 많으면 결국 더 긴 지연으로 돌아와."
+        },
+        {
+          "type": "qa",
+          "q": "읽기/쓰기 횟수와 읽기/쓰기 속도는 왜 둘 다 필요해?",
+          "a": "읽기·쓰기 횟수/초는 <b>몇 번 두드렸는지</b>, 읽기·쓰기 바이트/초는 <b>얼마나 큰 짐을 옮겼는지</b>야. 4KB 요청 1만 번과 100MB 요청 1번은 대역폭·IOPS 부담이 완전히 달라.\n예를 들어 쓰기 지연이 높을 때 작업 횟수는 적고 바이트만 크면 대형 백업·덤프일 수 있어. 횟수가 폭증하면 작은 랜덤 I/O나 로그 flush가 많을 수 있어.\n따라서 지연은 결과, 횟수와 바이트는 <span class='key-point'>왜 그 결과가 나왔는지</span>를 알려 주는 재료야."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 5. 네트워크 — Ping이 미응답이면 서버가 죽은 걸까?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "Ping이 정확히 뭐고, RTT는 누구와 누구 사이 시간이야?",
+          "a": "<span class='highlight'>Ping</span>은 이 머신이 지정 대상에게 ICMP Echo라는 짧은 '있니?' 편지를 보내고 답이 돌아오는 시간을 재는 거야. <span class='highlight'>RTT</span>(왕복 시간)는 그 두 지점 사이만의 시간이고, 클라이언트가 게이트를 거쳐 게임 서버까지 느끼는 전체 렉은 아니야.\n그래서 Ping 대상, 성공 여부, RTT, 제한 시간, 오류, 표본 시각을 같이 남겨. '어느 대상에', '어떤 방식으로', '언제' 실패했는지를 빼면 숫자는 쓸모없어져."
+        },
+        {
+          "type": "qa",
+          "q": "ICMP 미응답이면 통신 장애 맞잖아. 왜 아닌 척해?",
+          "a": "방화벽이나 네트워크 장비가 ICMP만 막을 수 있어. 그러면 게임 TCP 연결은 멀쩡한데 Ping만 미응답이야. 반대로 Ping은 낮아도 게임 포트·게이트 프로세스가 죽었을 수 있어.\n즉 Ping은 <span class='key-point'>'경로가 아주 대략 살아 있고 왕복이 얼마나 걸리는지'</span>를 보는 보조 신호지 서비스 가용성 판정 자체가 아니야. 서비스 가능 여부는 실제 TCP 포트·WinRM·프로세스·로그 같은 다른 관측과 분리해야 해."
+        },
+        {
+          "type": "qa",
+          "q": "TCP 재전송/초가 왜 유저 렉과 더 가깝다고 해?",
+          "a": "TCP는 보낸 바이트의 확인 응답이 오지 않으면 같은 데이터를 다시 보내. <span class='highlight'>TCP 재전송/초</span>은 그 재발송 횟수야. 도로에서 봉투가 사라져 다시 보내는 셈이라, 지속 상승하면 패킷 유실·혼잡·NIC·회선 문제 후보가 돼.\n하지만 재전송 하나로 바로 회선 탓은 금지야. 서버 CPU가 밀려 응답을 늦게 줘도 재전송은 생길 수 있거든. 최근 5초 NIC 오류·폐기, 연결 실패, RST와 같은 시간인지 확인해야 해."
+        },
+        {
+          "type": "qa",
+          "q": "TCP 연결 실패와 RST는 둘 다 끊긴 거 아닌가?",
+          "a": "다른 순간이야. <span class='highlight'>연결 실패</span>는 새 TCP 연결을 만들지 못한 횟수고, 대상 중단·포트·방화벽·접속 폭증이 후보야. <span class='highlight'>RST</span>는 이미 있던 연결이 정상 종료가 아닌 강제 종료를 당한 횟수야. 프로세스 종료·타임아웃·비정상 단절을 살펴봐.\n누적값은 오래 켠 서버면 원래 커져. 장애 순간을 읽을 때는 <span class='key-point'>최근 5초 변화량</span>이 핵심이고, 누적값은 장기 추세 비교용이야."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 6. 랜카드 — 서버의 문이 실제로 패킷을 버리고 있나?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "어댑터 번호·이름·동작 상태·회선 속도는 그냥 장비 정보 아닌가?",
+          "a": "맞아, 하지만 어느 랜카드를 보고 있는지 모르면 나머지 오류 수치가 전부 무의미해. VM에는 가상 NIC가 여러 개 있을 수 있고, 서비스 트래픽이 흐르는 문과 관리망 문이 다를 수 있거든.\n<span class='highlight'>어댑터 번호/이름</span>으로 대상을 식별하고, <span class='highlight'>동작 상태</span>와 <span class='highlight'>회선 속도</span>로 링크가 살아 있는지·예상 속도로 협상됐는지 확인해. 낮은 링크 속도나 Up/Down 반복은 물리·가상화·드라이버 문제의 단서야."
+        },
+        {
+          "type": "qa",
+          "q": "수신/송신 누적 바이트가 많으면 네트워크가 바쁜 거지?",
+          "a": "누적 바이트는 부팅 뒤 총량이라 오래 켠 서버일수록 커. 그래서 그 숫자 자체로 '지금 바쁘다'고 말할 수 없어.\n이 값은 어느 방향 트래픽이 많은지, 재부팅 전후에 대략 어떤 규모였는지 보는 맥락용이야. 현재 병목은 직전 표본과의 변화량, TCP 재전송, 송신 대기열을 함께 봐야 해. <span class='warning'>누적값을 순간 속도로 착각하면 안 돼.</span>"
+        },
+        {
+          "type": "qa",
+          "q": "오류·폐기와 최근 5초 오류·폐기는 왜 두 종류가 있어?",
+          "a": "오류·폐기 누적은 '이 NIC가 살면서 한 번이라도 문제가 있었나'를 보여 주고, 최근 5초 변화량은 '지금 새 문제가 생겼나'를 보여 줘.\n<span class='highlight'>오류</span>는 깨지거나 전송 실패한 패킷, <span class='highlight'>폐기</span>는 버퍼 부족 같은 이유로 받거나 보내지 못하고 버린 패킷이야. 둘 다 과거 누적만 크고 최근 5초가 0이면 지금 장애의 직접 원인이라고 보기 어렵지.\n반대로 최근 5초 오류·폐기와 TCP 재전송이 같이 오르면 <span class='key-point'>실제로 문 앞에서 패킷이 새로 떨어지고 있다</span>는 강한 단서야."
+        },
+        {
+          "type": "qa",
+          "q": "송신 대기열은 디스크 대기열이랑 똑같은 원리야?",
+          "a": "비슷해. <span class='highlight'>송신 대기열</span>은 랜카드가 회선으로 아직 내보내지 못한 패킷 수야. 문 앞에 배달 봉투가 쌓인 상태지.\n단, 0이 아니라고 무조건 장애는 아니야. 짧은 버스트는 정상이고, 계속 쌓이면서 재전송·오류·지연이 동반되는지가 중요해. 큐만 크게 만들면 해결될까? 디스크와 마찬가지로 느린 출구를 가려 줄 뿐, 평균 유입이 더 크면 지연만 길어져."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 7. MSSQL 기본 — DB 머신은 여러 DB가 있어도 한 번에 볼 수 있나?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "MSSQL 감지·수집 상태가 ready면 정확히 뭘 했다는 거야?",
+          "a": "수집기가 이 머신의 SQL Server를 감지하고, 시스템 뷰·DMV를 <span class='key-point'>읽기 전용으로 조회</span>해 요약을 가져왔다는 뜻이야. 게임 데이터·테이블·인덱스·설정은 건드리지 않아.\nready가 아니면 'DB가 문제'라고 단정하지 말고 SQL 서비스, 로컬 연결, 필요한 조회 권한(VIEW SERVER STATE), ODBC 드라이버 같은 <b>관측 경로</b>부터 확인해야 해. 관측기가 못 보는 것과 DB가 느린 것은 다른 사건이야."
+        },
+        {
+          "type": "qa",
+          "q": "인스턴스·SQL 서버 이름·버전·드라이버·읽기 전용은 왜 성능 화면에 있어?",
+          "a": "이건 속도 숫자라기보다 <span class='highlight'>이 값이 어디서 왔는지 증명하는 신분증</span>이야. 인스턴스·서버 이름은 어느 DB 엔진인지, 제품 버전·드라이버는 환경 차이와 연결 호환성을, 읽기 전용은 수집이 변경 작업이 아니었다는 걸 알려줘.\n서버 한 대에 Game·Trade·월드 DB가 여러 개 있어도 이 표본은 인스턴스 전체 요약이야. 'DB가 많으니 이 수치가 의미 없나?' 아니. 전체가 숨이 찬지 먼저 보고, 문제면 다음 단계에서 파일·세션·차단으로 어느 DB인지 좁히는 거야."
+        },
+        {
+          "type": "qa",
+          "q": "DB 표본 시각·경과와 데이터베이스 수는 왜 따로 봐?",
+          "a": "DB 상세 수집은 Windows 5초 표본보다 드문 주기로 읽을 수 있어. <span class='highlight'>DB 표본 시각/경과</span>는 지금 화면의 SQL 값이 몇 초 전 것인지 알려줘. 경과가 짧으면 정상 캐시고, 너무 길면 수집 경로가 멈춘 거야.\n<span class='highlight'>데이터베이스 수</span>는 한 인스턴스에 몇 DB가 붙어 있는지 알려 주는 규모 맥락이야. 값이 많다고 느리다는 뜻은 아니지만, 한 머신의 I/O·메모리·로그 자원을 누가 공유하는지 생각하게 해 줘."
+        },
+        {
+          "type": "qa",
+          "q": "사용자 세션·활성 요청·현재 SQL 작업·온라인 스케줄러는 서로 뭐가 달라?",
+          "a": "사용자 세션은 DB에 연결한 손님 수, 활성 요청은 지금 SQL을 실제 실행 중인 손님 수야. 현재 SQL 작업은 내부 실행·대기까지 포함한 전체 작업량이고, 온라인 스케줄러는 SQL이 실제로 쓸 수 있는 CPU 작업대 수야.\n세션만 많고 활성 요청이 적으면 연결 풀처럼 평온할 수 있어. 활성 요청과 현재 작업이 급증하면 요청 폭증·연결 누수·배치 작업을 의심해. 온라인 스케줄러는 뒤의 SQL 실행 대기열이 '몇 개면 많은가'를 해석하는 기준이야."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 8. MSSQL 잠금과 CPU — 장부를 누가 붙잡고 있나?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "차단 요청이 1개면 그렇게 심각한 거야?",
+          "a": "차단은 다른 세션이 잡은 잠금을 기다리는 요청이 있다는 뜻이야. 1개가 잠깐 생기는 건 거래·저장 중 정상일 수 있어. 하지만 <span class='highlight'>차단 요청</span>이 지속되고 <span class='highlight'>최대 차단 대기</span>가 늘면, 앞사람이 장부를 붙잡아 뒷사람 줄이 길어지는 실제 병목이야.\n여기서 대기 유형은 '무엇을 기다리는가'라는 힌트, blocker SPID는 '누가 막고 있는가'라는 시작점이야. SPID 하나를 죽이는 게 답일까? 아니. 먼저 그 세션의 쿼리·트랜잭션·호출 주체를 확인하고 왜 오래 잡는지 고쳐야 해."
+        },
+        {
+          "type": "qa",
+          "q": "가장 오래 열린 트랜잭션은 차단이 없는데도 왜 위험해?",
+          "a": "트랜잭션은 '여러 변경을 한 덩어리로 성공 또는 실패시키겠다'는 약속이야. 오래 열린 트랜잭션은 잠금을 잡고 있을 수 있고, 로그가 예전 상태를 버리지 못하게 만들 수도 있어.\n당장 차단이 0이어도 이 값이 계속 크면 다음 요청이 부딪힐 지뢰를 들고 있는 셈이야. 그래서 차단이 보이면 blocker와 같이 보고, 로그 사용률이 높으면 오래 열린 트랜잭션도 같이 확인해."
+        },
+        {
+          "type": "qa",
+          "q": "SQL Server CPU와 SQL 실행 대기열은 Windows CPU와 중복 아닌가?",
+          "a": "Windows CPU는 머신 전체 주방, <span class='highlight'>SQL Server CPU</span>는 그중 DB 주방만 따로 본 값이야. 머신 CPU가 낮은데 SQL CPU가 높으면 다른 프로세스는 한가하고 DB 쿼리만 무거운 상황을 잡을 수 있어.\n<span class='highlight'>SQL 실행 대기열</span>은 CPU를 기다리는 SQL 작업 수야. SQL CPU와 실행 대기열이 같이 높으면 실행계획·인덱스·호출량을 조사할 근거가 강해져. 반대로 SQL CPU가 낮은데 요청이 느리면 잠금·I/O·외부 대기를 봐야 해."
+        },
+        {
+          "type": "qa",
+          "q": "메모리 그랜트 대기와 PLE는 왜 쿼리 문제랑 연결돼?",
+          "a": "정렬·해시 조인은 중간 결과를 펼칠 작업 공간이 필요해. <span class='highlight'>메모리 그랜트 대기</span>는 그 공간을 못 받아 줄 선 요청 수야. 0보다 크면 큰 sort/hash, 부정확한 행 수 추정, 인덱스 부재가 후보가 돼.\n<span class='highlight'>PLE</span>은 데이터 페이지가 SQL 버퍼 캐시에 머문 시간이고, 절대값보다 갑자기 떨어지는 추세가 중요해. 대량 읽기나 메모리 압박이 캐시를 빨리 밀어내고 있다는 뜻일 수 있어.\n둘 다 'RAM을 더 사면 끝'일까? 메모리 부족일 수도 있지만, 필요 이상으로 많은 행을 읽는 쿼리·잘못된 실행계획이면 같은 돈으로 인덱스·쿼리를 고치는 편이 더 직접적이야."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 9. MSSQL 파일 I/O — 어떤 DB의 어떤 파일이 느린지는 어떻게 좁혀?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "데이터 읽기 지연과 데이터 쓰기 지연은 Windows 디스크 지연이랑 또 달라?",
+          "a": "Windows 디스크 지연은 머신의 저장장치 전체 관점이고, <span class='highlight'>SQL 데이터 읽기/쓰기 지연</span>은 SQL Server가 데이터 파일에 낸 I/O만 따로 본 평균이야.\n둘이 같은 시각에 높으면 스토리지층 가설이 강해져. SQL만 높으면 특정 DB 파일·쿼리·작업 패턴을 더 의심하고, Windows만 높으면 백업·다른 프로세스·OS 작업도 후보야.\n그래서 'DB가 느리다'를 더 좁히려면 다음 사건 데이터의 파일별 I/O에서 <span class='key-point'>어느 DB, 어느 데이터 파일</span>이 느린지 봐야 해. 이 요약 지표는 그 조사로 들어갈 문이야."
+        },
+        {
+          "type": "qa",
+          "q": "로그 쓰기 지연은 왜 저장·구매 렉과 특히 가까워?",
+          "a": "트랜잭션은 변경을 확정하기 전에 로그 파일에 기록을 남겨야 해. <span class='highlight'>로그 쓰기 지연</span>이 길면 커밋 완료가 늦어지고, 저장·강화·구매처럼 DB 확정이 필요한 흐름이 직접 기다릴 수 있어.\n데이터 파일은 나중에 정리해도 되는 경우가 많지만 로그 flush는 커밋의 문턱이야. 그래서 로그 지연이 지속되면 긴 트랜잭션, 대량 쓰기, 커밋 빈도, 로그 디스크, 로그 백업 시간을 같이 봐.\n로그 파일을 크게 잡으면 해결될까? 공간 부족 예방에는 도움이 되지만 느린 디스크에 쓰는 한 flush 지연 자체는 해결하지 못해."
+        },
+        {
+          "type": "qa",
+          "q": "데이터/로그 읽기·쓰기 작업 수는 지연을 어떻게 해석하게 해 줘?",
+          "a": "지연이 높다는 결과만으로는 '장치가 느려졌나, 일이 너무 많았나'를 몰라. <span class='highlight'>작업 수</span>는 직전 표본 동안 각 파일이 몇 번 읽고 썼는지야.\n작업 수 폭증과 지연 상승이 같이 오면 갑작스러운 대량 조회·쓰기·백업이 원인일 수 있어. 작업 수는 평소인데 지연만 치솟으면 스토리지·가상화·공유 디스크 문제 쪽이 더 의심돼.\n이게 성능 지표를 '높다/낮다'에서 <span class='key-point'>수요와 공급의 이야기</span>로 바꾸는 방법이야."
+        },
+        {
+          "type": "qa",
+          "q": "tempdb 사용률과 최대 로그 사용률이 높으면 바로 파일을 늘려?",
+          "a": "먼저 왜 찼는지 봐야 해. <span class='highlight'>tempdb</span>는 정렬·해시·버전 저장소 같은 임시 작업 공간이고, 사용률이 높으면 큰 sort/hash·버전 저장소·실행계획을 의심해. <span class='highlight'>최대 로그 사용률</span>은 인스턴스 안에서 가장 찬 DB 로그의 비율이야.\n파일을 늘리면 당장 공간 부족은 막을 수 있어. 하지만 오래 열린 트랜잭션·로그 백업 실패·대량 쓰기가 원인인데 공간만 늘리면 같은 일이 더 늦게 터질 뿐이야. <span class='warning'>공간 증설은 응급조치, 재사용을 막는 원인 제거가 본치료</span>야."
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 10. 수집기 자신 — 온도계를 먼저 의심해야 할 때",
+      "items": [
+        {
+          "type": "qa",
+          "q": "수집기 CPU·메모리·전용 메모리는 왜 보지? 서버만 보면 되잖아.",
+          "a": "관측 도구가 문제를 만들면 안 되기 때문이야. <span class='highlight'>수집기 CPU</span>는 측정 자체가 서버 CPU를 얼마나 쓰는지, <span class='highlight'>메모리 사용/전용 메모리</span>는 수집기가 실제로 RAM에 올린 양과 스스로 소유한 양이야.\n이 값이 낮고 평평하면 관측은 가벼운 편이야. 계속 우상향하면 로그 버퍼·객체·연결을 놓지 않는 수집기 누수일 수 있어. 이때 서버 지표가 나빠진 원인이 게임이 아니라 수집기일 가능성도 배제하면 안 돼."
+        },
+        {
+          "type": "qa",
+          "q": "수집기 핸들 수가 늘면 메모리 누수랑 같은 거야?",
+          "a": "완전히 같진 않아. <span class='highlight'>핸들</span>은 파일·소켓·이벤트·프로세스처럼 Windows가 관리하는 손잡이야. 핸들을 닫지 않으면 메모리뿐 아니라 새 파일·연결을 열 수 있는 능력도 소진돼.\n짧은 작업에서 오르내리는 건 정상일 수 있어. 그런데 표본마다 계속 계단처럼 오르고 내려오지 않으면 파일·소켓·프로세스 핸들 누수를 조사해야 해. <span class='key-point'>CPU는 조용한데 시간이 갈수록 망가지는 문제</span>를 이 값이 잡아줘."
+        },
+        {
+          "type": "raw_html",
+          "content": "<div class=\"metric-lab\" id=\"metricLab\"><h3>🔎 증상별로 어떤 지표 조합부터 볼까?</h3><p class=\"ml-note\">버튼을 눌러 봐. 수치는 구조를 보여 주는 예시값이고, 실제 판단은 같은 시각의 여러 표본을 비교해야 해.</p><div class=\"ml-controls\"><button class=\"ml-btn active\" data-case=\"cpu\">게임 로직 CPU 몰림</button><button class=\"ml-btn\" data-case=\"memory\">RAM 압박</button><button class=\"ml-btn\" data-case=\"disk\">디스크 쓰기 지연</button><button class=\"ml-btn\" data-case=\"network\">회선/NIC 문제</button><button class=\"ml-btn\" data-case=\"sql\">SQL 차단</button></div><div class=\"ml-grid\"><div class=\"ml-card\" id=\"ml1\"></div><div class=\"ml-card\" id=\"ml2\"></div><div class=\"ml-card\" id=\"ml3\"></div></div><div class=\"ml-result\" id=\"mlResult\"></div></div>"
+        }
+      ]
+    },
+    {
+      "type": "conversation",
+      "title": "Part 11. 그래서 실제 장애 때는 어느 순서로 읽어?",
+      "items": [
+        {
+          "type": "qa",
+          "q": "모두가 동시에 느리다고 하면 첫 화면에서 뭘 묶어 봐?",
+          "a": "먼저 CPU 사용률·CPU 대기열·디스크 읽기/쓰기 지연을 한 시각에 봐. CPU와 큐가 같이 높으면 계산 병목, 디스크 지연과 대기열이 같이 높으면 스토리지 병목 후보야.\n머신 전체 CPU가 낮은데 SQL CPU·SQL 실행 대기열만 높다면 DB 쿼리 쪽으로, 둘 다 낮은데 차단·로그 쓰기 지연이 높다면 잠금·커밋 경로로 들어가. <span class='key-point'>전부 느림 → 머신 층부터, 특정 기능만 느림 → DB/기능 경로부터</span>라는 출발점이 좋아."
+        },
+        {
+          "type": "qa",
+          "q": "일부 유저만 끊긴다고 하면 Ping부터 보라는 뜻이야?",
+          "a": "Ping은 보되 결론은 내리지 마. 먼저 TCP 재전송, 최근 5초 NIC 오류·폐기, TCP 연결 실패·RST를 묶어 봐. 이 값들이 같이 오르면 실제 패킷 유실·경로·NIC 쪽 가설이 세져.\n그런데 게이트만 CPU가 밀려도 일부 유저는 끊겨 보여. 그래서 해당 게이트의 CPU 큐·프로세스·송신 대기열도 비교해야 해. <span class='warning'>ICMP 미응답 하나를 장애 원인이라고 쓰면 안 돼.</span>"
+        },
+        {
+          "type": "qa",
+          "q": "저장·강화·구매만 느리면 결국 SQL만 보면 되지?",
+          "a": "SQL부터 보는 게 맞지만 SQL 화면 안에서도 순서가 있어. ① 차단 요청·최대 차단 대기·blocker SPID, ② 로그 쓰기 지연, ③ 데이터 쓰기 작업 수·Windows 디스크 쓰기 지연, ④ 오래 열린 트랜잭션·로그 사용률 순으로 좁혀.\n차단이면 프로시저·잠금 테이블·인덱스·트랜잭션 범위를 고치고, 로그 I/O면 커밋 패턴·로그 디스크·백업을 고쳐. 같은 '저장 느림'이라도 <span class='key-point'>비즈니스 로직·쿼리·테이블·인덱스·스토리지</span> 중 손댈 곳이 달라져."
+        }
+      ]
+    },
+    {
+      "type": "raw_html",
+      "content": "        <div class='conversation'>\n            <h2>Part 12. 전 지표 빠른 사전 — 화면 이름을 보고 바로 뜻 찾기</h2>\n            <p style='margin-bottom:16px'>위 Part는 <b>왜 그런 값이 나오는지</b>를 배우는 본문이고, 아래는 실제 대시보드에서 이름을 봤을 때 바로 찾는 사전이야. 같은 줄의 값은 함께 읽어야 하는 짝이야.</p>\n            <details open style='margin:12px 0'><summary><b>시스템 — 이 머신 전체에 남은 숨통</b></summary><table class='compare-table'><tr><th>지표</th><th>뜻</th><th>같이 볼 것</th></tr><tr><td>메모리 사용률</td><td>물리 RAM 중 사용 비율</td><td>남은 메모리, 페이지 입출력</td></tr><tr><td>남은 메모리</td><td>새 작업에 바로 줄 수 있는 RAM</td><td>계속 하락하는지</td></tr><tr><td>커밋 메모리</td><td>RAM+페이지 파일에서 예약한 총량</td><td>커밋 사용률</td></tr><tr><td>프로세스 수</td><td>실행 중인 프로그램 수</td><td>새로 증가한 프로세스</td></tr><tr><td>스레드 수</td><td>프로그램 내부 작업 단위 총수</td><td>계속 우상향하는지</td></tr></table></details>\n            <details style='margin:12px 0'><summary><b>CPU — 실제 계산과 하드웨어 후처리</b></summary><table class='compare-table'><tr><th>지표</th><th>뜻</th><th>같이 볼 것</th></tr><tr><td>CPU 사용률</td><td>전체 코어의 계산 사용 비율</td><td>프로세스별 CPU, 요청량</td></tr><tr><td>커널 CPU</td><td>OS·드라이버·I/O가 쓴 CPU</td><td>DPC, 인터럽트, NIC·디스크</td></tr><tr><td>CPU 대기열</td><td>CPU를 기다리는 실행 가능 작업 수</td><td>코어 편중, 락, 단일 스레드</td></tr><tr><td>컨텍스트 전환/초</td><td>CPU가 작업을 교대하는 횟수</td><td>스레드 과다, 경합</td></tr><tr><td>DPC 비율 / DPC/초</td><td>드라이버가 미뤄 둔 하드웨어 후처리</td><td>커널 CPU, NIC·스토리지 드라이버</td></tr><tr><td>인터럽트 비율 / 인터럽트/초</td><td>하드웨어가 CPU를 부른 횟수·비율</td><td>DPC, 장치 I/O</td></tr></table></details>\n            <details style='margin:12px 0'><summary><b>메모리 — RAM과 페이지 파일 사이의 왕복</b></summary><table class='compare-table'><tr><th>지표</th><th>뜻</th><th>같이 볼 것</th></tr><tr><td>커밋 사용률</td><td>예약 가능한 한도 중 커밋 비율</td><td>남은 메모리, 할당 실패</td></tr><tr><td>페이지 입출력/초</td><td>RAM과 디스크 사이 실제 페이지 이동</td><td>디스크 지연</td></tr><tr><td>페이지 폴트/초</td><td>필요한 메모리 페이지를 찾은 횟수</td><td>페이지 입출력과 구분</td></tr><tr><td>페이지드 풀</td><td>디스크로 내보낼 수 있는 OS·드라이버 메모리</td><td>지속 증가 여부</td></tr><tr><td>논페이지드 풀</td><td>반드시 RAM에 남는 OS·드라이버 메모리</td><td>드라이버·커널 누수</td></tr></table></details>\n            <details style='margin:12px 0'><summary><b>디스크 — I/O 수요와 저장장치 공급</b></summary><table class='compare-table'><tr><th>지표</th><th>뜻</th><th>같이 볼 것</th></tr><tr><td>읽기 지연(초)</td><td>읽기 1회 평균 처리 시간</td><td>읽기 횟수/초, 읽기 속도</td></tr><tr><td>쓰기 지연(초)</td><td>쓰기 1회 평균 처리 시간</td><td>로그 쓰기, 백업, 쓰기량</td></tr><tr><td>디스크 대기열</td><td>아직 처리 못 한 I/O 요청 줄</td><td>읽기·쓰기 지연</td></tr><tr><td>읽기 횟수/초 · 쓰기 횟수/초</td><td>초당 I/O 요청 수</td><td>작은 랜덤 I/O 폭증 여부</td></tr><tr><td>읽기 속도 · 쓰기 속도</td><td>초당 옮긴 바이트 양</td><td>대형 백업·덤프 여부</td></tr></table></details>\n            <details style='margin:12px 0'><summary><b>네트워크 / TCP — 길이 있는지와 봉투가 사라지는지</b></summary><table class='compare-table'><tr><th>지표</th><th>뜻</th><th>같이 볼 것</th></tr><tr><td>Ping 대상 · 방식</td><td>ICMP를 보낸 대상과 측정 방식</td><td>실제 서비스 포트와 혼동 금지</td></tr><tr><td>Ping 상태 · 성공 · RTT</td><td>응답 여부와 왕복 시간</td><td>방화벽·ICMP 정책</td></tr><tr><td>Ping 제한 시간 · 오류 · 표본 시각</td><td>얼마나 기다렸고 언제 왜 실패했는지</td><td>측정 자체 실패인지</td></tr><tr><td>TCP 재전송/초</td><td>확인이 안 와 다시 보낸 바이트 수</td><td>NIC 오류·폐기, CPU 지연</td></tr><tr><td>연결 실패(5초) · 누적</td><td>새 TCP 연결 실패의 현재 변화·장기 합계</td><td>대상·포트·방화벽</td></tr><tr><td>RST 단절(5초) · 누적</td><td>강제 종료된 연결의 현재 변화·장기 합계</td><td>프로세스 종료·타임아웃</td></tr></table></details>\n            <details style='margin:12px 0'><summary><b>랜카드 — 어느 문에서 지금 패킷을 버리는지</b></summary><table class='compare-table'><tr><th>지표</th><th>뜻</th><th>같이 볼 것</th></tr><tr><td>어댑터 번호 · 어댑터</td><td>Windows NIC 식별자와 이름</td><td>실제 서비스 NIC인지</td></tr><tr><td>동작 상태 · 회선 속도</td><td>링크 Up 여부와 협상 속도</td><td>링크 flap·드라이버</td></tr><tr><td>수신 누적 · 송신 누적</td><td>부팅 뒤 받은·보낸 총 바이트</td><td>순간값이 아닌 장기 맥락</td></tr><tr><td>수신/송신 오류 누적</td><td>깨지거나 전송 실패한 패킷 총합</td><td>최근 5초 변화량</td></tr><tr><td>수신/송신 폐기 누적</td><td>버퍼 부족 등으로 버린 패킷 총합</td><td>TCP 재전송</td></tr><tr><td>송신 대기열</td><td>아직 회선으로 못 나간 패킷 수</td><td>재전송·지속성</td></tr><tr><td>최근 5초 수신/송신 오류·폐기</td><td>지금 새로 발생한 NIC 문제</td><td>누적과 반드시 구분</td></tr></table></details>\n            <details style='margin:12px 0'><summary><b>MSSQL 연결·활동 — 지금 어느 DB 엔진이 숨 쉬는지</b></summary><table class='compare-table'><tr><th>지표</th><th>뜻</th><th>같이 볼 것</th></tr><tr><td>MSSQL 감지 · 수집 상태</td><td>SQL 감지와 읽기 전용 수집 성공 여부</td><td>서비스·권한·드라이버</td></tr><tr><td>인스턴스 · SQL 서버</td><td>관측한 SQL 엔진의 식별</td><td>어느 DB 머신 값인지</td></tr><tr><td>DB 표본 시각 · 경과</td><td>SQL 값의 실제 측정 시각과 나이</td><td>오래된 캐시·수집 중단</td></tr><tr><td>읽기 전용 · SQL 버전 · 접속 드라이버</td><td>조회 모드와 환경 정보</td><td>환경·호환성 차이</td></tr><tr><td>데이터베이스 수</td><td>인스턴스가 가진 DB 수</td><td>공유 I/O·메모리 맥락</td></tr><tr><td>사용자 세션 · 활성 요청</td><td>연결 손님 수와 지금 실행 중인 SQL 수</td><td>연결 누수·요청 폭증</td></tr><tr><td>현재 SQL 작업 · 온라인 스케줄러</td><td>전체 작업량과 SQL이 쓸 CPU 작업대 수</td><td>실행 대기열 해석</td></tr></table></details>\n            <details style='margin:12px 0'><summary><b>MSSQL 잠금·CPU·메모리 — 장부가 누구를 기다리는지</b></summary><table class='compare-table'><tr><th>지표</th><th>뜻</th><th>같이 볼 것</th></tr><tr><td>차단 요청</td><td>잠금을 기다리는 SQL 요청 수</td><td>blocker SPID</td></tr><tr><td>최대 차단 대기 · 최상위 대기 유형</td><td>가장 오래 기다린 시간과 이유</td><td>호출 프로시저·잠금 자원</td></tr><tr><td>차단 SPID</td><td>다른 요청을 막는 세션 ID</td><td>실행 SQL·트랜잭션</td></tr><tr><td>가장 오래 열린 TX</td><td>커밋/롤백되지 않은 최장 트랜잭션</td><td>로그 재사용·차단</td></tr><tr><td>SQL Server CPU · SQL 실행 대기열</td><td>DB 프로세스 CPU와 CPU를 기다리는 SQL 작업</td><td>실행계획·인덱스·호출량</td></tr><tr><td>메모리 그랜트 대기</td><td>sort/hash 작업 공간을 기다리는 요청</td><td>추정치·인덱스·정렬</td></tr><tr><td>버퍼 PLE</td><td>데이터 페이지가 캐시에 머문 시간</td><td>갑작스런 하락·대량 읽기</td></tr></table></details>\n            <details style='margin:12px 0'><summary><b>MSSQL 파일 I/O·공간 — 어느 파일의 커밋이 늦는지</b></summary><table class='compare-table'><tr><th>지표</th><th>뜻</th><th>같이 볼 것</th></tr><tr><td>데이터 읽기 지연 · 데이터 쓰기 지연</td><td>SQL 데이터 파일 I/O 1회 평균 지연</td><td>파일별 I/O, Windows 디스크</td></tr><tr><td>로그 쓰기 지연</td><td>트랜잭션 로그 flush 평균 지연</td><td>커밋·대량 쓰기·로그 디스크</td></tr><tr><td>데이터 읽기/쓰기 작업 · 로그 읽기/쓰기 작업</td><td>직전 표본의 파일 I/O 횟수</td><td>수요 급증인지 장치 저하인지</td></tr><tr><td>tempdb 사용률</td><td>정렬·해시·버전 저장소 임시 공간 사용 비율</td><td>실행계획·version store</td></tr><tr><td>최대 로그 사용률</td><td>인스턴스 안에서 가장 찬 DB 로그 비율</td><td>긴 TX·로그 백업·재사용 대기</td></tr></table></details>\n            <details style='margin:12px 0'><summary><b>수집기 자신 — 관측 도구가 원인이 아닌지</b></summary><table class='compare-table'><tr><th>지표</th><th>뜻</th><th>같이 볼 것</th></tr><tr><td>수집기 CPU 사용률</td><td>프로파일러 자체가 쓰는 CPU</td><td>측정 비용이 과하지 않은지</td></tr><tr><td>수집기 메모리 사용 · 전용 메모리</td><td>실제 RAM과 수집기만 소유한 메모리</td><td>시간에 따른 우상향</td></tr><tr><td>수집기 핸들 수</td><td>파일·소켓·이벤트 등 열린 OS 손잡이 수</td><td>파일·소켓 핸들 누수</td></tr></table></details>\n        </div>"
+    },
+    {
+      "type": "summary",
+      "title": "핵심 정리 — 숫자를 조치 후보로 바꾸는 법",
+      "items": [
+        "CPU 사용률만 보지 마 — CPU 대기열은 특정 코어·락·단일 스레드 병목을 따로 드러낸다",
+        "페이지 폴트만으로 메모리 부족 판정 금지 — 페이지 입출력과 디스크 지연이 같이 높을 때 실제 RAM 압박이다",
+        "디스크 지연은 결과고, I/O 횟수·바이트·대기열은 원인을 나눈다",
+        "Ping은 두 지점의 ICMP 왕복일 뿐이다 — 게임 체감과 서비스 가능 여부는 TCP·NIC·프로세스 관측으로 분리한다",
+        "NIC 누적 오류보다 최근 5초 변화량이 '지금' 문제를 말해 준다",
+        "SQL 차단·CPU·메모리 그랜트·파일 I/O는 서로 다른 쿼리/인덱스/트랜잭션/스토리지 조치로 이어진다",
+        "프로파일러는 읽기 전용 지도다 — 원인 후보를 좁힌 뒤 사건 로그·파일별 I/O·SPID·실행계획으로 정확한 대상을 찾는다"
+      ]
+    },
+    {
+      "type": "warning_box",
+      "title": "⚠ 숫자만 보고 바로 고치면 생기는 사고",
+      "items": [
+        "20ms, 80%, 0 같은 임계값은 출발점이지 모든 서버에 통하는 판정선이 아니야. 같은 머신의 평소 기준선·지속 시간·함께 변한 지표가 먼저다.",
+        "프로파일러 요약만으로 특정 쿼리·테이블·인덱스를 단정하면 안 돼. SQL 차단이면 blocker SPID와 실행 SQL, I/O면 파일별 통계, CPU면 실행계획까지 내려가야 한다.",
+        "관측 실패와 서비스 실패를 혼동하지 마. Ping·WinRM·SQL 수집이 안 되는 이유는 방화벽·권한·수집기 중단일 수 있고, 실제 게임 기능 장애와 별개일 수 있다."
+      ]
+    },
+    {
+      "type": "info_box",
+      "title": "🤔 다음에 직접 해볼 질문",
+      "items": [
+        "게임 로직 CPU는 낮은데 CPU 대기열이 계속 높다. 단일 스레드 편중, 락 경합, affinity 중 무엇을 어떤 순서로 분리 측정할까?",
+        "로그 쓰기 지연은 높지만 Windows 디스크 쓰기 지연은 평평하다. SQL 로그 파일별 I/O, 가상화 스토리지, 커밋 패턴 중 어디부터 확인할까?",
+        "TCP 재전송이 올랐는데 최근 NIC 오류는 0이다. 회선 문제 외에 서버 CPU 지연·상대 프로세스 중단을 어떻게 구분할까?"
+      ]
+    }
+  ]
+}
