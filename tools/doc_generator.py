@@ -148,6 +148,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
             <a href="{next_link}">{next_text}</a>
         </div>
     </div>
+    <script src="/MSH_Portfolio/study/notes.js"></script>
 </body>
 </html>
 '''
